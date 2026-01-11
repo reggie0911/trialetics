@@ -350,7 +350,7 @@ export default function BlogClient({ posts }: BlogClientProps) {
         <div>
           <Select value={sortBy} onValueChange={(value) => value && setSortBy(value)}>
             <SelectTrigger className="bg-background w-full sm:w-[200px]">
-              <SelectValue placeholder="Sort" />
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="newest">Newest first</SelectItem>
