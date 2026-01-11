@@ -344,7 +344,6 @@ export default function BlogClient({ posts }: BlogClientProps) {
               </TabsList>
               <ScrollBar orientation="horizontal" />
             </ScrollArea>
-            </ScrollArea>
           </Tabs>
         </div>
 
