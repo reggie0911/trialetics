@@ -21,7 +21,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -330,7 +330,7 @@ export default function BlogClient({ posts }: BlogClientProps) {
       <div className="mt-14 mb-10 flex flex-col justify-between gap-4 md:mt-16 lg:mt-20 lg:flex-row">
         <div className="w-full overflow-x-auto">
           <Tabs value={selectedCategory} onValueChange={handleCategoryChange}>
-            <ScrollArea className="pb-2" orientation="horizontal">
+            <ScrollArea className="pb-2">
               <TabsList className="">
                 {categories.map((category) => (
                   <TabsTrigger
@@ -342,6 +342,8 @@ export default function BlogClient({ posts }: BlogClientProps) {
                   </TabsTrigger>
                 ))}
               </TabsList>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
             </ScrollArea>
           </Tabs>
         </div>
