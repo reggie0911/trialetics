@@ -55,6 +55,7 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={inter.variable}>
       <body
+        suppressHydrationWarning
         className={cn(
           "flex min-h-screen flex-col antialiased [--header-height:calc(var(--spacing)*14)] lg:[--header-height:calc(var(--spacing)*23)]",
           geistSans.variable,

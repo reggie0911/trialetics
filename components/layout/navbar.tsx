@@ -73,8 +73,10 @@ const Navbar = ({
   const hideNavbar = [
     '/auth/login',
     '/auth/sign-up',
+    '/auth/sign-up-success',
     '/auth/forgot-password',
     '/auth/update-password',
+    '/auth/error',
     '/docs',
     '/not-found',
   ].some((route) => pathname.includes(route));
