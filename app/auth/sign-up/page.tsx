@@ -97,7 +97,7 @@ export default function SignUpPage() {
               />
             </div>
             <div className="flex items-start justify-between gap-1.5">
-              <div className="flex items-start justify-between gap-1.5">
+              <div className="flex items-center gap-1.5">
                 <Checkbox id="terms" required />
                 <Label htmlFor="terms" className="">
                   I agree to the{' '}
