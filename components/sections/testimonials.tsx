@@ -37,7 +37,7 @@ const testimonials = [
       height: 24,
     },
     testimonial:
-      'Lumen has completely changed the way we present our project workflows. We can create visual boards, share tasks instantly, and demo progress live. It’s business-focused collaboration without the overhead.',
+      "Lumen has completely changed the way we present our project workflows. We can create visual boards, share tasks instantly, and demo progress live. It's business-focused collaboration without the overhead.",
     className: COMMON_CARDS_CLASSNAMES.big,
   },
   {
@@ -48,7 +48,7 @@ const testimonials = [
     image:
       'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face',
     testimonial:
-      'Lumen was the missing layer between our product and engineering teams. We’ve never had this much clarity in how tasks move through the pipeline.',
+      "Lumen was the missing layer between our product and engineering teams. We've never had this much clarity in how tasks move through the pipeline.",
     className: 'col-span-2 ',
   },
   {
@@ -92,7 +92,7 @@ const testimonials = [
     image:
       'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&h=400&fit=crop&crop=face',
     testimonial:
-      'Lumen makes it incredibly easy to manage cross-functional work. We’ve cut coordination time in half and deliver with better insights.',
+      "Lumen makes it incredibly easy to manage cross-functional work. We've cut coordination time in half and deliver with better insights.",
     className: 'col-span-2',
   },
   {
@@ -103,7 +103,7 @@ const testimonials = [
     image:
       'https://images.unsplash.com/photo-1507591064344-4c6ce005b128?w=400&h=400&fit=crop&crop=face',
     testimonial:
-      'We use Lumen across all departments — from tech to support. Creating shared workflows has drastically improved internal communication.”',
+      'We use Lumen across all departments — from tech to support. Creating shared workflows has drastically improved internal communication.',
     className: 'col-span-2',
   },
   {
@@ -119,7 +119,7 @@ const testimonials = [
       height: 28,
     },
     testimonial:
-      'Lumen has completely transformed how we approach daily project planning and execution. Before switching, we constantly missed deadlines due to misalignment. Now, everyone knows what’s happening, who’s responsible, and when things are due. Our productivity skyrocketed, and team communication has never been clearer.',
+      "Lumen has completely transformed how we approach daily project planning and execution. Before switching, we constantly missed deadlines due to misalignment. Now, everyone knows what's happening, who's responsible, and when things are due. Our productivity skyrocketed, and team communication has never been clearer.",
     className: cn(COMMON_CARDS_CLASSNAMES.big, ''),
   },
   {
@@ -135,7 +135,7 @@ const testimonials = [
       height: 20,
     },
     testimonial:
-      'I created a workspace, invited my co-founder, and started assigning tasks in 45 seconds. That’s how fast Lumen works.',
+      "I created a workspace, invited my co-founder, and started assigning tasks in 45 seconds. That's how fast Lumen works.",
     className: cn(
       COMMON_CARDS_CLASSNAMES.big,
       'lg:[&_blockquote]:text-4xl lg:[&_blockquote]:leading-tight lg:shadow-lg',
@@ -297,7 +297,7 @@ function TestimonialCard({ testimonial }: TestimonialCardProps) {
         <blockquote
           className={cn('lg:text-muted-foreground leading-relaxed lg:text-sm')}
         >
-          “{testimonial.testimonial}”
+          "{testimonial.testimonial}"
         </blockquote>
       </CardContent>
 

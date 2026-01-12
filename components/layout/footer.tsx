@@ -71,7 +71,7 @@ const Footer = () => {
     '/auth',
     '/docs',
     '/not-found',
-  ].some((route) => pathname.includes(route));
+  ].some((route) => pathname.includes(route)) || pathname.startsWith('/protected');
 
   if (hideFooter) return null;
 
