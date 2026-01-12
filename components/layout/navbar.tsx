@@ -79,7 +79,7 @@ const Navbar = ({
     '/auth/error',
     '/docs',
     '/not-found',
-  ].some((route) => pathname.includes(route));
+  ].some((route) => pathname.includes(route)) || pathname.startsWith('/protected');
 
   useEffect(() => {
     const handleBannerDismiss = () => {
