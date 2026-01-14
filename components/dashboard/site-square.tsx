@@ -20,7 +20,7 @@ export function SiteSquare({
     <button
       onClick={onClick}
       className={`
-        h-[60px] w-[60px] 
+        h-[55px] w-[55px] 
         flex items-center justify-center
         text-xs font-medium
         rounded cursor-pointer
@@ -28,9 +28,17 @@ export function SiteSquare({
         hover:scale-105 hover:shadow-md
         focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2
         ${isPinned ? 'ring-4 ring-primary' : ''}
-        ${isCompliant ? 'bg-teal-400 hover:bg-teal-500' : 'bg-red-500 hover:bg-red-600'}
         text-black
       `}
+      style={{
+        backgroundColor: isCompliant ? '#17B890' : '#F70000',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = isCompliant ? '#139074' : '#D60000';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = isCompliant ? '#17B890' : '#F70000';
+      }}
       aria-label={`Site ${siteNumber}, ${isCompliant ? 'Compliant' : 'Not Compliant'}`}
       type="button"
     >

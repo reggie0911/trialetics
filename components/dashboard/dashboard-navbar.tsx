@@ -56,7 +56,7 @@ export function DashboardNavbar() {
         {menuItems.map((item, index) =>
           item.type === "dropdown" ? (
             <NavigationMenuItem key={index}>
-              <NavigationMenuTrigger className="text-xs sm:text-sm">{item.trigger}</NavigationMenuTrigger>
+              <NavigationMenuTrigger className="text-xs">{item.trigger}</NavigationMenuTrigger>
               <NavigationMenuContent>
                     <div className="w-48 p-2">
                       {item.items.map((subItem, subIndex) => (

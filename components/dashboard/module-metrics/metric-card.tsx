@@ -15,7 +15,7 @@ export function MetricCard({ metric }: MetricCardProps) {
     <div className="bg-card border border-input rounded-lg p-3 hover:shadow-md transition-shadow duration-200">
       <div className="space-y-2">
         {/* Title */}
-        <h3 className="text-sm font-semibold text-foreground leading-tight">
+        <h3 className="text-sm font-medium text-foreground leading-tight">
           {metric.title}
         </h3>
 

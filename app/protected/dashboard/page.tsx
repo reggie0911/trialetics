@@ -67,7 +67,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
 
         {/* Project Info */}
-        <div className="inline-flex flex-wrap items-center gap-2 px-3 sm:px-4 py-2 mb-6 sm:mb-8 bg-card border border-input rounded-lg text-xs sm:text-sm">
+        <div className="inline-flex flex-wrap items-center gap-2 px-3 sm:px-4 py-2 mb-6 sm:mb-8 bg-card border border-input rounded-lg text-xs">
           <span className="text-muted-foreground">You are now viewing study data for</span>
           <span className="font-semibold text-foreground">{project.protocol_name}</span>
         </div>

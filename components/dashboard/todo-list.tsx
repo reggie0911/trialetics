@@ -115,7 +115,7 @@ export function TodoList({ projectId }: TodoListProps) {
           variant="default"
           size="sm"
           onClick={handleAddNew}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium text-[10px] sm:text-xs px-2 py-1 h-6 sm:h-7"
+          className="bg-neutral-700 hover:bg-neutral-800 text-white font-medium text-[10px] sm:text-xs px-2 py-1 h-6 sm:h-7"
         >
           + New Task
         </Button>
@@ -124,7 +124,7 @@ export function TodoList({ projectId }: TodoListProps) {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortBy)}
-            className="text-[10px] sm:text-xs border border-slate-300 rounded-md px-2 py-1 bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 flex-1 sm:flex-none"
+            className="text-[10px] sm:text-xs rounded-md px-2 py-1 bg-neutral-50 focus:bg-white focus:ring-1 focus:ring-neutral-300 flex-1 sm:flex-none border-0"
           >
             <option value="due_date">Sort by Due Date</option>
             <option value="created_at">Sort by Created</option>
@@ -134,7 +134,7 @@ export function TodoList({ projectId }: TodoListProps) {
             variant="outline"
             size="sm"
             onClick={toggleSort}
-            className="h-6 sm:h-7 w-6 sm:w-7 p-0 border-slate-300 flex-shrink-0"
+            className="h-6 sm:h-7 w-6 sm:w-7 p-0 border-0 bg-neutral-50 hover:bg-neutral-100 flex-shrink-0"
           >
             <ArrowUpDown className="h-3 w-3" />
           </Button>
@@ -142,19 +142,19 @@ export function TodoList({ projectId }: TodoListProps) {
       </div>
 
       {/* Ongoing Tasks */}
-      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-2 border border-blue-200">
+      <div className="bg-neutral-50 rounded-lg p-2">
         <div className="flex items-center gap-1.5 mb-2">
-          <div className="h-1 w-1 rounded-full bg-blue-600"></div>
-          <h2 className="text-[10px] sm:text-xs font-semibold text-slate-900">Ongoing Tasks</h2>
+          <div className="h-1 w-1 rounded-full bg-neutral-600"></div>
+          <h2 className="text-[10px] sm:text-xs font-semibold text-neutral-900">Ongoing Tasks</h2>
           {ongoingTodos.length > 0 && (
-            <span className="ml-auto bg-blue-600 text-white text-[10px] sm:text-xs font-semibold px-1.5 py-0.5 rounded-full">
+            <span className="ml-auto bg-neutral-600 text-white text-[10px] sm:text-xs font-semibold px-1.5 py-0.5 rounded-full">
               {ongoingTodos.length}
             </span>
           )}
         </div>
         {ongoingTodos.length === 0 ? (
-          <div className="text-center py-4 bg-white rounded-lg border border-dashed border-slate-300">
-            <p className="text-[10px] sm:text-xs text-slate-500">No ongoing tasks</p>
+          <div className="text-center py-4 bg-white rounded-lg">
+            <p className="text-[10px] sm:text-xs text-neutral-500">No ongoing tasks</p>
           </div>
         ) : (
           <>
@@ -172,7 +172,7 @@ export function TodoList({ projectId }: TodoListProps) {
               <Button
                 variant="link"
                 onClick={() => setShowAllOngoing(true)}
-                className="mt-1 text-[10px] sm:text-xs text-blue-600 hover:text-blue-700 h-auto p-0"
+                className="mt-1 text-[10px] sm:text-xs text-neutral-700 hover:text-neutral-900 h-auto p-0"
               >
                 View all {ongoingTodos.length} items →
               </Button>
@@ -182,19 +182,19 @@ export function TodoList({ projectId }: TodoListProps) {
       </div>
 
       {/* Completed Tasks */}
-      <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-2 border border-green-200">
+      <div className="bg-neutral-100 rounded-lg p-2">
         <div className="flex items-center gap-1.5 mb-2">
-          <div className="h-1 w-1 rounded-full bg-green-600"></div>
-          <h2 className="text-[10px] sm:text-xs font-semibold text-slate-900">Completed Tasks</h2>
+          <div className="h-1 w-1 rounded-full bg-neutral-600"></div>
+          <h2 className="text-[10px] sm:text-xs font-semibold text-neutral-900">Completed Tasks</h2>
           {completedTodos.length > 0 && (
-            <span className="ml-auto bg-green-600 text-white text-[10px] sm:text-xs font-semibold px-1.5 py-0.5 rounded-full">
+            <span className="ml-auto bg-neutral-600 text-white text-[10px] sm:text-xs font-semibold px-1.5 py-0.5 rounded-full">
               {completedTodos.length}
             </span>
           )}
         </div>
         {completedTodos.length === 0 ? (
-          <div className="text-center py-4 bg-white rounded-lg border border-dashed border-slate-300">
-            <p className="text-[10px] sm:text-xs text-slate-500">No completed tasks</p>
+          <div className="text-center py-4 bg-white rounded-lg">
+            <p className="text-[10px] sm:text-xs text-neutral-500">No completed tasks</p>
           </div>
         ) : (
           <>
@@ -212,7 +212,7 @@ export function TodoList({ projectId }: TodoListProps) {
               <Button
                 variant="link"
                 onClick={() => setShowAllCompleted(true)}
-                className="mt-1 text-[10px] sm:text-xs text-green-600 hover:text-green-700 h-auto p-0"
+                className="mt-1 text-[10px] sm:text-xs text-neutral-700 hover:text-neutral-900 h-auto p-0"
               >
                 View all {completedTodos.length} items →
               </Button>

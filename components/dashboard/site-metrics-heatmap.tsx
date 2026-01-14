@@ -66,13 +66,13 @@ export function SiteMetricsHeatmap() {
         {/* Legend */}
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1.5">
-            <div className="h-3 w-3 rounded bg-teal-400" />
+            <div className="h-3 w-3 rounded" style={{ backgroundColor: '#17B890' }} />
             <span className="text-[10px] sm:text-xs text-muted-foreground">
               Compliant ({compliantCount})
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-3 w-3 rounded bg-red-500" />
+            <div className="h-3 w-3 rounded" style={{ backgroundColor: '#F70000' }} />
             <span className="text-[10px] sm:text-xs text-muted-foreground">
               Not Compliant ({notCompliantCount})
             </span>
