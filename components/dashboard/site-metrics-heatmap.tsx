@@ -55,25 +55,25 @@ export function SiteMetricsHeatmap() {
   const displaySite = pinnedSite || hoveredSite;
 
   return (
-    <div className="w-full flex gap-4">
+    <div className="w-full flex flex-col md:flex-row gap-4">
       <div className="flex flex-col gap-2">
         {/* Site Count Display */}
         <div className="flex items-end gap-2">
-          <div className="text-5xl font-bold tracking-tight">{mockSiteMetrics.length}</div>
-          <div className="pb-1 text-sm font-normal text-muted-foreground">Total Sites</div>
+          <div className="text-4xl sm:text-5xl font-bold tracking-tight">{mockSiteMetrics.length}</div>
+          <div className="pb-1 text-xs sm:text-sm font-normal text-muted-foreground">Total Sites</div>
         </div>
 
         {/* Legend */}
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1.5">
-            <div className="h-3 w-3 rounded bg-teal-400" />
-            <span className="text-[10px] text-muted-foreground">
+            <div className="h-3 w-3 rounded" style={{ backgroundColor: '#17B890' }} />
+            <span className="text-[10px] sm:text-xs text-muted-foreground">
               Compliant ({compliantCount})
             </span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="h-3 w-3 rounded bg-red-500" />
-            <span className="text-[10px] text-muted-foreground">
+            <div className="h-3 w-3 rounded" style={{ backgroundColor: '#F70000' }} />
+            <span className="text-[10px] sm:text-xs text-muted-foreground">
               Not Compliant ({notCompliantCount})
             </span>
           </div>
@@ -81,8 +81,8 @@ export function SiteMetricsHeatmap() {
       </div>
 
       {/* Heatmap Grid */}
-      <div className="relative">
-        <div className="grid grid-cols-13 gap-1 w-fit">
+      <div className="relative overflow-x-auto">
+        <div className="grid grid-cols-13 gap-1 w-fit min-w-max">
           {mockSiteMetrics.map((site) => (
             <div
               key={site.siteNumber}
@@ -103,16 +103,16 @@ export function SiteMetricsHeatmap() {
         {/* Tooltip */}
         {displaySite && (
           <div
-            className="fixed z-50 w-72 rounded-lg border border-border bg-popover p-2 shadow-lg"
+            className="fixed z-50 w-64 sm:w-72 rounded-lg border border-border bg-popover p-2 shadow-lg"
             style={{
               left: `${tooltipPosition.x}px`,
               top: `${tooltipPosition.y}px`,
             }}
           >
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-[10px] font-semibold">Site Details</h3>
+              <h3 className="text-[10px] sm:text-xs font-semibold">Site Details</h3>
               {pinnedSite && (
-                <span className="text-[10px] text-muted-foreground">(Pinned)</span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground">(Pinned)</span>
               )}
             </div>
             <div className="space-y-1">

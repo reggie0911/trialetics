@@ -56,9 +56,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   return (
     <div className="min-h-screen bg-background">
       <ProtectedNavbar />
-      <main className="mx-auto w-full max-w-[1400px] px-6 py-8">
+      <main className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 py-4 sm:py-8">
         {/* Welcome Message and Navigation on same row */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <Greeting 
             firstName={profile?.first_name} 
             displayName={profile?.display_name}
@@ -67,18 +67,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
 
         {/* Project Info */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 bg-card border border-input rounded-lg text-sm">
+        <div className="inline-flex flex-wrap items-center gap-2 px-3 sm:px-4 py-2 mb-6 sm:mb-8 bg-card border border-input rounded-lg text-xs">
           <span className="text-muted-foreground">You are now viewing study data for</span>
           <span className="font-semibold text-foreground">{project.protocol_name}</span>
         </div>
 
         {/* Dashboard Content */}
-        <div className="grid grid-cols-4 gap-6">
-          <div className="col-span-3 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
+          <div className="lg:col-span-3 space-y-4 sm:space-y-6">
             {/* Site Metrics Heatmap */}
             <Card>
               <CardHeader>
-                <CardTitle>Site Metrics Heatmap</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Site Metrics Heatmap</CardTitle>
               </CardHeader>
               <CardContent>
                 <SiteMetricsHeatmap />
@@ -90,9 +90,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
 
           {/* Todo List Sidebar */}
-          <Card className="col-span-1">
+          <Card className="lg:col-span-1">
             <CardHeader>
-              <CardTitle>To-Do items</CardTitle>
+              <CardTitle className="text-base sm:text-lg">To-Do items</CardTitle>
             </CardHeader>
             <CardContent className="bg-muted/20 border border-muted rounded-lg">
               <TodoList projectId={projectId} />

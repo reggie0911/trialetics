@@ -42,8 +42,8 @@ export function TodoItem({ todo, onToggleComplete, onEdit }: TodoItemProps) {
 
   // Different styling for ongoing vs completed
   const containerClasses = todo.completed
-    ? "flex items-start gap-2 py-1.5 px-2 cursor-pointer bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg transition-all duration-200"
-    : "flex items-start gap-2 py-1.5 px-2 cursor-pointer bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md";
+    ? "flex items-start gap-2 py-1.5 px-2 cursor-pointer bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 rounded-lg transition-all duration-200"
+    : "flex items-start gap-2 py-1.5 px-2 cursor-pointer bg-white hover:bg-neutral-50 border border-neutral-200 hover:border-neutral-300 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md";
 
   return (
     <div
