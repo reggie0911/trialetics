@@ -52,11 +52,11 @@ const menuItems = [
 export function DashboardNavbar() {
   return (
     <NavigationMenu className="w-auto">
-      <NavigationMenuList className="justify-end">
+      <NavigationMenuList className="flex-col sm:flex-row justify-end">
         {menuItems.map((item, index) =>
           item.type === "dropdown" ? (
             <NavigationMenuItem key={index}>
-              <NavigationMenuTrigger>{item.trigger}</NavigationMenuTrigger>
+              <NavigationMenuTrigger className="text-xs sm:text-sm">{item.trigger}</NavigationMenuTrigger>
               <NavigationMenuContent>
                     <div className="w-48 p-2">
                       {item.items.map((subItem, subIndex) => (

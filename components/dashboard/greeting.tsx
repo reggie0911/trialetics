@@ -27,7 +27,7 @@ export function Greeting({ firstName, displayName }: GreetingProps) {
   const nameToDisplay = displayName || firstName;
 
   return (
-    <h1 className="text-4xl font-semibold tracking-tight">
+    <h1 className="text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight">
       {greeting}{nameToDisplay ? ` ${nameToDisplay}` : ''}!
     </h1>
   );
