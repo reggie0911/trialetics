@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -82,10 +83,10 @@ export function ProtectedProjects({ projects }: ProtectedProjectsProps) {
               </CardContent>
               <CardFooter>
                 <Button variant="outline" className="w-full gap-2" asChild>
-                  <a href="#">
+                  <Link href={`/protected/dashboard?projectId=${project.id}`}>
                     View Project
                     <ArrowRight className="h-4 w-4" />
-                  </a>
+                  </Link>
                 </Button>
               </CardFooter>
             </Card>
