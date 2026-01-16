@@ -76,7 +76,7 @@ export function ProtectedNavbar() {
 
           <div className="flex items-center gap-6">
             <DropdownMenu>
-              <DropdownMenuTrigger className="cursor-pointer outline-none">
+              <DropdownMenuTrigger className="cursor-pointer outline-none" suppressHydrationWarning>
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={avatarUrl || '/images/avatar-placeholder.png'} alt="User" />
                   <AvatarFallback>
