@@ -130,6 +130,183 @@ export type Database = {
           },
         ]
       }
+      ae_header_mappings: {
+        Row: {
+          id: string
+          company_id: string
+          original_header: string
+          customized_header: string
+          table_order: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          original_header: string
+          customized_header: string
+          table_order?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          original_header?: string
+          customized_header?: string
+          table_order?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ae_header_mappings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ae_uploads: {
+        Row: {
+          id: string
+          company_id: string
+          uploaded_by: string
+          file_name: string
+          row_count: number
+          column_count: number
+          filter_preferences: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          uploaded_by: string
+          file_name: string
+          row_count: number
+          column_count: number
+          filter_preferences?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          uploaded_by?: string
+          file_name?: string
+          row_count?: number
+          column_count?: number
+          filter_preferences?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ae_uploads_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ae_uploads_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ae_records: {
+        Row: {
+          id: string
+          upload_id: string
+          site_name: string | null
+          subject_id: string | null
+          aedecod: string | null
+          aeser: string | null
+          aeout: string | null
+          aesercat1: string | null
+          extra_fields: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          upload_id: string
+          site_name?: string | null
+          subject_id?: string | null
+          aedecod?: string | null
+          aeser?: string | null
+          aeout?: string | null
+          aesercat1?: string | null
+          extra_fields?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          upload_id?: string
+          site_name?: string | null
+          subject_id?: string | null
+          aedecod?: string | null
+          aeser?: string | null
+          aeout?: string | null
+          aesercat1?: string | null
+          extra_fields?: Json
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ae_records_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "ae_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ae_column_configs: {
+        Row: {
+          id: string
+          upload_id: string
+          column_id: string
+          label: string
+          visible: boolean
+          table_order: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          upload_id: string
+          column_id: string
+          label: string
+          visible?: boolean
+          table_order?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          upload_id?: string
+          column_id?: string
+          label?: string
+          visible?: boolean
+          table_order?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ae_column_configs_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "ae_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       header_mappings: {
         Row: {
           created_at: string
