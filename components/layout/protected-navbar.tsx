@@ -63,7 +63,7 @@ export function ProtectedNavbar() {
 
   // Determine the label based on the current route
   const isDashboard = pathname?.startsWith('/protected/dashboard');
-  const label = isDashboard ? 'CTMS' : 'Homepage';
+  const label = isDashboard ? 'CTMS' : 'Polares Custom Modules';
 
   return (
     <>
