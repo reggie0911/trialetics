@@ -13,10 +13,10 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { CreateProjectForm } from '@/components/create-project-form';
-import { Project } from '@/lib/types/database.types';
+import { Tables } from '@/lib/types/database.types';
 
 interface ProtectedProjectsProps {
-  projects: Project[];
+  projects: Tables<'projects'>[];
 }
 
 export function ProtectedProjects({ projects }: ProtectedProjectsProps) {

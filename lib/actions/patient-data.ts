@@ -20,7 +20,7 @@ export type ActionResponse<T> = {
  * Create a new patient upload and insert all patient records
  */
 export async function uploadPatientData(
-  projectId: string,
+  companyId: string,
   fileName: string,
   patientRecords: PatientRecord[],
   columnConfigs: ColumnConfig[]
@@ -46,7 +46,7 @@ export async function uploadPatientData(
 
     // Create the upload record
     const uploadData: TablesInsert<'patient_uploads'> = {
-      project_id: projectId,
+      company_id: companyId,
       uploaded_by: profile.id,
       file_name: fileName,
       row_count: patientRecords.length,
@@ -188,10 +188,10 @@ function categorizePatientRecord(record: PatientRecord, uploadId: string): Table
 }
 
 /**
- * Get all uploads for a project
+ * Get all uploads for a company
  */
 export async function getPatientUploads(
-  projectId: string
+  companyId: string
 ): Promise<ActionResponse<Tables<'patient_uploads'>[]>> {
   try {
     const supabase = await createClient();
@@ -199,7 +199,7 @@ export async function getPatientUploads(
     const { data, error } = await supabase
       .from('patient_uploads')
       .select('*')
-      .eq('project_id', projectId)
+      .eq('company_id', companyId)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -513,10 +513,10 @@ export async function getHeaderMappings(
 }
 
 /**
- * Save header mappings for a project (bulk upsert)
+ * Save header mappings for a company (bulk upsert)
  */
 export async function saveHeaderMappings(
-  projectId: string,
+  companyId: string,
   mappings: Array<{
     originalHeader: string;
     customizedHeader: string;
@@ -527,15 +527,15 @@ export async function saveHeaderMappings(
   try {
     const supabase = await createClient();
 
-    // Delete existing mappings for this project
+    // Delete existing mappings for this company
     await supabase
       .from('header_mappings')
       .delete()
-      .eq('project_id', projectId);
+      .eq('company_id', companyId);
 
     // Insert new mappings
     const mappingInserts: TablesInsert<'header_mappings'>[] = mappings.map(mapping => ({
-      project_id: projectId,
+      company_id: companyId,
       original_header: mapping.originalHeader,
       customized_header: mapping.customizedHeader,
       visit_group: mapping.visitGroup || null,

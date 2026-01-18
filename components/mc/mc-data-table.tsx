@@ -1,17 +1,10 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
-import { AERecord } from "./ae-csv-upload-dialog";
+import { MCRecord } from "./mc-csv-upload-dialog";
 import {
   useReactTable,
   getCoreRowModel,
@@ -24,26 +17,26 @@ import {
   ColumnFiltersState,
   PaginationState,
 } from "@tanstack/react-table";
+import { MultiLevelMCHeader, VisitGroupSpan, GROUP_COLORS } from "./mc-multi-level-header";
 
 const REQUIRED_COLUMNS = [
   "SiteName",
   "SubjectId",
-  "AESTDAT",
-  "RWOSDAT",
-  "AESER",
-  "AESERCAT1",
-  "AEEXP",
-  "AEDECOD",
-  "AEOUT",
-  "IM_AEREL",
-  "IS_AEREL",
-  "DS_AEREL",
-  "LT_AEREL",
-  "PR_AEREL",
+  "1.CCSVT",
+  "E02_V2[1].PRO_01.PEP[1].PEPDAT",
+  "1.CCMED",
+  "1.CCIND",
+  "1.CC1",
+  "1.CCUNIT",
+  "1.CCFREQ",
+  "1.CCSTDAT",
+  "1.CMSTDATUN1",
+  "1.CCSPDAT",
+  "1.CCONGO1"
 ];
 
 // Date columns that should be formatted as dd-mmm-yyyy
-const DATE_COLUMNS = ["AESTDAT", "RWOSDAT"];
+const DATE_COLUMNS = ["1.CCSTDAT", "1.CCSPDAT", "E02_V2[1].PRO_01.PEP[1].PEPDAT"];
 
 // Format date from YYYY-MM-DD to dd-mmm-yyyy
 const formatDate = (dateStr: string | undefined): string => {
@@ -54,7 +47,7 @@ const formatDate = (dateStr: string | undefined): string => {
   try {
     // Parse YYYY-MM-DD format
     const parts = dateStr.split('-');
-    if (parts.length !== 3) return dateStr; // Return original if not in expected format
+    if (parts.length !== 3) return dateStr;
 
     const year = parseInt(parts[0], 10);
     const month = parseInt(parts[1], 10);
@@ -62,34 +55,34 @@ const formatDate = (dateStr: string | undefined): string => {
 
     if (isNaN(year) || isNaN(month) || isNaN(day)) return dateStr;
 
-    // Month names abbreviated
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     
     if (month < 1 || month > 12) return dateStr;
 
-    // Format as dd-mmm-yyyy
     const formattedDay = day.toString().padStart(2, '0');
     const formattedMonth = monthNames[month - 1];
     
     return `${formattedDay}-${formattedMonth}-${year}`;
   } catch (error) {
-    return dateStr; // Return original if parsing fails
+    return dateStr;
   }
 };
 
-interface AEDataTableProps {
-  data: AERecord[];
+interface MCDataTableProps {
+  data: MCRecord[];
   headerMappings?: Record<string, string>;
   columnFilters?: ColumnFiltersState;
   onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
+  visitGroups?: Record<string, string>; // columnId -> visit group name
 }
 
-export function AEDataTable({ 
+export function MCDataTable({ 
   data, 
   headerMappings = {},
   columnFilters: externalColumnFilters,
   onColumnFiltersChange,
-}: AEDataTableProps) {
+  visitGroups = {},
+}: MCDataTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [internalColumnFilters, setInternalColumnFilters] = useState<ColumnFiltersState>([]);
   const [pagination, setPagination] = useState<PaginationState>({
@@ -135,7 +128,7 @@ export function AEDataTable({
     REQUIRED_COLUMNS.forEach((col) => {
       const values = new Set<string>();
       data.forEach((row) => {
-        const value = row[col as keyof AERecord];
+        const value = row[col as keyof MCRecord];
         if (value && value !== "") {
           values.add(String(value));
         }
@@ -146,14 +139,81 @@ export function AEDataTable({
     return uniqueValuesMap;
   }, [data]);
 
+  // Calculate visit group spans
+  const visitGroupSpans = useMemo((): VisitGroupSpan[] => {
+    const spans: VisitGroupSpan[] = [];
+    let currentGroup = '';
+    let startIndex = 0;
+    let count = 0;
+
+    REQUIRED_COLUMNS.forEach((col, index) => {
+      const group = visitGroups[col] || '';
+      
+      if (!group) {
+        // If no visit group, each column is its own span
+        if (currentGroup) {
+          spans.push({
+            visitGroup: currentGroup,
+            startIndex,
+            columnCount: count,
+          });
+          currentGroup = '';
+          count = 0;
+        }
+        return;
+      }
+
+      if (group !== currentGroup) {
+        // Save previous group if exists
+        if (currentGroup && count > 0) {
+          spans.push({
+            visitGroup: currentGroup,
+            startIndex,
+            columnCount: count,
+          });
+        }
+        // Start new group
+        currentGroup = group;
+        startIndex = index;
+        count = 1;
+      } else {
+        count++;
+      }
+    });
+
+    // Add last group
+    if (currentGroup && count > 0) {
+      spans.push({
+        visitGroup: currentGroup,
+        startIndex,
+        columnCount: count,
+      });
+    }
+
+    return spans;
+  }, [visitGroups]);
+
+  // Create column-to-group mapping for cell coloring
+  const columnToGroupIndex = useMemo(() => {
+    const map = new Map<string, number>();
+    visitGroupSpans.forEach((span, groupIdx) => {
+      for (let i = span.startIndex; i < span.startIndex + span.columnCount; i++) {
+        if (REQUIRED_COLUMNS[i]) {
+          map.set(REQUIRED_COLUMNS[i], groupIdx);
+        }
+      }
+    });
+    return map;
+  }, [visitGroupSpans]);
+
   // Create columns from required columns
-  const columns: ColumnDef<AERecord>[] = REQUIRED_COLUMNS.map((col) => ({
-    accessorKey: col,
+  const columns: ColumnDef<MCRecord>[] = REQUIRED_COLUMNS.map((col) => ({
+    id: col,
+    accessorFn: (row) => row[col],
     header: headerMappings[col] || col,
     cell: ({ getValue }) => {
       const value = getValue() as string | undefined;
       
-      // Format date columns
       if (DATE_COLUMNS.includes(col)) {
         return formatDate(value);
       }
@@ -183,7 +243,7 @@ export function AEDataTable({
   if (data.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-64 text-muted-foreground text-[11px] space-y-2">
-        <p className="font-medium">No adverse event data available</p>
+        <p className="font-medium">No medication data available</p>
         <p className="text-center">Upload a CSV file to populate the table</p>
       </div>
     );
@@ -208,60 +268,26 @@ export function AEDataTable({
       >
         <table className="w-full caption-bottom text-sm">
           <thead className="sticky top-0 z-30 bg-background">
-            {/* Combined Column Headers & Filters Row */}
-            {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="bg-background border-b">
-                {headerGroup.headers.map((header) => {
-                  const column = header.column;
-                  const uniqueValues = columnUniqueValues[column.id] || [];
-                  const currentValue = column.getFilterValue() as string | undefined;
-                  
-                  return (
-                    <th
-                      key={header.id}
-                      className="text-[12px] p-1 px-2 font-medium whitespace-nowrap bg-background border-b text-left align-middle"
-                    >
-                      {/* Header Label with Sort */}
-                      <div 
-                        className="flex items-center gap-1 cursor-pointer hover:bg-muted/50 rounded px-1 mb-1"
-                        onClick={header.column.getToggleSortingHandler()}
-                      >
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                        {{
-                          asc: " ↑",
-                          desc: " ↓",
-                        }[header.column.getIsSorted() as string] ?? null}
-                      </div>
-                      
-                      {/* Filter Dropdown */}
-                      <Select
-                        value={currentValue || "all"}
-                        onValueChange={(value) => {
-                          column.setFilterValue(value === "all" ? undefined : value);
-                        }}
-                      >
-                        <SelectTrigger className="h-3.5 text-[11px] bg-background text-muted-foreground border-0 shadow-none">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent className="max-h-[300px]">
-                          <SelectItem value="all" className="text-[11px]">
-                            All
-                          </SelectItem>
-                          {uniqueValues.map((value) => (
-                            <SelectItem key={value} value={value} className="text-[11px]">
-                              {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </th>
-                  );
-                })}
-              </tr>
-            ))}
+            <MultiLevelMCHeader
+              headerGroups={table.getHeaderGroups()}
+              visitGroupSpans={visitGroupSpans}
+              columnIds={REQUIRED_COLUMNS}
+              columnUniqueValues={columnUniqueValues}
+              columnFilters={columnFilters}
+              onColumnFilterChange={(columnId, value) => {
+                const column = table.getColumn(columnId);
+                column?.setFilterValue(value);
+              }}
+              onSortingChange={(columnId) => {
+                const column = table.getColumn(columnId);
+                column?.toggleSorting(column.getIsSorted() === "asc");
+              }}
+              getSortingState={(columnId) => {
+                const column = table.getColumn(columnId);
+                return column?.getIsSorted() || false;
+              }}
+              headerMappings={headerMappings}
+            />
           </thead>
           <tbody className="[&_tr:last-child]:border-0">
             {table.getRowModel().rows.length === 0 ? (
@@ -275,10 +301,12 @@ export function AEDataTable({
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="h-[40px] hover:bg-[#79D7BE]/20 border-b transition-all duration-500 ease-in-out">
+                <tr key={row.id} className="group h-[40px] hover:bg-[#79D7BE] border-b transition-all duration-500 ease-in-out">
                   {row.getVisibleCells().map((cell) => {
                     const value = cell.getValue() as string | undefined;
                     const columnId = cell.column.id;
+                    const groupIndex = columnToGroupIndex.get(columnId) ?? 0;
+                    const bgColorClass = groupIndex % 2 === 0 ? GROUP_COLORS.even : GROUP_COLORS.odd;
                     
                     // Apply date formatting for date columns
                     let formattedValue = value;
@@ -299,7 +327,7 @@ export function AEDataTable({
                     return (
                       <td
                         key={cell.id}
-                        className="text-[12px] p-1 px-2 whitespace-nowrap align-middle"
+                        className={`text-[12px] p-1 px-2 whitespace-nowrap align-middle ${bgColorClass} group-hover:!bg-transparent`}
                       >
                         {isTruncated ? (
                           <Tooltip>
@@ -325,51 +353,58 @@ export function AEDataTable({
       
       {/* Pagination Controls */}
       <div className="flex items-center justify-between px-2 py-3">
-        <div className="text-[11px] text-muted-foreground">
-          Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{" "}
-          {Math.min(
-            (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-            table.getFilteredRowModel().rows.length
-          )}{" "}
-          of {table.getFilteredRowModel().rows.length} results
+        <div className="flex items-center gap-2">
+          <p className="text-[11px] text-muted-foreground">
+            Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1} to{' '}
+            {Math.min(
+              (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
+              table.getFilteredRowModel().rows.length
+            )}{' '}
+            of {table.getFilteredRowModel().rows.length} results
+          </p>
         </div>
+        
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
+            className="h-8 w-8"
             onClick={() => table.setPageIndex(0)}
             disabled={!table.getCanPreviousPage()}
-            className="h-8 w-8 p-0"
           >
             <ChevronsLeft className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
+            className="h-8 w-8"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
-            className="h-8 w-8 p-0"
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <div className="text-[11px] font-medium">
-            Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+          
+          <div className="flex items-center gap-1">
+            <p className="text-[11px] text-muted-foreground">
+              Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+            </p>
           </div>
+          
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
+            className="h-8 w-8"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
-            className="h-8 w-8 p-0"
           >
             <ChevronRight className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
-            size="sm"
+            size="icon"
+            className="h-8 w-8"
             onClick={() => table.setPageIndex(table.getPageCount() - 1)}
             disabled={!table.getCanNextPage()}
-            className="h-8 w-8 p-0"
           >
             <ChevronsRight className="h-4 w-4" />
           </Button>

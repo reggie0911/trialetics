@@ -6,32 +6,185 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-// Helper types
-export type Project = Database['public']['Tables']['projects']['Row'];
-export type Profile = Database['public']['Tables']['profiles']['Row'];
-export type Company = Database['public']['Tables']['companies']['Row'];
-
-// Composite types
-export type ProfileWithCompany = Profile & {
-  companies: Company | null;
-};
-
-export type UserProjectWithDetails = Database['public']['Tables']['user_projects']['Row'] & {
-  projects: Project;
-};
-
-export type UserModuleWithDetails = Database['public']['Tables']['user_modules']['Row'] & {
-  modules: Database['public']['Tables']['modules']['Row'];
-};
-
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
+      ae_column_configs: {
+        Row: {
+          column_id: string
+          created_at: string
+          id: string
+          label: string
+          table_order: number | null
+          updated_at: string
+          upload_id: string
+          visible: boolean
+        }
+        Insert: {
+          column_id: string
+          created_at?: string
+          id?: string
+          label: string
+          table_order?: number | null
+          updated_at?: string
+          upload_id: string
+          visible?: boolean
+        }
+        Update: {
+          column_id?: string
+          created_at?: string
+          id?: string
+          label?: string
+          table_order?: number | null
+          updated_at?: string
+          upload_id?: string
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ae_column_configs_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "ae_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ae_records: {
+        Row: {
+          aedecod: string | null
+          aeout: string | null
+          aeser: string | null
+          aesercat1: string | null
+          created_at: string
+          extra_fields: Json | null
+          id: string
+          site_name: string | null
+          subject_id: string | null
+          upload_id: string
+        }
+        Insert: {
+          aedecod?: string | null
+          aeout?: string | null
+          aeser?: string | null
+          aesercat1?: string | null
+          created_at?: string
+          extra_fields?: Json | null
+          id?: string
+          site_name?: string | null
+          subject_id?: string | null
+          upload_id: string
+        }
+        Update: {
+          aedecod?: string | null
+          aeout?: string | null
+          aeser?: string | null
+          aesercat1?: string | null
+          created_at?: string
+          extra_fields?: Json | null
+          id?: string
+          site_name?: string | null
+          subject_id?: string | null
+          upload_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ae_records_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "ae_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ae_uploads: {
+        Row: {
+          column_count: number
+          company_id: string
+          created_at: string
+          file_name: string
+          filter_preferences: Json | null
+          id: string
+          row_count: number
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          column_count: number
+          company_id: string
+          created_at?: string
+          file_name: string
+          filter_preferences?: Json | null
+          id?: string
+          row_count: number
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          column_count?: number
+          company_id?: string
+          created_at?: string
+          file_name?: string
+          filter_preferences?: Json | null
+          id?: string
+          row_count?: number
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ae_uploads_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ae_uploads_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ae_uploads_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "project_assignments"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
       column_configs: {
         Row: {
           category: string | null
@@ -130,228 +283,234 @@ export type Database = {
           },
         ]
       }
-      ae_header_mappings: {
-        Row: {
-          id: string
-          company_id: string
-          original_header: string
-          customized_header: string
-          table_order: number | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          company_id: string
-          original_header: string
-          customized_header: string
-          table_order?: number | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          company_id?: string
-          original_header?: string
-          customized_header?: string
-          table_order?: number | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ae_header_mappings_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ae_uploads: {
-        Row: {
-          id: string
-          company_id: string
-          uploaded_by: string
-          file_name: string
-          row_count: number
-          column_count: number
-          filter_preferences: Json
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          company_id: string
-          uploaded_by: string
-          file_name: string
-          row_count: number
-          column_count: number
-          filter_preferences?: Json
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          company_id?: string
-          uploaded_by?: string
-          file_name?: string
-          row_count?: number
-          column_count?: number
-          filter_preferences?: Json
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ae_uploads_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "ae_uploads_uploaded_by_fkey"
-            columns: ["uploaded_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ae_records: {
-        Row: {
-          id: string
-          upload_id: string
-          site_name: string | null
-          subject_id: string | null
-          aedecod: string | null
-          aeser: string | null
-          aeout: string | null
-          aesercat1: string | null
-          extra_fields: Json
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          upload_id: string
-          site_name?: string | null
-          subject_id?: string | null
-          aedecod?: string | null
-          aeser?: string | null
-          aeout?: string | null
-          aesercat1?: string | null
-          extra_fields?: Json
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          upload_id?: string
-          site_name?: string | null
-          subject_id?: string | null
-          aedecod?: string | null
-          aeser?: string | null
-          aeout?: string | null
-          aesercat1?: string | null
-          extra_fields?: Json
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ae_records_upload_id_fkey"
-            columns: ["upload_id"]
-            isOneToOne: false
-            referencedRelation: "ae_uploads"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      ae_column_configs: {
-        Row: {
-          id: string
-          upload_id: string
-          column_id: string
-          label: string
-          visible: boolean
-          table_order: number | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          upload_id: string
-          column_id: string
-          label: string
-          visible?: boolean
-          table_order?: number | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          upload_id?: string
-          column_id?: string
-          label?: string
-          visible?: boolean
-          table_order?: number | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ae_column_configs_upload_id_fkey"
-            columns: ["upload_id"]
-            isOneToOne: false
-            referencedRelation: "ae_uploads"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       header_mappings: {
         Row: {
+          company_id: string
           created_at: string
           customized_header: string
           id: string
           original_header: string
-          project_id: string
           table_order: number | null
           updated_at: string
           visit_group: string | null
         }
         Insert: {
+          company_id: string
           created_at?: string
           customized_header: string
           id?: string
           original_header: string
-          project_id: string
           table_order?: number | null
           updated_at?: string
           visit_group?: string | null
         }
         Update: {
+          company_id?: string
           created_at?: string
           customized_header?: string
           id?: string
           original_header?: string
-          project_id?: string
           table_order?: number | null
           updated_at?: string
           visit_group?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "header_mappings_project_id_fkey"
-            columns: ["project_id"]
+            foreignKeyName: "fk_header_mappings_company"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "project_assignments"
-            referencedColumns: ["project_id"]
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mc_column_configs: {
+        Row: {
+          column_id: string
+          created_at: string
+          id: string
+          label: string
+          table_order: number | null
+          updated_at: string
+          upload_id: string
+          visible: boolean
+          visit_group: string | null
+        }
+        Insert: {
+          column_id: string
+          created_at?: string
+          id?: string
+          label: string
+          table_order?: number | null
+          updated_at?: string
+          upload_id: string
+          visible?: boolean
+          visit_group?: string | null
+        }
+        Update: {
+          column_id?: string
+          created_at?: string
+          id?: string
+          label?: string
+          table_order?: number | null
+          updated_at?: string
+          upload_id?: string
+          visible?: boolean
+          visit_group?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mc_column_configs_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "mc_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mc_header_mappings: {
+        Row: {
+          company_id: string
+          created_at: string
+          customized_header: string
+          id: string
+          original_header: string
+          table_order: number | null
+          updated_at: string
+          visit_group: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          customized_header: string
+          id?: string
+          original_header: string
+          table_order?: number | null
+          updated_at?: string
+          visit_group?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          customized_header?: string
+          id?: string
+          original_header?: string
+          table_order?: number | null
+          updated_at?: string
+          visit_group?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mc_header_mappings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mc_records: {
+        Row: {
+          created_at: string
+          event_name: string | null
+          extra_fields: Json | null
+          id: string
+          medication_name: string | null
+          site_name: string | null
+          start_date: string | null
+          stop_date: string | null
+          subject_id: string | null
+          upload_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_name?: string | null
+          extra_fields?: Json | null
+          id?: string
+          medication_name?: string | null
+          site_name?: string | null
+          start_date?: string | null
+          stop_date?: string | null
+          subject_id?: string | null
+          upload_id: string
+        }
+        Update: {
+          created_at?: string
+          event_name?: string | null
+          extra_fields?: Json | null
+          id?: string
+          medication_name?: string | null
+          site_name?: string | null
+          start_date?: string | null
+          stop_date?: string | null
+          subject_id?: string | null
+          upload_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mc_records_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "mc_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mc_uploads: {
+        Row: {
+          column_count: number
+          company_id: string
+          created_at: string
+          file_name: string
+          filter_preferences: Json | null
+          id: string
+          row_count: number
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          column_count: number
+          company_id: string
+          created_at?: string
+          file_name: string
+          filter_preferences?: Json | null
+          id?: string
+          row_count: number
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          column_count?: number
+          company_id?: string
+          created_at?: string
+          file_name?: string
+          filter_preferences?: Json | null
+          id?: string
+          row_count?: number
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mc_uploads_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "header_mappings_project_id_fkey"
-            columns: ["project_id"]
+            foreignKeyName: "mc_uploads_uploaded_by_fkey"
+            columns: ["uploaded_by"]
             isOneToOne: false
-            referencedRelation: "projects"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mc_uploads_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "project_assignments"
+            referencedColumns: ["profile_id"]
           },
         ]
       }
@@ -403,50 +562,43 @@ export type Database = {
       patient_uploads: {
         Row: {
           column_count: number
+          company_id: string
           created_at: string
           file_name: string
           filter_preferences: Json | null
           id: string
-          project_id: string
           row_count: number
           updated_at: string
           uploaded_by: string
         }
         Insert: {
           column_count: number
+          company_id: string
           created_at?: string
           file_name: string
           filter_preferences?: Json | null
           id?: string
-          project_id: string
           row_count: number
           updated_at?: string
           uploaded_by: string
         }
         Update: {
           column_count?: number
+          company_id?: string
           created_at?: string
           file_name?: string
           filter_preferences?: Json | null
           id?: string
-          project_id?: string
           row_count?: number
           updated_at?: string
           uploaded_by?: string
         }
         Relationships: [
           {
-            foreignKeyName: "patient_uploads_project_id_fkey"
-            columns: ["project_id"]
+            foreignKeyName: "fk_patient_uploads_company"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: "project_assignments"
-            referencedColumns: ["project_id"]
-          },
-          {
-            foreignKeyName: "patient_uploads_project_id_fkey"
-            columns: ["project_id"]
-            isOneToOne: false
-            referencedRelation: "projects"
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
           {
@@ -912,7 +1064,7 @@ export type Database = {
       }
     }
     Functions: {
-      generate_company_id: { Args: Record<string, never>; Returns: string }
+      generate_company_id: { Args: never; Returns: string }
     }
     Enums: {
       [_ in never]: never
@@ -1041,7 +1193,47 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
 } as const
+
+// Type aliases for commonly used tables
+export type Profile = Tables<'profiles'>;
+export type Project = Tables<'projects'>;
+export type Company = Tables<'companies'>;
+
+// Extended types with relations
+export type ProfileWithCompany = Profile & {
+  companies: Company | null;
+};
+
+export type UserProjectWithDetails = {
+  id: string;
+  user_id: string;
+  project_id: string;
+  assigned_at: string | null;
+  projects: Project;
+};
+
+export type UserModuleWithDetails = {
+  id: string;
+  user_id: string;
+  module_id: string;
+  granted_at: string | null;
+  modules: Tables<'modules'>;
+};
+
+// Manual type definitions for tables not yet in generated types
+export interface AEHeaderMapping {
+  id: string;
+  company_id: string;
+  original_header: string;
+  customized_header: string;
+  table_order: number | null;
+  created_at: string;
+  updated_at: string;
+}

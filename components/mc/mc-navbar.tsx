@@ -4,9 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   NavigationMenu,
+  NavigationMenuContent,
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuList,
+  NavigationMenuTrigger,
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
 import { cn } from "@/lib/utils";
@@ -39,7 +41,7 @@ const menuItems = [
   },
 ];
 
-export function PatientsNavbar() {
+export function MCNavbar() {
   const pathname = usePathname();
 
   return (

@@ -7,7 +7,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, LabelList } from "recharts";
 import { X } from "lucide-react";
 
-interface AECategoriesChartProps {
+interface MCCategoriesChartProps {
   data: Array<{ [key: string]: string | undefined }>;
   selectedCategory?: string;
   onCategoryClick?: (category: string | undefined) => void;
@@ -21,13 +21,13 @@ const CHART_COLORS = [
   "hsl(var(--chart-5))",
 ];
 
-export function AECategoriesChart({ data, selectedCategory, onCategoryClick }: AECategoriesChartProps) {
-  // Group data by AEDECOD and count occurrences
+export function MCCategoriesChart({ data, selectedCategory, onCategoryClick }: MCCategoriesChartProps) {
+  // Group data by study visit (1.CCSVT) and count occurrences
   const chartData = useMemo(() => {
     const categoryCounts = new Map<string, number>();
 
     data.forEach((row) => {
-      const category = row.AEDECOD;
+      const category = row["1.CCSVT"];
       if (category && category.trim() !== "") {
         categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
       }
@@ -55,11 +55,11 @@ export function AECategoriesChart({ data, selectedCategory, onCategoryClick }: A
     return (
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm">AE Categories</CardTitle>
+          <CardTitle className="text-sm">Study Visits</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center h-64 text-[11px] text-muted-foreground">
-            No AE category data available
+            No study visit data available
           </div>
         </CardContent>
       </Card>
@@ -81,7 +81,7 @@ export function AECategoriesChart({ data, selectedCategory, onCategoryClick }: A
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">AE Categories</CardTitle>
+          <CardTitle className="text-sm">Study Visits</CardTitle>
           {selectedCategory && (
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-muted-foreground">
@@ -100,11 +100,11 @@ export function AECategoriesChart({ data, selectedCategory, onCategoryClick }: A
         </div>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[300px] w-full">
+        <ChartContainer config={chartConfig} className="h-[200px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={chartData}
-              margin={{ top: 20, right: 20, left: 20, bottom: 70 }}
+              margin={{ top: 20, right: 20, left: 20, bottom: 60 }}
               onClick={(e) => {
                 if (e && e.activePayload && e.activePayload[0]) {
                   handleBarClick(e.activePayload[0].payload);
@@ -117,7 +117,7 @@ export function AECategoriesChart({ data, selectedCategory, onCategoryClick }: A
                 dataKey="category"
                 angle={-45}
                 textAnchor="end"
-                height={70}
+                height={60}
                 interval={0}
                 tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
               />

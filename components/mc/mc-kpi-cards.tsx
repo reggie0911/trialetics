@@ -4,22 +4,32 @@ import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 interface KPIMetrics {
-  totalAEs: number;
-  totalSAEs: number;
-  totalResolved: number;
-  deaths: number;
-  percentResolved: number;
+  totalMeds: number;
+  missingStartDate: number;
+  startDateUnknown: number;
+  missingStopDate: number;
+  missingDoseOrUnit: number;
+  invalidFreq: number;
+  partialData: number;
 }
 
-export type KPIFilterType = "total" | "sae" | "resolved" | "death" | null;
+export type KPIFilterType = 
+  | "total" 
+  | "missingStartDate" 
+  | "startDateUnknown" 
+  | "missingStopDate" 
+  | "missingDoseOrUnit" 
+  | "invalidFrequency" 
+  | "partialData" 
+  | null;
 
-interface AEKPICardsProps {
+interface MCKPICardsProps {
   metrics: KPIMetrics;
   selectedFilter?: KPIFilterType;
   onCardClick?: (filterType: KPIFilterType) => void;
 }
 
-export function AEKPICards({ metrics, selectedFilter, onCardClick }: AEKPICardsProps) {
+export function MCKPICards({ metrics, selectedFilter, onCardClick }: MCKPICardsProps) {
   const kpiItems: Array<{
     label: string;
     value: number | string;
@@ -27,39 +37,51 @@ export function AEKPICards({ metrics, selectedFilter, onCardClick }: AEKPICardsP
     filterKey: KPIFilterType;
   }> = [
     {
-      label: "Total AEs",
-      value: metrics.totalAEs,
+      label: "Total Medications",
+      value: metrics.totalMeds,
       valueColor: "text-foreground",
       filterKey: "total",
     },
     {
-      label: "Total SAEs",
-      value: metrics.totalSAEs,
+      label: "Missing Start Date",
+      value: metrics.missingStartDate,
       valueColor: "text-foreground",
-      filterKey: "sae",
+      filterKey: "missingStartDate",
     },
     {
-      label: "Total Resolved",
-      value: metrics.totalResolved,
+      label: "Start Date Unknown Flag",
+      value: metrics.startDateUnknown,
       valueColor: "text-foreground",
-      filterKey: "resolved",
+      filterKey: "startDateUnknown",
     },
     {
-      label: "Death",
-      value: metrics.deaths,
+      label: "Missing Stop Date",
+      value: metrics.missingStopDate,
       valueColor: "text-foreground",
-      filterKey: "death",
+      filterKey: "missingStopDate",
     },
     {
-      label: "% Resolved",
-      value: `${metrics.percentResolved}%`,
+      label: "Missing Dose or Unit",
+      value: metrics.missingDoseOrUnit,
       valueColor: "text-foreground",
-      filterKey: null, // % Resolved is informational only, no filter
+      filterKey: "missingDoseOrUnit",
+    },
+    {
+      label: "Invalid Frequency Entries",
+      value: metrics.invalidFreq,
+      valueColor: "text-foreground",
+      filterKey: "invalidFrequency",
+    },
+    {
+      label: "Med logs w/ Partial Data",
+      value: metrics.partialData,
+      valueColor: "text-foreground",
+      filterKey: "partialData",
     },
   ];
 
   const handleCardClick = (filterKey: KPIFilterType) => {
-    if (filterKey === null) return; // % Resolved is not clickable
+    if (filterKey === null) return; // Should not happen with our data
     
     // Toggle: if already selected, deselect
     if (selectedFilter === filterKey) {
@@ -70,7 +92,7 @@ export function AEKPICards({ metrics, selectedFilter, onCardClick }: AEKPICardsP
   };
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
       {kpiItems.map((item, index) => (
         <Card 
           key={index} 

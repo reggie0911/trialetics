@@ -91,7 +91,7 @@ export function PatientFilters({
           value={selectedPatientId}
           onValueChange={(value) => onPatientIdChange(value || '')}
         >
-          <SelectTrigger id="patient-id-filter" size="sm" className="w-[200px]">
+          <SelectTrigger id="patient-id-filter" size="sm" className="w-[200px] text-[12px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -119,7 +119,7 @@ export function PatientFilters({
           value={selectedSiteName}
           onValueChange={(value) => onSiteNameChange(value || '')}
         >
-          <SelectTrigger id="site-name-filter" size="sm" className="w-[200px]">
+          <SelectTrigger id="site-name-filter" size="sm" className="w-[200px] text-[12px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

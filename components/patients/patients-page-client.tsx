@@ -7,7 +7,6 @@ import { PatientDataTable } from "./patient-data-table";
 import { ColumnVisibilityToggle } from "./column-visibility-toggle";
 import { HeaderMappingUpload } from "./header-mapping-upload";
 import { GroupedColumnVisibility } from "./grouped-column-visibility";
-import { ProjectSelector, Project } from "./project-selector";
 import { UploadHistory } from "./upload-history";
 import { PatientEditModal } from "./patient-edit-modal";
 import { PatientFilters } from "./patient-filters";
@@ -30,7 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
 interface PatientsPageClientProps {
-  projects: Project[];
+  companyId: string;
   profileId: string;
 }
 
@@ -60,11 +59,8 @@ function calculateDaysBetweenDates(laterDateString: string | undefined, earlierD
   }
 }
 
-export function PatientsPageClient({ projects, profileId }: PatientsPageClientProps) {
-  // Project and upload selection
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    projects.length > 0 ? projects[0].id : null
-  );
+export function PatientsPageClient({ companyId, profileId }: PatientsPageClientProps) {
+  // Upload selection (removed project selection)
   const [uploads, setUploads] = useState<Tables<'patient_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
 
@@ -120,13 +116,13 @@ export function PatientsPageClient({ projects, profileId }: PatientsPageClientPr
     });
   }, [data]);
 
-  // Load uploads when project changes
+  // Load uploads on mount
   useEffect(() => {
-    if (selectedProjectId) {
-      loadUploads(selectedProjectId);
-      loadHeaderMappings(selectedProjectId);
+    if (companyId) {
+      loadUploads(companyId);
+      loadHeaderMappings(companyId);
     }
-  }, [selectedProjectId]);
+  }, [companyId]);
 
   // Load patient data when upload changes
   useEffect(() => {
@@ -200,8 +196,8 @@ export function PatientsPageClient({ projects, profileId }: PatientsPageClientPr
   };
 
   // Load header mappings for project
-  const loadHeaderMappings = async (projectId: string) => {
-    const result = await getHeaderMappings(projectId);
+  const loadHeaderMappings = async (companyId: string) => {
+    const result = await getHeaderMappings(companyId);
     if (result.success && result.data) {
       // Convert database format to HeaderMapping format
       const mappings: HeaderMapping[] = result.data.map(m => ({
@@ -222,10 +218,10 @@ export function PatientsPageClient({ projects, profileId }: PatientsPageClientPr
 
   // Handle CSV upload
   const handleUpload = async (newData: PatientRecord[], fileName: string) => {
-    if (!selectedProjectId) {
+    if (!companyId) {
       toast({
-        title: "No Project Selected",
-        description: "Please select a project before uploading data",
+        title: "Error",
+        description: "No company ID available",
         variant: "destructive",
       });
       return;
@@ -250,7 +246,7 @@ export function PatientsPageClient({ projects, profileId }: PatientsPageClientPr
       // Upload to Supabase
       setLoadingMessage("Uploading to database...");
       const result = await uploadPatientData(
-        selectedProjectId,
+        companyId,
         fileName,
         filteredData,
         newConfigs
@@ -263,7 +259,7 @@ export function PatientsPageClient({ projects, profileId }: PatientsPageClientPr
         });
         
         // Refresh uploads and select the new one
-        await loadUploads(selectedProjectId);
+        await loadUploads(companyId);
       } else {
         toast({
           title: "Upload Failed",
@@ -416,10 +412,10 @@ export function PatientsPageClient({ projects, profileId }: PatientsPageClientPr
 
   // Handle header mapping load
   const handleMappingLoad = async (mappings: HeaderMapping[], spans: VisitGroupSpan[]) => {
-    if (!selectedProjectId) {
+    if (!companyId) {
       toast({
-        title: "No Project Selected",
-        description: "Please select a project before loading header mappings",
+        title: "No Company",
+        description: "Company information is missing",
         variant: "destructive",
       });
       return;
@@ -430,7 +426,7 @@ export function PatientsPageClient({ projects, profileId }: PatientsPageClientPr
     
     // Save to database
     const result = await saveHeaderMappings(
-      selectedProjectId,
+      companyId,
       mappings.map(m => ({
         originalHeader: m.originalHeader,
         customizedHeader: m.customizedHeader,
@@ -499,8 +495,8 @@ export function PatientsPageClient({ projects, profileId }: PatientsPageClientPr
       });
       
       // Refresh uploads
-      if (selectedProjectId) {
-        await loadUploads(selectedProjectId);
+      if (companyId) {
+        await loadUploads(companyId);
       }
     } else {
       toast({
@@ -719,18 +715,11 @@ export function PatientsPageClient({ projects, profileId }: PatientsPageClientPr
         </div>
       )}
       
-      {/* Project Selector */}
-      <ProjectSelector
-        projects={projects}
-        selectedProjectId={selectedProjectId}
-        onProjectChange={setSelectedProjectId}
-      />
-
       {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <div className="flex items-center gap-2 flex-wrap">
-          <CSVUploadDialog onUpload={handleUpload} disabled={!selectedProjectId} />
-          <HeaderMappingUpload onMappingLoad={handleMappingLoad} disabled={!selectedProjectId} />
+          <CSVUploadDialog onUpload={handleUpload} />
+          <HeaderMappingUpload onMappingLoad={handleMappingLoad} />
           {headerMappings.length > 0 ? (
             <GroupedColumnVisibility
               columns={columnConfigs}
@@ -750,36 +739,34 @@ export function PatientsPageClient({ projects, profileId }: PatientsPageClientPr
             onUploadDelete={handleUploadDelete}
           />
         </div>
-        {selectedUploadId && (() => {
-          const selectedUpload = uploads.find(u => u.id === selectedUploadId);
-          if (!selectedUpload) return null;
-          const uploadDate = new Date(selectedUpload.created_at);
-          return (
-            <div className="text-[10px] text-muted-foreground">
-              Viewing upload from: <span className="font-medium text-foreground">
-                {uploadDate.toLocaleDateString('en-US', { 
-                  month: 'short', 
-                  day: 'numeric',
-                  year: 'numeric'
-                })} at {uploadDate.toLocaleTimeString('en-US', {
-                  hour: 'numeric',
-                  minute: '2-digit',
-                  hour12: true
-                })}
-              </span>
-            </div>
-          );
-        })()}
       </div>
 
       {/* Data Table */}
-      {selectedProjectId ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base sm:text-lg">Patient Data</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {data.length > 0 ? (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          {selectedUploadId && (() => {
+            const selectedUpload = uploads.find(u => u.id === selectedUploadId);
+            if (!selectedUpload) return null;
+            const uploadDate = new Date(selectedUpload.created_at);
+            return (
+              <div className="text-[10px] text-muted-foreground ml-auto">
+                Viewing upload from: <span className="font-medium text-foreground">
+                  {uploadDate.toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric',
+                    year: 'numeric'
+                  })} at {uploadDate.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    hour12: true
+                  })}
+                </span>
+              </div>
+            );
+          })()}
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {data.length > 0 ? (
               <>
                 {/* Filters */}
                 <PatientFilters
@@ -881,15 +868,6 @@ export function PatientsPageClient({ projects, profileId }: PatientsPageClientPr
             )}
           </CardContent>
         </Card>
-      ) : (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center text-sm text-muted-foreground">
-              Please select a project to view or upload patient data
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Patient Edit Modal */}
       <PatientEditModal

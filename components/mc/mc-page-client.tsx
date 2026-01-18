@@ -3,50 +3,83 @@
 import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AECSVUploadDialog, AERecord } from "./ae-csv-upload-dialog";
-import { AEDataTable } from "./ae-data-table";
-import { AEFilters } from "./ae-filters";
-import { AEKPICards, KPIFilterType } from "./ae-kpi-cards";
-import { AECategoriesChart } from "./ae-categories-chart";
-import { AEHeaderRelabelModal } from "./ae-header-relabel-modal";
-import { AEUploadHistory } from "./ae-upload-history";
+import { Loader2, Printer, Download } from "lucide-react";
+import { MCCSVUploadDialog, MCRecord } from "./mc-csv-upload-dialog";
+import { MCDataTable } from "./mc-data-table";
+import { MCFilters } from "./mc-filters";
+import { MCKPICards, KPIFilterType } from "./mc-kpi-cards";
+import { MCCategoriesChart } from "./mc-categories-chart";
+import { MCHeaderRelabelModal } from "./mc-header-relabel-modal";
+import { MCUploadHistory } from "./mc-upload-history";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  getAEHeaderMappings, 
-  saveAEHeaderMappings,
-  getAEUploads,
-  uploadAEData,
-  getAERecords,
-  deleteAEUpload,
-} from "@/lib/actions/ae-data";
+  getMCHeaderMappings, 
+  saveMCHeaderMappings,
+  getMCUploads,
+  uploadMCData,
+  getMCRecords,
+  deleteMCUpload,
+} from "@/lib/actions/mc-data";
 import { ColumnFiltersState } from "@tanstack/react-table";
 import { Tables } from "@/lib/types/database.types";
-import { Loader2, Printer, Download } from "lucide-react";
 
-interface AEPageClientProps {
+interface MCPageClientProps {
   companyId: string;
   profileId: string;
 }
 
-export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
+export function MCPageClient({ companyId, profileId }: MCPageClientProps) {
   // Upload management
-  const [uploads, setUploads] = useState<Tables<'ae_uploads'>[]>([]);
+  const [uploads, setUploads] = useState<Tables<'mc_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
   
   // Data state
-  const [data, setData] = useState<AERecord[]>([]);
+  const [data, setData] = useState<MCRecord[]>([]);
   const [headerMappings, setHeaderMappings] = useState<Record<string, string>>({});
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [kpiFilter, setKpiFilter] = useState<KPIFilterType>(null);
   const [filters, setFilters] = useState({
     siteName: "",
     subjectId: "",
-    aeDecod: "",
-    aeSer: "",
-    aeExp: "",
-    aeOut: "",
-    aeSerCat1: "",
+    medicationName: "",
+    indication: "",
+    ongoingStatus: "",
+    frequency: "",
   });
+
+  // Visit groups for multi-level headers
+  const [visitGroups] = useState<Record<string, string>>({
+    "SiteName": "Patient Info",
+    "SubjectId": "Patient Info",
+    "1.CCSVT": "Medication Details",
+    "E02_V2[1].PRO_01.PEP[1].PEPDAT": "Medication Details",
+    "1.CCMED": "Medication Details",
+    "1.CCIND": "Medication Details",
+    "1.CC1": "Medication Details",
+    "1.CCUNIT": "Medication Details",
+    "1.CCFREQ": "Medication Details",
+    "1.CCSTDAT": "Dates & Status",
+    "1.CMSTDATUN1": "Dates & Status",
+    "1.CCSPDAT": "Dates & Status",
+    "1.CCONGO1": "Dates & Status",
+  });
+
+  // Default header labels matching standard format
+  const defaultHeaderLabels: Record<string, string> = {
+    "SiteName": "SITE NAME",
+    "SubjectId": "PATIENT ID",
+    "1.CCSVT": "PROCEDURE DAT",
+    "E02_V2[1].PRO_01.PEP[1].PEPDAT": "Procedure Date",
+    "1.CCMED": "Medication Name",
+    "1.CCIND": "Indication",
+    "1.CC1": "Dose",
+    "1.CCUNIT": "Unit",
+    "1.CCFREQ": "Frequency",
+    "1.CCSTDAT": "Start Date",
+    "1.CMSTDATUN1": "Start Date Unknown",
+    "1.CCSPDAT": "Stop Date",
+    "1.CCONGO1": "Status",
+  };
 
   // Loading state
   const [isLoading, setIsLoading] = useState(false);
@@ -62,21 +95,25 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
     }
   }, [companyId]);
 
-  // Load AE data when upload is selected
+  // Load MC data when upload is selected
   useEffect(() => {
     if (selectedUploadId) {
-      loadAEData(selectedUploadId);
+      loadMCData(selectedUploadId);
     }
   }, [selectedUploadId]);
 
   const loadHeaderMappings = async () => {
-    const result = await getAEHeaderMappings(companyId);
+    const result = await getMCHeaderMappings(companyId);
     if (result.success && result.data) {
       const mappings: Record<string, string> = {};
-      result.data.forEach((mapping: any) => {
+      result.data.forEach(mapping => {
         mappings[mapping.original_header] = mapping.customized_header;
       });
-      setHeaderMappings(mappings);
+      // Merge with defaults
+      setHeaderMappings({ ...defaultHeaderLabels, ...mappings });
+    } else {
+      // Use default labels if no custom mappings
+      setHeaderMappings(defaultHeaderLabels);
     }
   };
 
@@ -84,7 +121,7 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
     setIsLoading(true);
     setLoadingMessage("Loading uploads...");
     
-    const result = await getAEUploads(companyId);
+    const result = await getMCUploads(companyId);
     if (result.success && result.data) {
       setUploads(result.data);
       
@@ -104,12 +141,15 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
     setLoadingMessage("");
   };
 
-  const loadAEData = async (uploadId: string) => {
+  const loadMCData = async (uploadId: string) => {
     setIsLoading(true);
-    setLoadingMessage("Loading AE records...");
+    setLoadingMessage("Loading medication records...");
     
-    const result = await getAERecords(uploadId);
+    const result = await getMCRecords(uploadId);
+    console.log('📊 Load MC Data Result:', result);
     if (result.success && result.data) {
+      console.log('📊 First Record Sample:', result.data.records[0]);
+      console.log('📊 Total Records:', result.data.records.length);
       setData(result.data.records);
     } else if (result.error) {
       toast({
@@ -131,7 +171,7 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
       tableOrder: index,
     }));
 
-    const result = await saveAEHeaderMappings(companyId, mappingsArray);
+    const result = await saveMCHeaderMappings(companyId, mappingsArray);
     if (result.success) {
       setHeaderMappings(newMappings);
     } else {
@@ -140,9 +180,9 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
   };
 
   // Handle CSV upload - now uploads to Supabase
-  const handleUpload = async (newData: AERecord[], fileName: string) => {
+  const handleUpload = async (newData: MCRecord[], fileName: string) => {
     setIsLoading(true);
-    setLoadingMessage(`Uploading ${newData.length} AE records...`);
+    setLoadingMessage(`Uploading ${newData.length} medication records...`);
     
     try {
       // Prepare column configs
@@ -154,7 +194,7 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
       }));
 
       // Upload to Supabase
-      const result = await uploadAEData(
+      const result = await uploadMCData(
         companyId,
         profileId,
         fileName,
@@ -165,7 +205,7 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
       if (result.success && result.data) {
         toast({
           title: "Upload Successful",
-          description: `Uploaded ${newData.length} adverse event records`,
+          description: `Uploaded ${newData.length} medication records`,
         });
 
         // Reload uploads and select the new one
@@ -174,7 +214,7 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
       } else {
         toast({
           title: "Upload Failed",
-          description: result.error || "Failed to upload AE data",
+          description: result.error || "Failed to upload medication data",
           variant: "destructive",
         });
       }
@@ -199,11 +239,10 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
     setFilters({
       siteName: "",
       subjectId: "",
-      aeDecod: "",
-      aeSer: "",
-      aeExp: "",
-      aeOut: "",
-      aeSerCat1: "",
+      medicationName: "",
+      indication: "",
+      ongoingStatus: "",
+      frequency: "",
     });
   };
 
@@ -211,7 +250,7 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
     setIsLoading(true);
     setLoadingMessage("Deleting upload...");
     
-    const result = await deleteAEUpload(uploadId);
+    const result = await deleteMCUpload(uploadId);
     
     if (result.success) {
       toast({
@@ -239,36 +278,30 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
     setLoadingMessage("");
   };
 
-  // Handle chart category click - filters the table by AEDECOD
+  // Handle chart category click - filters the table by study visit
   const handleCategoryClick = (category: string | undefined) => {
     if (category) {
-      // Add or update the AEDECOD filter
+      // Add or update the 1.CCSVT filter
       setColumnFilters((prev) => {
-        const existingFilterIndex = prev.findIndex((f) => f.id === "AEDECOD");
+        const existingFilterIndex = prev.findIndex((f) => f.id === "1.CCSVT");
         if (existingFilterIndex >= 0) {
           const newFilters = [...prev];
-          newFilters[existingFilterIndex] = { id: "AEDECOD", value: category };
+          newFilters[existingFilterIndex] = { id: "1.CCSVT", value: category };
           return newFilters;
         }
-        return [...prev, { id: "AEDECOD", value: category }];
+        return [...prev, { id: "1.CCSVT", value: category }];
       });
     } else {
-      // Remove the AEDECOD filter
-      setColumnFilters((prev) => prev.filter((f) => f.id !== "AEDECOD"));
+      // Remove the 1.CCSVT filter
+      setColumnFilters((prev) => prev.filter((f) => f.id !== "1.CCSVT"));
     }
   };
 
   // Get the currently selected category from column filters
   const selectedCategory = useMemo(() => {
-    const aeDecodFilter = columnFilters.find((f) => f.id === "AEDECOD");
-    return aeDecodFilter?.value as string | undefined;
+    const studyVisitFilter = columnFilters.find((f) => f.id === "1.CCSVT");
+    return studyVisitFilter?.value as string | undefined;
   }, [columnFilters]);
-
-  // Reset all filters (column filters, chart selection, and KPI filter)
-  const handleResetAllFilters = () => {
-    setColumnFilters([]);
-    setKpiFilter(null);
-  };
 
   // Handle print
   const handlePrint = () => {
@@ -287,22 +320,21 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
     }
 
     try {
-      // Get all column headers from the table
+      // Get column headers
       const headers = [
         "SiteName",
         "SubjectId",
-        "AESTDAT",
-        "RWOSDAT",
-        "AESER",
-        "AESERCAT1",
-        "AEEXP",
-        "AEDECOD",
-        "AEOUT",
-        "IM_AEREL",
-        "IS_AEREL",
-        "DS_AEREL",
-        "LT_AEREL",
-        "PR_AEREL",
+        "1.CCSVT",
+        "E02_V2[1].PRO_01.PEP[1].PEPDAT",
+        "1.CCMED",
+        "1.CCIND",
+        "1.CC1",
+        "1.CCUNIT",
+        "1.CCFREQ",
+        "1.CCSTDAT",
+        "1.CMSTDATUN1",
+        "1.CCSPDAT",
+        "1.CCONGO1"
       ];
 
       // Create CSV content
@@ -325,7 +357,7 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
       const url = URL.createObjectURL(blob);
       
       link.setAttribute('href', url);
-      link.setAttribute('download', `ae_metrics_${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute('download', `med_compliance_${new Date().toISOString().split('T')[0]}.csv`);
       link.style.visibility = 'hidden';
       
       document.body.appendChild(link);
@@ -334,7 +366,7 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
 
       toast({
         title: "Download successful",
-        description: `Downloaded ${filteredData.length} AE records`,
+        description: `Downloaded ${filteredData.length} medication records`,
       });
     } catch (error) {
       console.error('Download error:', error);
@@ -344,6 +376,12 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
         variant: "destructive",
       });
     }
+  };
+
+  // Reset all filters (column filters, chart selection, and KPI filter)
+  const handleResetAllFilters = () => {
+    setColumnFilters([]);
+    setKpiFilter(null);
   };
 
   // Handle KPI card click - filters the table
@@ -369,38 +407,31 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
       });
     }
 
-    if (filters.aeDecod) {
+    if (filters.medicationName) {
       result = result.filter((row) => {
-        const aeDecod = row.AEDECOD || "";
-        return aeDecod.toLowerCase().includes(filters.aeDecod.toLowerCase());
+        const medName = row["1.CCMED"] || "";
+        return medName.toLowerCase().includes(filters.medicationName.toLowerCase());
       });
     }
 
-    if (filters.aeSer) {
+    if (filters.indication) {
       result = result.filter((row) => {
-        const aeSer = row.AESER || "";
-        return aeSer.toLowerCase().includes(filters.aeSer.toLowerCase());
+        const indication = row["1.CCIND"] || "";
+        return indication.toLowerCase().includes(filters.indication.toLowerCase());
       });
     }
 
-    if (filters.aeExp) {
+    if (filters.ongoingStatus) {
       result = result.filter((row) => {
-        const aeExp = row.AEEXP || "";
-        return aeExp.toLowerCase().includes(filters.aeExp.toLowerCase());
+        const status = row["1.CCONGO1"] || "";
+        return status.toLowerCase().includes(filters.ongoingStatus.toLowerCase());
       });
     }
 
-    if (filters.aeOut) {
+    if (filters.frequency) {
       result = result.filter((row) => {
-        const aeOut = row.AEOUT || "";
-        return aeOut.toLowerCase().includes(filters.aeOut.toLowerCase());
-      });
-    }
-
-    if (filters.aeSerCat1) {
-      result = result.filter((row) => {
-        const aeSerCat1 = row.AESERCAT1 || "";
-        return aeSerCat1.toLowerCase().includes(filters.aeSerCat1.toLowerCase());
+        const freq = row["1.CCFREQ"] || "";
+        return freq.toLowerCase().includes(filters.frequency.toLowerCase());
       });
     }
 
@@ -418,7 +449,7 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
       
       if (filterValue) {
         result = result.filter((row) => {
-          const cellValue = row[columnId as keyof AERecord];
+          const cellValue = row[columnId as keyof MCRecord];
           return cellValue === filterValue;
         });
       }
@@ -427,20 +458,39 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
     // Apply KPI filter
     if (kpiFilter) {
       switch (kpiFilter) {
-        case "sae":
+        case "missingStartDate":
           result = result.filter((row) => 
-            row.AESER && row.AESER.toUpperCase().includes("SERIOUS")
+            !row["1.CCSTDAT"] || row["1.CCSTDAT"].trim() === ""
           );
           break;
-        case "resolved":
+        case "startDateUnknown":
           result = result.filter((row) => 
-            row.AEOUT && row.AEOUT.toUpperCase().includes("RESOLVED")
+            row["1.CMSTDATUN1"] === "Unknown" || row["1.CMSTDATUN1"] === "Y"
           );
           break;
-        case "death":
+        case "missingStopDate":
           result = result.filter((row) => 
-            row.AESERCAT1 && row.AESERCAT1.toUpperCase().includes("DEATH")
+            row["1.CCONGO1"] !== "Ongoing" && (!row["1.CCSPDAT"] || row["1.CCSPDAT"].trim() === "")
           );
+          break;
+        case "missingDoseOrUnit":
+          result = result.filter((row) => 
+            !row["1.CC1"] || !row["1.CCUNIT"]
+          );
+          break;
+        case "invalidFrequency":
+          result = result.filter((row) => {
+            const freq = row["1.CCFREQ"];
+            const validFreqs = ['QD', 'BID', 'TID', 'QID', 'PRN', '1x', 'Other'];
+            return freq && !validFreqs.some(v => freq.includes(v));
+          });
+          break;
+        case "partialData":
+          result = result.filter((row) => {
+            const fields = [row["1.CCMED"], row["1.CC1"], row["1.CCUNIT"], row["1.CCFREQ"], row["1.CCSTDAT"]];
+            const filledFields = fields.filter(f => f && f.trim() !== "").length;
+            return filledFields > 0 && filledFields < fields.length;
+          });
           break;
         case "total":
           // No additional filtering needed - show all
@@ -452,28 +502,39 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
   }, [topFilteredData, columnFilters, kpiFilter]);
 
   // Calculate KPI metrics from topFilteredData (excludes KPI and column filters)
-  // This ensures KPI cards show total counts, not filtered counts
   const kpiMetrics = useMemo(() => {
-    const totalAEs = topFilteredData.length;
-    const totalSAEs = topFilteredData.filter(
-      (row) => row.AESER && row.AESER.toUpperCase().includes("SERIOUS")
+    const totalMeds = topFilteredData.length;
+    const missingStartDate = topFilteredData.filter(row => 
+      !row["1.CCSTDAT"] || row["1.CCSTDAT"].trim() === ""
     ).length;
-    const totalResolved = topFilteredData.filter(
-      (row) => row.AEOUT && row.AEOUT.toUpperCase().includes("RESOLVED")
+    const startDateUnknown = topFilteredData.filter(row => 
+      row["1.CMSTDATUN1"] === "Unknown" || row["1.CMSTDATUN1"] === "Y"
     ).length;
-    const deaths = topFilteredData.filter(
-      (row) =>
-        row.AESERCAT1 && row.AESERCAT1.toUpperCase().includes("DEATH")
+    const missingStopDate = topFilteredData.filter(row => 
+      row["1.CCONGO1"] !== "Ongoing" && (!row["1.CCSPDAT"] || row["1.CCSPDAT"].trim() === "")
     ).length;
-    const percentResolved =
-      totalAEs > 0 ? Math.round((totalResolved / totalAEs) * 100) : 0;
+    const missingDoseOrUnit = topFilteredData.filter(row => 
+      !row["1.CC1"] || !row["1.CCUNIT"]
+    ).length;
+    const invalidFreq = topFilteredData.filter(row => {
+      const freq = row["1.CCFREQ"];
+      const validFreqs = ['QD', 'BID', 'TID', 'QID', 'PRN', '1x', 'Other'];
+      return freq && !validFreqs.some(v => freq.includes(v));
+    }).length;
+    const partialData = topFilteredData.filter(row => {
+      const fields = [row["1.CCMED"], row["1.CC1"], row["1.CCUNIT"], row["1.CCFREQ"], row["1.CCSTDAT"]];
+      const filledFields = fields.filter(f => f && f.trim() !== "").length;
+      return filledFields > 0 && filledFields < fields.length;
+    }).length;
 
     return {
-      totalAEs,
-      totalSAEs,
-      totalResolved,
-      deaths,
-      percentResolved,
+      totalMeds,
+      missingStartDate,
+      startDateUnknown,
+      missingStopDate,
+      missingDoseOrUnit,
+      invalidFreq,
+      partialData,
     };
   }, [topFilteredData]);
 
@@ -492,17 +553,17 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
       {/* Upload Control & History */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <AECSVUploadDialog 
+          <MCCSVUploadDialog 
             onUpload={handleUpload}
             companyId={companyId}
             profileId={profileId}
           />
-          <AEHeaderRelabelModal 
+          <MCHeaderRelabelModal 
             currentMappings={headerMappings}
             onSave={handleSaveHeaderMappings}
             disabled={!companyId}
           />
-          <AEUploadHistory
+          <MCUploadHistory
             uploads={uploads}
             selectedUploadId={selectedUploadId}
             onUploadSelect={handleUploadSelect}
@@ -536,7 +597,7 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
       {/* Filters */}
       {data.length > 0 && (
         <>
-          <AEFilters 
+          <MCFilters 
             filters={filters} 
             onFiltersChange={setFilters} 
             onResetAll={handleResetAllFilters}
@@ -544,14 +605,14 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
           />
 
           {/* KPI Cards */}
-          <AEKPICards 
+          <MCKPICards 
             metrics={kpiMetrics} 
             selectedFilter={kpiFilter}
             onCardClick={handleKpiCardClick}
           />
 
-          {/* AE Categories Chart */}
-          <AECategoriesChart 
+          {/* MC Categories Chart */}
+          <MCCategoriesChart 
             data={filteredData} 
             selectedCategory={selectedCategory}
             onCategoryClick={handleCategoryClick}
@@ -560,14 +621,15 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
           {/* Data Table */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Adverse Events</CardTitle>
+              <CardTitle className="text-sm">Medication Records</CardTitle>
             </CardHeader>
             <CardContent>
-              <AEDataTable 
+              <MCDataTable 
                 data={filteredData} 
                 headerMappings={headerMappings}
                 columnFilters={columnFilters}
                 onColumnFiltersChange={setColumnFilters}
+                visitGroups={visitGroups}
               />
             </CardContent>
           </Card>
