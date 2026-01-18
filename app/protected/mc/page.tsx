@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation';
 import { ProtectedNavbar } from '@/components/layout/protected-navbar';
-import { AENavbar } from '@/components/ae/ae-navbar';
-import { AEPageClient } from '@/components/ae/ae-page-client';
+import { MCNavbar } from '@/components/mc/mc-navbar';
+import { MCPageClient } from '@/components/mc/mc-page-client';
 import { createClient } from '@/lib/server';
 
-export default async function AEPage() {
+export default async function MCPage() {
   const supabase = await createClient();
 
   // Check authentication
@@ -32,17 +32,17 @@ export default async function AEPage() {
         <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-[32px] font-semibold mb-1 tracking-[-1px]">
-              AE Metrics
+              Med Compliance
             </h1>
             <p className="text-[11px] text-muted-foreground">
-              Upload and manage adverse event data
+              Upload and manage medication compliance data
             </p>
           </div>
-          <AENavbar />
+          <MCNavbar />
         </div>
 
         {/* Client-side component for data management */}
-        <AEPageClient companyId={profile.company_id || ""} profileId={profile.id} />
+        <MCPageClient companyId={profile.company_id || ""} profileId={profile.id} />
       </main>
     </div>
   );

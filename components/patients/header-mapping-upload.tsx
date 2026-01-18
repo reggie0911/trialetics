@@ -73,12 +73,13 @@ export function HeaderMappingUpload({ onMappingLoad, disabled = false }: HeaderM
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <Button variant="outline" size="sm" className="gap-2" asChild disabled={disabled}>
-        <DialogTrigger>
-          <FileSpreadsheet className="h-4 w-4" />
-          {uploadedFile ? `Loaded: ${uploadedFile}` : 'Load Header Map'}
-        </DialogTrigger>
-      </Button>
+      <DialogTrigger
+        disabled={disabled}
+        className="inline-flex items-center cursor-pointer justify-center gap-2 whitespace-nowrap rounded-md text-xs font-medium transition-all disabled:pointer-events-none disabled:opacity-50 border bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4"
+      >
+        <FileSpreadsheet className="w-3 h-3" />
+        Load Header Map
+      </DialogTrigger>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Upload Header Mapping CSV</DialogTitle>

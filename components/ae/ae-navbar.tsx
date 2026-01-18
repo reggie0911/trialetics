@@ -37,7 +37,7 @@ const menuItems = [
   {
     type: "link" as const,
     label: "Med Compliance",
-    href: "#",
+    href: "/protected/mc",
   },
 ];
 
@@ -46,7 +46,7 @@ export function AENavbar() {
 
   return (
     <NavigationMenu className="w-auto">
-      <NavigationMenuList className="flex-col sm:flex-row justify-end gap-0">
+      <NavigationMenuList className="flex-col sm:flex-row justify-end gap-2">
         {menuItems.map((item, index) => (
           <NavigationMenuItem key={index}>
             <NavigationMenuLink asChild>
@@ -54,8 +54,10 @@ export function AENavbar() {
                 href={item.href}
                 className={cn(
                   navigationMenuTriggerStyle(),
-                  "text-[11px] h-auto py-2 px-3",
-                  pathname === item.href && "bg-accent text-accent-foreground"
+                  "text-[11px] h-auto py-2 px-3 transition-all",
+                  pathname === item.href 
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" 
+                    : "hover:bg-primary/10"
                 )}
               >
                 {item.label}

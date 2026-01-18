@@ -13,36 +13,16 @@ export default async function PatientsPage() {
     redirect('/auth/login');
   }
 
-  // Fetch user profile
+  // Fetch user profile with company_id
   const { data: profile } = await supabase
     .from('profiles')
     .select('id, first_name, display_name, company_id, role')
     .eq('user_id', data.user.id)
     .single();
 
-  if (!profile) {
+  if (!profile || !profile.company_id) {
     redirect('/auth/login');
   }
-
-  // Fetch user's projects based on role
-  let projectsQuery = supabase
-    .from('projects')
-    .select('id, protocol_number, protocol_name, protocol_status, trial_phase')
-    .eq('company_id', profile.company_id!)
-    .order('protocol_number', { ascending: true });
-
-  // For non-admin users, only show projects they're assigned to
-  if (profile.role !== 'admin') {
-    const { data: userProjects } = await supabase
-      .from('user_projects')
-      .select('project_id')
-      .eq('user_id', profile.id);
-
-    const projectIds = userProjects?.map(up => up.project_id) || [];
-    projectsQuery = projectsQuery.in('id', projectIds);
-  }
-
-  const { data: projects } = await projectsQuery;
 
   return (
     <div className="min-h-screen bg-background">
@@ -51,11 +31,11 @@ export default async function PatientsPage() {
         {/* Header with Navigation */}
         <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-lg sm:text-xl font-semibold mb-1">
-              Patient Data Tracker
+            <h1 className="text-[32px] font-semibold mb-1 tracking-[-1px]">
+              MRace Performance Tracker
             </h1>
             <p className="text-xs text-muted-foreground">
-              Upload and manage monthly patient data exports
+              Upload and manage patient data for your company
             </p>
           </div>
           <PatientsNavbar />
@@ -63,7 +43,7 @@ export default async function PatientsPage() {
 
         {/* Client-side component for data management */}
         <PatientsPageClient 
-          projects={projects || []} 
+          companyId={profile.company_id} 
           profileId={profile.id}
         />
       </main>

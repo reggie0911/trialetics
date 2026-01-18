@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { History, FileText, Calendar, Users, Trash2 } from "lucide-react";
+import { History, FileText, Calendar, BarChart2, Trash2 } from "lucide-react";
 import { Tables } from "@/lib/types/database.types";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -26,19 +26,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-interface UploadHistoryProps {
-  uploads: Tables<'patient_uploads'>[];
+interface MCUploadHistoryProps {
+  uploads: Tables<'mc_uploads'>[];
   selectedUploadId: string | null;
   onUploadSelect: (uploadId: string) => void;
   onUploadDelete?: (uploadId: string) => void;
 }
 
-export function UploadHistory({
+export function MCUploadHistory({
   uploads,
   selectedUploadId,
   onUploadSelect,
   onUploadDelete,
-}: UploadHistoryProps) {
+}: MCUploadHistoryProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [uploadToDelete, setUploadToDelete] = useState<string | null>(null);
@@ -65,22 +65,22 @@ export function UploadHistory({
   return (
     <>
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetTrigger
-          className="inline-flex items-center cursor-pointer justify-center gap-2 whitespace-nowrap rounded-md text-xs font-medium transition-all disabled:pointer-events-none disabled:opacity-50 border bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-4"
-        >
-          <History className="w-3 h-3" />
-          Upload History
-          {uploads.length > 0 && (
-            <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-              {uploads.length}
-            </Badge>
-          )}
-        </SheetTrigger>
+        <Button variant="outline" size="sm" asChild>
+          <SheetTrigger className="text-[11px] h-8">
+            <History className="h-3 w-3 mr-2" />
+            Upload History
+            {uploads.length > 0 && (
+              <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0">
+                {uploads.length}
+              </Badge>
+            )}
+          </SheetTrigger>
+        </Button>
         <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
-            <SheetTitle>Upload History</SheetTitle>
-            <SheetDescription>
-              View and manage previous patient data uploads
+            <SheetTitle>MC Upload History</SheetTitle>
+            <SheetDescription className="text-xs">
+              View and manage previous medication compliance data uploads
             </SheetDescription>
           </SheetHeader>
           <ScrollArea className="h-[calc(100vh-120px)] mt-4">
@@ -89,7 +89,7 @@ export function UploadHistory({
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <FileText className="h-10 w-10 text-muted-foreground mb-3" />
                   <p className="text-xs text-muted-foreground">
-                    No uploads yet. Upload your first patient data CSV file to get started.
+                    No uploads yet. Upload your first MC data CSV file to get started.
                   </p>
                 </div>
               ) : (
@@ -119,15 +119,14 @@ export function UploadHistory({
                                 Current
                               </Badge>
                             )}
-                            {/* Delete button hidden for now */}
                           </div>
                         </div>
 
                         {/* Stats Row */}
                         <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-1.5">
                           <div className="flex items-center gap-1">
-                            <Users className="h-2.5 w-2.5" />
-                            <span>{upload.row_count} patients</span>
+                            <BarChart2 className="h-2.5 w-2.5" />
+                            <span>{upload.row_count} medication records</span>
                           </div>
                           <span className="text-muted-foreground/50">•</span>
                           <span>{upload.column_count} columns</span>
@@ -168,7 +167,7 @@ export function UploadHistory({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Upload?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete this upload and all associated patient data.
+              This will permanently delete this upload and all associated medication compliance records.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>

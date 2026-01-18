@@ -166,7 +166,7 @@ export function PatientDataTable({
       )}
 
       <div
-        className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-300px)] border rounded-md"
+        className="overflow-x-auto border rounded-md"
         onScroll={handleScroll}
       >
         <DndContext
@@ -202,7 +202,7 @@ export function PatientDataTable({
                   <TableRow 
                     key={row.id}
                     onDoubleClick={() => onRowDoubleClick?.(row.original)}
-                    className="cursor-pointer"
+                    className="cursor-pointer group hover:!bg-[#79D7BE]"
                   >
                     {row.getVisibleCells().map((cell, colIdx) => {
                       const groupIndex = columnToGroupIndex.get(cell.column.id) ?? 0;
@@ -326,7 +326,7 @@ function DragAlongCell({ cell, isFirstColumn, columnConfig, groupIndex, rowData 
   return (
     <TableCell
       ref={setNodeRef}
-      className={`text-xs p-1 px-2 whitespace-nowrap text-center ${bgColorClass} ${
+      className={`text-xs p-1 px-2 whitespace-nowrap text-center ${bgColorClass} group-hover:!bg-transparent ${
         isFirstColumn ? "font-medium" : ""
       }`}
       style={style}

@@ -13,54 +13,50 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
-import { AERecord } from "./ae-csv-upload-dialog";
+import { MCRecord } from "./mc-csv-upload-dialog";
 
-interface AEFiltersProps {
+interface MCFiltersProps {
   filters: {
     siteName: string;
     subjectId: string;
-    aeDecod: string;
-    aeSer: string;
-    aeExp: string;
-    aeOut: string;
-    aeSerCat1: string;
+    medicationName: string;
+    indication: string;
+    ongoingStatus: string;
+    frequency: string;
   };
-  onFiltersChange: (filters: AEFiltersProps["filters"]) => void;
+  onFiltersChange: (filters: MCFiltersProps["filters"]) => void;
   onResetAll?: () => void;
-  data: AERecord[];
+  data: MCRecord[];
 }
 
-export function AEFilters({ filters, onFiltersChange, onResetAll, data }: AEFiltersProps) {
+export function MCFilters({ filters, onFiltersChange, onResetAll, data }: MCFiltersProps) {
   const [isOpen, setIsOpen] = useState(true);
   
   // Get unique values for each filter
   const uniqueValues = useMemo(() => {
     const siteNames = new Set<string>();
     const subjectIds = new Set<string>();
-    const aeDecods = new Set<string>();
-    const aeSers = new Set<string>();
-    const aeExps = new Set<string>();
-    const aeOuts = new Set<string>();
-    const aeSerCat1s = new Set<string>();
+    const medicationNames = new Set<string>();
+    const indications = new Set<string>();
+    const ongoingStatuses = new Set<string>();
+    const frequencies = new Set<string>();
 
     data.forEach((row) => {
       if (row.SiteName) siteNames.add(row.SiteName);
       if (row.SubjectId) subjectIds.add(row.SubjectId);
-      if (row.AEDECOD) aeDecods.add(row.AEDECOD);
-      if (row.AESER) aeSers.add(row.AESER);
-      if (row.AEEXP) aeExps.add(row.AEEXP);
-      if (row.AEOUT) aeOuts.add(row.AEOUT);
-      if (row.AESERCAT1) aeSerCat1s.add(row.AESERCAT1);
+      if (row["1.CCMED"]) medicationNames.add(row["1.CCMED"]);
+      if (row["1.CCIND"]) indications.add(row["1.CCIND"]);
+      if (row["1.CCONGO1"]) ongoingStatuses.add(row["1.CCONGO1"]);
+      if (row["1.CCFREQ"]) frequencies.add(row["1.CCFREQ"]);
     });
 
     return {
       siteNames: Array.from(siteNames).sort(),
       subjectIds: Array.from(subjectIds).sort(),
-      aeDecods: Array.from(aeDecods).sort(),
-      aeSers: Array.from(aeSers).sort(),
-      aeExps: Array.from(aeExps).sort(),
-      aeOuts: Array.from(aeOuts).sort(),
-      aeSerCat1s: Array.from(aeSerCat1s).sort(),
+      medicationNames: Array.from(medicationNames).sort(),
+      indications: Array.from(indications).sort(),
+      ongoingStatuses: Array.from(ongoingStatuses).sort(),
+      frequencies: Array.from(frequencies).sort(),
     };
   }, [data]);
 
@@ -69,11 +65,10 @@ export function AEFilters({ filters, onFiltersChange, onResetAll, data }: AEFilt
     onFiltersChange({
       siteName: "",
       subjectId: "",
-      aeDecod: "",
-      aeSer: "",
-      aeExp: "",
-      aeOut: "",
-      aeSerCat1: "",
+      medicationName: "",
+      indication: "",
+      ongoingStatus: "",
+      frequency: "",
     });
     // Reset column filters and chart selection
     onResetAll?.();
@@ -97,8 +92,8 @@ export function AEFilters({ filters, onFiltersChange, onResetAll, data }: AEFilt
         
         <CollapsibleContent>
           <CardContent className="pt-0">
-            {/* First Row - 5 Filters */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {/* First Row - 6 Filters */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           {/* Site Name */}
           <div className="space-y-1">
             <Label htmlFor="site-name" className="text-[11px]">
@@ -149,48 +144,73 @@ export function AEFilters({ filters, onFiltersChange, onResetAll, data }: AEFilt
             </Select>
           </div>
 
-          {/* Category */}
+          {/* Medication Name */}
           <div className="space-y-1">
-            <Label htmlFor="category" className="text-[11px]">
-              Category
+            <Label htmlFor="medication-name" className="text-[11px]">
+              Medication Name
             </Label>
             <Select
-              value={filters.aeDecod}
+              value={filters.medicationName}
               onValueChange={(value) =>
-                onFiltersChange({ ...filters, aeDecod: value || "" })
+                onFiltersChange({ ...filters, medicationName: value || "" })
               }
             >
-              <SelectTrigger id="category" className="h-8 text-[11px] w-full">
+              <SelectTrigger id="medication-name" className="h-8 text-[11px] w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="text-[11px]">
                 <SelectItem value="" className="text-[11px]">Choose an option...</SelectItem>
-                {uniqueValues.aeDecods.map((cat) => (
-                  <SelectItem key={cat} value={cat} className="text-[11px]">
-                    {cat}
+                {uniqueValues.medicationNames.map((med) => (
+                  <SelectItem key={med} value={med} className="text-[11px]">
+                    {med}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Deaths */}
+          {/* Indication */}
           <div className="space-y-1">
-            <Label htmlFor="deaths" className="text-[11px]">
-              Deaths
+            <Label htmlFor="indication" className="text-[11px]">
+              Indication
             </Label>
             <Select
-              value={filters.aeSerCat1}
+              value={filters.indication}
               onValueChange={(value) =>
-                onFiltersChange({ ...filters, aeSerCat1: value || "" })
+                onFiltersChange({ ...filters, indication: value || "" })
               }
             >
-              <SelectTrigger id="deaths" className="h-8 text-[11px] w-full">
+              <SelectTrigger id="indication" className="h-8 text-[11px] w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="text-[11px]">
                 <SelectItem value="" className="text-[11px]">Choose an option...</SelectItem>
-                {uniqueValues.aeSerCat1s.map((status) => (
+                {uniqueValues.indications.map((ind) => (
+                  <SelectItem key={ind} value={ind} className="text-[11px]">
+                    {ind}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Ongoing Status */}
+          <div className="space-y-1">
+            <Label htmlFor="ongoing-status" className="text-[11px]">
+              Ongoing Status
+            </Label>
+            <Select
+              value={filters.ongoingStatus}
+              onValueChange={(value) =>
+                onFiltersChange({ ...filters, ongoingStatus: value || "" })
+              }
+            >
+              <SelectTrigger id="ongoing-status" className="h-8 text-[11px] w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="text-[11px]">
+                <SelectItem value="" className="text-[11px]">Choose an option...</SelectItem>
+                {uniqueValues.ongoingStatuses.map((status) => (
                   <SelectItem key={status} value={status} className="text-[11px]">
                     {status}
                   </SelectItem>
@@ -199,78 +219,25 @@ export function AEFilters({ filters, onFiltersChange, onResetAll, data }: AEFilt
             </Select>
           </div>
 
-          {/* SAE/ AE Status */}
+          {/* Frequency */}
           <div className="space-y-1">
-            <Label htmlFor="sae-ae-status" className="text-[11px]">
-              SAE/ AE Status
+            <Label htmlFor="frequency" className="text-[11px]">
+              Frequency
             </Label>
             <Select
-              value={filters.aeSer}
+              value={filters.frequency}
               onValueChange={(value) =>
-                onFiltersChange({ ...filters, aeSer: value || "" })
+                onFiltersChange({ ...filters, frequency: value || "" })
               }
             >
-              <SelectTrigger id="sae-ae-status" className="h-8 text-[11px] w-full">
+              <SelectTrigger id="frequency" className="h-8 text-[11px] w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent className="text-[11px]">
                 <SelectItem value="" className="text-[11px]">Choose an option...</SelectItem>
-                {uniqueValues.aeSers.map((status) => (
-                  <SelectItem key={status} value={status} className="text-[11px]">
-                    {status}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Second Row - 2 More Filters */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mt-3">
-          {/* Study Procedure - Causality */}
-          <div className="space-y-1">
-            <Label htmlFor="study-proc-causality" className="text-[11px]">
-              Study Procedure - Causality
-            </Label>
-            <Select
-              value={filters.aeExp}
-              onValueChange={(value) =>
-                onFiltersChange({ ...filters, aeExp: value || "" })
-              }
-            >
-              <SelectTrigger id="study-proc-causality" className="h-8 text-[11px] w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="text-[11px]">
-                <SelectItem value="" className="text-[11px]">Choose an option...</SelectItem>
-                {uniqueValues.aeExps.map((exp) => (
-                  <SelectItem key={exp} value={exp} className="text-[11px]">
-                    {exp}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Outcome */}
-          <div className="space-y-1">
-            <Label htmlFor="outcome" className="text-[11px]">
-              Outcome
-            </Label>
-            <Select
-              value={filters.aeOut}
-              onValueChange={(value) =>
-                onFiltersChange({ ...filters, aeOut: value || "" })
-              }
-            >
-              <SelectTrigger id="outcome" className="h-8 text-[11px] w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="text-[11px]">
-                <SelectItem value="" className="text-[11px]">Choose an option...</SelectItem>
-                {uniqueValues.aeOuts.map((out) => (
-                  <SelectItem key={out} value={out} className="text-[11px]">
-                    {out}
+                {uniqueValues.frequencies.map((freq) => (
+                  <SelectItem key={freq} value={freq} className="text-[11px]">
+                    {freq}
                   </SelectItem>
                 ))}
               </SelectContent>

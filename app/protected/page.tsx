@@ -4,7 +4,7 @@ import { ProtectedNavbar } from '@/components/layout/protected-navbar';
 import { ProtectedProjects } from '@/components/protected-projects';
 import { createClient } from '@/lib/server';
 import { getUserProjects } from '@/lib/actions/projects';
-import { Project } from '@/lib/types/database.types';
+import { Tables } from '@/lib/types/database.types';
 
 export default async function ProtectedPage() {
   const supabase = await createClient();
@@ -16,7 +16,7 @@ export default async function ProtectedPage() {
 
   // Fetch user's projects
   const projectsResponse = await getUserProjects();
-  const projects: Project[] = projectsResponse.success
+  const projects: Tables<'projects'>[] = projectsResponse.success
     ? projectsResponse.data || []
     : [];
 

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/server';
-import { Project } from '@/lib/types/database.types';
+import { Tables } from '@/lib/types/database.types';
 
 export interface CreateProjectInput {
   programName?: string;

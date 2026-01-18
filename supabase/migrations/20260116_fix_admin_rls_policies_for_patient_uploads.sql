@@ -1,4 +1,4 @@
-﻿-- Fix RLS policies to allow admins to insert/update/delete on patient_uploads and header_mappings
+-- Fix RLS policies to allow admins to insert/update/delete on patient_uploads and header_mappings
 -- for any project in their company, while regular users still need user_projects assignment
 
 -- Drop existing INSERT policies
@@ -313,3 +313,4 @@ USING (
     SELECT id FROM patient_uploads WHERE uploaded_by = (SELECT id FROM profiles WHERE user_id = auth.uid())
   )
 );
+

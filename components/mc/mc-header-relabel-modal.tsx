@@ -19,31 +19,30 @@ import { useToast } from "@/hooks/use-toast";
 const DEFAULT_HEADERS = [
   "SiteName",
   "SubjectId",
-  "AESTDAT",
-  "RWOSDAT",
-  "AESER",
-  "AESERCAT1",
-  "AEEXP",
-  "AEDECOD",
-  "AEOUT",
-  "IM_AEREL",
-  "IS_AEREL",
-  "DS_AEREL",
-  "LT_AEREL",
-  "PR_AEREL",
+  "EventName",
+  "1.CCSVT",
+  "1.CCMED",
+  "1.CCIND",
+  "1.CC1",
+  "1.CCUNIT",
+  "1.CCFREQ",
+  "1.CCSTDAT",
+  "1.CMSTDATUN1",
+  "1.CCSPDAT",
+  "1.CCONGO1"
 ];
 
-interface AEHeaderRelabelModalProps {
+interface MCHeaderRelabelModalProps {
   currentMappings: Record<string, string>;
   onSave: (mappings: Record<string, string>) => Promise<void>;
   disabled?: boolean;
 }
 
-export function AEHeaderRelabelModal({
+export function MCHeaderRelabelModal({
   currentMappings,
   onSave,
   disabled = false,
-}: AEHeaderRelabelModalProps) {
+}: MCHeaderRelabelModalProps) {
   const [open, setOpen] = useState(false);
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
