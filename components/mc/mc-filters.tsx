@@ -15,6 +15,9 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
 import { MCRecord } from "./mc-csv-upload-dialog";
 
+// Change status filter type
+export type ChangeStatusFilterType = 'all' | 'Yes' | 'No' | '-';
+
 interface MCFiltersProps {
   filters: {
     siteName: string;
@@ -27,9 +30,21 @@ interface MCFiltersProps {
   onFiltersChange: (filters: MCFiltersProps["filters"]) => void;
   onResetAll?: () => void;
   data: MCRecord[];
+  // Pivot view specific props
+  viewMode?: 'standard' | 'pivot';
+  changeStatusFilter?: ChangeStatusFilterType;
+  onChangeStatusFilterChange?: (value: ChangeStatusFilterType) => void;
 }
 
-export function MCFilters({ filters, onFiltersChange, onResetAll, data }: MCFiltersProps) {
+export function MCFilters({ 
+  filters, 
+  onFiltersChange, 
+  onResetAll, 
+  data,
+  viewMode = 'standard',
+  changeStatusFilter = 'all',
+  onChangeStatusFilterChange,
+}: MCFiltersProps) {
   const [isOpen, setIsOpen] = useState(true);
   
   // Get unique values for each filter
@@ -243,6 +258,46 @@ export function MCFilters({ filters, onFiltersChange, onResetAll, data }: MCFilt
               </SelectContent>
             </Select>
           </div>
+
+          {/* Change Status - Only visible in Pivot View */}
+          {viewMode === 'pivot' && (
+            <div className="space-y-1">
+              <Label htmlFor="change-status" className="text-[11px]">
+                Change Status
+              </Label>
+              <Select
+                value={changeStatusFilter}
+                onValueChange={(value) =>
+                  onChangeStatusFilterChange?.(value as ChangeStatusFilterType)
+                }
+              >
+                <SelectTrigger id="change-status" className="h-8 text-[11px] w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="text-[11px]">
+                  <SelectItem value="all" className="text-[11px]">All</SelectItem>
+                  <SelectItem value="Yes" className="text-[11px]">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
+                      Has Changes (Yes)
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="No" className="text-[11px]">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-green-400"></span>
+                      No Changes (No)
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="-" className="text-[11px]">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-gray-400"></span>
+                      First Visit (-)
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
         
         {/* Reset Button Row */}

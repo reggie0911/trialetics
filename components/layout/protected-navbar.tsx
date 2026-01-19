@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { LogOut, Settings } from 'lucide-react';
+import { LogOut, Settings, Shield } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
 
 import Logo from '@/components/layout/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -20,12 +21,13 @@ export function ProtectedNavbar() {
   const pathname = usePathname();
   const [showSettings, setShowSettings] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
-    loadUserAvatar();
+    loadUserProfile();
   }, []);
 
-  const loadUserAvatar = async () => {
+  const loadUserProfile = async () => {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
@@ -33,7 +35,7 @@ export function ProtectedNavbar() {
       if (user) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('avatar_url')
+          .select('avatar_url, role')
           .eq('user_id', user.id)
           .single();
         
@@ -41,9 +43,12 @@ export function ProtectedNavbar() {
           // Add timestamp to force reload
           setAvatarUrl(`${profile.avatar_url}?t=${Date.now()}`);
         }
+        if (profile?.role) {
+          setUserRole(profile.role);
+        }
       }
     } catch (error) {
-      console.error('Error loading avatar:', error);
+      console.error('Error loading profile:', error);
     }
   };
 
@@ -55,11 +60,13 @@ export function ProtectedNavbar() {
 
   const handleSettingsClose = (open: boolean) => {
     setShowSettings(open);
-    // Reload avatar when modal closes in case it was updated
+    // Reload profile when modal closes in case it was updated
     if (!open) {
-      loadUserAvatar();
+      loadUserProfile();
     }
   };
+
+  const isAdmin = userRole === 'admin';
 
   // Determine the label based on the current route
   const isDashboard = pathname?.startsWith('/protected/dashboard');
@@ -92,6 +99,12 @@ export function ProtectedNavbar() {
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </DropdownMenuItem>
+                {isAdmin && (
+                  <DropdownMenuItem onClick={() => router.push('/protected/admin')} className="cursor-pointer">
+                    <Shield className="mr-2 h-4 w-4" />
+                    <span>Admin</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Log out</span>

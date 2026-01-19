@@ -1033,6 +1033,208 @@ export type Database = {
           },
         ]
       }
+      vw_column_configs: {
+        Row: {
+          column_id: string
+          created_at: string
+          id: string
+          label: string
+          table_order: number | null
+          updated_at: string
+          upload_id: string
+          visible: boolean
+        }
+        Insert: {
+          column_id: string
+          created_at?: string
+          id?: string
+          label: string
+          table_order?: number | null
+          updated_at?: string
+          upload_id: string
+          visible?: boolean
+        }
+        Update: {
+          column_id?: string
+          created_at?: string
+          id?: string
+          label?: string
+          table_order?: number | null
+          updated_at?: string
+          upload_id?: string
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vw_column_configs_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "vw_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_header_mappings: {
+        Row: {
+          company_id: string
+          created_at: string
+          customized_header: string
+          id: string
+          original_header: string
+          table_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          customized_header: string
+          id?: string
+          original_header: string
+          table_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          customized_header?: string
+          id?: string
+          original_header?: string
+          table_order?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vw_header_mappings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_records: {
+        Row: {
+          alert_status: string | null
+          created_at: string
+          death_date: string | null
+          event_date: string | null
+          event_name: string | null
+          event_status: string | null
+          extra_fields: Json | null
+          id: string
+          planned_date: string | null
+          procedure_date: string | null
+          proposed_date: string | null
+          site_name: string | null
+          subject_id: string | null
+          upload_id: string
+          window_end_date: string | null
+          window_start_date: string | null
+        }
+        Insert: {
+          alert_status?: string | null
+          created_at?: string
+          death_date?: string | null
+          event_date?: string | null
+          event_name?: string | null
+          event_status?: string | null
+          extra_fields?: Json | null
+          id?: string
+          planned_date?: string | null
+          procedure_date?: string | null
+          proposed_date?: string | null
+          site_name?: string | null
+          subject_id?: string | null
+          upload_id: string
+          window_end_date?: string | null
+          window_start_date?: string | null
+        }
+        Update: {
+          alert_status?: string | null
+          created_at?: string
+          death_date?: string | null
+          event_date?: string | null
+          event_name?: string | null
+          event_status?: string | null
+          extra_fields?: Json | null
+          id?: string
+          planned_date?: string | null
+          procedure_date?: string | null
+          proposed_date?: string | null
+          site_name?: string | null
+          subject_id?: string | null
+          upload_id?: string
+          window_end_date?: string | null
+          window_start_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vw_records_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "vw_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_uploads: {
+        Row: {
+          column_count: number
+          company_id: string
+          created_at: string
+          file_name: string
+          filter_preferences: Json | null
+          id: string
+          row_count: number
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          column_count: number
+          company_id: string
+          created_at?: string
+          file_name: string
+          filter_preferences?: Json | null
+          id?: string
+          row_count: number
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          column_count?: number
+          company_id?: string
+          created_at?: string
+          file_name?: string
+          filter_preferences?: Json | null
+          id?: string
+          row_count?: number
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vw_uploads_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vw_uploads_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vw_uploads_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "project_assignments"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
     }
     Views: {
       project_assignments: {
@@ -1201,39 +1403,21 @@ export const Constants = {
   },
 } as const
 
-// Type aliases for commonly used tables
+// Convenience type aliases
 export type Profile = Tables<'profiles'>;
-export type Project = Tables<'projects'>;
 export type Company = Tables<'companies'>;
+export type Project = Tables<'projects'>;
+export type Module = Tables<'modules'>;
 
-// Extended types with relations
+// Types with relations
 export type ProfileWithCompany = Profile & {
   companies: Company | null;
 };
 
-export type UserProjectWithDetails = {
-  id: string;
-  user_id: string;
-  project_id: string;
-  assigned_at: string | null;
-  projects: Project;
+export type UserProjectWithDetails = Tables<'user_projects'> & {
+  projects: Project | null;
 };
 
-export type UserModuleWithDetails = {
-  id: string;
-  user_id: string;
-  module_id: string;
-  granted_at: string | null;
-  modules: Tables<'modules'>;
+export type UserModuleWithDetails = Tables<'user_modules'> & {
+  modules: Module | null;
 };
-
-// Manual type definitions for tables not yet in generated types
-export interface AEHeaderMapping {
-  id: string;
-  company_id: string;
-  original_header: string;
-  customized_header: string;
-  table_order: number | null;
-  created_at: string;
-  updated_at: string;
-}

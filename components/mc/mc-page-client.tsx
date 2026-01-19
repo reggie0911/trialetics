@@ -3,9 +3,10 @@
 import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Loader2, Printer, Download } from "lucide-react";
+import { Loader2, Printer, Download, TableProperties, GitCompare } from "lucide-react";
 import { MCCSVUploadDialog, MCRecord } from "./mc-csv-upload-dialog";
 import { MCDataTable } from "./mc-data-table";
+import { MCPivotDataTable } from "./mc-pivot-data-table";
 import { MCFilters } from "./mc-filters";
 import { MCKPICards, KPIFilterType } from "./mc-kpi-cards";
 import { MCCategoriesChart } from "./mc-categories-chart";
@@ -22,6 +23,10 @@ import {
 } from "@/lib/actions/mc-data";
 import { ColumnFiltersState } from "@tanstack/react-table";
 import { Tables } from "@/lib/types/database.types";
+import { transformToPivotData } from "@/lib/utils/mc-pivot-transformer";
+
+// View mode type
+type ViewMode = 'standard' | 'pivot';
 
 interface MCPageClientProps {
   companyId: string;
@@ -32,6 +37,9 @@ export function MCPageClient({ companyId, profileId }: MCPageClientProps) {
   // Upload management
   const [uploads, setUploads] = useState<Tables<'mc_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
+  
+  // View mode state
+  const [viewMode, setViewMode] = useState<ViewMode>('standard');
   
   // Data state
   const [data, setData] = useState<MCRecord[]>([]);
@@ -46,6 +54,9 @@ export function MCPageClient({ companyId, profileId }: MCPageClientProps) {
     ongoingStatus: "",
     frequency: "",
   });
+  
+  // Change status filter for pivot view
+  const [changeStatusFilter, setChangeStatusFilter] = useState<'all' | 'Yes' | 'No' | '-'>('all');
 
   // Visit groups for multi-level headers
   const [visitGroups] = useState<Record<string, string>>({
@@ -320,36 +331,111 @@ export function MCPageClient({ companyId, profileId }: MCPageClientProps) {
     }
 
     try {
-      // Get column headers
-      const headers = [
-        "SiteName",
-        "SubjectId",
-        "1.CCSVT",
-        "E02_V2[1].PRO_01.PEP[1].PEPDAT",
-        "1.CCMED",
-        "1.CCIND",
-        "1.CC1",
-        "1.CCUNIT",
-        "1.CCFREQ",
-        "1.CCSTDAT",
-        "1.CMSTDATUN1",
-        "1.CCSPDAT",
-        "1.CCONGO1"
-      ];
+      let csvContent: string;
+      let recordCount: number;
+      let fileName: string;
 
-      // Create CSV content
-      const csvContent = [
-        // Header row with custom labels
-        headers.map(h => headerMappings[h] || h).join(','),
+      if (viewMode === 'pivot') {
+        // Pivot view export
+        const pivotResult = transformToPivotData(filteredData);
+        const { rows: pivotRows, visitOrder } = pivotResult;
+        
+        // Apply change status filter if active
+        const filteredPivotRows = changeStatusFilter === 'all' 
+          ? pivotRows 
+          : pivotRows.filter(row => 
+              Object.values(row.visits).some(v => v.changeStatus === changeStatusFilter)
+            );
+        
+        // Build headers: Static columns + per-visit columns
+        const staticHeaders = ['Site Name', 'Patient ID', 'Procedure Date'];
+        const visitFields = ['Medication Name', 'Dose', 'Unit', 'Frequency', 'Start Date', 'Start Date Unknown', 'Stop Date', 'Status', 'Change Status'];
+        
+        // First header row: Visit groups
+        const visitGroupRow = [
+          '', '', '', // Empty for static columns
+          ...visitOrder.flatMap(visit => 
+            visitFields.map((_, idx) => idx === 0 ? visit : '') // Only first cell of each visit group has the name
+          )
+        ];
+        
+        // Second header row: Column names
+        const columnHeaderRow = [
+          ...staticHeaders,
+          ...visitOrder.flatMap(() => visitFields)
+        ];
+        
         // Data rows
-        ...filteredData.map(row => 
-          headers.map(h => {
-            const value = row[h] || '';
-            // Escape commas and quotes
-            return `"${String(value).replace(/"/g, '""')}"`;
-          }).join(',')
-        )
-      ].join('\n');
+        const dataRows = filteredPivotRows.map(row => {
+          const staticData = [
+            row.siteName || '',
+            row.subjectId || '',
+            row.procedureDate || '',
+          ];
+          
+          const visitData = visitOrder.flatMap(visit => {
+            const v = row.visits[visit];
+            return [
+              v?.medicationName || '',
+              v?.dose || '',
+              v?.unit || '',
+              v?.frequency || '',
+              v?.startDate || '',
+              v?.startDateUnknown || '',
+              v?.stopDate || '',
+              v?.status || '',
+              v?.changeStatus || '',
+            ];
+          });
+          
+          return [...staticData, ...visitData];
+        });
+        
+        // Build CSV
+        csvContent = [
+          visitGroupRow.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','),
+          columnHeaderRow.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','),
+          ...dataRows.map(row => 
+            row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')
+          )
+        ].join('\n');
+        
+        recordCount = filteredPivotRows.length;
+        fileName = `med_compliance_pivot_${new Date().toISOString().split('T')[0]}.csv`;
+      } else {
+        // Standard view export
+        const headers = [
+          "SiteName",
+          "SubjectId",
+          "1.CCSVT",
+          "E02_V2[1].PRO_01.PEP[1].PEPDAT",
+          "1.CCMED",
+          "1.CCIND",
+          "1.CC1",
+          "1.CCUNIT",
+          "1.CCFREQ",
+          "1.CCSTDAT",
+          "1.CMSTDATUN1",
+          "1.CCSPDAT",
+          "1.CCONGO1"
+        ];
+
+        csvContent = [
+          // Header row with custom labels
+          headers.map(h => headerMappings[h] || h).join(','),
+          // Data rows
+          ...filteredData.map(row => 
+            headers.map(h => {
+              const value = row[h] || '';
+              // Escape commas and quotes
+              return `"${String(value).replace(/"/g, '""')}"`;
+            }).join(',')
+          )
+        ].join('\n');
+        
+        recordCount = filteredData.length;
+        fileName = `med_compliance_${new Date().toISOString().split('T')[0]}.csv`;
+      }
 
       // Create blob and download
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -357,7 +443,7 @@ export function MCPageClient({ companyId, profileId }: MCPageClientProps) {
       const url = URL.createObjectURL(blob);
       
       link.setAttribute('href', url);
-      link.setAttribute('download', `med_compliance_${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute('download', fileName);
       link.style.visibility = 'hidden';
       
       document.body.appendChild(link);
@@ -366,7 +452,9 @@ export function MCPageClient({ companyId, profileId }: MCPageClientProps) {
 
       toast({
         title: "Download successful",
-        description: `Downloaded ${filteredData.length} medication records`,
+        description: viewMode === 'pivot' 
+          ? `Downloaded ${recordCount} pivot rows`
+          : `Downloaded ${recordCount} medication records`,
       });
     } catch (error) {
       console.error('Download error:', error);
@@ -378,10 +466,11 @@ export function MCPageClient({ companyId, profileId }: MCPageClientProps) {
     }
   };
 
-  // Reset all filters (column filters, chart selection, and KPI filter)
+  // Reset all filters (column filters, chart selection, KPI filter, and change status filter)
   const handleResetAllFilters = () => {
     setColumnFilters([]);
     setKpiFilter(null);
+    setChangeStatusFilter('all');
   };
 
   // Handle KPI card click - filters the table
@@ -601,7 +690,10 @@ export function MCPageClient({ companyId, profileId }: MCPageClientProps) {
             filters={filters} 
             onFiltersChange={setFilters} 
             onResetAll={handleResetAllFilters}
-            data={data} 
+            data={data}
+            viewMode={viewMode}
+            changeStatusFilter={changeStatusFilter}
+            onChangeStatusFilterChange={setChangeStatusFilter}
           />
 
           {/* KPI Cards */}
@@ -621,16 +713,48 @@ export function MCPageClient({ companyId, profileId }: MCPageClientProps) {
           {/* Data Table */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Medication Records</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm">Medication Records</CardTitle>
+                
+                {/* View Mode Toggle */}
+                <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
+                  <Button
+                    variant={viewMode === 'standard' ? 'default' : 'ghost'}
+                    size="sm"
+                    className="h-7 px-3 text-[11px]"
+                    onClick={() => setViewMode('standard')}
+                  >
+                    <TableProperties className="h-3 w-3 mr-1.5" />
+                    Standard View
+                  </Button>
+                  <Button
+                    variant={viewMode === 'pivot' ? 'default' : 'ghost'}
+                    size="sm"
+                    className="h-7 px-3 text-[11px]"
+                    onClick={() => setViewMode('pivot')}
+                  >
+                    <GitCompare className="h-3 w-3 mr-1.5" />
+                    Pivot View
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              <MCDataTable 
-                data={filteredData} 
-                headerMappings={headerMappings}
-                columnFilters={columnFilters}
-                onColumnFiltersChange={setColumnFilters}
-                visitGroups={visitGroups}
-              />
+              {viewMode === 'standard' ? (
+                <MCDataTable 
+                  data={filteredData} 
+                  headerMappings={headerMappings}
+                  columnFilters={columnFilters}
+                  onColumnFiltersChange={setColumnFilters}
+                  visitGroups={visitGroups}
+                />
+              ) : (
+                <MCPivotDataTable 
+                  data={filteredData} 
+                  headerMappings={headerMappings}
+                  changeStatusFilter={changeStatusFilter}
+                />
+              )}
             </CardContent>
           </Card>
         </>

@@ -1,8 +1,19 @@
 'use server';
 
 import { createClient } from '@/lib/server';
-import { Tables, TablesInsert, AEHeaderMapping } from '@/lib/types/database.types';
+import { Tables, TablesInsert } from '@/lib/types/database.types';
 import { revalidatePath } from 'next/cache';
+
+// Type for AE Header Mapping (until database types are regenerated)
+export type AEHeaderMapping = {
+  id: string;
+  company_id: string;
+  original_header: string;
+  customized_header: string;
+  table_order: number | null;
+  created_at: string;
+  updated_at: string;
+};
 
 // Types for our responses
 export type ActionResponse<T> = {
