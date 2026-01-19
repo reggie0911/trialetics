@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { ProtectedNavbar } from '@/components/layout/protected-navbar';
-import { MCNavbar } from '@/components/mc/mc-navbar';
+import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { MCPageClient } from '@/components/mc/mc-page-client';
 import { createClient } from '@/lib/server';
 
@@ -38,7 +38,7 @@ export default async function MCPage() {
               Upload and manage medication compliance data
             </p>
           </div>
-          <MCNavbar />
+          <ModuleNavbar />
         </div>
 
         {/* Client-side component for data management */}

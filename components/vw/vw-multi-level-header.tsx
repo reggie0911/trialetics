@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MCRecord } from "./mc-csv-upload-dialog";
+import { VWRecord } from "./vw-csv-upload-dialog";
 
 // Alternating group colors
 const GROUP_COLORS = {
@@ -28,7 +28,7 @@ export interface VisitGroupSpan {
   columnCount: number;
 }
 
-interface MultiLevelMCHeaderProps {
+interface MultiLevelVWHeaderProps {
   headerGroups: any[];
   visitGroupSpans: VisitGroupSpan[];
   columnIds: string[];
@@ -40,7 +40,7 @@ interface MultiLevelMCHeaderProps {
   headerMappings: Record<string, string>;
 }
 
-export function MultiLevelMCHeader({
+export function MultiLevelVWHeader({
   headerGroups,
   visitGroupSpans,
   columnIds,
@@ -50,7 +50,7 @@ export function MultiLevelMCHeader({
   onSortingChange,
   getSortingState,
   headerMappings,
-}: MultiLevelMCHeaderProps) {
+}: MultiLevelVWHeaderProps) {
   const hasVisitGroups = visitGroupSpans.length > 0;
 
   // Create a mapping of column id to group index for coloring

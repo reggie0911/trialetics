@@ -243,7 +243,7 @@ export function AEDataTable({
                           column.setFilterValue(value === "all" ? undefined : value);
                         }}
                       >
-                        <SelectTrigger className="h-3.5 text-[11px] bg-background text-muted-foreground border-0 shadow-none">
+                        <SelectTrigger className="h-3.5 text-[11px] bg-background text-muted-foreground border-0 shadow-none pb-2 justify-start">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="max-h-[300px]">

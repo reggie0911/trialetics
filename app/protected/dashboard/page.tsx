@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { ProtectedNavbar } from '@/components/layout/protected-navbar';
-import { DashboardNavbar } from '@/components/dashboard/dashboard-navbar';
+import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { Greeting } from '@/components/dashboard/greeting';
 import { SiteMetricsHeatmap } from '@/components/dashboard/site-metrics-heatmap';
 import { TodoList } from '@/components/dashboard/todo-list';
@@ -63,7 +63,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             firstName={profile?.first_name} 
             displayName={profile?.display_name}
           />
-          <DashboardNavbar />
+          <ModuleNavbar />
         </div>
 
         {/* Project Info */}

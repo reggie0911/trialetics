@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { ProtectedNavbar } from '@/components/layout/protected-navbar';
-import { PatientsNavbar } from '@/components/patients/patients-navbar';
+import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { PatientsPageClient } from '@/components/patients/patients-page-client';
 import { createClient } from '@/lib/server';
 
@@ -38,7 +38,7 @@ export default async function PatientsPage() {
               Upload and manage patient data for your company
             </p>
           </div>
-          <PatientsNavbar />
+          <ModuleNavbar />
         </div>
 
         {/* Client-side component for data management */}
