@@ -25,7 +25,7 @@ const menuItems = [
     href: "/protected/ae",
   },
   {
-    label: "Visit Compliance",
+    label: "Query Metrics",
     href: "/protected/vc", // Placeholder route
   },
   {

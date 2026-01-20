@@ -3,6 +3,8 @@ export interface PatientRecord {
   SubjectId: string;
   'E01_V1[1].SCR_01.VS[1].SEX': string;
   'E01_V1[1].SCR_01.VS[1].AGE': string;
+  'E01_V1[1].SCR_01.VS[1].HEIGHT_VSORRES': string;
+  'E01_V1[1].SCR_01.VS[1].WEIGHT_VSORRES': string;
   BMI: string;
   BSA: string;
   
@@ -13,6 +15,7 @@ export interface PatientRecord {
   
   // Visit Information
   'E01_V1[1]..DATE': string;
+  'E02_V2[1]..DATE': string;
   'E02_V2[1].PRO_01.PEP[1].PEPDAT': string;
   'E03_V3[1]..DATE': string;
   'E04_V4[1]..DATE': string;

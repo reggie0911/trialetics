@@ -126,6 +126,53 @@ export async function uploadPatientData(
 }
 
 /**
+ * Calculate BSA (Body Surface Area) using Mosteller formula
+ * BSA (m²) = √[(Height(cm) × Weight(kg)) / 3600]
+ * @param heightCm - Height in centimeters
+ * @param weightKg - Weight in kilograms
+ * @returns BSA in m² rounded to 2 decimals, or empty string if invalid
+ */
+function calculateBSA(heightCm: string | undefined, weightKg: string | undefined): string {
+  if (!heightCm || !weightKg || heightCm === '' || heightCm === '—' ||
+      weightKg === '' || weightKg === '—') {
+    return '';
+  }
+  
+  try {
+    const height = parseFloat(heightCm);
+    const weight = parseFloat(weightKg);
+    
+    if (isNaN(height) || isNaN(weight) || height <= 0 || weight <= 0) {
+      return '';
+    }
+    
+    // Mosteller formula: BSA (m²) = √[(Height(cm) × Weight(kg)) / 3600]
+    const bsa = Math.sqrt((height * weight) / 3600);
+    return bsa.toFixed(2); // Round to 2 decimal places
+  } catch (error) {
+    console.error('Error calculating BSA:', error);
+    return '';
+  }
+}
+
+/**
+ * Consolidate DTHDAT values from COMMON_AE[1-16] into a single value
+ * Returns the first non-empty death date found
+ * Only checks columns ending with .DTHDAT (excludes DTHDATUNK98 variants)
+ */
+function consolidateDthdat(record: PatientRecord): string {
+  // Check COMMON_AE[1] through COMMON_AE[16]
+  for (let i = 1; i <= 16; i++) {
+    const aeKey = `COMMON_AE[${i}].LOG_AE.AE[1].DTHDAT` as keyof PatientRecord;
+    const value = record[aeKey];
+    if (value && value !== '' && value !== '—') {
+      return value;
+    }
+  }
+  return '';
+}
+
+/**
  * Categorize a patient record into normalized fields and JSONB columns
  */
 function categorizePatientRecord(record: PatientRecord, uploadId: string): TablesInsert<'patients'> {
@@ -134,6 +181,14 @@ function categorizePatientRecord(record: PatientRecord, uploadId: string): Table
   const sex = record['E01_V1[1].SCR_01.VS[1].SEX'] || null;
   const age = record['E01_V1[1].SCR_01.VS[1].AGE'] || null;
   const siteName = record.SiteName || record['Site Name'] || null;
+
+  // Calculate BSA from height and weight
+  const height = record['E01_V1[1].SCR_01.VS[1].HEIGHT_VSORRES'];
+  const weight = record['E01_V1[1].SCR_01.VS[1].WEIGHT_VSORRES'];
+  const calculatedBSA = calculateBSA(height, weight);
+  
+  // Consolidate DTHDAT from all COMMON_AE entries
+  const consolidatedDthdat = consolidateDthdat(record);
 
   // Categorize remaining fields
   const demographics: Record<string, string> = {};
@@ -156,8 +211,13 @@ function categorizePatientRecord(record: PatientRecord, uploadId: string): Table
     }
 
     // Categorize by key patterns
-    if (key.includes('BMI') || key.includes('BSA')) {
-      demographics[key] = value || '';
+    if (key.includes('BMI') || key.includes('BSA') || key.includes('HEIGHT') || key.includes('WEIGHT')) {
+      // Store calculated BSA if this is the BSA field, otherwise store the value
+      if (key === 'BSA' && calculatedBSA) {
+        demographics[key] = calculatedBSA;
+      } else {
+        demographics[key] = value || '';
+      }
     } else if (key.includes('DATE') || key.includes('PEPDAT') || key.includes('Visit')) {
       visits[key] = value || '';
     } else if (
@@ -173,11 +233,24 @@ function categorizePatientRecord(record: PatientRecord, uploadId: string): Table
     ) {
       measurements[key] = value || '';
     } else if (key.includes('AE') || key.includes('AEDECOD') || key.includes('DTHDAT')) {
-      adverseEvents[key] = value || '';
+      // Store consolidated DTHDAT for the first DTHDAT column
+      if (key === 'COMMON_AE[1].LOG_AE.AE[1].DTHDAT' && consolidatedDthdat) {
+        adverseEvents[key] = consolidatedDthdat;
+      } else if (key.includes('DTHDAT') && key.includes('COMMON_AE')) {
+        // Skip other COMMON_AE DTHDAT columns - we consolidated into [1]
+        return;
+      } else {
+        adverseEvents[key] = value || '';
+      }
     } else {
       extraFields[key] = value || '';
     }
   });
+  
+  // Ensure the consolidated DTHDAT is stored even if COMMON_AE[1] wasn't in the original record
+  if (consolidatedDthdat && !adverseEvents['COMMON_AE[1].LOG_AE.AE[1].DTHDAT']) {
+    adverseEvents['COMMON_AE[1].LOG_AE.AE[1].DTHDAT'] = consolidatedDthdat;
+  }
 
   return {
     upload_id: uploadId,
@@ -281,12 +354,15 @@ function reconstructPatientRecord(dbRecord: Tables<'patients'>): PatientRecord {
     SubjectId: dbRecord.subject_id || '',
     'E01_V1[1].SCR_01.VS[1].SEX': dbRecord.sex || '',
     'E01_V1[1].SCR_01.VS[1].AGE': dbRecord.age || '',
+    'E01_V1[1].SCR_01.VS[1].HEIGHT_VSORRES': '',
+    'E01_V1[1].SCR_01.VS[1].WEIGHT_VSORRES': '',
     SiteName: dbRecord.site_name || '',
     BMI: '',
     BSA: '',
     'Hospital ID': '',
     'Company ID': '',
     'E01_V1[1]..DATE': '',
+    'E02_V2[1]..DATE': '',
     'E02_V2[1].PRO_01.PEP[1].PEPDAT': '',
     'E03_V3[1]..DATE': '',
     'E04_V4[1]..DATE': '',
@@ -539,7 +615,19 @@ export async function saveHeaderMappings(
       new Map(mappings.map(m => [m.originalHeader, m])).values()
     );
 
-    // Upsert mappings - update if exists (based on company_id + original_header), insert if not
+    // Delete all existing mappings for this company first
+    // This ensures we only keep the mappings from the new upload
+    const { error: deleteError } = await supabase
+      .from('header_mappings')
+      .delete()
+      .eq('company_id', companyId);
+
+    if (deleteError) {
+      console.error('Error deleting old header mappings:', deleteError);
+      return { success: false, error: 'Failed to delete old header mappings' };
+    }
+
+    // Insert all new mappings
     const mappingInserts: TablesInsert<'header_mappings'>[] = deduplicatedMappings.map(mapping => ({
       company_id: companyId,
       original_header: mapping.originalHeader,
@@ -550,10 +638,7 @@ export async function saveHeaderMappings(
 
     const { error } = await supabase
       .from('header_mappings')
-      .upsert(mappingInserts, {
-        onConflict: 'company_id,original_header',
-        ignoreDuplicates: false,
-      });
+      .insert(mappingInserts);
 
     if (error) {
       console.error('Error saving header mappings:', error);

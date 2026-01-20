@@ -26,7 +26,7 @@ const menuItems = [
   },
   {
     type: "link" as const,
-    label: "Visit Compliance",
+    label: "Query Metrics",
     href: "#",
   },
   {

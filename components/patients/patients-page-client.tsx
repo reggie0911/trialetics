@@ -60,6 +60,93 @@ function calculateDaysBetweenDates(laterDateString: string | undefined, earlierD
   }
 }
 
+// Helper function to calculate BSA using Mosteller formula
+function calculateBSA(heightCm: string | undefined, weightKg: string | undefined): string {
+  if (!heightCm || !weightKg || heightCm === '' || heightCm === '—' ||
+      weightKg === '' || weightKg === '—') {
+    return '';
+  }
+  
+  try {
+    const height = parseFloat(heightCm);
+    const weight = parseFloat(weightKg);
+    
+    if (isNaN(height) || isNaN(weight) || height <= 0 || weight <= 0) {
+      return '';
+    }
+    
+    // Mosteller formula: BSA (m²) = √[(Height(cm) × Weight(kg)) / 3600]
+    const bsa = Math.sqrt((height * weight) / 3600);
+    return bsa.toFixed(2); // Round to 2 decimal places
+  } catch (error) {
+    console.error('Error calculating BSA:', error);
+    return '';
+  }
+}
+
+// Helper function to calculate remodeling percentage
+// Formula: ((baseline - followup) / baseline) * 100
+function calculateRemodelingPercentage(
+  baseline: string | undefined,
+  followup: string | undefined
+): string {
+  if (!baseline || !followup || baseline === '' || baseline === '—' ||
+      followup === '' || followup === '—') {
+    return '';
+  }
+  
+  try {
+    const baselineVal = parseFloat(baseline);
+    const followupVal = parseFloat(followup);
+    
+    if (isNaN(baselineVal) || isNaN(followupVal) || baselineVal === 0) {
+      return '';
+    }
+    
+    const percentage = ((baselineVal - followupVal) / baselineVal) * 100;
+    return percentage.toFixed(2);
+  } catch (error) {
+    console.error('Error calculating remodeling percentage:', error);
+    return '';
+  }
+}
+
+// Helper function to add days to a date string
+function addDaysToDate(dateStr: string | undefined, days: number): string {
+  if (!dateStr || dateStr === '' || dateStr === '—') {
+    return '';
+  }
+  
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    
+    date.setDate(date.getDate() + days);
+    return date.toISOString().split('T')[0]; // Return YYYY-MM-DD format
+  } catch (error) {
+    console.error('Error adding days to date:', error);
+    return '';
+  }
+}
+
+// Helper function to format date for display
+function formatDateForDisplay(dateStr: string): string {
+  if (!dateStr) return '';
+  
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric', 
+      year: 'numeric' 
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
 export function PatientsPageClient({ companyId, profileId }: PatientsPageClientProps) {
   // Upload selection (removed project selection)
   const [uploads, setUploads] = useState<Tables<'patient_uploads'>[]>([]);
@@ -91,28 +178,108 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
   // Filter state
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [selectedSiteName, setSelectedSiteName] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   
   const { toast } = useToast();
 
-  // Calculate PRDAT automatically based on DTHDAT - PEPDAT
+  // Calculate PRDAT automatically based on DTHDAT - Implant Date (E02_V2[1]..DATE)
   const dataWithCalculations = useMemo(() => {
-    return data.map(record => {
-      // Get the two dates from the record
-      const pepdat = record['E02_V2[1].PRO_01.PEP[1].PEPDAT'];
-      const dthdat = record['COMMON_AE[1].LOG_AE.AE[2].DTHDAT'];
+    return data.map((record, idx) => {
+      const implantDate = record['E02_V2[1]..DATE'];
+      const patientId = record.SubjectId || record['Subject ID'] || '';
       
-      // Calculate days between DTHDAT and PEPDAT (DTHDAT - PEPDAT)
-      const daysDifference = calculateDaysBetweenDates(dthdat, pepdat);
+      // Find first non-empty death date from all COMMON_AE entries (1-16)
+      // The data should already be consolidated during upload, but this handles legacy data
+      let dthdat = '';
       
-      // Only update PRDAT if we have both dates and a valid calculation
-      const calculatedPRDAT = (pepdat && dthdat && daysDifference !== 0) 
+      for (let i = 1; i <= 16; i++) {
+        const aeKey = `COMMON_AE[${i}].LOG_AE.AE[1].DTHDAT` as keyof PatientRecord;
+        const date = record[aeKey];
+        if (date && date !== '' && date !== '—') {
+          dthdat = date;
+          break; // Use first found death date
+        }
+      }
+      
+      // Calculate days between DTHDAT and Implant Date (DTHDAT - E02_V2[1]..DATE)
+      const daysDifference = calculateDaysBetweenDates(dthdat, implantDate);
+      
+      // Only calculate PRDAT if we have a death date
+      // If no death date, PRDAT should be blank regardless of CSV value
+      const calculatedPRDAT = (dthdat && implantDate && daysDifference !== 0) 
         ? String(daysDifference) 
-        : record['COMMON_AE[1].LOG_AE.AE[1].PRDAT'] || '';
+        : '';
       
-      // Return record with calculated PRDAT
+      // Calculate BSA from height and weight
+      const height = record['E01_V1[1].SCR_01.VS[1].HEIGHT_VSORRES'];
+      const weight = record['E01_V1[1].SCR_01.VS[1].WEIGHT_VSORRES'];
+      const calculatedBSA = calculateBSA(height, weight);
+      
+      // Calculate remodeling percentages
+      // Use the raw echo measurements (SE fields) for screening baseline and 1-year follow-up
+      const screeningLVEDV = record['E01_V1[1].SCR_05.SE[1].SE_LVEDV'];
+      const oneYearLVEDV = record['E06_V6[1].Y1_09.SE[1].SE_LVEDV'];
+      const diastolicRemodeling = calculateRemodelingPercentage(screeningLVEDV, oneYearLVEDV);
+
+      const screeningLVESV = record['E01_V1[1].SCR_05.SE[1].SE_LVESV'];
+      const oneYearLVESV = record['E06_V6[1].Y1_09.SE[1].SE_LVESV'];
+      const systolicRemodeling = calculateRemodelingPercentage(screeningLVESV, oneYearLVESV);
+      
+      // Calculate visit window openings based on procedure date
+      const procedureDate = record['E02_V2[1]..DATE'];
+      const windows = [
+        { name: '30-Day', openDate: addDaysToDate(procedureDate, 23) },    // 30 - 7
+        { name: '90-Day', openDate: addDaysToDate(procedureDate, 60) },    // 90 - 30
+        { name: '6-Month', openDate: addDaysToDate(procedureDate, 150) },  // 180 - 30
+        { name: '1-Year', openDate: addDaysToDate(procedureDate, 335) },   // 365 - 30
+        { name: '2-Year', openDate: addDaysToDate(procedureDate, 640) },   // 730 - 90
+      ];
+
+      // Find latest (furthest in future) window that is still in the future (or latest if all past)
+      const today = new Date().toISOString().split('T')[0];
+      let nextWindowOpen = '';
+      let nextVisitName = '';
+
+      const futureWindows = windows.filter(w => w.openDate && w.openDate >= today);
+      if (futureWindows.length > 0) {
+        // Use the latest future window (last in the array)
+        const latestWindow = futureWindows[futureWindows.length - 1];
+        nextWindowOpen = formatDateForDisplay(latestWindow.openDate);
+        nextVisitName = latestWindow.name;
+      } else if (windows.length > 0 && windows[windows.length - 1].openDate) {
+        // All windows have passed, use the latest one
+        const latestWindow = windows[windows.length - 1];
+        nextWindowOpen = formatDateForDisplay(latestWindow.openDate);
+        nextVisitName = latestWindow.name;
+      }
+
+      // Determine Next Visit values - show "Death" if death occurred
+      const calculatedNextVisit = dthdat ? 'Death' : nextVisitName;
+      const calculatedNextWindowOpen = dthdat ? 'Death' : nextWindowOpen;
+      
+      // Populate ALL DTHDAT columns with the consolidated death date
+      // This ensures the "Date of Death" column shows the value regardless of which AE entry it's mapped to
+      // Also handle header mapping typos like trailing )
+      const dthdatOverrides: Record<string, string> = {};
+      for (let i = 1; i <= 16; i++) {
+        const aeKey = `COMMON_AE[${i}].LOG_AE.AE[1].DTHDAT`;
+        if (dthdat) {
+          dthdatOverrides[aeKey] = dthdat;
+          // Also set version with trailing ) in case of header mapping typo
+          dthdatOverrides[`${aeKey})`] = dthdat;
+        }
+      }
+      
+      // Return record with calculated PRDAT, consolidated DTHDAT across all AE entries, BSA, remodeling percentages, and visit windows
       return {
         ...record,
+        ...dthdatOverrides, // Spread all DTHDAT overrides
         'COMMON_AE[1].LOG_AE.AE[1].PRDAT': calculatedPRDAT,
+        BSA: calculatedBSA || record.BSA || '', // Use calculated BSA, fallback to CSV value
+        '1 yr Diastolic Remodeling %': diastolicRemodeling || record['1 yr Diastolic Remodeling %'] || '',
+        '1 yr Systolic Remodeling %': systolicRemodeling || record['1 yr Systolic Remodeling %'] || '',
+        'Next Visit Window Open': calculatedNextWindowOpen || record['Next Visit Window Open'] || '',
+        'Next Visit': calculatedNextVisit || record['Next Visit'] || '',
       };
     });
   }, [data]);
@@ -187,11 +354,17 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
   const loadColumnConfigs = async (uploadId: string) => {
     const result = await getColumnConfigs(uploadId);
     if (result.success && result.data) {
-      setColumnConfigs(result.data);
-      setColumnOrder(result.data.filter(c => c.visible).map(c => c.id));
+      // Ensure all columns are visible by default
+      const allVisibleConfigs = result.data.map(config => ({
+        ...config,
+        visible: true, // Override to make all columns visible
+      }));
       
-      // Recalculate visit group spans
-      const spans = recalculateVisitGroupSpans(result.data, result.data.filter(c => c.visible).map(c => c.id));
+      setColumnConfigs(allVisibleConfigs);
+      setColumnOrder(allVisibleConfigs.map(c => c.id)); // Include all columns in order
+      
+      // Recalculate visit group spans with all columns
+      const spans = recalculateVisitGroupSpans(allVisibleConfigs, allVisibleConfigs.map(c => c.id));
       setVisitGroupSpans(spans);
     }
   };
@@ -282,6 +455,7 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
   };
 
   // Filter data by header mappings - include ALL mapped headers even if not in data
+  // Also consolidates multi-column data (like DTHDAT from COMMON_AE[1-15]) into single mapped columns
   const filterDataByHeaderMappings = (
     data: PatientRecord[],
     mappings: HeaderMapping[]
@@ -311,18 +485,53 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
       return undefined;
     };
     
-    return data.map(record => {
+    // Find the mapped DTHDAT column (if any) - typically COMMON_AE[1].LOG_AE.AE[1].DTHDAT
+    // Handle potential typos like trailing ) in header mapping
+    const dthdatMapping = mappings.find(m => {
+      const header = m.originalHeader.replace(/\)$/, ''); // Remove trailing ) if present
+      return header.endsWith('.DTHDAT') && header.includes('COMMON_AE');
+    });
+    
+    return data.map((record, idx) => {
       // Start with all header mapping columns set to empty string
       const filteredRecord: Partial<PatientRecord> = {};
       mappings.forEach(m => {
         filteredRecord[m.originalHeader] = '';
       });
       
+      // Consolidate DTHDAT: look for first non-empty value from COMMON_AE[1-16].LOG_AE.AE[1].DTHDAT
+      // Only check columns ending with exactly .DTHDAT (not DTHDATUNK98 variants)
+      if (dthdatMapping) {
+        let consolidatedDthdat = '';
+        for (let i = 1; i <= 16; i++) {
+          const aeKey = `COMMON_AE[${i}].LOG_AE.AE[1].DTHDAT`;
+          // Access as generic object since CSV may have columns not in PatientRecord type
+          const value = (record as Record<string, string>)[aeKey];
+          if (value && value !== '' && value !== '—') {
+            consolidatedDthdat = value;
+            break; // Use first non-empty death date
+          }
+        }
+        if (consolidatedDthdat) {
+          filteredRecord[dthdatMapping.originalHeader] = consolidatedDthdat;
+        }
+      }
+      
       // Then populate with actual data where available
+      // (DTHDAT fields are already handled above, so this will only overwrite if the mapped DTHDAT[1] has a value)
       Object.keys(record).forEach(key => {
         const matchedHeader = findMatchingHeader(key);
         if (matchedHeader) {
-          filteredRecord[matchedHeader] = record[key];
+          // Don't overwrite already-consolidated DTHDAT with empty value
+          if (matchedHeader === dthdatMapping?.originalHeader && filteredRecord[matchedHeader]) {
+            // Keep the consolidated value unless this one is also non-empty
+            const newValue = record[key as keyof PatientRecord];
+            if (newValue && newValue !== '' && newValue !== '—') {
+              filteredRecord[matchedHeader] = newValue;
+            }
+          } else {
+            filteredRecord[matchedHeader] = record[key as keyof PatientRecord];
+          }
         }
       });
       return filteredRecord as PatientRecord;
@@ -338,7 +547,12 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
     
     // If we have mappings, use ALL mapping columns (not just what's in data)
     if (mappings.length > 0) {
-      const configs = mappings.map(mapping => ({
+      // Deduplicate mappings by originalHeader (keep last occurrence)
+      const deduplicatedMappings = Array.from(
+        new Map(mappings.map(m => [m.originalHeader, m])).values()
+      );
+      
+      const configs = deduplicatedMappings.map(mapping => ({
         id: mapping.originalHeader,
         label: mapping.customizedHeader || mapping.originalHeader,
         originalLabel: mapping.originalHeader,
@@ -442,30 +656,35 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
         description: `Saved ${mappings.length} header mappings`,
       });
       
-      // If we have data loaded, update column configs
-      if (data.length > 0 && columnConfigs.length > 0) {
-        const lookup = createHeaderLookup(mappings);
-        
-        const updatedConfigs = columnConfigs.map((col) => {
-          const customLabel = lookup.get(col.originalLabel);
-          const visitGroup = getVisitGroupForColumn(col.originalLabel, mappings);
-          const mapping = mappings.find((m) => m.originalHeader === col.originalLabel);
-          
-          return {
-            ...col,
-            label: customLabel || col.label,
-            visitGroup,
-            tableOrder: mapping?.tableOrder,
-          };
-        });
-        
-        updatedConfigs.sort((a, b) => (a.tableOrder || 999) - (b.tableOrder || 999));
-        
-        setColumnConfigs(updatedConfigs);
-        setColumnOrder(updatedConfigs.map(c => c.id));
-        
-        const newSpans = recalculateVisitGroupSpans(updatedConfigs, updatedConfigs.map(c => c.id));
-        setVisitGroupSpans(newSpans);
+      // Regenerate column configs from ALL header mappings (regardless of whether data is loaded)
+      // Deduplicate mappings by originalHeader (keep last occurrence)
+      const deduplicatedMappings = Array.from(
+        new Map(mappings.map(m => [m.originalHeader, m])).values()
+      );
+      
+      // Regenerate configs from all deduplicated mappings to ensure all unique columns are included
+      const newConfigs = deduplicatedMappings.map(mapping => ({
+        id: mapping.originalHeader,
+        label: mapping.customizedHeader || mapping.originalHeader,
+        originalLabel: mapping.originalHeader,
+        visible: true,
+        dataType: inferDataType(mapping.originalHeader) as 'text' | 'number' | 'date' | 'categorical',
+        category: inferCategory(mapping.originalHeader) as 'demographics' | 'visits' | 'measurements' | 'adverse_events' | 'other',
+        visitGroup: mapping.visitGroup || 'Other',
+        tableOrder: mapping.tableOrder,
+      }));
+      
+      newConfigs.sort((a, b) => (a.tableOrder || 999) - (b.tableOrder || 999));
+      
+      setColumnConfigs(newConfigs);
+      setColumnOrder(newConfigs.map(c => c.id));
+      
+      const newSpans = recalculateVisitGroupSpans(newConfigs, newConfigs.map(c => c.id));
+      setVisitGroupSpans(newSpans);
+      
+      // Save the new configs to database if we have an upload
+      if (selectedUploadId) {
+        await updateColumnConfigs(selectedUploadId, newConfigs);
       }
     } else {
       toast({
@@ -664,7 +883,17 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
       });
     }
 
-    // Global search
+    // Search query - search across all columns
+    if (searchQuery && searchQuery.trim() !== '') {
+      const searchLower = searchQuery.toLowerCase().trim();
+      result = result.filter((row) =>
+        Object.values(row).some((val) =>
+          String(val || "").toLowerCase().includes(searchLower)
+        )
+      );
+    }
+
+    // Global search (legacy, keeping for compatibility)
     if (filters.globalSearch) {
       const searchLower = filters.globalSearch.toLowerCase();
       result = result.filter((row) =>
@@ -685,7 +914,7 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
     });
 
     return result;
-  }, [dataWithCalculations, filters, selectedPatientId, selectedSiteName]);
+  }, [dataWithCalculations, filters, selectedPatientId, selectedSiteName, searchQuery]);
 
   // Apply client-side pagination to filtered results
   const paginatedData = useMemo(() => {
@@ -697,7 +926,7 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filters, selectedPatientId, selectedSiteName]);
+  }, [filters, selectedPatientId, selectedSiteName, searchQuery]);
 
   // Calculate pagination info based on filtered data
   const totalPages = Math.ceil(filteredData.length / pageSize);
@@ -726,13 +955,48 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
         .filter(c => c.visible)
         .sort((a, b) => (a.tableOrder || 999) - (b.tableOrder || 999));
 
-      // Build CSV headers using customized labels
-      const headers = visibleColumns.map(c => c.label);
+      // Build visit group header row (first row)
+      const visitGroupRow: string[] = [];
+      let currentGroup = '';
+      let groupStartIndex = 0;
+
+      visibleColumns.forEach((col, index) => {
+        const group = col.visitGroup || 'Other';
+        
+        if (group !== currentGroup) {
+          // Fill previous group cells with empty strings (except the first cell which has the group name)
+          if (currentGroup) {
+            for (let i = groupStartIndex; i < index; i++) {
+              if (i === groupStartIndex) {
+                visitGroupRow.push(currentGroup);
+              } else {
+                visitGroupRow.push('');
+              }
+            }
+          }
+          currentGroup = group;
+          groupStartIndex = index;
+        }
+      });
+      
+      // Fill the last group
+      for (let i = groupStartIndex; i < visibleColumns.length; i++) {
+        if (i === groupStartIndex) {
+          visitGroupRow.push(currentGroup);
+        } else {
+          visitGroupRow.push('');
+        }
+      }
+
+      // Build column header row (second row) using customized labels
+      const columnHeaders = visibleColumns.map(c => c.label);
 
       // Build CSV content
       const csvContent = [
-        // Header row
-        headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(','),
+        // Visit group row
+        visitGroupRow.map(h => `"${String(h).replace(/"/g, '""')}"`).join(','),
+        // Column header row
+        columnHeaders.map(h => `"${String(h).replace(/"/g, '""')}"`).join(','),
         // Data rows
         ...filteredData.map(row => 
           visibleColumns.map(col => {
@@ -758,7 +1022,7 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
 
       toast({
         title: "Download successful",
-        description: `Downloaded ${filteredData.length} patient records`,
+        description: `Downloaded ${filteredData.length} patient records with visit groups`,
       });
     } catch (error) {
       console.error('Download error:', error);
@@ -786,7 +1050,11 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <div className="flex items-center gap-2 flex-wrap">
           <CSVUploadDialog onUpload={handleUpload} />
-          <HeaderMappingUpload onMappingLoad={handleMappingLoad} />
+          <HeaderMappingUpload 
+            onMappingLoad={handleMappingLoad}
+            hasExistingMapping={headerMappings.length > 0}
+            mappingCount={headerMappings.length}
+          />
           {headerMappings.length > 0 ? (
             <GroupedColumnVisibility
               columns={columnConfigs}
@@ -862,8 +1130,10 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
                   data={dataWithCalculations}
                   selectedPatientId={selectedPatientId}
                   selectedSiteName={selectedSiteName}
+                  searchQuery={searchQuery}
                   onPatientIdChange={setSelectedPatientId}
                   onSiteNameChange={setSelectedSiteName}
+                  onSearchChange={setSearchQuery}
                 />
                 
                 <PatientDataTable
@@ -979,6 +1249,7 @@ function inferDataType(columnName: string): string {
     return 'date';
   }
   if (columnName.includes('AGE') || columnName.includes('BMI') || columnName.includes('BSA') ||
+      columnName.includes('HEIGHT') || columnName.includes('WEIGHT') ||
       columnName.includes('LVEF') || columnName.includes('LVEDV') || columnName.includes('LVESV') ||
       columnName.includes('Gradient') || columnName.includes('TOTDIST') || columnName.includes('NTPBNP')) {
     return 'number';
