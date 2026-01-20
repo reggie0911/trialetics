@@ -10,6 +10,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { ColumnConfig, VisitGroupSpan } from "@/lib/types/patient-data";
 import { Eye, ChevronDown, ChevronRight } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -66,10 +67,13 @@ export function GroupedColumnVisibility({
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <Button variant="outline" size="sm" className="gap-2" asChild>
+      <Button variant="outline" size="sm" className="gap-2 text-xs" asChild>
         <DialogTrigger>
           <Eye className="h-4 w-4" />
-          Columns ({columns.filter(c => c.visible).length}/{columns.length})
+          Columns
+          <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
+            {columns.filter(c => c.visible).length}/{columns.length}
+          </Badge>
         </DialogTrigger>
       </Button>
       <DialogContent className="max-h-[80vh] overflow-y-auto">

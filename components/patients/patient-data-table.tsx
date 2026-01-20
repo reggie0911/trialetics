@@ -67,7 +67,12 @@ export function PatientDataTable({
   const [sorting, setSorting] = useState<SortingState>([]);
   const dndId = useId();
 
-  const visibleColumns = columnConfigs.filter((col) => col.visible);
+  // Deduplicate columnConfigs to prevent duplicate keys
+  const uniqueColumnConfigs = Array.from(
+    new Map(columnConfigs.map(c => [c.id, c])).values()
+  );
+
+  const visibleColumns = uniqueColumnConfigs.filter((col) => col.visible);
 
   // Create a mapping of column id to group index for alternating colors
   const columnToGroupIndex = new Map<string, number>();
@@ -125,7 +130,7 @@ export function PatientDataTable({
       onColumnOrderChange(newOrder);
       
       // Recalculate visit group spans after reorder
-      const reorderedConfigs = newOrder.map(id => columnConfigs.find(c => c.id === id)!).filter(Boolean);
+      const reorderedConfigs = newOrder.map(id => uniqueColumnConfigs.find(c => c.id === id)!).filter(Boolean);
       const newSpans = recalculateVisitGroupSpans(reorderedConfigs);
       onVisitGroupSpansChange(newSpans);
     }
@@ -322,6 +327,9 @@ function DragAlongCell({ cell, isFirstColumn, columnConfig, groupIndex, rowData 
   const patientId = rowData.SubjectId || rowData['Subject ID'] || '—';
   const siteName = rowData.SiteName || rowData['Site Name'] || '—';
   const visitGroup = columnConfig?.visitGroup || 'Other';
+  
+  // Check if this is the BMI column for special tooltip
+  const isBMIColumn = cell.column.id === 'BMI' || cell.column.id.includes('BMI');
 
   return (
     <TableCell
@@ -349,6 +357,14 @@ function DragAlongCell({ cell, isFirstColumn, columnConfig, groupIndex, rowData 
               <span className="text-muted-foreground">Visit Group:</span>
               <span className="font-medium">{visitGroup}</span>
             </div>
+            {isBMIColumn && (
+              <div className="pt-1 border-t mt-1">
+                <p className="text-muted-foreground text-[10px]">
+                  Note: BMI calculation requires Height and Weight.
+                  For BSI (Body Shape Index), Waist Circumference is also required.
+                </p>
+              </div>
+            )}
             {value && value.length > 50 && (
               <div className="pt-1 border-t mt-1">
                 <span className="text-muted-foreground">Value:</span>

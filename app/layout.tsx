@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
-import { cookies } from "next/headers";
 import "./globals.css";
 
-import Banner from "@/components/layout/banner";
 import Footer from "@/components/layout/footer";
 import Navbar from "@/components/layout/navbar";
 import { StyleGlideProvider } from "@/components/styleglide-provider";
@@ -44,15 +42,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Read banner dismissed state from cookies (server-side)
-  const cookieStore = await cookies();
-  const bannerDismissed = cookieStore.get("banner-dismissed")?.value === "true";
-
   return (
     <html lang="en" suppressHydrationWarning className={inter.variable}>
       <body
@@ -69,11 +63,7 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <StyleGlideProvider />
-          <Banner
-            url="https://www.shadcnblocks.com/template/lumen"
-            initialVisible={!bannerDismissed}
-          />
-          <Navbar initialBannerVisible={!bannerDismissed} />
+          <Navbar />
           <main className="flex-1">{children}</main>
           <Footer />
           <Toaster />

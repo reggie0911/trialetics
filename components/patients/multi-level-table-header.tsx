@@ -15,7 +15,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { PatientRecord, ColumnConfig, VisitGroupSpan } from "@/lib/types/patient-data";
 import { EditableTableHeader } from "./editable-table-header";
-import { ArrowUpDown, ArrowUp, ArrowDown, GripVertical } from "lucide-react";
+import { GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 // Alternating group colors - using Tailwind classes for better CSS specificity
@@ -128,8 +128,6 @@ function DraggableTableHeader({
     zIndex: isDragging ? 1 : isFirstColumn ? 30 : 0,
   };
 
-  const isSorted = header.column.getIsSorted();
-
   return (
     <TableHead
       ref={setNodeRef}
@@ -158,18 +156,6 @@ function DraggableTableHeader({
           ) : (
             <span>{header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}</span>
           )}
-          <button
-            onClick={() => header.column.toggleSorting(header.column.getIsSorted() === "asc")}
-            className="ml-1 hover:bg-accent rounded p-0.5"
-          >
-            {isSorted === "asc" ? (
-              <ArrowUp className="h-3 w-3" />
-            ) : isSorted === "desc" ? (
-              <ArrowDown className="h-3 w-3" />
-            ) : (
-              <ArrowUpDown className="h-3 w-3 opacity-40" />
-            )}
-          </button>
         </div>
       </div>
     </TableHead>

@@ -85,7 +85,7 @@ export function ProtectedNavbar() {
             <DropdownMenu>
               <DropdownMenuTrigger className="cursor-pointer outline-none" suppressHydrationWarning>
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src={avatarUrl || '/images/avatar-placeholder.png'} alt="User" />
+                  {avatarUrl && <AvatarImage src={avatarUrl} alt="User" />}
                   <AvatarFallback>
                     <Settings className="h-4 w-4" />
                   </AvatarFallback>

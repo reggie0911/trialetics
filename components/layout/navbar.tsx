@@ -60,16 +60,11 @@ const ACTION_BUTTONS = [
   { label: 'Sign in', href: '/auth/login', variant: 'ghost' as const },
   { label: 'Get started', href: '/auth/sign-up', variant: 'default' as const },
 ];
-const Navbar = ({
-  initialBannerVisible = true,
-}: {
-  initialBannerVisible?: boolean;
-}) => {
+const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const { isAtLeast } = useMediaQuery();
   const pathname = usePathname();
-  const [isBannerVisible, setIsBannerVisible] = useState(initialBannerVisible);
   const hideNavbar = [
     '/auth/login',
     '/auth/sign-up',
@@ -80,16 +75,6 @@ const Navbar = ({
     '/docs',
     '/not-found',
   ].some((route) => pathname.includes(route)) || pathname.startsWith('/protected');
-
-  useEffect(() => {
-    const handleBannerDismiss = () => {
-      setIsBannerVisible(false);
-    };
-
-    window.addEventListener('banner-dismissed', handleBannerDismiss);
-    return () =>
-      window.removeEventListener('banner-dismissed', handleBannerDismiss);
-  }, []);
 
   useEffect(() => {
     if (isMenuOpen) {
@@ -251,9 +236,7 @@ const Navbar = ({
         <div
           className={cn(
             'bg-background/95 text-accent-foreground fixed inset-0 -z-10 flex flex-col justify-between tracking-normal backdrop-blur-md transition-all duration-500 ease-out lg:hidden',
-            isBannerVisible
-              ? 'pt-[calc(var(--header-height)+3rem)]'
-              : 'pt-[var(--header-height)]',
+            'pt-[var(--header-height)]',
             isMenuOpen
               ? 'translate-x-0 opacity-100'
               : 'pointer-events-none translate-x-full opacity-0',
