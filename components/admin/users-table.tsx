@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Users, Shield, User, Trash2, MoreHorizontal, Loader2 } from 'lucide-react';
+import { Users, Shield, User, Trash2, MoreHorizontal, Loader2, Ban, CheckCircle } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -37,7 +37,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { UserWithModules, updateUserRole, removeUserFromCompany } from '@/lib/actions/admin';
+import { UserWithModules, updateUserRole, removeUserFromCompany, toggleUserActiveStatus } from '@/lib/actions/admin';
 
 interface UsersTableProps {
   users: UserWithModules[];
@@ -112,6 +112,45 @@ export function UsersTable({
     }
   };
 
+  const handleToggleActive = async (user: UserWithModules, newStatus: boolean) => {
+    if (user.id === currentUserId) {
+      toast({
+        title: 'Cannot change own status',
+        description: 'You cannot deactivate your own account',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setLoadingUserId(user.id);
+
+    try {
+      const result = await toggleUserActiveStatus(user.id, newStatus, companyId);
+
+      if (result.success) {
+        toast({
+          title: 'Status updated',
+          description: `${getUserDisplayName(user)} is now ${newStatus ? 'active' : 'inactive'}`,
+        });
+        onRefresh();
+      } else {
+        toast({
+          title: 'Failed to update status',
+          description: result.error || 'An unexpected error occurred',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'An unexpected error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoadingUserId(null);
+    }
+  };
+
   const handleRemoveUser = async (user: UserWithModules) => {
     setConfirmRemove(null);
     setLoadingUserId(user.id);
@@ -163,7 +202,7 @@ export function UsersTable({
                   <TableHead>User</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>Modules</TableHead>
+                  <TableHead>Active Status</TableHead>
                   <TableHead>Joined</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
@@ -204,21 +243,14 @@ export function UsersTable({
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {user.modules.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {user.modules.slice(0, 3).map(mod => (
-                              <Badge key={mod.id} variant="outline" className="text-[10px]">
-                                {mod.name}
-                              </Badge>
-                            ))}
-                            {user.modules.length > 3 && (
-                              <Badge variant="outline" className="text-[10px]">
-                                +{user.modules.length - 3}
-                              </Badge>
-                            )}
-                          </div>
+                        {user.is_active ? (
+                          <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800">
+                            Active
+                          </Badge>
                         ) : (
-                          <span className="text-muted-foreground text-sm">-</span>
+                          <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700">
+                            Inactive
+                          </Badge>
                         )}
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
@@ -246,6 +278,21 @@ export function UsersTable({
                                 >
                                   <User className="mr-2 h-4 w-4" />
                                   Make User
+                                </DropdownMenuItem>
+                              )}
+                              {user.is_active ? (
+                                <DropdownMenuItem
+                                  onClick={() => handleToggleActive(user, false)}
+                                >
+                                  <Ban className="mr-2 h-4 w-4" />
+                                  Deactivate User
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onClick={() => handleToggleActive(user, true)}
+                                >
+                                  <CheckCircle className="mr-2 h-4 w-4" />
+                                  Activate User
                                 </DropdownMenuItem>
                               )}
                               <DropdownMenuSeparator />

@@ -26,7 +26,8 @@ import {
   updatePatientRecord,
 } from "@/lib/actions/patient-data";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Printer, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface PatientsPageClientProps {
   companyId: string;
@@ -703,6 +704,72 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
   const startRecord = filteredData.length > 0 ? (currentPage - 1) * pageSize + 1 : 0;
   const endRecord = Math.min(currentPage * pageSize, filteredData.length);
 
+  // Handle print
+  const handlePrint = () => {
+    window.print();
+  };
+
+  // Handle download as CSV
+  const handleDownload = () => {
+    if (filteredData.length === 0) {
+      toast({
+        title: "No data to download",
+        description: "Please upload data first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Get visible columns in order
+      const visibleColumns = columnConfigs
+        .filter(c => c.visible)
+        .sort((a, b) => (a.tableOrder || 999) - (b.tableOrder || 999));
+
+      // Build CSV headers using customized labels
+      const headers = visibleColumns.map(c => c.label);
+
+      // Build CSV content
+      const csvContent = [
+        // Header row
+        headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(','),
+        // Data rows
+        ...filteredData.map(row => 
+          visibleColumns.map(col => {
+            const value = (row as any)[col.id] || '';
+            // Escape commas and quotes
+            return `"${String(value).replace(/"/g, '""')}"`;
+          }).join(',')
+        )
+      ].join('\n');
+
+      // Create blob and download
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', `patient_data_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: "Download successful",
+        description: `Downloaded ${filteredData.length} patient records`,
+      });
+    } catch (error) {
+      console.error('Download error:', error);
+      toast({
+        title: "Download failed",
+        description: "An error occurred while downloading the data",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Loading Indicator */}
@@ -738,6 +805,28 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
             onUploadSelect={handleUploadSelect}
             onUploadDelete={handleUploadDelete}
           />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrint}
+            disabled={data.length === 0}
+            className="text-[11px] h-8"
+          >
+            <Printer className="h-3 w-3 mr-2" />
+            Print
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownload}
+            disabled={data.length === 0}
+            className="text-[11px] h-8"
+          >
+            <Download className="h-3 w-3 mr-2" />
+            Download
+          </Button>
         </div>
       </div>
 
