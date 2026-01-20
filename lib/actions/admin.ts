@@ -19,6 +19,7 @@ export interface UserWithModules {
   last_name: string | null;
   display_name: string | null;
   role: string;
+  is_active: boolean;
   created_at: string | null;
   modules: Array<{
     id: string;
@@ -35,6 +36,13 @@ export interface ModuleWithUserCount {
   user_count: number;
 }
 
+// User statistics
+export interface UserStats {
+  totalUsers: number;
+  adminUsers: number;
+  pendingInvites: number;
+}
+
 // =====================================================
 // Get Company Users
 // =====================================================
@@ -48,12 +56,16 @@ export async function getCompanyUsers(
   try {
     const supabase = await createClient();
 
+    console.log('Fetching users for company:', companyId);
+
     // Fetch all profiles for the company
     const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
-      .select('id, email, first_name, last_name, display_name, role, created_at')
+      .select('id, email, first_name, last_name, display_name, role, is_active, created_at')
       .eq('company_id', companyId)
       .order('created_at', { ascending: false });
+
+    console.log('Profiles query result:', { count: profiles?.length, error: profilesError });
 
     if (profilesError) {
       console.error('Error fetching profiles:', profilesError);
@@ -97,6 +109,7 @@ export async function getCompanyUsers(
       last_name: profile.last_name,
       display_name: profile.display_name,
       role: profile.role,
+      is_active: profile.is_active,
       created_at: profile.created_at,
       modules: userModulesMap.get(profile.id) || [],
     }));
@@ -184,6 +197,86 @@ export async function getActiveModules(
 }
 
 // =====================================================
+// Get Company User Statistics
+// =====================================================
+
+/**
+ * Get statistics about users in a company
+ * Includes total users, admin users, and pending invites
+ */
+export async function getCompanyUserStats(
+  companyId: string
+): Promise<ActionResponse<UserStats>> {
+  try {
+    const supabase = await createClient();
+
+    // Get all profiles for the company
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, role, user_id')
+      .eq('company_id', companyId);
+
+    if (profilesError) {
+      console.error('Error fetching profiles:', profilesError);
+      return { success: false, error: 'Failed to fetch user statistics' };
+    }
+
+    if (!profiles || profiles.length === 0) {
+      return { 
+        success: true, 
+        data: { totalUsers: 0, adminUsers: 0, pendingInvites: 0 } 
+      };
+    }
+
+    // Count total and admin users
+    const totalUsers = profiles.length;
+    const adminUsers = profiles.filter(p => p.role === 'admin').length;
+
+    // Get pending invites by checking auth.users for unconfirmed emails
+    // Create admin client to access auth.users table
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    let pendingInvites = 0;
+
+    if (supabaseUrl && serviceRoleKey) {
+      try {
+        const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+          },
+        });
+
+        // Get all user IDs from this company
+        const userIds = profiles.map(p => p.user_id);
+
+        // Query auth.users for unconfirmed users
+        const { data: authUsers, error: authError } = await adminClient.auth.admin.listUsers();
+
+        if (!authError && authUsers?.users) {
+          // Count users who haven't confirmed their email and belong to this company
+          pendingInvites = authUsers.users.filter(user => 
+            userIds.includes(user.id) && !user.email_confirmed_at
+          ).length;
+        }
+      } catch (error) {
+        console.error('Error checking pending invites:', error);
+        // Continue with pendingInvites = 0 rather than failing
+      }
+    }
+
+    return { 
+      success: true, 
+      data: { totalUsers, adminUsers, pendingInvites } 
+    };
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return { success: false, error: 'Unexpected error fetching user statistics' };
+  }
+}
+
+// =====================================================
 // Invite User
 // =====================================================
 
@@ -247,38 +340,76 @@ export async function inviteUser(
 
     const newUserId = inviteData.user.id;
 
-    // Create profile for the invited user
+    // Wait for trigger to create profile (with retries)
     const supabase = await createClient();
+    let profileData = null;
+    let retries = 5;
     
-    // Get inviter's email for audit
-    const { data: inviterProfile } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('id', inviterId)
-      .single();
+    while (retries > 0 && !profileData) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', newUserId)
+        .maybeSingle();
 
-    const { data: profileData, error: profileError } = await adminClient
-      .from('profiles')
-      .insert({
-        user_id: newUserId,
-        email: email,
-        first_name: firstName,
-        last_name: lastName,
-        company_id: companyId,
-        role: role,
-        created_by_id: inviterId,
-        creator_email: inviterProfile?.email,
-      })
-      .select('id')
-      .single();
-
-    if (profileError) {
-      console.error('Error creating profile:', profileError);
-      // Don't fail completely - user was invited, profile will be created on first login
+      if (data) {
+        profileData = data;
+        break;
+      }
+      
+      retries--;
     }
 
-    // Grant module access if profile was created and modules selected
+    // If trigger didn't create profile, create it manually as fallback
+    if (!profileData) {
+      console.warn('Trigger did not create profile, creating manually for user:', newUserId);
+      console.log('Creating profile with company_id:', companyId, 'role:', role);
+      
+      // Get inviter's email for audit
+      const { data: inviterProfile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', inviterId)
+        .single();
+
+      const { data: manualProfile, error: profileError } = await adminClient
+        .from('profiles')
+        .insert({
+          user_id: newUserId,
+          email: email,
+          first_name: firstName,
+          last_name: lastName,
+          company_id: companyId,
+          role: role,
+          is_active: true,
+          created_by_id: inviterId,
+          creator_email: inviterProfile?.email,
+        })
+        .select('id, company_id, role, email')
+        .single();
+
+      if (profileError) {
+        console.error('Error creating profile manually:', profileError);
+        return { success: false, error: 'Failed to create user profile' };
+      }
+      
+      console.log('Profile created successfully:', manualProfile);
+      profileData = manualProfile;
+    } else {
+      console.log('Profile created by trigger:', profileData);
+    }
+
+    // Grant module access if modules selected
     if (profileData && moduleIds.length > 0) {
+      // Get inviter's email for audit
+      const { data: inviterProfile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', inviterId)
+        .single();
+
       const moduleInserts = moduleIds.map(moduleId => ({
         user_id: profileData.id,
         module_id: moduleId,
@@ -352,6 +483,56 @@ export async function updateUserRole(
   } catch (error) {
     console.error('Unexpected error:', error);
     return { success: false, error: 'Unexpected error updating role' };
+  }
+}
+
+// =====================================================
+// Toggle User Active Status
+// =====================================================
+
+/**
+ * Toggle user's active status (admin only)
+ */
+export async function toggleUserActiveStatus(
+  userId: string,
+  isActive: boolean,
+  companyId: string
+): Promise<ActionResponse<void>> {
+  try {
+    const supabase = await createClient();
+
+    // Verify the user belongs to the same company
+    const { data: targetProfile, error: fetchError } = await supabase
+      .from('profiles')
+      .select('id, company_id')
+      .eq('id', userId)
+      .single();
+
+    if (fetchError || !targetProfile) {
+      return { success: false, error: 'User not found' };
+    }
+
+    if (targetProfile.company_id !== companyId) {
+      return { success: false, error: 'Cannot update users from other companies' };
+    }
+
+    // Update the active status
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ is_active: isActive })
+      .eq('id', userId);
+
+    if (updateError) {
+      console.error('Error updating active status:', updateError);
+      return { success: false, error: 'Failed to update user status' };
+    }
+
+    revalidatePath('/protected/admin');
+
+    return { success: true };
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return { success: false, error: 'Unexpected error updating status' };
   }
 }
 

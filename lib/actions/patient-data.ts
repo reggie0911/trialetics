@@ -83,8 +83,14 @@ export async function uploadPatientData(
       }
     }
 
+    // Deduplicate column configs by id (keep last occurrence)
+    // This prevents "duplicate key value violates unique constraint" error
+    const deduplicatedConfigs = Array.from(
+      new Map(columnConfigs.map(c => [c.id, c])).values()
+    );
+
     // Insert column configurations
-    const columnConfigInserts: TablesInsert<'column_configs'>[] = columnConfigs.map(config => ({
+    const columnConfigInserts: TablesInsert<'column_configs'>[] = deduplicatedConfigs.map(config => ({
       upload_id: upload.id,
       column_id: config.id,
       label: config.label,
@@ -486,10 +492,10 @@ export async function deletePatientUpload(
 // =====================================================
 
 /**
- * Get header mappings for a project
+ * Get header mappings for a company
  */
 export async function getHeaderMappings(
-  projectId: string
+  companyId: string
 ): Promise<ActionResponse<Tables<'header_mappings'>[]>> {
   try {
     const supabase = await createClient();
@@ -497,7 +503,7 @@ export async function getHeaderMappings(
     const { data, error } = await supabase
       .from('header_mappings')
       .select('*')
-      .eq('project_id', projectId)
+      .eq('company_id', companyId)
       .order('table_order', { ascending: true });
 
     if (error) {
@@ -527,14 +533,14 @@ export async function saveHeaderMappings(
   try {
     const supabase = await createClient();
 
-    // Delete existing mappings for this company
-    await supabase
-      .from('header_mappings')
-      .delete()
-      .eq('company_id', companyId);
+    // Deduplicate mappings by originalHeader (keep last occurrence)
+    // This prevents "ON CONFLICT DO UPDATE command cannot affect row a second time" error
+    const deduplicatedMappings = Array.from(
+      new Map(mappings.map(m => [m.originalHeader, m])).values()
+    );
 
-    // Insert new mappings
-    const mappingInserts: TablesInsert<'header_mappings'>[] = mappings.map(mapping => ({
+    // Upsert mappings - update if exists (based on company_id + original_header), insert if not
+    const mappingInserts: TablesInsert<'header_mappings'>[] = deduplicatedMappings.map(mapping => ({
       company_id: companyId,
       original_header: mapping.originalHeader,
       customized_header: mapping.customizedHeader,
@@ -544,7 +550,10 @@ export async function saveHeaderMappings(
 
     const { error } = await supabase
       .from('header_mappings')
-      .insert(mappingInserts);
+      .upsert(mappingInserts, {
+        onConflict: 'company_id,original_header',
+        ignoreDuplicates: false,
+      });
 
     if (error) {
       console.error('Error saving header mappings:', error);

@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -12,8 +13,20 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { CreateProjectForm } from '@/components/create-project-form';
 import { Tables } from '@/lib/types/database.types';
+import { createClient } from '@/lib/client';
+import { toast } from 'sonner';
 
 interface ProtectedProjectsProps {
   projects: Tables<'projects'>[];
@@ -21,10 +34,45 @@ interface ProtectedProjectsProps {
 
 export function ProtectedProjects({ projects }: ProtectedProjectsProps) {
   const router = useRouter();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleProjectCreated = () => {
     // Refresh the page to show the new project
     router.refresh();
+  };
+
+  const handleDeleteClick = (projectId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setProjectToDelete(projectId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!projectToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', projectToDelete);
+
+      if (error) throw error;
+
+      toast.success('Project deleted successfully');
+      router.refresh();
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      toast.error('Failed to delete project');
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
+    }
   };
 
   return (
@@ -50,13 +98,26 @@ export function ProtectedProjects({ projects }: ProtectedProjectsProps) {
               className="overflow-hidden transition-colors duration-300 hover:bg-[#e9e9e9]"
             >
               <CardHeader className="pb-4">
-                <CardTitle className="text-xl">
-                  {project.protocol_number}
-                </CardTitle>
-                <CardDescription className="text-base">
-                  {project.protocol_name}
-                  {project.trial_phase && ` | ${project.trial_phase}`}
-                </CardDescription>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-xl">
+                      {project.protocol_number}
+                    </CardTitle>
+                    <CardDescription className="text-base">
+                      {project.protocol_name}
+                      {project.trial_phase && ` | ${project.trial_phase}`}
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={(e) => handleDeleteClick(project.id, e)}
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    title="Delete project"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent className="pb-4">
                 <div className="space-y-2 text-sm text-muted-foreground">
@@ -93,6 +154,27 @@ export function ProtectedProjects({ projects }: ProtectedProjectsProps) {
           ))}
         </div>
       )}
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Project</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this project? This action cannot be undone and will permanently remove the project and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

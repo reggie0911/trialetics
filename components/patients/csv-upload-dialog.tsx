@@ -64,47 +64,84 @@ export function CSVUploadDialog({ onUpload, disabled = false }: CSVUploadDialogP
     setParsing(true);
     setError(null);
 
-    Papa.parse(csvFile, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
+    // Read file as text to skip the first row before parsing
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      if (!text) {
         setParsing(false);
-        
-        if (results.errors.length > 0) {
-          setError(`CSV parsing errors: ${results.errors[0].message}`);
-          return;
-        }
+        setError("Failed to read file");
+        return;
+      }
 
-        const data = results.data as PatientRecord[];
-        
-        if (data.length === 0) {
-          setError("CSV file is empty");
-          return;
-        }
-
-        // Show preview of first 5 rows
-        setPreviewData(data.slice(0, 5));
-      },
-      error: (error) => {
+      // Remove the first row (skip top row before headers)
+      const lines = text.split('\n');
+      if (lines.length < 2) {
         setParsing(false);
-        setError(`Failed to parse CSV: ${error.message}`);
-      },
-    });
+        setError("CSV file has insufficient rows");
+        return;
+      }
+      const csvWithoutFirstRow = lines.slice(1).join('\n');
+
+      Papa.parse(csvWithoutFirstRow, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          setParsing(false);
+          
+          if (results.errors.length > 0) {
+            setError(`CSV parsing errors: ${results.errors[0].message}`);
+            return;
+          }
+
+          const data = results.data as PatientRecord[];
+          
+          if (data.length === 0) {
+            setError("CSV file is empty");
+            return;
+          }
+
+          // Show preview of first 5 rows
+          setPreviewData(data.slice(0, 5));
+        },
+        error: (error: Error) => {
+          setParsing(false);
+          setError(`Failed to parse CSV: ${error.message}`);
+        },
+      });
+    };
+    reader.onerror = () => {
+      setParsing(false);
+      setError("Failed to read file");
+    };
+    reader.readAsText(csvFile);
   };
 
   const handleConfirmUpload = () => {
     if (!file) return;
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        const data = results.data as PatientRecord[];
-        onUpload(data, file.name);
-        setOpen(false);
-        resetDialog();
-      },
-    });
+    // Read file as text to skip the first row before parsing
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      if (!text) return;
+
+      // Remove the first row (skip top row before headers)
+      const lines = text.split('\n');
+      const csvWithoutFirstRow = lines.slice(1).join('\n');
+
+      Papa.parse(csvWithoutFirstRow, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const data = results.data as PatientRecord[];
+          onUpload(data, file.name);
+          setOpen(false);
+          resetDialog();
+        },
+      });
+    };
+    reader.readAsText(file);
   };
 
   const resetDialog = () => {

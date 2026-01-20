@@ -1,17 +1,21 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { Loader2, RefreshCw, Home } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { UsersTable } from './users-table';
 import { InviteUserForm } from './invite-user-form';
 import { ModulesList } from './modules-list';
+import { UserStatsCards } from './user-stats-cards';
 import {
   getCompanyUsers,
   getActiveModules,
+  getCompanyUserStats,
   UserWithModules,
   ModuleWithUserCount,
+  UserStats,
 } from '@/lib/actions/admin';
 
 interface AdminPageClientProps {
@@ -25,11 +29,13 @@ export function AdminPageClient({
   profileId,
   userEmail,
 }: AdminPageClientProps) {
+  const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [users, setUsers] = useState<UserWithModules[]>([]);
   const [modules, setModules] = useState<ModuleWithUserCount[]>([]);
+  const [stats, setStats] = useState<UserStats | null>(null);
 
   const loadData = useCallback(async (showRefreshIndicator = false) => {
     if (showRefreshIndicator) {
@@ -37,10 +43,11 @@ export function AdminPageClient({
     }
 
     try {
-      // Fetch users and modules in parallel
-      const [usersResult, modulesResult] = await Promise.all([
+      // Fetch users, modules, and stats in parallel
+      const [usersResult, modulesResult, statsResult] = await Promise.all([
         getCompanyUsers(companyId),
         getActiveModules(companyId),
+        getCompanyUserStats(companyId),
       ]);
 
       if (usersResult.success && usersResult.data) {
@@ -62,6 +69,16 @@ export function AdminPageClient({
           variant: 'destructive',
         });
       }
+
+      if (statsResult.success && statsResult.data) {
+        setStats(statsResult.data);
+      } else if (!statsResult.success) {
+        toast({
+          title: 'Error loading statistics',
+          description: statsResult.error || 'Failed to load statistics',
+          variant: 'destructive',
+        });
+      }
     } catch (error) {
       toast({
         title: 'Error',
@@ -72,7 +89,7 @@ export function AdminPageClient({
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [companyId, toast]);
+  }, [companyId]); // Removed toast from dependencies
 
   useEffect(() => {
     loadData();
@@ -92,8 +109,19 @@ export function AdminPageClient({
 
   return (
     <div className="space-y-6">
-      {/* Refresh Button */}
-      <div className="flex justify-end">
+      {/* User Statistics */}
+      {stats && <UserStatsCards stats={stats} />}
+
+      {/* Action Buttons */}
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => router.push('/protected')}
+        >
+          <Home className="mr-2 h-4 w-4" />
+          Go to Homepage
+        </Button>
         <Button
           variant="outline"
           size="sm"

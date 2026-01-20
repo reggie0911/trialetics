@@ -8,16 +8,18 @@ interface LogoProps {
   className?: string;
   wrapperClassName?: string;
   onlyLogo?: boolean;
+  href?: string;
 }
 
 const Logo: React.FC<LogoProps> = ({
   className = '',
   wrapperClassName = '',
   onlyLogo = false,
+  href = '/',
 }) => {
   if (onlyLogo) {
     return (
-      <Link href="/">
+      <Link href={href}>
         <Image
           src="/Trialetics_Logo_Black.svg"
           alt="Trialetics"
@@ -40,7 +42,7 @@ const Logo: React.FC<LogoProps> = ({
   return (
     <div className={cn(``, wrapperClassName)}>
       <Link
-        href="/"
+        href={href}
         className={cn(
           `flex items-center`,
           className
