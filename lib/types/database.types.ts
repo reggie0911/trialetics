@@ -283,6 +283,211 @@ export type Database = {
           },
         ]
       }
+      ecrf_column_configs: {
+        Row: {
+          column_id: string
+          created_at: string
+          id: string
+          label: string
+          table_order: number | null
+          updated_at: string
+          upload_id: string
+          visible: boolean
+        }
+        Insert: {
+          column_id: string
+          created_at?: string
+          id?: string
+          label: string
+          table_order?: number | null
+          updated_at?: string
+          upload_id: string
+          visible?: boolean
+        }
+        Update: {
+          column_id?: string
+          created_at?: string
+          id?: string
+          label?: string
+          table_order?: number | null
+          updated_at?: string
+          upload_id?: string
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ecrf_column_configs_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "ecrf_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ecrf_header_mappings: {
+        Row: {
+          company_id: string
+          created_at: string
+          customized_header: string
+          id: string
+          original_header: string
+          table_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          customized_header: string
+          id?: string
+          original_header: string
+          table_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          customized_header?: string
+          id?: string
+          original_header?: string
+          table_order?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ecrf_header_mappings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ecrf_records: {
+        Row: {
+          created_at: string
+          date_time: string | null
+          event_date: string | null
+          event_name: string | null
+          extra_fields: Json | null
+          form_name: string | null
+          id: string
+          query_raised_by_role: string | null
+          query_resolution: string | null
+          query_state: string | null
+          query_text: string | null
+          query_type: string | null
+          site_name: string | null
+          subject_id: string | null
+          upload_id: string
+          user_name: string | null
+          user_role: string | null
+        }
+        Insert: {
+          created_at?: string
+          date_time?: string | null
+          event_date?: string | null
+          event_name?: string | null
+          extra_fields?: Json | null
+          form_name?: string | null
+          id?: string
+          query_raised_by_role?: string | null
+          query_resolution?: string | null
+          query_state?: string | null
+          query_text?: string | null
+          query_type?: string | null
+          site_name?: string | null
+          subject_id?: string | null
+          upload_id: string
+          user_name?: string | null
+          user_role?: string | null
+        }
+        Update: {
+          created_at?: string
+          date_time?: string | null
+          event_date?: string | null
+          event_name?: string | null
+          extra_fields?: Json | null
+          form_name?: string | null
+          id?: string
+          query_raised_by_role?: string | null
+          query_resolution?: string | null
+          query_state?: string | null
+          query_text?: string | null
+          query_type?: string | null
+          site_name?: string | null
+          subject_id?: string | null
+          upload_id?: string
+          user_name?: string | null
+          user_role?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ecrf_records_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "ecrf_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ecrf_uploads: {
+        Row: {
+          column_count: number
+          company_id: string
+          created_at: string
+          file_name: string
+          filter_preferences: Json | null
+          id: string
+          row_count: number
+          updated_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          column_count: number
+          company_id: string
+          created_at?: string
+          file_name: string
+          filter_preferences?: Json | null
+          id?: string
+          row_count: number
+          updated_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          column_count?: number
+          company_id?: string
+          created_at?: string
+          file_name?: string
+          filter_preferences?: Json | null
+          id?: string
+          row_count?: number
+          updated_at?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ecrf_uploads_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ecrf_uploads_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ecrf_uploads_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "project_assignments"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
       header_mappings: {
         Row: {
           company_id: string
@@ -681,6 +886,7 @@ export type Database = {
           email: string | null
           first_name: string | null
           id: string
+          is_active: boolean
           job_title: string | null
           language: string | null
           last_name: string | null
@@ -700,6 +906,7 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id?: string
+          is_active?: boolean
           job_title?: string | null
           language?: string | null
           last_name?: string | null
@@ -719,6 +926,7 @@ export type Database = {
           email?: string | null
           first_name?: string | null
           id?: string
+          is_active?: boolean
           job_title?: string | null
           language?: string | null
           last_name?: string | null
@@ -1403,21 +1611,23 @@ export const Constants = {
   },
 } as const
 
-// Convenience type aliases
+// Convenience type aliases for common tables
 export type Profile = Tables<'profiles'>;
 export type Company = Tables<'companies'>;
 export type Project = Tables<'projects'>;
 export type Module = Tables<'modules'>;
+export type UserProject = Tables<'user_projects'>;
+export type UserModule = Tables<'user_modules'>;
 
-// Types with relations
+// Type with relations
 export type ProfileWithCompany = Profile & {
   companies: Company | null;
 };
 
-export type UserProjectWithDetails = Tables<'user_projects'> & {
+export type UserProjectWithDetails = UserProject & {
   projects: Project | null;
 };
 
-export type UserModuleWithDetails = Tables<'user_modules'> & {
+export type UserModuleWithDetails = UserModule & {
   modules: Module | null;
 };

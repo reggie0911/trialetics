@@ -25,8 +25,8 @@ const menuItems = [
     href: "/protected/ae",
   },
   {
-    label: "Query Metrics",
-    href: "/protected/vc", // Placeholder route
+    label: "eCRF Query Tracker",
+    href: "/protected/ecrf-query-tracker",
   },
   {
     label: "Visit Window",
