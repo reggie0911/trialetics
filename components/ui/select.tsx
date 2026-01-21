@@ -18,13 +18,19 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   )
 }
 
-function SelectValue({ className, ...props }: SelectPrimitive.Value.Props) {
+interface SelectValueProps extends SelectPrimitive.Value.Props {
+  placeholder?: string;
+}
+
+function SelectValue({ className, placeholder, ...props }: SelectValueProps) {
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("flex flex-1 text-left", className)}
       {...props}
-    />
+    >
+      {(value) => value ?? placeholder ?? null}
+    </SelectPrimitive.Value>
   )
 }
 

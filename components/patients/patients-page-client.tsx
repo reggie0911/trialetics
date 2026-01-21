@@ -34,6 +34,52 @@ interface PatientsPageClientProps {
   profileId: string;
 }
 
+// Helper function to parse a date string in various formats (MM/DD/YYYY, YYYY-MM-DD, or standard Date parseable)
+function parseFlexibleDate(dateString: string): Date | null {
+  if (!dateString || dateString === '' || dateString === '—') {
+    return null;
+  }
+  
+  try {
+    // Check for MM/DD/YYYY format
+    if (dateString.includes('/')) {
+      const parts = dateString.split('/').map(num => parseInt(num, 10));
+      if (parts.length === 3 && parts.every(p => !isNaN(p))) {
+        const [month, day, year] = parts;
+        return new Date(year, month - 1, day);
+      }
+    }
+    
+    // Check for YYYY-MM-DD format (ISO)
+    if (dateString.includes('-')) {
+      const parts = dateString.split('-').map(num => parseInt(num, 10));
+      if (parts.length === 3 && parts.every(p => !isNaN(p))) {
+        // Check if first part is a year (4 digits) or a day/month
+        if (parts[0] > 31) {
+          // YYYY-MM-DD format
+          const [year, month, day] = parts;
+          return new Date(year, month - 1, day);
+        } else {
+          // DD-MM-YYYY format
+          const [day, month, year] = parts;
+          return new Date(year, month - 1, day);
+        }
+      }
+    }
+    
+    // Fallback to standard Date parsing
+    const date = new Date(dateString);
+    if (!isNaN(date.getTime())) {
+      return date;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error parsing date:', dateString, error);
+    return null;
+  }
+}
+
 // Helper function to calculate days between two dates
 function calculateDaysBetweenDates(laterDateString: string | undefined, earlierDateString: string | undefined): number {
   if (!laterDateString || laterDateString === '' || laterDateString === '—' ||
@@ -42,18 +88,19 @@ function calculateDaysBetweenDates(laterDateString: string | undefined, earlierD
   }
   
   try {
-    // Parse MM/DD/YYYY format for both dates
-    const [laterMonth, laterDay, laterYear] = laterDateString.split('/').map(num => parseInt(num, 10));
-    const [earlierMonth, earlierDay, earlierYear] = earlierDateString.split('/').map(num => parseInt(num, 10));
+    const laterDate = parseFlexibleDate(laterDateString);
+    const earlierDate = parseFlexibleDate(earlierDateString);
     
-    const laterDate = new Date(laterYear, laterMonth - 1, laterDay);
-    const earlierDate = new Date(earlierYear, earlierMonth - 1, earlierDay);
+    if (!laterDate || !earlierDate || isNaN(laterDate.getTime()) || isNaN(earlierDate.getTime())) {
+      return 0;
+    }
     
     // Calculate difference in days
     const diffTime = laterDate.getTime() - earlierDate.getTime();
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
     
-    return diffDays;
+    // Return the absolute value to handle cases where dates might be in wrong order
+    return isNaN(diffDays) ? 0 : diffDays;
   } catch (error) {
     console.error('Error parsing dates:', laterDateString, earlierDateString, error);
     return 0;
@@ -118,8 +165,8 @@ function addDaysToDate(dateStr: string | undefined, days: number): string {
   }
   
   try {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) {
+    const date = parseFlexibleDate(dateStr);
+    if (!date || isNaN(date.getTime())) {
       return '';
     }
     

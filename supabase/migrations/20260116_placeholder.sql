@@ -1,0 +1,2 @@
+-- Placeholder migration to match remote migration history
+-- This migration was already applied on the remote database
