@@ -1,8 +1,8 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
-import Image from 'next/image';
 
 import Noise from '@/components/noise';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,15 @@ import usePrefersReducedMotion from '@/hooks/usePrefersReducedMotion';
 
 export default function Hero() {
   const prefersReducedMotion = usePrefersReducedMotion();
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.play().catch(error => {
+        console.error("Video autoplay failed:", error);
+      });
+    }
+  }, []);
 
   // Animation variants
   const containerVariants = {
@@ -83,45 +92,76 @@ export default function Hero() {
   };
 
   return (
-    <section className="section-padding relative flex flex-col items-center bg-[url(/images/gradient.webp)] bg-cover bg-center bg-no-repeat !pb-0 dark:bg-[url(/images/gradient-dark.webp)]">
+    <section className="section-padding relative flex flex-col items-center !pb-0 overflow-hidden">
+      {/* Video Background - Absolute Bottom */}
+      <video
+        ref={videoRef}
+        key="hero-video"
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 h-full w-full object-cover z-0"
+        suppressHydrationWarning
+      >
+        <source src="/videos/hero-background.mp4" type="video/mp4" />
+      </video>
+
+      {/* Dark Overlay for Text Readability */}
+      <div className="absolute inset-0 bg-black/40 z-[1]" />
+
+      {/* Noise Texture */}
+      <div className="absolute inset-0 z-[2] opacity-20 pointer-events-none">
+        <Noise />
+      </div>
+
+      {/* Content - On Top */}
       <motion.div
-        variants={overlayVariants}
-        initial={prefersReducedMotion ? 'visible' : 'hidden'}
-        animate="visible"
-        className="from-background/30 pointer-events-none absolute inset-0 bg-gradient-to-b to-transparent"
-      />
-      <Noise />
-      <motion.div
-        className="z-1 container text-center"
+        className="z-10 container text-center relative"
         variants={containerVariants}
         initial={prefersReducedMotion ? 'visible' : 'hidden'}
         animate="visible"
       >
         <motion.h1
           variants={itemVariants}
-          className="text-3xl leading-tight tracking-tight md:text-5xl lg:text-6xl"
+          className="mx-auto text-3xl leading-tight tracking-tight md:text-5xl lg:text-6xl text-white"
         >
-          Optimize Your Workflow
-          <br className="hidden md:block" /> Accelerate Your Growth
+          <span className="block lg:whitespace-nowrap">Stop Managing Trials in Spreadsheets.</span>
+          <span className="block lg:whitespace-nowrap">Start Managing with Trialetics.</span>
         </motion.h1>
 
         <motion.p
           variants={itemVariants}
-          className="text-muted-foreground my-2 text-sm md:my-4 md:text-lg lg:my-6 lg:text-xl"
+          className="text-white/80 my-2 text-sm md:my-4 md:text-lg lg:my-6 lg:text-lg"
         >
-          Simplify project management and boost team productivity with our SaaS
-          platform.
+          Spreadsheets break under the weight of growing studies, Trialetics doesn't. Whether you're running one trial or a full portfolio, our platform gives you the speed, compliance, and oversight to scale without adding complexity.
         </motion.p>
 
-        <motion.div variants={itemVariants}>
+        <motion.div variants={itemVariants} className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Button
             size="lg"
-            className="mt-2 rounded-full !pl-5.5 before:rounded-full"
+            className="rounded-full !pl-5.5 before:rounded-full"
+            asChild
           >
-            Start Testing
-            <div className="bg-background/15 border-background/10 grid size-5.5 place-items-center rounded-full border">
-              <ChevronRight className="size-4" />
-            </div>
+            <a href="https://www.linkedin.com/company/trialetics-io" target="_blank" rel="noopener noreferrer">
+              Connect With Us
+              <div className="bg-background/15 border-background/10 grid size-5.5 place-items-center rounded-full border">
+                <ChevronRight className="size-4" />
+              </div>
+            </a>
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            className="rounded-full !pl-5.5"
+            asChild
+          >
+            <a href="/app-store">
+              Visit Our App Store
+              <div className="bg-background/15 border-background/10 grid size-5.5 place-items-center rounded-full border">
+                <ChevronRight className="size-4" />
+              </div>
+            </a>
           </Button>
         </motion.div>
 
@@ -129,14 +169,15 @@ export default function Hero() {
           variants={imageVariants}
           className="bg-background/45 border-background relative mt-10 justify-self-end overflow-hidden rounded-t-xl border p-2 md:mt-20 md:rounded-t-3xl md:p-4 lg:mt-25"
         >
-          <Image
-            src="/images/hero.webp"
-            alt="Lumina Workspace"
-            width={1056}
-            height={752.5}
-            priority
-            className="border-background/45 rounded-t-sm md:rounded-t-xl"
-          />
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="border-background/45 rounded-t-sm md:rounded-t-xl w-full"
+          >
+            <source src="/videos/hero-demo.mp4" type="video/mp4" />
+          </video>
         </motion.div>
         <div className="from-background pointer-events-none absolute inset-0 bg-gradient-to-t via-transparent via-25% to-transparent" />
       </motion.div>

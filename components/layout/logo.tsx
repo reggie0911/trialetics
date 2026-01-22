@@ -9,6 +9,7 @@ interface LogoProps {
   wrapperClassName?: string;
   onlyLogo?: boolean;
   href?: string;
+  white?: boolean;
 }
 
 const Logo: React.FC<LogoProps> = ({
@@ -16,25 +17,26 @@ const Logo: React.FC<LogoProps> = ({
   wrapperClassName = '',
   onlyLogo = false,
   href = '/',
+  white = false,
 }) => {
   if (onlyLogo) {
     return (
       <Link href={href}>
         <Image
           src="/Trialetics_Logo_Black.svg"
-          alt="Trialetics"
+          alt="Trialetics Technologies"
           width={160}
           height={40}
           priority
-          className="dark:hidden"
+          className={cn(white ? "hidden" : "dark:hidden")}
         />
         <Image
           src="/Trialetics_Logo_White.svg"
-          alt="Trialetics"
+          alt="Trialetics Technologies"
           width={160}
           height={40}
           priority
-          className="hidden dark:block"
+          className={cn(white ? "block" : "hidden dark:block")}
         />
       </Link>
     );
@@ -50,19 +52,19 @@ const Logo: React.FC<LogoProps> = ({
       >
         <Image
           src="/Trialetics_Logo_Black.svg"
-          alt="Trialetics"
+          alt="Trialetics Technologies"
           width={120}
           height={30}
           priority
-          className="dark:hidden"
+          className={cn(white ? "hidden" : "dark:hidden")}
         />
         <Image
           src="/Trialetics_Logo_White.svg"
-          alt="Trialetics"
+          alt="Trialetics Technologies"
           width={120}
           height={30}
           priority
-          className="hidden dark:block"
+          className={cn(white ? "block" : "hidden dark:block")}
         />
       </Link>
     </div>

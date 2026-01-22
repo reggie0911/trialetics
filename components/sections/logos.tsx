@@ -1,115 +1,100 @@
 'use client';
 
-import Image from 'next/image';
-import Link from 'next/link';
-import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
+import { AlertTriangle, Clock, FileQuestion, Users } from 'lucide-react';
+import { motion } from 'motion/react';
 
-import { Marquee } from '@/components/magicui/marquee';
 import Noise from '@/components/noise';
-import { cn } from '@/lib/utils';
+import usePrefersReducedMotion from '@/hooks/usePrefersReducedMotion';
 
-const companies = [
+const painPoints = [
   {
-    name: 'Booking.com',
-    logo: '/images/logos/booking.svg',
-    className: 'dark:hidden',
-    url: 'https://booking.com',
+    icon: Clock,
+    title: 'Time Drain',
+    description: 'Spending hours manually updating trackers and chasing updates?',
   },
   {
-    name: 'Fortinet',
-    logo: '/images/logos/fortinet.svg',
-    className: 'dark:hidden',
-    url: 'https://fortinet.com',
+    icon: AlertTriangle,
+    title: 'Manual Errors',
+    description: 'How many hours are wasted correcting spreadsheet mistakes?',
   },
   {
-    name: 'IBM',
-    logo: '/images/logos/ibm.svg',
-    className: '',
-    url: 'https://ibm.com',
+    icon: Users,
+    title: 'Siloed Information',
+    description: 'Are your CRAs, data managers, and regulatory staff each maintaining separate sheets?',
   },
   {
-    name: 'Logitech',
-    logo: '/images/logos/logitech.svg',
-    className: 'dark:hidden',
-    url: 'https://logitech.com',
-  },
-  {
-    name: 'Netflix',
-    logo: '/images/logos/netflix.svg',
-    className: '',
-    url: 'https://netflix.com',
-  },
-  {
-    name: 'Spotify',
-    logo: '/images/logos/spotify.svg',
-    className: '',
-    url: 'https://spotify.com',
-  },
-  {
-    name: 'T-Mobile',
-    logo: '/images/logos/t-mobile.svg',
-    className: '',
-    url: 'https://t-mobile.com',
-  },
-  {
-    name: 'TIBCO',
-    logo: '/images/logos/tibc.svg',
-    className: '',
-    url: 'https://tibco.com',
+    icon: FileQuestion,
+    title: 'Version Chaos',
+    description: 'Are you asking which file is the latest and who updated it last?',
   },
 ];
 
 export default function Logos() {
-  const { theme } = useTheme();
-  const [mounted, setMounted] = useState(false);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.15,
+        delayChildren: 0.2,
+      },
+    },
+  };
 
-  // Filter out companies with dark:hidden when theme is dark
-  // Only apply theme-based filtering after component is mounted to prevent hydration mismatch
-  const visibleCompanies = companies.filter((company) => {
-    if (
-      mounted &&
-      theme === 'dark' &&
-      company.className.includes('dark:hidden')
-    ) {
-      return false;
-    }
-    return true;
-  });
+  const itemVariants = {
+    hidden: {
+      opacity: 0,
+      y: 20,
+    },
+    visible: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        type: 'spring' as const,
+        stiffness: 100,
+        damping: 20,
+      },
+    },
+  };
 
   return (
     <section className="section-padding relative">
       <Noise />
-      <p className="container text-center text-base">
-        Over 2+ million teams rely on Lumen to collaborate and get work done.
-      </p>
+      <div className="container">
+        <div className="text-center mb-10 lg:mb-14">
+          <h2 className="text-3xl leading-tight tracking-tight md:text-4xl lg:text-5xl">
+            Why the Change?
+          </h2>
+          <p className="text-muted-foreground mt-4 text-base md:text-lg max-w-2xl mx-auto">
+            If any of these sound familiar, it's time to move beyond spreadsheets.
+          </p>
+        </div>
 
-      <div>
-        <Marquee
-          pauseOnHover
-          className="mt-8 mask-r-from-60% mask-r-to-100% mask-l-from-60% mask-l-to-100% [--duration:20s] [--gap:4rem]"
+        <motion.div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+          variants={containerVariants}
+          initial={prefersReducedMotion ? 'visible' : 'hidden'}
+          whileInView="visible"
+          viewport={{ once: true, amount: 0.3 }}
         >
-          {visibleCompanies.map((company) => (
-            <Link
-              key={company.name}
-              href={company.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="relative h-8 w-24 transition-transform duration-200 hover:scale-105"
+          {painPoints.map((point) => (
+            <motion.div
+              key={point.title}
+              variants={itemVariants}
+              className="group relative rounded-xl border border-input bg-background/50 p-6 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5 hover:border-primary/20"
             >
-              <Image
-                src={company.logo}
-                alt={`${company.name} logo`}
-                fill
-                className={cn('object-contain', company.className)}
-              />
-            </Link>
+              <div className="mb-4 inline-flex size-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <point.icon className="size-6" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">{point.title}</h3>
+              <p className="text-muted-foreground text-sm leading-relaxed">
+                {point.description}
+              </p>
+            </motion.div>
           ))}
-        </Marquee>
+        </motion.div>
       </div>
     </section>
   );

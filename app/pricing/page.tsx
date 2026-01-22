@@ -1,19 +1,20 @@
 import { Metadata } from 'next';
 
-import Pricing from '@/components/sections/pricing';
-import PricingTable from '@/components/sections/pricing-table';
+import { Pricing32 } from '@/components/pricing32';
+import Noise from '@/components/noise';
 
 export const metadata: Metadata = {
-  title: 'Pricing - Trialetics',
-  description:
-    'Choose the perfect Trialetics plan for your needs. Compare features and pricing to find the best solution for individuals, teams, and enterprises.',
+  title: 'Pricing | Trialetics',
+  description: 'Flexible pricing options for clinical trial management software. Choose from App Store modules, custom development, or enterprise solutions.',
 };
 
 export default function PricingPage() {
   return (
     <>
-      <Pricing />
-      <PricingTable />
+      <section className="relative">
+        <Noise />
+        <Pricing32 />
+      </section>
     </>
   );
 }

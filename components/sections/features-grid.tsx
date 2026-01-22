@@ -10,10 +10,10 @@ const FEATURES_DATA = [
   {
     id: 1,
     image: '/images/features-grid/1.webp',
-    imageAlt: 'Feature management interface',
-    title: 'Smart Task Management',
+    imageAlt: 'Bespoke Innovation',
+    title: 'Bespoke Innovation',
     description:
-      'Organize and prioritize tasks with intelligent automation that adapts to your workflow patterns.',
+      'Each clinical trial is unique, and so are our solutions. Tailored to fit the specific needs of your project, our innovations are designed to propel your clinical trials towards efficacy and efficiency.',
     className: 'lg:col-span-3',
     width: 423,
     height: 228,
@@ -21,10 +21,10 @@ const FEATURES_DATA = [
   {
     id: 2,
     image: '/images/features-grid/2.webp',
-    imageAlt: 'Team collaboration dashboard',
-    title: 'Team Collaboration',
+    imageAlt: 'Rapid, Yet Rigorous',
+    title: 'Rapid, Yet Rigorous',
     description:
-      'Connect with your team seamlessly through integrated communication and shared workspaces.',
+      'Speed without sacrifice. We offer an ambitious average turnaround time of just 8 weeks for custom projects. Despite this rapid pace, our commitment to meticulousness, accuracy, and quality remains uncompromised.',
     className: 'lg:col-span-3',
     width: 435,
     height: 228,
@@ -32,10 +32,10 @@ const FEATURES_DATA = [
   {
     id: 3,
     image: '/images/features-grid/3.webp',
-    imageAlt: 'Analytics and reporting',
-    title: 'Advanced Analytics',
+    imageAlt: 'Beyond Data Management',
+    title: 'Beyond Data Management',
     description:
-      'Get comprehensive insights into your project performance with detailed analytics and customizable reports.',
+      'Our expertise extends far beyond converting Excel spreadsheets into SaaS applications. We revolutionize how data is managed, analyzed, and utilized, paving the way for more insightful, data-driven decisions.',
     className: 'lg:col-span-4',
     width: 599,
     height: 218,
@@ -43,10 +43,10 @@ const FEATURES_DATA = [
   {
     id: 4,
     image: '/images/features-grid/4.webp',
-    imageAlt: 'Project timeline view',
-    title: 'Project Timeline',
+    imageAlt: 'Readiness Meets Reliability',
+    title: 'Readiness Meets Reliability',
     description:
-      'Visualize project progress and milestones with interactive timeline views and dependency tracking.',
+      'The future waits for no one, which is why we offer a suite of ready-to-deploy solutions through our app store — a perfect mix for when time is of the essence.',
     className: 'lg:col-span-2',
     width: 292,
     height: 215,
@@ -54,10 +54,10 @@ const FEATURES_DATA = [
   {
     id: 5,
     image: '/images/features-grid/5.webp',
-    imageAlt: 'Integration capabilities',
-    title: 'Seamless Integrations',
+    imageAlt: 'Partnership at Every Step',
+    title: 'Partnership at Every Step',
     description:
-      'Connect with your favorite tools and services to create a unified workflow ecosystem.',
+      'What truly sets us apart is our unwavering commitment to your success. We see ourselves as more than just a vendor; we are your partner at every step, ensuring seamless integration and ongoing excellence.',
     className: 'lg:col-span-3',
     width: 417,
     height: 175,
@@ -65,10 +65,10 @@ const FEATURES_DATA = [
   {
     id: 6,
     image: '/images/features-grid/6.webp',
-    imageAlt: 'Mobile application',
-    title: 'Mobile Ready',
+    imageAlt: 'Security & Compliance',
+    title: 'Security & Compliance',
     description:
-      'Access your projects anywhere with our fully responsive mobile application.',
+      'Upholding the highest levels of security and regulatory compliance with HIPAA, GDPR, and FDA standards. Your data integrity and compliance are our highest priorities.',
     className: 'lg:col-span-3',
     width: 433,
     height: 155,
@@ -83,12 +83,10 @@ export default function FeaturesGrid() {
         {/* Section Header */}
         <div className="mx-auto max-w-5xl space-y-3 lg:space-y-4 lg:text-center">
           <h2 className="text-4xl tracking-tight lg:text-5xl">
-            Feature management that fits your workflow
+            What Sets Trialetics Apart?
           </h2>
           <p className="text-muted-foreground text-lg leading-snug lg:text-balance">
-            Assign, prioritize, and monitor every feature with precision. Lumen
-            helps teams ship faster by bringing structure to your development
-            process, without slowing you down.
+            In the intricate world of clinical trial management, the right technology partner can make all the difference. We're more than just a software provider — we're an integral part of your team, deeply committed to the success of each project.
           </p>
         </div>
 

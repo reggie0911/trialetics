@@ -24,52 +24,52 @@ import { cn } from '@/lib/utils';
 
 const features = [
   {
-    id: 'navigation',
+    id: 'custom-software',
     icon: Link,
-    title: 'Navigate your work with clarity',
-    description: 'A style board that adapts with your work.',
+    title: 'Tailored Software Solutions',
+    description: 'Comprehensive clinical trial management needs met with precision.',
     image: {
       src: '/images/features-carousel/1.webp',
-      alt: 'Navigate your work with clarity',
+      alt: 'Tailored Software Solutions',
       width: 400,
       height: 400,
       className: 'ps-4 pt-4',
     },
   },
   {
-    id: 'tracking',
+    id: 'excel-to-saas',
     icon: BarChart3,
-    title: 'Issue tracking with less noise',
-    description: 'Simple, powerful, and built for clarity.',
+    title: 'Excel to SaaS Conversion',
+    description: 'Enhancing data manageability and security with cloud-based solutions.',
     image: {
       src: '/images/features-carousel/2.webp',
-      alt: 'Issue tracking with less noise',
+      alt: 'Excel to SaaS Conversion',
       width: 400,
       height: 400,
       className: 'pt-4',
     },
   },
   {
-    id: 'filtering',
-    icon: Filter,
-    title: 'Filtering Tasks, no more distractions',
-    description: 'Smart filters that adapt to your needs.',
+    id: 'rapid-implementation',
+    icon: Clock,
+    title: '8-Week Rapid Implementation',
+    description: 'Delivering custom projects within an ambitious timeframe.',
     image: {
       src: '/images/features-carousel/3.webp',
-      alt: 'Filtering Tasks',
+      alt: '8-Week Rapid Implementation',
       width: 400,
       height: 400,
       className: 'p-4',
     },
   },
   {
-    id: 'timeline',
-    icon: Clock,
-    title: 'Timeline Management, no more delays',
-    description: 'Keep track of project progress with ease.',
+    id: 'app-store',
+    icon: Filter,
+    title: 'Ready-to-Deploy App Store',
+    description: 'Immediate solutions available for urgent requirements.',
     image: {
       src: '/images/features-carousel/4.webp',
-      alt: 'Timeline Management',
+      alt: 'Ready-to-Deploy App Store',
       width: 400,
       height: 400,
       className: 'pt-4',
@@ -183,13 +183,13 @@ export default function FeaturesCarousel() {
             variants={headerVariants}
           >
             <h2 className="text-4xl tracking-tight text-balance lg:text-5xl">
-              Navigate your{' '}
+              Our{' '}
               <span className="text-muted-foreground/80">
-                work with clarity
+                Expertise
               </span>
             </h2>
             <p className="text-muted-foreground text-lg leading-snug">
-              A style board that adapts to how your team works.
+              At Trialetics, we specialize in delivering innovative solutions tailored to clinical trial management.
             </p>
           </motion.div>
 

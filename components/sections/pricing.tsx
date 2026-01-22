@@ -1,69 +1,36 @@
 'use client';
 
-import { Check, ChevronRight, X } from 'lucide-react';
+import { ChevronRight, Users, Target, Building } from 'lucide-react';
 import { motion } from 'motion/react';
 import Link from 'next/link';
-import { useState } from 'react';
 
 import Noise from '@/components/noise';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 
-import Logo from '../layout/logo';
-
-const pricingPlans = {
-  individual: {
-    title: 'Individual Plan',
-    subtitle: 'Best option for solo',
-    description: 'Designers or Freelancers',
-    monthlyPrice: 25,
-    annualPrice: 19,
-    popular: true,
-    features: [
-      { name: 'Real-time task syncing', included: true },
-      { name: 'Basic project analytics', included: true },
-      { name: 'Custom workflows & automation', included: true },
-      { name: 'Cross-platform integrations', included: true },
-      { name: 'Unlimited boards & views', included: false },
-      { name: 'Priority support for teams', included: false },
-      { name: 'API access (Limited)', included: false },
-      { name: 'Community support', included: false },
-    ],
-    cta: {
-      text: 'Contact us for Custom CRM Integration',
-      button: 'Contact With Us',
-    },
+const targetAudience = [
+  {
+    id: 'directors',
+    icon: Target,
+    title: 'Directors of Clinical Trial Operations',
+    description: 'Streamline and optimize your clinical trial management processes',
   },
-  team: {
-    title: 'Power Users & Teams',
-    subtitle: 'Best option for team',
-    description: 'Agencies or Corporates',
-    monthlyPrice: 59,
-    annualPrice: 44,
-    popular: false,
-    features: [
-      { name: 'Advanced task syncing with dependencies', included: true },
-      { name: 'Smart automations & conditional triggers', included: true },
-      { name: 'In-depth usage insights & analytics', included: true },
-      { name: 'Priority team collaboration tools', included: true },
-      { name: 'CRM integrations', included: true },
-      { name: 'Developer toolkit', included: true },
-      { name: 'API access (Full)', included: true },
-      { name: 'Premium support & onboarding', included: true },
-    ],
-    cta: {
-      text: 'Connect us for Custom CRM Integration',
-      button: 'Contact With Us',
-    },
+  {
+    id: 'managers',
+    icon: Users,
+    title: 'Clinical Monitoring Managers',
+    description: 'Enhance monitoring efficiency and data quality across trials',
   },
-};
+  {
+    id: 'vps',
+    icon: Building,
+    title: 'VP of Clinical Affairs',
+    description: 'Drive strategic excellence with cutting-edge technology solutions',
+  },
+];
 
-export default function Pricing() {
-  const [isAnnual, setIsAnnual] = useState(false);
-
+export default function EngagementCTA() {
   return (
     <section className="section-padding relative overflow-hidden">
       {/* Background Image with Mask - Hidden in dark mode */}
@@ -94,143 +61,75 @@ export default function Pricing() {
 
       <div className="bigger-container relative z-10">
         {/* Section Header */}
-        <div className="flex flex-col items-center justify-between gap-8 md:flex-row md:items-end">
-          {/* Left side - Title and subtitle */}
-          <div className="">
-            <h2 className="text-center text-4xl font-medium tracking-tighter md:text-start md:text-6xl md:leading-none lg:text-7xl">
-              Power your progress with <br className="hidden md:block" />
-              Pro Access
-            </h2>
-            <p className="text-muted-foreground/70 mt-3 hidden text-lg leading-relaxed md:block lg:mt-4">
-              Increase feature adoption and customer satisfaction with the right
-              Lumen plan.
-            </p>
-          </div>
-
-          {/* Right side - Billing Switch */}
-          <div className="flex flex-col items-center gap-4">
-            <div className="flex items-center gap-3">
-              <span
-                className={cn(
-                  'text-lg font-semibold transition-colors',
-                  !isAnnual ? 'text-foreground' : 'text-muted-foreground/70',
-                )}
-              >
-                Monthly
-              </span>
-              <Switch checked={isAnnual} onCheckedChange={setIsAnnual} />
-              <span
-                className={cn(
-                  'text-lg font-semibold transition-colors',
-                  isAnnual ? 'text-foreground' : 'text-muted-foreground/70',
-                )}
-              >
-                Annual
-              </span>
-            </div>
-            <p className="text-center text-sm font-medium">
-              Save 25% on annual plan
-            </p>
-          </div>
+        <div className="mx-auto max-w-4xl text-center">
+          <h2 className="text-4xl font-medium tracking-tighter md:text-6xl md:leading-none lg:text-7xl">
+            Engage with Trialetics
+          </h2>
+          <p className="text-muted-foreground/70 mt-6 text-lg leading-relaxed lg:text-xl">
+            Trialetics invites leaders in clinical operations to explore how our innovative software solutions can revolutionize your trial management processes.
+          </p>
         </div>
 
-        {/* Pricing Cards */}
-        <div className="mx-auto mt-8 grid gap-4 lg:mt-12 lg:grid-cols-2">
-          {Object.entries(pricingPlans).map(([key, plan]) => (
-            <Card
-              key={key}
-              className="bg-secondary dark:bg-muted hover:shadow-primary/5 h-full gap-4 p-3 transition-all duration-300 hover:shadow-lg md:p-6"
-            >
-              <CardHeader className="bg-card dark:bg-card rounded-md p-4 md:p-6">
-                {/* Header with title and badge */}
-                <div className="flex items-start justify-between">
-                  <h3 className="text-xl">{plan.title}</h3>
-                  {plan.popular && (
-                    <Badge className="rounded-none bg-[#FFE6D0] px-4 py-1 text-[#FB6D21] dark:bg-[#6b3200] dark:text-[#fcaa7d]">
-                      Popular Plan
-                    </Badge>
-                  )}
-                </div>
-
-                {/* Subtitle and description */}
-                <div className="mt-6 text-2xl md:mt-8 md:space-y-2 md:text-4xl">
-                  <div className="text-muted-foreground/70">
-                    {plan.subtitle}
+        {/* Target Audience Cards */}
+        <div className="mx-auto mt-12 grid max-w-5xl gap-4 md:grid-cols-3 lg:mt-16">
+          {targetAudience.map((audience) => {
+            const IconComponent = audience.icon;
+            return (
+              <Card
+                key={audience.id}
+                className="bg-secondary dark:bg-muted hover:shadow-primary/5 h-full gap-4 transition-all duration-300 hover:shadow-lg"
+              >
+                <CardHeader className="items-center text-center">
+                  <div className="bg-card dark:bg-accent mb-4 grid size-16 place-items-center rounded-full">
+                    <IconComponent className="size-8" strokeWidth={1.5} />
                   </div>
-                  <div className="font-medium">{plan.description}</div>
-                </div>
+                  <h3 className="text-lg font-semibold">{audience.title}</h3>
+                </CardHeader>
+                <CardContent className="text-center">
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    {audience.description}
+                  </p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
 
-                {/* Price and contact section */}
-                <div className="mt-8 flex flex-col justify-between gap-8 md:mt-10 md:flex-row">
-                  {/* Left side - Price and main CTA */}
-                  <div className="flex flex-1 flex-wrap justify-between gap-4 md:flex-col md:gap-8">
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-medium">$</span>
-                      <span className="text-5xl md:text-6xl">
-                        {isAnnual ? plan.annualPrice : plan.monthlyPrice}
-                      </span>
-                      <span className="text-2xl">/mo</span>
-                    </div>
-                    <Button className="h-10 !pl-5.5">
-                      Upgrade to Pro
-                      <div className="bg-background/15 border-background/10 grid size-5.5 place-items-center rounded-full border">
-                        <ChevronRight className="size-4" />
+        {/* CTA Section */}
+        <div className="mx-auto mt-12 max-w-4xl lg:mt-16">
+          <Card className="bg-secondary dark:bg-muted border-input">
+            <CardContent className="p-8 md:p-12">
+              <div className="space-y-6 text-center">
+                <h3 className="text-2xl font-semibold md:text-3xl">
+                  Ready to Transform Your Clinical Trial Management?
+                </h3>
+                <p className="text-muted-foreground mx-auto max-w-2xl text-lg leading-relaxed">
+                  Whether your project demands a custom solution developed within our 8-week timeframe or an immediate implementation from our app store, our team is ready to assist.
+                </p>
+                <div className="flex flex-col gap-4 pt-4 sm:flex-row sm:justify-center">
+                  <Button size="lg" className="group h-14 !pl-6" asChild>
+                    <Link href="https://www.linkedin.com/company/trialetics-io" target="_blank" rel="noopener noreferrer">
+                      Connect With Us
+                      <div className="bg-background/15 border-background/10 grid size-6 place-items-center rounded-full border">
+                        <ChevronRight className="size-5 transition-transform group-hover:translate-x-0.25" />
                       </div>
-                    </Button>
-                  </div>
-
-                  {/* Right side - Contact info */}
-                  <div className="bg-secondary dark:bg-accent flex-1 space-y-4 p-6">
-                    <div className="flex justify-between gap-6">
-                      <p className="text-card-foreground text-xs leading-none font-medium">
-                        {plan.cta.text}
-                      </p>
-                      <Logo className="h-4 w-14" />
-                    </div>
-                    <Button
-                      variant="light"
-                      className="group h-10 w-full"
-                      asChild
-                    >
-                      <Link href="/contact">
-                        Contact With Us
-                        <div className="bg-secondary dark:bg-muted border-input grid size-5.5 place-items-center rounded-full border">
-                          <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.25" />
-                        </div>
-                      </Link>
-                    </Button>
-                  </div>
+                    </Link>
+                  </Button>
+                  <Button size="lg" variant="outline" className="group h-14 !pl-6" asChild>
+                    <Link href="/app-store">
+                      Visit Our App Store
+                      <div className="bg-background/15 border-background/10 grid size-6 place-items-center rounded-full border">
+                        <ChevronRight className="size-5 transition-transform group-hover:translate-x-0.25" />
+                      </div>
+                    </Link>
+                  </Button>
                 </div>
-              </CardHeader>
-              <CardContent className="grid gap-4 p-4 md:grid-cols-2 md:p-6">
-                {plan.features.map((feature, index) => (
-                  <div key={index} className="flex items-center gap-3">
-                    <div className="">
-                      {feature.included ? (
-                        <div className="border-muted-foreground flex size-4 items-center justify-center rounded-full border-[0.5px]">
-                          <Check className="text-muted-foreground size-2" />
-                        </div>
-                      ) : (
-                        <div className="border-muted-foreground flex size-4 items-center justify-center rounded-full border-[0.5px]">
-                          <X className="text-muted-foreground/70 size-2" />
-                        </div>
-                      )}
-                    </div>
-                    <span
-                      className={cn(
-                        'text-sm',
-                        feature.included
-                          ? 'text-muted-foreground'
-                          : 'text-muted-foreground/70',
-                      )}
-                    >
-                      {feature.name}
-                    </span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          ))}
+                <p className="text-muted-foreground/70 pt-4 text-sm">
+                  Join us at Trialetics, where innovation meets clinical trial management excellence.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </section>

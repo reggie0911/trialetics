@@ -5,8 +5,13 @@ import { useTheme } from 'next-themes';
 import { useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
-export function ThemeToggle() {
+interface ThemeToggleProps {
+  className?: string;
+}
+
+export function ThemeToggle({ className }: ThemeToggleProps) {
   const { theme, setTheme } = useTheme();
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -113,6 +118,7 @@ export function ThemeToggle() {
       onClick={toggleTheme}
       data-theme-toggle
       ref={buttonRef}
+      className={cn(className)}
     >
       <m.svg
         strokeWidth="4"

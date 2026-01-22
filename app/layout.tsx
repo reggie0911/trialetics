@@ -27,10 +27,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Trialetics",
-    template: "%s | Trialetics",
+    default: "Trialetics Technologies | Clinical Trial Management Software",
+    template: "%s | Trialetics Technologies",
   },
-  description: "Your modern web application",
+  description: "Premier custom software agency dedicated to advancing clinical trial management through technological innovation. Tailored solutions, Excel to SaaS conversion, and rapid 8-week implementation for clinical operations excellence.",
   icons: {
     icon: [
       { url: "/favicon/favicon.ico", sizes: "48x48" },
