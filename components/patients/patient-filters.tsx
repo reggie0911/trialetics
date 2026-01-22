@@ -18,9 +18,11 @@ interface PatientFiltersProps {
   data: PatientRecord[];
   selectedPatientId: string;
   selectedSiteName: string;
+  selectedRefId: string;
   searchQuery: string;
   onPatientIdChange: (patientId: string) => void;
   onSiteNameChange: (siteName: string) => void;
+  onRefIdChange: (refId: string) => void;
   onSearchChange: (query: string) => void;
 }
 
@@ -28,9 +30,11 @@ export function PatientFilters({
   data,
   selectedPatientId,
   selectedSiteName,
+  selectedRefId,
   searchQuery,
   onPatientIdChange,
   onSiteNameChange,
+  onRefIdChange,
   onSearchChange,
 }: PatientFiltersProps) {
   // Local state for search input (before executing search)
@@ -76,9 +80,30 @@ export function PatientFilters({
     return Array.from(sites).sort();
   }, [data, selectedPatientId]);
 
+  // Get unique Ref IDs and check if there are empty values
+  const refIds = useMemo(() => {
+    const ids = new Set<string>();
+    let hasEmpty = false;
+    
+    data.forEach((record) => {
+      const refId = record['E01_V1[1].SCR_05.SE[1].SE_REFID'] || record['Ref#'];
+      if (refId && refId !== '' && refId !== '—') {
+        ids.add(refId);
+      } else {
+        hasEmpty = true;
+      }
+    });
+    
+    return { 
+      ids: Array.from(ids).sort(), 
+      hasEmpty 
+    };
+  }, [data]);
+
   const handleClearFilters = () => {
     onPatientIdChange('');
     onSiteNameChange('');
+    onRefIdChange('');
     onSearchChange('');
     setSearchInput('');
   };
@@ -93,7 +118,7 @@ export function PatientFilters({
     }
   };
 
-  const hasActiveFilters = selectedPatientId !== '' || selectedSiteName !== '' || searchQuery !== '';
+  const hasActiveFilters = selectedPatientId !== '' || selectedSiteName !== '' || selectedRefId !== '' || searchQuery !== '';
 
   return (
     <div className="flex items-end gap-3 flex-wrap">
@@ -147,6 +172,32 @@ export function PatientFilters({
             {siteNames.map((site) => (
               <SelectItem key={site} value={site}>
                 {site}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Ref# Filter */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="ref-id-filter" className="text-xs font-medium h-4 flex items-center">
+          Ref#
+        </Label>
+        <Select
+          value={selectedRefId}
+          onValueChange={(value) => onRefIdChange(value || '')}
+        >
+          <SelectTrigger id="ref-id-filter" size="sm" className="w-[200px] text-[12px] h-8">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">All Ref#</SelectItem>
+            {refIds.hasEmpty && (
+              <SelectItem value="__EMPTY__">(Empty)</SelectItem>
+            )}
+            {refIds.ids.map((id) => (
+              <SelectItem key={id} value={id}>
+                {id}
               </SelectItem>
             ))}
           </SelectContent>

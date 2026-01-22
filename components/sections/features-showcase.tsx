@@ -11,53 +11,53 @@ import { cn } from '@/lib/utils';
 
 const features = [
   {
-    id: 'security',
+    id: 'custom-solutions',
     icon: Shield,
-    title: 'Manage features with clarity, not clutter',
+    title: 'Custom Solutions Designed for Clinical Excellence',
     description:
-      'Say goodbye to messy event logs. Lumen turns real usage data into clear, grouped feature insights, so you can track what matters, not just what happened.',
+      'Understanding the unique challenges faced by clinical trial operations, Trialetics Technologies brings deep expertise in designing solutions that are precisely tailored to meet those needs. From patient data management and regulatory compliance to workflow optimizations, our bespoke software development approach ensures your goals are met with precision.',
     image: {
       src: '/images/features-showcase/1.webp',
-      alt: 'Advanced Security',
+      alt: 'Custom Solutions for Clinical Excellence',
       width: 500,
       height: 400,
     },
   },
   {
-    id: 'performance',
+    id: 'excel-to-saas',
     icon: Zap,
-    title: 'Instant answers to product usage questions',
+    title: 'Excel to SaaS Conversion: Elevate Your Data Management',
     description:
-      'Lumen’s powerful filters make it easy to get actionable usage insights, no SQL needed.',
+      'Transition from limited, spreadsheet-based data management to robust, cloud-based SaaS applications with our specialized conversion services. Our process not only enhances your data\'s accessibility and security but also introduces superior collaboration capabilities and scalability options to meet the demands of any clinical trial phase.',
     image: {
       src: '/images/features-showcase/2.webp',
-      alt: 'Lightning Fast Performance',
+      alt: 'Excel to SaaS Conversion',
       width: 500,
       height: 400,
     },
   },
   {
-    id: 'collaboration',
+    id: 'ready-to-deploy',
     icon: Users,
-    title: 'Segment users by feature behavior',
+    title: 'Ready-to-Deploy Solutions',
     description:
-      'Slice your audience based on real feature interaction.Find champions, trial users, and at-risk accounts in seconds.',
+      'Acknowledging the need for speed in the dynamic environment of clinical trials, Trialetics also offers a range of ready-to-deploy applications. Available immediately through our app store, these solutions are designed to provide instant support for critical management functions, ensuring you can move forward without delay.',
     image: {
       src: '/images/features-showcase/3.webp',
-      alt: 'Team Collaboration',
+      alt: 'Ready-to-Deploy Solutions',
       width: 500,
       height: 400,
     },
   },
   {
-    id: 'analytics',
+    id: 'security-compliance',
     icon: TrendingUp,
-    title: 'Export insights, tie them to business impact',
+    title: 'Security & Regulatory Compliance',
     description:
-      'Send enriched usage data to your warehouse.Blend Lumen metrics with revenue, churn, or NPS to connect product behavior to outcomes.',
+      'In the fast-paced world of clinical trial management, security and regulatory compliance are imperatives. We implement robust security measures including state-of-the-art encryption, strict access controls, and regular security audits. Our solutions are fully compliant with HIPAA, GDPR, and FDA regulations, ensuring your data integrity and the compliance of your clinical trials.',
     image: {
       src: '/images/features-showcase/4.webp',
-      alt: 'Smart Analytics',
+      alt: 'Security & Regulatory Compliance',
       width: 500,
       height: 400,
     },
@@ -150,12 +150,10 @@ export default function FeaturesShowcase() {
           }}
         >
           <h2 className="text-4xl tracking-tight lg:text-5xl">
-            Feature intelligence built for modern product teams
+            Comprehensive Solutions for Clinical Trial Management
           </h2>
           <p className="text-muted-foreground text-lg leading-snug">
-            Stay ahead of user needs. Lumen turns your product features into
-            actionable insights, so you can prioritize what matters, streamline
-            delivery, and scale with confidence.
+            Trialetics provides end-to-end solutions designed to revolutionize clinical trial management. From custom development to ready-to-deploy applications, we deliver the tools you need to conduct efficient, accurate, and impactful clinical trials.
           </p>
         </motion.div>
 

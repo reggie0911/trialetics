@@ -19,35 +19,79 @@ import {
 } from '@/components/ui/card';
 
 const faqData = [
+  // General FAQs
   {
-    id: 'lumen-who-is-it-for',
-    question: 'What is Lumen and who is it for?',
+    id: 'services',
+    question: 'What services does Trialetics provide?',
     answer:
-      'Lumen is a task and workflow management platform designed for product teams, developers, and creatives who want to move faster with clarity and control.',
+      'Trialetics specializes in custom software solutions for clinical trial management. Our services include tailored development for specific trial needs, conversion of Excel spreadsheets into scalable SaaS platforms, data security enhancement, and provision of immediate solutions via our app store.',
   },
   {
-    id: 'technical-knowledge',
-    question: 'Can I use Lumen without technical knowledge?',
+    id: 'excel-to-saas',
+    question: 'How does the Excel to SaaS conversion process work?',
     answer:
-      'Absolutely! Lumen is designed with simplicity in mind. You can start organizing tasks, creating workflows, and collaborating with your team without any technical background. The intuitive interface makes it easy for anyone to get started.',
+      'Our conversion process involves analyzing your existing Excel data model, planning the migration strategy, developing a custom SaaS solution that meets your specific requirements, and finally ensuring seamless data transfer while maintaining integrity and compliance.',
   },
   {
-    id: 'integrations',
-    question: 'Does Lumen integrate with tools like Slack or Figma?',
+    id: 'project-timeline',
+    question: 'How long does a custom software project take to complete?',
     answer:
-      "Yes, Lumen integrates seamlessly with popular tools including Slack, Figma, GitHub, Jira, and many more. You can connect your existing workflow tools to create a unified workspace that fits your team's needs.",
+      'On average, custom software projects are completed within an 8-week timeframe. However, the duration can vary based on the complexity and specific requirements of the project. Our team works diligently to meet project timelines while ensuring the highest quality.',
   },
   {
-    id: 'task-automation',
-    question: 'How does task automation work in Lumen?',
+    id: 'ready-solutions',
+    question: 'Are there ready-to-use solutions available for immediate needs?',
     answer:
-      'Lumen offers intelligent task automation that helps streamline repetitive processes. You can set up custom rules, triggers, and workflows that automatically assign tasks, update statuses, send notifications, and move projects through different stages based on your defined criteria.',
+      'Yes, Trialetics offers a range of ready-to-deploy solutions available through our app store. These solutions are designed for clinical trials and offer quick support for various management needs, ensuring that you can move forward without delay.',
   },
   {
-    id: 'security-compliance',
-    question: 'Is Lumen secure and compliant?',
+    id: 'data-security',
+    question: 'How does Trialetics ensure data security and compliance?',
     answer:
-      'Security is our top priority. Lumen is built with enterprise-grade security features including end-to-end encryption, SOC 2 Type II compliance, GDPR compliance, and regular security audits. Your data is protected with industry-standard security protocols.',
+      'We adhere to stringent data security standards and ensure compliance with relevant regulations, including HIPAA. Our solutions feature robust encryption, secure data storage, and controlled access mechanisms to protect sensitive trial data.',
+  },
+  {
+    id: 'integration',
+    question: 'Can Trialetics integrate with existing systems?',
+    answer:
+      'Yes, our custom solutions are designed with flexibility in mind and can integrate seamlessly with your existing clinical trial systems and databases. Our goal is to enhance your operations without disrupting your current workflows.',
+  },
+  {
+    id: 'support',
+    question: 'What support does Trialetics offer post-deployment?',
+    answer:
+      'We provide comprehensive support and training post-deployment, including troubleshooting, system updates, and user training. Our team is committed to ensuring your team is comfortable and proficient in using our solutions.',
+  },
+  {
+    id: 'industries',
+    question: 'What industries does Trialetics serve?',
+    answer:
+      'While our primary focus is on clinical trial management within the healthcare and life sciences industries, our software solutions are versatile and can be tailored to meet the needs of related sectors requiring data management, analytics, and operational efficiency.',
+  },
+  {
+    id: 'innovation',
+    question: 'How does Trialetics stay ahead of technological advancements?',
+    answer:
+      'Our team continually monitors and adopts the latest technologies and best practices in software development and clinical trial management. We invest in ongoing research and development to ensure our solutions are innovative and effective.',
+  },
+  {
+    id: 'start-project',
+    question: 'How can I start a project with Trialetics?',
+    answer:
+      'Starting a project with us is simple. Just reach out to us through our website\'s contact form or directly via email or phone. Our team will schedule a consultation to understand your needs, discuss potential solutions, and outline the next steps.',
+  },
+  // Security & Compliance FAQs
+  {
+    id: 'hipaa-compliance',
+    question: 'Is Trialetics compliant with HIPAA?',
+    answer:
+      'Yes, our solutions are fully compliant with the Health Insurance Portability and Accountability Act (HIPAA), ensuring the confidentiality, integrity, and security of healthcare information.',
+  },
+  {
+    id: 'international-compliance',
+    question: 'How do you handle compliance with international data protection regulations?',
+    answer:
+      'We ensure compliance with international regulations such as the General Data Protection Regulation (GDPR) through data minimization, obtaining proper consent, and upholding individuals\' rights over their data, among other requirements.',
   },
 ];
 
@@ -93,17 +137,17 @@ export default function FAQSection() {
             <CardContent className="pt-0">
               <p className="text-muted-foreground">
                 Let&apos;s talk. Our team is here to help you make the most of
-                Lumen. Whether it&apos;s onboarding, integration, or support.
+                Trialetics. Whether it&apos;s onboarding, integration, or support.
               </p>
             </CardContent>
             <CardFooter className="mt-auto justify-self-end">
               <Button
                 size="lg"
-                variant="light"
+                variant="outline"
                 className="group h-12 w-full gap-4"
                 asChild
               >
-                <Link href="/contact">
+                <Link href="https://www.linkedin.com/company/trialetics-io" target="_blank" rel="noopener noreferrer">
                   Contact With Us
                   <div className="bg-secondary dark:bg-accent border-input grid size-5.5 place-items-center rounded-full border">
                     <ChevronRightIcon className="size-4 transition-transform group-hover:translate-x-0.25" />

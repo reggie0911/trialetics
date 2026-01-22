@@ -27,44 +27,44 @@ import { cn } from '@/lib/utils';
 
 export const NAV_LINKS = [
   {
-    label: 'Features',
-    href: '#features',
+    label: 'Solutions',
+    href: '#solutions',
     subitems: [
       {
-        label: 'Work with clarity',
-        href: '/#features-carousel',
-        description: 'This is a subtext that explains a part of the item',
+        label: 'Custom Software Development',
+        href: '/#features-showcase',
+        description: 'Tailored solutions for clinical trial management',
         icon: Link2,
       },
       {
-        label: 'Issue tracking with less noise',
-        href: '/#features-grid',
-        description: 'This is a subtext that explains a part of the item',
+        label: 'Excel to SaaS Conversion',
+        href: '/#features-showcase',
+        description: 'Transform spreadsheets into robust cloud applications',
         icon: BarChart3,
       },
       {
-        label: 'Filtering Tasks, no more distractions',
+        label: 'Ready-to-Deploy Solutions',
         href: '/#features-showcase',
-        description: 'This is a subtext that explains a part of the item',
+        description: 'Immediate support from our app store',
         icon: Filter,
       },
     ],
   },
-  { label: 'About', href: '/about' },
+  { label: 'App Store', href: '/app-store' },
+  { label: 'Resources', href: '/resources' },
   { label: 'Pricing', href: '/pricing' },
-  { label: 'Blog', href: '/blog' },
-  { label: 'FAQ', href: '/faq' },
 ];
 
 const ACTION_BUTTONS = [
-  { label: 'Sign in', href: '/auth/login', variant: 'ghost' as const },
-  { label: 'Get started', href: '/auth/sign-up', variant: 'default' as const },
+  { label: 'Visit App Store', href: '/app-store', variant: 'ghost' as const },
+  { label: 'Sign in', href: '/auth/login', variant: 'default' as const },
 ];
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const { isAtLeast } = useMediaQuery();
   const pathname = usePathname();
+  const isHomePage = pathname === '/';
   const hideNavbar = [
     '/auth/login',
     '/auth/sign-up',
@@ -107,20 +107,22 @@ const Navbar = () => {
     <header
       className={cn(
         'isolate z-50 transition-all duration-300 ease-in-out',
+        isHomePage && !isScrolled ? 'absolute top-0 left-0 right-0' : '',
         isScrolled && isAtLeast('lg')
           ? 'fixed top-0 right-0 left-0 translate-y-2 px-5.5'
-          : 'relative',
+          : !isHomePage && 'relative',
       )}
     >
       <div
         className={cn(
-          'bg-background navbar-container relative z-50 flex h-[var(--header-height)] items-center justify-between gap-4 transition-all duration-300 ease-in-out',
+          'navbar-container relative z-50 flex h-[var(--header-height)] items-center justify-between gap-4 transition-all duration-300 ease-in-out',
+          isHomePage && !isScrolled ? '!bg-transparent text-white' : 'bg-background',
           isScrolled &&
             isAtLeast('lg') &&
-            'h-[calc(var(--header-height)-20px)] max-w-7xl rounded-full shadow-sm backdrop-blur-md',
+            'h-[calc(var(--header-height)-20px)] max-w-7xl rounded-full shadow-sm backdrop-blur-md !bg-background/95 text-foreground',
         )}
       >
-        <Logo className="" />
+        <Logo className="" white={isHomePage && !isScrolled} />
 
         <div className="flex items-center gap-8">
           <NavigationMenu viewport={false} className="hidden lg:block">
@@ -132,8 +134,9 @@ const Navbar = () => {
                       <NavigationMenuTrigger
                         className={cn(
                           'cursor-pointer [&_svg]:ms-2 [&_svg]:size-4',
+                          isHomePage && !isScrolled && 'text-white hover:text-white/80 !bg-transparent hover:!bg-white/10 !border-transparent',
                           // "after:from-chart-2 after:to-chart-3 after:absolute after:-inset-0.25 after:-z-1 after:rounded-sm after:bg-gradient-to-tr after:opacity-0 after:transition-all after:content-[''] hover:after:opacity-100",
-                          pathname.startsWith(item.href) &&
+                          pathname.startsWith(item.href) && !isHomePage &&
                             'bg-accent font-semibold',
                         )}
                         suppressHydrationWarning
@@ -168,8 +171,9 @@ const Navbar = () => {
                       href={item.href}
                       className={cn(
                         navigationMenuTriggerStyle(),
+                        isHomePage && !isScrolled && 'text-white hover:text-white/80 !bg-transparent hover:!bg-white/10 !border-transparent',
                         // "after:from-chart-2 after:to-chart-3 after:absolute after:-inset-0.25 after:-z-1 after:rounded-sm after:bg-gradient-to-tr after:opacity-0 after:transition-all after:content-[''] hover:after:opacity-100",
-                        pathname === item.href && 'bg-accent font-semibold',
+                        pathname === item.href && !isHomePage && 'bg-accent font-semibold',
                       )}
                       suppressHydrationWarning
                     >
@@ -182,13 +186,17 @@ const Navbar = () => {
           </NavigationMenu>
 
           <div className="hidden items-center justify-end gap-4 lg:flex">
-            <ThemeToggle />
+            <ThemeToggle className={cn(isHomePage && 'hidden')} />
             {ACTION_BUTTONS.map((button) => (
               <Button
                 key={button.label}
                 size="sm"
                 variant={button.variant}
-                className="rounded-full shadow-none"
+                className={cn(
+                  "rounded-full shadow-none",
+                  isHomePage && !isScrolled && button.variant === 'ghost' && 'text-white hover:text-white/80 hover:bg-white/10',
+                  isHomePage && !isScrolled && button.variant === 'default' && 'bg-white text-black hover:bg-white/90'
+                )}
                 asChild
               >
                 <Link href={button.href}>{button.label}</Link>

@@ -225,6 +225,7 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
   // Filter state
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [selectedSiteName, setSelectedSiteName] = useState<string>('');
+  const [selectedRefId, setSelectedRefId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   
   const { toast } = useToast();
@@ -930,6 +931,20 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
       });
     }
 
+    // Filter by Ref#
+    if (selectedRefId && selectedRefId !== '') {
+      result = result.filter((row) => {
+        const refId = (row as any)['E01_V1[1].SCR_05.SE[1].SE_REFID'] || (row as any)['Ref#'];
+        
+        // Handle special case for empty values
+        if (selectedRefId === '__EMPTY__') {
+          return !refId || refId === '' || refId === '—';
+        }
+        
+        return refId === selectedRefId;
+      });
+    }
+
     // Search query - search across all columns
     if (searchQuery && searchQuery.trim() !== '') {
       const searchLower = searchQuery.toLowerCase().trim();
@@ -961,7 +976,7 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
     });
 
     return result;
-  }, [dataWithCalculations, filters, selectedPatientId, selectedSiteName, searchQuery]);
+  }, [dataWithCalculations, filters, selectedPatientId, selectedSiteName, selectedRefId, searchQuery]);
 
   // Apply client-side pagination to filtered results
   const paginatedData = useMemo(() => {
@@ -1177,9 +1192,11 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
                   data={dataWithCalculations}
                   selectedPatientId={selectedPatientId}
                   selectedSiteName={selectedSiteName}
+                  selectedRefId={selectedRefId}
                   searchQuery={searchQuery}
                   onPatientIdChange={setSelectedPatientId}
                   onSiteNameChange={setSelectedSiteName}
+                  onRefIdChange={setSelectedRefId}
                   onSearchChange={setSearchQuery}
                 />
                 
