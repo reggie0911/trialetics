@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation';
 import { ProtectedNavbar } from '@/components/layout/protected-navbar';
 import { ModuleNavbar } from '@/components/layout/module-navbar';
-import { ECRFQueryTrackerPageClient } from '@/components/ecrf-query-tracker/ecrf-query-tracker-page-client';
+import { SDVTrackerPageClient } from '@/components/sdv-tracker/sdv-tracker-page-client';
 import { createClient } from '@/lib/server';
 
-export default async function ECRFQueryTrackerPage() {
+export default async function SDVTrackerPage() {
   const supabase = await createClient();
 
   // Check authentication
@@ -33,21 +33,21 @@ export default async function ECRFQueryTrackerPage() {
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-[32px] font-semibold tracking-[-1px]">
-                eCRF Query Tracker
+                Source Data Verification Report
               </h1>
               <span className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-full shadow-md animate-pulse">
                 Beta
               </span>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Track and monitor eCRF query volume, status, aging, and resolution trends
+              Monitor SDV completion rates across clinical trials with real-time percentage dashboards
             </p>
           </div>
           <ModuleNavbar />
         </div>
 
         {/* Client-side component for data management */}
-        <ECRFQueryTrackerPageClient companyId={profile.company_id || ""} profileId={profile.id} />
+        <SDVTrackerPageClient companyId={profile.company_id || ""} profileId={profile.id} />
       </main>
     </div>
   );

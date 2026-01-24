@@ -29,6 +29,10 @@ const menuItems = [
     href: "/protected/ecrf-query-tracker",
   },
   {
+    label: "SDV Tracker",
+    href: "/protected/sdv-tracker",
+  },
+  {
     label: "Visit Window",
     href: "/protected/vw",
   },

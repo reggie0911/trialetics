@@ -540,12 +540,22 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
       return header.endsWith('.DTHDAT') && header.includes('COMMON_AE');
     });
     
+    // Find SubjectId or Subject ID column in the data
+    const subjectIdKey = Object.keys(data[0] || {}).find(key => 
+      key === 'SubjectId' || key === 'Subject ID'
+    );
+    
     return data.map((record, idx) => {
       // Start with all header mapping columns set to empty string
       const filteredRecord: Partial<PatientRecord> = {};
       mappings.forEach(m => {
         filteredRecord[m.originalHeader] = '';
       });
+      
+      // Always include SubjectId if it exists in the data
+      if (subjectIdKey && !mappings.find(m => m.originalHeader === subjectIdKey)) {
+        filteredRecord[subjectIdKey] = record[subjectIdKey as keyof PatientRecord] || '';
+      }
       
       // Consolidate DTHDAT: look for first non-empty value from COMMON_AE[1-16].LOG_AE.AE[1].DTHDAT
       // Only check columns ending with exactly .DTHDAT (not DTHDATUNK98 variants)
@@ -593,6 +603,11 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
   ): ColumnConfig[] => {
     const lookup = createHeaderLookup(mappings);
     
+    // Find SubjectId or Subject ID column in the data
+    const subjectIdKey = data.length > 0 
+      ? Object.keys(data[0]).find(key => key === 'SubjectId' || key === 'Subject ID')
+      : undefined;
+    
     // If we have mappings, use ALL mapping columns (not just what's in data)
     if (mappings.length > 0) {
       // Deduplicate mappings by originalHeader (keep last occurrence)
@@ -610,6 +625,20 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
         visitGroup: mapping.visitGroup || 'Other',
         tableOrder: mapping.tableOrder,
       }));
+      
+      // Add SubjectId column if it exists and not already in mappings
+      if (subjectIdKey && !configs.find(c => c.id === subjectIdKey)) {
+        configs.unshift({
+          id: subjectIdKey,
+          label: subjectIdKey === 'SubjectId' ? 'Patient ID' : 'Subject ID',
+          originalLabel: subjectIdKey,
+          visible: true,
+          dataType: 'text',
+          category: 'demographics',
+          visitGroup: 'Patient Info',
+          tableOrder: -1, // Place it first
+        });
+      }
       
       // Sort by table order
       configs.sort((a, b) => (a.tableOrder || 999) - (b.tableOrder || 999));
