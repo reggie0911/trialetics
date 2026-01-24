@@ -30,5 +30,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "lumen-temp"]
+  "exclude": ["node_modules", "lumen-temp", "supabase/functions"]
 }

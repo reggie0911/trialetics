@@ -1,0 +1,7 @@
+# Supabase Edge Functions Configuration
+
+[functions.process-csv-upload]
+verify_jwt = false
+
+[functions.merge-sdv-data]
+verify_jwt = false

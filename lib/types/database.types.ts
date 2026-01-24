@@ -1042,6 +1042,425 @@ export type Database = {
           },
         ]
       }
+      sdv_column_configs: {
+        Row: {
+          column_id: string
+          created_at: string
+          id: string
+          label: string
+          table_order: number | null
+          updated_at: string
+          upload_id: string
+          visible: boolean
+        }
+        Insert: {
+          column_id: string
+          created_at?: string
+          id?: string
+          label: string
+          table_order?: number | null
+          updated_at?: string
+          upload_id: string
+          visible?: boolean
+        }
+        Update: {
+          column_id?: string
+          created_at?: string
+          id?: string
+          label?: string
+          table_order?: number | null
+          updated_at?: string
+          upload_id?: string
+          visible?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdv_column_configs_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "sdv_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdv_header_mappings: {
+        Row: {
+          company_id: string
+          created_at: string
+          customized_header: string
+          id: string
+          original_header: string
+          table_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          customized_header: string
+          id?: string
+          original_header: string
+          table_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          customized_header?: string
+          id?: string
+          original_header?: string
+          table_order?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdv_header_mappings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdv_merged_records: {
+        Row: {
+          answered_queries: number | null
+          crf_field: string | null
+          crf_name: string | null
+          created_at: string
+          data_entered: number | null
+          data_expected: number | null
+          data_needing_review: number | null
+          data_verified: number | null
+          estimate_days: number | null
+          estimate_hours: number | null
+          extra_fields: Json | null
+          id: string
+          merge_key: string
+          opened_queries: number | null
+          sdv_percent: number | null
+          site_name: string | null
+          site_number: string | null
+          subject_id: string | null
+          updated_at: string
+          upload_id: string
+          visit_type: string | null
+        }
+        Insert: {
+          answered_queries?: number | null
+          crf_field?: string | null
+          crf_name?: string | null
+          created_at?: string
+          data_entered?: number | null
+          data_expected?: number | null
+          data_needing_review?: number | null
+          data_verified?: number | null
+          estimate_days?: number | null
+          estimate_hours?: number | null
+          extra_fields?: Json | null
+          id?: string
+          merge_key: string
+          opened_queries?: number | null
+          sdv_percent?: number | null
+          site_name?: string | null
+          site_number?: string | null
+          subject_id?: string | null
+          updated_at?: string
+          upload_id: string
+          visit_type?: string | null
+        }
+        Update: {
+          answered_queries?: number | null
+          crf_field?: string | null
+          crf_name?: string | null
+          created_at?: string
+          data_entered?: number | null
+          data_expected?: number | null
+          data_needing_review?: number | null
+          data_verified?: number | null
+          estimate_days?: number | null
+          estimate_hours?: number | null
+          extra_fields?: Json | null
+          id?: string
+          merge_key?: string
+          opened_queries?: number | null
+          sdv_percent?: number | null
+          site_name?: string | null
+          site_number?: string | null
+          subject_id?: string | null
+          updated_at?: string
+          upload_id?: string
+          visit_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdv_merged_records_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "sdv_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdv_data_raw: {
+        Row: {
+          id: string
+          upload_id: string
+          merge_key: string
+          site_name: string | null
+          subject_id: string | null
+          event_name: string | null
+          form_name: string | null
+          item_id: string | null
+          item_name: string | null
+          sdv_by: string | null
+          sdv_date: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          upload_id: string
+          merge_key: string
+          site_name?: string | null
+          subject_id?: string | null
+          event_name?: string | null
+          form_name?: string | null
+          item_id?: string | null
+          item_name?: string | null
+          sdv_by?: string | null
+          sdv_date?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          upload_id?: string
+          merge_key?: string
+          site_name?: string | null
+          subject_id?: string | null
+          event_name?: string | null
+          form_name?: string | null
+          item_id?: string | null
+          item_name?: string | null
+          sdv_by?: string | null
+          sdv_date?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdv_data_raw_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "sdv_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdv_site_data_raw: {
+        Row: {
+          id: string
+          upload_id: string
+          merge_key: string
+          site_name: string | null
+          subject_id: string | null
+          event_name: string | null
+          form_name: string | null
+          item_id: string | null
+          item_export_label: string | null
+          edit_date_time: string | null
+          edit_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          upload_id: string
+          merge_key: string
+          site_name?: string | null
+          subject_id?: string | null
+          event_name?: string | null
+          form_name?: string | null
+          item_id?: string | null
+          item_export_label?: string | null
+          edit_date_time?: string | null
+          edit_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          upload_id?: string
+          merge_key?: string
+          site_name?: string | null
+          subject_id?: string | null
+          event_name?: string | null
+          form_name?: string | null
+          item_id?: string | null
+          item_export_label?: string | null
+          edit_date_time?: string | null
+          edit_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdv_site_data_raw_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "sdv_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdv_records: {
+        Row: {
+          created_at: string
+          data_entered: number | null
+          data_verified: number | null
+          edit_by: string | null
+          edit_date_time: string | null
+          event_name: string | null
+          extra_fields: Json | null
+          form_name: string | null
+          id: string
+          item_export_label: string | null
+          item_id: string | null
+          item_name: string | null
+          merge_key: string
+          sdv_by: string | null
+          sdv_date: string | null
+          site_name: string | null
+          subject_id: string | null
+          upload_id: string
+        }
+        Insert: {
+          created_at?: string
+          data_entered?: number | null
+          data_verified?: number | null
+          edit_by?: string | null
+          edit_date_time?: string | null
+          event_name?: string | null
+          extra_fields?: Json | null
+          form_name?: string | null
+          id?: string
+          item_export_label?: string | null
+          item_id?: string | null
+          item_name?: string | null
+          merge_key: string
+          sdv_by?: string | null
+          sdv_date?: string | null
+          site_name?: string | null
+          subject_id?: string | null
+          upload_id: string
+        }
+        Update: {
+          created_at?: string
+          data_entered?: number | null
+          data_verified?: number | null
+          edit_by?: string | null
+          edit_date_time?: string | null
+          event_name?: string | null
+          extra_fields?: Json | null
+          form_name?: string | null
+          id?: string
+          item_export_label?: string | null
+          item_id?: string | null
+          item_name?: string | null
+          merge_key?: string
+          sdv_by?: string | null
+          sdv_date?: string | null
+          site_name?: string | null
+          subject_id?: string | null
+          upload_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdv_records_upload_id_fkey"
+            columns: ["upload_id"]
+            isOneToOne: false
+            referencedRelation: "sdv_uploads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sdv_uploads: {
+        Row: {
+          column_count: number
+          company_id: string
+          created_at: string
+          file_name: string
+          filter_preferences: Json | null
+          id: string
+          primary_upload_id: string | null
+          row_count: number
+          updated_at: string
+          upload_type: string
+          uploaded_by: string
+          merge_status: string | null
+          merge_error: string | null
+          merged_at: string | null
+          sdv_upload_id: string | null
+        }
+        Insert: {
+          column_count: number
+          company_id: string
+          created_at?: string
+          file_name: string
+          filter_preferences?: Json | null
+          id?: string
+          primary_upload_id?: string | null
+          row_count: number
+          updated_at?: string
+          upload_type: string
+          uploaded_by: string
+          merge_status?: string | null
+          merge_error?: string | null
+          merged_at?: string | null
+          sdv_upload_id?: string | null
+        }
+        Update: {
+          column_count?: number
+          company_id?: string
+          created_at?: string
+          file_name?: string
+          filter_preferences?: Json | null
+          id?: string
+          primary_upload_id?: string | null
+          row_count?: number
+          updated_at?: string
+          upload_type?: string
+          uploaded_by?: string
+          merge_status?: string | null
+          merge_error?: string | null
+          merged_at?: string | null
+          sdv_upload_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sdv_uploads_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sdv_uploads_primary_upload_id_fkey"
+            columns: ["primary_upload_id"]
+            isOneToOne: false
+            referencedRelation: "sdv_uploads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sdv_uploads_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sdv_uploads_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "project_assignments"
+            referencedColumns: ["profile_id"]
+          },
+        ]
+      }
       todos: {
         Row: {
           completed: boolean | null
@@ -1098,6 +1517,84 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      upload_jobs: {
+        Row: {
+          id: string
+          company_id: string
+          created_by: string
+          job_type: string
+          upload_id: string | null
+          file_name: string
+          status: string
+          progress: number
+          total_records: number
+          processed_records: number
+          failed_records: number
+          error_message: string | null
+          error_details: Json
+          started_at: string | null
+          completed_at: string | null
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          created_by: string
+          job_type: string
+          upload_id?: string | null
+          file_name: string
+          status?: string
+          progress?: number
+          total_records?: number
+          processed_records?: number
+          failed_records?: number
+          error_message?: string | null
+          error_details?: Json
+          started_at?: string | null
+          completed_at?: string | null
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          created_by?: string
+          job_type?: string
+          upload_id?: string | null
+          file_name?: string
+          status?: string
+          progress?: number
+          total_records?: number
+          processed_records?: number
+          failed_records?: number
+          error_message?: string | null
+          error_details?: Json
+          started_at?: string | null
+          completed_at?: string | null
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "upload_jobs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "upload_jobs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
