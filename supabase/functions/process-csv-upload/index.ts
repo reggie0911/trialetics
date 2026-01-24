@@ -17,6 +17,9 @@ interface ProcessRequest {
   companyId: string;
   profileId: string;
   primaryUploadId?: string;
+  isChunk?: boolean;
+  chunkNumber?: number;
+  totalChunks?: number;
 }
 
 // Generate merge key from record fields
@@ -132,9 +135,15 @@ Deno.serve(async (req) => {
     // Parse request body
     const body: ProcessRequest = await req.json();
     jobId = body.jobId;
-    const { filePath, fileType, companyId, profileId, primaryUploadId } = body;
+    const { filePath, fileType, companyId, profileId, primaryUploadId, isChunk, chunkNumber, totalChunks } = body;
 
-    console.log(`[START] Processing job ${jobId}: ${fileType} from ${filePath}`);
+    const isChunkedUpload = isChunk === true && chunkNumber !== undefined && totalChunks !== undefined;
+    
+    if (isChunkedUpload) {
+      console.log(`[START] Processing chunk ${chunkNumber}/${totalChunks} of job ${jobId}: ${fileType} from ${filePath}`);
+    } else {
+      console.log(`[START] Processing job ${jobId}: ${fileType} from ${filePath}`);
+    }
 
     // Update job status to processing
     await supabase
@@ -155,69 +164,86 @@ Deno.serve(async (req) => {
     const fileSize = fileData.size;
     console.log(`[DOWNLOAD] File downloaded, size: ${fileSize} bytes`);
 
-    // Create upload record first
+    // Handle upload record creation/retrieval for chunked uploads
     let uploadId: string;
 
-    if (fileType === "sdv_site_data_entry") {
-      const { data: uploadData, error: uploadError } = await supabase
-        .from("sdv_uploads")
-        .insert({
-          company_id: companyId,
-          uploaded_by: profileId,
-          upload_type: "site_data_entry",
-          file_name: filePath.split("/").pop() || "unknown.csv",
-          row_count: 0,
-          column_count: 8,
-          filter_preferences: {},
-          merge_status: "pending",
-        })
-        .select("id")
+    if (isChunkedUpload && chunkNumber! > 1) {
+      // For subsequent chunks, get upload_id from the job
+      const { data: jobData, error: jobError } = await supabase
+        .from("upload_jobs")
+        .select("upload_id")
+        .eq("id", jobId)
         .single();
 
-      if (uploadError || !uploadData) {
-        throw new Error(`Failed to create upload record: ${uploadError?.message}`);
+      if (jobError || !jobData?.upload_id) {
+        throw new Error(`Failed to retrieve upload_id from job: ${jobError?.message || "upload_id not found"}`);
       }
-      uploadId = uploadData.id;
-      console.log(`[UPLOAD] Created site data upload record: ${uploadId}`);
+
+      uploadId = jobData.upload_id;
+      console.log(`[UPLOAD] Reusing upload record ${uploadId} for chunk ${chunkNumber}`);
     } else {
-      if (!primaryUploadId) {
-        throw new Error("primaryUploadId required for SDV data upload");
+      // For first chunk or non-chunked uploads, create new upload record
+      if (fileType === "sdv_site_data_entry") {
+        const { data: uploadData, error: uploadError } = await supabase
+          .from("sdv_uploads")
+          .insert({
+            company_id: companyId,
+            uploaded_by: profileId,
+            upload_type: "site_data_entry",
+            file_name: filePath.split("/").pop()?.replace(/_chunk_\d+\.csv$/, ".csv") || "unknown.csv",
+            row_count: 0,
+            column_count: 8,
+            filter_preferences: {},
+            merge_status: "pending",
+          })
+          .select("id")
+          .single();
+
+        if (uploadError || !uploadData) {
+          throw new Error(`Failed to create upload record: ${uploadError?.message}`);
+        }
+        uploadId = uploadData.id;
+        console.log(`[UPLOAD] Created site data upload record: ${uploadId}`);
+      } else {
+        if (!primaryUploadId) {
+          throw new Error("primaryUploadId required for SDV data upload");
+        }
+
+        const { data: sdvUploadData, error: sdvUploadError } = await supabase
+          .from("sdv_uploads")
+          .insert({
+            company_id: companyId,
+            uploaded_by: profileId,
+            upload_type: "sdv_data",
+            file_name: filePath.split("/").pop()?.replace(/_chunk_\d+\.csv$/, ".csv") || "unknown.csv",
+            row_count: 0,
+            column_count: 8,
+            primary_upload_id: primaryUploadId,
+            filter_preferences: {},
+            merge_status: "pending",
+          })
+          .select("id")
+          .single();
+
+        if (sdvUploadError || !sdvUploadData) {
+          throw new Error(`Failed to create SDV upload record: ${sdvUploadError?.message}`);
+        }
+        uploadId = sdvUploadData.id;
+        console.log(`[UPLOAD] Created SDV data upload record: ${uploadId}`);
+
+        // Update the primary upload to link to this SDV upload
+        await supabase
+          .from("sdv_uploads")
+          .update({ sdv_upload_id: uploadId })
+          .eq("id", primaryUploadId);
       }
 
-      const { data: sdvUploadData, error: sdvUploadError } = await supabase
-        .from("sdv_uploads")
-        .insert({
-          company_id: companyId,
-          uploaded_by: profileId,
-          upload_type: "sdv_data",
-          file_name: filePath.split("/").pop() || "unknown.csv",
-          row_count: 0,
-          column_count: 8,
-          primary_upload_id: primaryUploadId,
-          filter_preferences: {},
-          merge_status: "pending",
-        })
-        .select("id")
-        .single();
-
-      if (sdvUploadError || !sdvUploadData) {
-        throw new Error(`Failed to create SDV upload record: ${sdvUploadError?.message}`);
-      }
-      uploadId = sdvUploadData.id;
-      console.log(`[UPLOAD] Created SDV data upload record: ${uploadId}`);
-
-      // Update the primary upload to link to this SDV upload
+      // Update job with upload ID (only for first chunk or non-chunked)
       await supabase
-        .from("sdv_uploads")
-        .update({ sdv_upload_id: uploadId })
-        .eq("id", primaryUploadId);
+        .from("upload_jobs")
+        .update({ upload_id: uploadId })
+        .eq("id", jobId);
     }
-
-    // Update job with upload ID
-    await supabase
-      .from("upload_jobs")
-      .update({ upload_id: uploadId })
-      .eq("id", jobId);
 
     // Get CSV text and split into lines
     console.log(`[PARSE] Reading CSV content...`);
@@ -238,14 +264,34 @@ Deno.serve(async (req) => {
     console.log(`[PARSE] Headers: ${headers.join(", ")}`);
     console.log(`[PARSE] Data rows to process: ${totalRecords}`);
 
-    // Update job with total count
-    await supabase
-      .from("upload_jobs")
-      .update({ 
-        total_records: totalRecords,
-        progress: 5,
-      })
-      .eq("id", jobId);
+    // Update job with total count (accumulate for chunked uploads)
+    if (isChunkedUpload) {
+      // Get current total_records and add this chunk's count
+      const { data: jobData } = await supabase
+        .from("upload_jobs")
+        .select("total_records")
+        .eq("id", jobId)
+        .single();
+      
+      const currentTotal = (jobData?.total_records as number) || 0;
+      const newTotal = currentTotal + totalRecords;
+      
+      await supabase
+        .from("upload_jobs")
+        .update({ 
+          total_records: newTotal,
+          progress: Math.min(5, Math.round((chunkNumber! / totalChunks!) * 5)),
+        })
+        .eq("id", jobId);
+    } else {
+      await supabase
+        .from("upload_jobs")
+        .update({ 
+          total_records: totalRecords,
+          progress: 5,
+        })
+        .eq("id", jobId);
+    }
 
     // Determine table and transformer based on file type
     const tableName = fileType === "sdv_site_data_entry" ? "sdv_site_data_raw" : "sdv_data_raw";
@@ -298,15 +344,42 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Update progress every batch
-      const progress = Math.min(95, Math.round(5 + ((i + BATCH_SIZE) / dataLines.length) * 90));
-      await supabase
-        .from("upload_jobs")
-        .update({ 
-          progress,
-          processed_records: processedCount,
-        })
-        .eq("id", jobId);
+      // Update progress every batch (chunk-aware)
+      let progress: number;
+      if (isChunkedUpload) {
+        // Progress is based on chunk completion within overall job
+        const chunkProgress = Math.round((i + BATCH_SIZE) / dataLines.length * 90);
+        const baseProgress = Math.round(((chunkNumber! - 1) / totalChunks!) * 100);
+        progress = Math.min(95, baseProgress + Math.round(chunkProgress / totalChunks!));
+      } else {
+        progress = Math.min(95, Math.round(5 + ((i + BATCH_SIZE) / dataLines.length) * 90));
+      }
+      
+      // Accumulate processed_records for chunked uploads
+      if (isChunkedUpload) {
+        const { data: jobData } = await supabase
+          .from("upload_jobs")
+          .select("processed_records")
+          .eq("id", jobId)
+          .single();
+        
+        const currentProcessed = (jobData?.processed_records as number) || 0;
+        await supabase
+          .from("upload_jobs")
+          .update({ 
+            progress,
+            processed_records: currentProcessed + processedCount,
+          })
+          .eq("id", jobId);
+      } else {
+        await supabase
+          .from("upload_jobs")
+          .update({ 
+            progress,
+            processed_records: processedCount,
+          })
+          .eq("id", jobId);
+      }
 
       // Log progress every 10 batches (10,000 rows)
       if (i > 0 && i % (BATCH_SIZE * 10) === 0) {
@@ -320,29 +393,71 @@ Deno.serve(async (req) => {
     const rowsPerSecond = duration > 0 ? Math.round(processedCount / (duration / 1000)) : processedCount;
     console.log(`[INSERT] Completed in ${duration}ms (${rowsPerSecond} rows/sec)`);
 
-    // Update upload record with final row count
-    await supabase
-      .from("sdv_uploads")
-      .update({ row_count: processedCount })
-      .eq("id", uploadId);
+    // Update upload record with accumulated row count
+    if (isChunkedUpload) {
+      // Get current row_count and add this chunk's count
+      const { data: uploadData } = await supabase
+        .from("sdv_uploads")
+        .select("row_count")
+        .eq("id", uploadId)
+        .single();
+      
+      const currentRowCount = (uploadData?.row_count as number) || 0;
+      await supabase
+        .from("sdv_uploads")
+        .update({ row_count: currentRowCount + processedCount })
+        .eq("id", uploadId);
+      
+      console.log(`[UPLOAD] Updated row_count: ${currentRowCount} + ${processedCount} = ${currentRowCount + processedCount}`);
+    } else {
+      await supabase
+        .from("sdv_uploads")
+        .update({ row_count: processedCount })
+        .eq("id", uploadId);
+    }
 
-    // Mark job as completed
-    await supabase
-      .from("upload_jobs")
-      .update({
-        status: "completed",
-        progress: 100,
-        processed_records: processedCount,
-        total_records: totalRecords,
-        failed_records: errorCount,
-        completed_at: new Date().toISOString(),
-        upload_id: uploadId,
-      })
-      .eq("id", jobId);
+    // Mark job as completed only if this is the last chunk or non-chunked upload
+    const isLastChunk = !isChunkedUpload || (chunkNumber === totalChunks);
+    
+    if (isLastChunk) {
+      // Get final totals for chunked uploads
+      let finalProcessedRecords = processedCount;
+      let finalTotalRecords = totalRecords;
+      let finalErrorCount = errorCount;
+      
+      if (isChunkedUpload) {
+        const { data: jobData } = await supabase
+          .from("upload_jobs")
+          .select("processed_records, total_records, failed_records")
+          .eq("id", jobId)
+          .single();
+        
+        finalProcessedRecords = (jobData?.processed_records as number) || processedCount;
+        finalTotalRecords = (jobData?.total_records as number) || totalRecords;
+        finalErrorCount = (jobData?.failed_records as number) || 0;
+      }
+      
+      await supabase
+        .from("upload_jobs")
+        .update({
+          status: "completed",
+          progress: 100,
+          processed_records: finalProcessedRecords,
+          total_records: finalTotalRecords,
+          failed_records: finalErrorCount,
+          completed_at: new Date().toISOString(),
+          upload_id: uploadId,
+        })
+        .eq("id", jobId);
+      
+      console.log(`[JOB] Marked job ${jobId} as completed (final chunk)`);
+    } else {
+      console.log(`[JOB] Chunk ${chunkNumber}/${totalChunks} processed, waiting for remaining chunks...`);
+    }
 
-    // If this was an SDV data upload, update the primary upload's merge_status to 'completed'
+    // If this was an SDV data upload and it's the last chunk, update the primary upload's merge_status to 'completed'
     // since the view automatically calculates metrics once data is linked
-    if (fileType === "sdv_data" && primaryUploadId) {
+    if (fileType === "sdv_data" && primaryUploadId && isLastChunk) {
       console.log(`[STATUS] Updating primary upload ${primaryUploadId} merge_status to 'completed'`);
       await supabase
         .from("sdv_uploads")
@@ -356,7 +471,11 @@ Deno.serve(async (req) => {
     // Clean up: delete the CSV file from storage
     await supabase.storage.from("csv-uploads").remove([filePath]);
 
-    console.log(`[SUCCESS] Job ${jobId} completed: ${processedCount} records in ${duration}ms`);
+    if (isChunkedUpload) {
+      console.log(`[SUCCESS] Chunk ${chunkNumber}/${totalChunks} of job ${jobId} completed: ${processedCount} records in ${duration}ms`);
+    } else {
+      console.log(`[SUCCESS] Job ${jobId} completed: ${processedCount} records in ${duration}ms`);
+    }
 
     return new Response(
       JSON.stringify({ 

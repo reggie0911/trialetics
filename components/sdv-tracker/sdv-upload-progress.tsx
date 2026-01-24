@@ -122,11 +122,22 @@ export function SDVUploadProgress({ companyId, onComplete }: SDVUploadProgressPr
           
           <div className="mt-3 space-y-1">
             <Progress value={job.progress} className="h-2" />
-            <div className="flex justify-between text-[10px] text-muted-foreground">
-              <span>
-                {job.processed_records.toLocaleString()} / {job.total_records.toLocaleString()} records
-              </span>
-              <span>{job.progress}%</span>
+            <div className="flex flex-col gap-1">
+              <div className="flex justify-between text-[10px] text-muted-foreground">
+                <span>
+                  {job.processed_records.toLocaleString()} / {job.total_records.toLocaleString()} records
+                </span>
+                <span>{job.progress}%</span>
+              </div>
+              {/* Show chunk progress if job is chunked */}
+              {job.metadata && 
+               typeof job.metadata.isChunked === 'boolean' && 
+               job.metadata.isChunked && 
+               typeof job.metadata.totalChunks === 'number' && (
+                <div className="text-[10px] text-muted-foreground">
+                  Processing chunk {(typeof job.metadata.currentChunk === 'number' ? job.metadata.currentChunk : 0)} of {job.metadata.totalChunks}
+                </div>
+              )}
             </div>
           </div>
         </Card>
@@ -153,7 +164,11 @@ export function SDVUploadProgress({ companyId, onComplete }: SDVUploadProgressPr
                 </p>
                 <p className="text-[10px] text-muted-foreground">
                   {job.status === "completed" 
-                    ? `${job.processed_records.toLocaleString()} records uploaded`
+                    ? `${job.processed_records.toLocaleString()} records uploaded${
+                        job.metadata?.isChunked && job.metadata?.totalChunks 
+                          ? ` (${job.metadata.totalChunks} chunks)` 
+                          : ''
+                      }`
                     : job.error_message || "Upload failed"
                   }
                 </p>

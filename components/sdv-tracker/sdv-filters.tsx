@@ -28,7 +28,7 @@ export function SDVFilters({
   filters, 
   onFiltersChange, 
   onResetAll,
-  filterOptions 
+  filterOptions
 }: SDVFiltersProps) {
   const handleFilterChange = (key: keyof SDVFiltersType, value: string | null) => {
     onFiltersChange({

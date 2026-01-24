@@ -138,6 +138,106 @@ export async function saveSDVHeaderMappings(
 }
 
 // =====================================================
+// SDV Calculation Settings
+// =====================================================
+
+export interface SDVCalculationSettings {
+  minutes_per_field: number;
+  hours_per_day: number;
+}
+
+/**
+ * Get SDV calculation settings for a company
+ */
+export async function getSDVCalculationSettings(
+  companyId: string
+): Promise<ActionResponse<SDVCalculationSettings>> {
+  try {
+    const supabase = await createClient();
+
+    const { data: company, error } = await supabase
+      .from('companies')
+      .select('settings')
+      .eq('company_id', companyId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching company settings:', error);
+      return { success: false, error: 'Failed to fetch calculation settings' };
+    }
+
+    // Extract SDV settings with defaults
+    const sdvSettings = company?.settings?.sdv || {};
+    const settings: SDVCalculationSettings = {
+      minutes_per_field: sdvSettings.minutes_per_field || 60,
+      hours_per_day: sdvSettings.hours_per_day || 7,
+    };
+
+    return { success: true, data: settings };
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return { success: false, error: 'Unexpected error fetching calculation settings' };
+  }
+}
+
+/**
+ * Save SDV calculation settings for a company
+ */
+export async function saveSDVCalculationSettings(
+  companyId: string,
+  settings: SDVCalculationSettings
+): Promise<ActionResponse<void>> {
+  try {
+    const supabase = await createClient();
+
+    // Validate settings
+    if (settings.minutes_per_field <= 0 || settings.hours_per_day <= 0) {
+      return { success: false, error: 'Settings must be positive numbers' };
+    }
+
+    // Get current settings
+    const { data: company, error: fetchError } = await supabase
+      .from('companies')
+      .select('settings')
+      .eq('company_id', companyId)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching company:', fetchError);
+      return { success: false, error: 'Failed to fetch company settings' };
+    }
+
+    // Merge new SDV settings with existing settings
+    const currentSettings = company?.settings || {};
+    const updatedSettings = {
+      ...currentSettings,
+      sdv: {
+        minutes_per_field: settings.minutes_per_field,
+        hours_per_day: settings.hours_per_day,
+      },
+    };
+
+    // Update company settings
+    const { error: updateError } = await supabase
+      .from('companies')
+      .update({ settings: updatedSettings })
+      .eq('company_id', companyId);
+
+    if (updateError) {
+      console.error('Error updating company settings:', updateError);
+      return { success: false, error: 'Failed to save calculation settings' };
+    }
+
+    revalidatePath('/protected/sdv-tracker');
+
+    return { success: true };
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return { success: false, error: 'Unexpected error saving calculation settings' };
+  }
+}
+
+// =====================================================
 // SDV Uploads
 // =====================================================
 
@@ -800,6 +900,7 @@ export async function getSDVRecordsBySites(
 
 /**
  * Get site-level summary for initial tree table load (fast)
+ * Uses RPC function for better performance with large datasets
  */
 export async function getSDVSiteSummary(
   uploadId: string,
@@ -810,28 +911,38 @@ export async function getSDVSiteSummary(
 
     console.log(`[SDV Site Summary] Fetching site-level summary for upload ${uploadId}`);
 
-    let query = supabase
-      .from('sdv_site_summary')
-      .select('*')
-      .eq('upload_id', uploadId);
+    // Use fast database-level aggregation via RPC (with 30s timeout)
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_sdv_site_summary', {
+      p_upload_id: uploadId,
+      p_site_filter: filters.siteName || null,
+      p_subject_filter: filters.subjectId || null,
+      p_visit_filter: filters.visitType || null,
+      p_crf_filter: filters.crfName || null
+    });
 
-    // Apply filters
-    if (filters.siteName) {
-      query = query.eq('site_name', filters.siteName);
-    }
-
-    const { data: sites, error } = await query;
-
-    if (error) {
-      console.error('Error fetching site summary:', error);
+    if (rpcError) {
+      console.error('RPC error for site summary:', rpcError);
       return { success: false, error: 'Failed to fetch site summary' };
     }
 
-    console.log(`[SDV Site Summary] Fetched ${sites?.length || 0} sites`);
+    // Transform RPC result to match expected format
+    const sites = (rpcData || []).map((row: any) => ({
+      site_name: row.site_name,
+      total_subjects: row.total_subjects || 0,
+      data_verified: row.data_verified || 0,
+      data_entered: row.data_entered || 0,
+      data_needing_review: row.data_needing_review || 0,
+      data_expected: row.data_expected || 0,
+      sdv_percent: row.sdv_percent || 0,
+      estimate_hours: row.estimate_hours || 0,
+      estimate_days: row.estimate_days || 0,
+    }));
+
+    console.log(`[SDV Site Summary] Fetched ${sites.length} sites`);
 
     return {
       success: true,
-      data: { sites: sites || [] }
+      data: { sites }
     };
   } catch (error) {
     console.error('Unexpected error:', error);
@@ -840,7 +951,8 @@ export async function getSDVSiteSummary(
 }
 
 /**
- * Get detailed records for a specific site (lazy load on expand)
+ * Get subject-level summary for a site (lazy load on site expand)
+ * Returns aggregated data by subject - much faster than fetching all records
  */
 export async function getSDVSiteDetails(
   uploadId: string,
@@ -850,43 +962,222 @@ export async function getSDVSiteDetails(
   try {
     const supabase = await createClient();
 
-    console.log(`[SDV Site Details] Fetching details for site: ${siteName}`);
+    console.log(`[SDV Site Details] Fetching subject summary for site: ${siteName}`);
 
-    let query = supabase
-      .from('sdv_merged_view')
-      .select('*')
-      .eq('upload_id', uploadId)
-      .eq('site_name', siteName)
-      .order('subject_id', { ascending: true })
-      .order('visit_type', { ascending: true });
+    // Use RPC function to get subject-level aggregates (fast!)
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_sdv_subject_summary', {
+      p_upload_id: uploadId,
+      p_site_name: siteName,
+      p_subject_filter: filters.subjectId || null,
+      p_visit_filter: filters.visitType || null,
+      p_crf_filter: filters.crfName || null
+    });
 
-    // Apply additional filters
-    if (filters.subjectId) {
-      query = query.eq('subject_id', filters.subjectId);
-    }
-    if (filters.visitType) {
-      query = query.eq('visit_type', filters.visitType);
-    }
-    if (filters.crfName) {
-      query = query.eq('crf_name', filters.crfName);
-    }
-
-    const { data: records, error } = await query;
-
-    if (error) {
-      console.error('Error fetching site details:', error);
+    if (rpcError) {
+      console.error('RPC error for subject summary:', rpcError);
       return { success: false, error: 'Failed to fetch site details' };
     }
 
-    console.log(`[SDV Site Details] Fetched ${records?.length || 0} records for ${siteName}`);
+    // Transform RPC result to match expected format
+    const records = (rpcData || []).map((row: any) => ({
+      site_name: row.site_name,
+      subject_id: row.subject_id,
+      visit_type: null, // Subject level - no specific visit
+      crf_name: null,
+      crf_field: null,
+      total_visits: row.total_visits || 0,
+      data_verified: row.data_verified || 0,
+      data_entered: row.data_entered || 0,
+      data_needing_review: row.data_needing_review || 0,
+      data_expected: row.data_expected || 0,
+      sdv_percent: row.sdv_percent || 0,
+      estimate_hours: row.estimate_hours || 0,
+      estimate_days: row.estimate_days || 0,
+      _level: 'subject', // Mark as subject-level for hierarchy building
+      _hasChildren: true, // Has visit children
+    }));
+
+    console.log(`[SDV Site Details] Fetched ${records.length} subjects for ${siteName}`);
 
     return {
       success: true,
-      data: { records: records || [] }
+      data: { records }
     };
   } catch (error) {
     console.error('Unexpected error:', error);
     return { success: false, error: 'Unexpected error fetching site details' };
+  }
+}
+
+/**
+ * Get visit-level summary for a subject (lazy load on subject expand)
+ */
+export async function getSDVSubjectDetails(
+  uploadId: string,
+  siteName: string,
+  subjectId: string,
+  filters: SDVFilters = {}
+): Promise<ActionResponse<{ records: any[] }>> {
+  try {
+    const supabase = await createClient();
+
+    console.log(`[SDV Subject Details] Fetching visit summary for subject: ${subjectId}`);
+
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_sdv_visit_summary', {
+      p_upload_id: uploadId,
+      p_site_name: siteName,
+      p_subject_id: subjectId,
+      p_visit_filter: filters.visitType || null,
+      p_crf_filter: filters.crfName || null
+    });
+
+    if (rpcError) {
+      console.error('RPC error for visit summary:', rpcError);
+      return { success: false, error: 'Failed to fetch subject details' };
+    }
+
+    const records = (rpcData || []).map((row: any) => ({
+      site_name: row.site_name,
+      subject_id: row.subject_id,
+      visit_type: row.visit_type,
+      crf_name: null,
+      crf_field: null,
+      total_crfs: row.total_crfs || 0,
+      data_verified: row.data_verified || 0,
+      data_entered: row.data_entered || 0,
+      data_needing_review: row.data_needing_review || 0,
+      data_expected: row.data_expected || 0,
+      sdv_percent: row.sdv_percent || 0,
+      estimate_hours: row.estimate_hours || 0,
+      estimate_days: row.estimate_days || 0,
+      _level: 'visit',
+      _hasChildren: true,
+    }));
+
+    console.log(`[SDV Subject Details] Fetched ${records.length} visits for ${subjectId}`);
+
+    return {
+      success: true,
+      data: { records }
+    };
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return { success: false, error: 'Unexpected error fetching subject details' };
+  }
+}
+
+/**
+ * Get CRF-level summary for a visit (lazy load on visit expand)
+ */
+export async function getSDVVisitDetails(
+  uploadId: string,
+  siteName: string,
+  subjectId: string,
+  visitType: string,
+  filters: SDVFilters = {}
+): Promise<ActionResponse<{ records: any[] }>> {
+  try {
+    const supabase = await createClient();
+
+    console.log(`[SDV Visit Details] Fetching CRF summary for visit: ${visitType}`);
+
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_sdv_crf_summary', {
+      p_upload_id: uploadId,
+      p_site_name: siteName,
+      p_subject_id: subjectId,
+      p_visit_type: visitType,
+      p_crf_filter: filters.crfName || null
+    });
+
+    if (rpcError) {
+      console.error('RPC error for CRF summary:', rpcError);
+      return { success: false, error: 'Failed to fetch visit details' };
+    }
+
+    const records = (rpcData || []).map((row: any) => ({
+      site_name: row.site_name,
+      subject_id: row.subject_id,
+      visit_type: row.visit_type,
+      crf_name: row.crf_name,
+      crf_field: null,
+      total_fields: row.total_fields || 0,
+      data_verified: row.data_verified || 0,
+      data_entered: row.data_entered || 0,
+      data_needing_review: row.data_needing_review || 0,
+      data_expected: row.data_expected || 0,
+      sdv_percent: row.sdv_percent || 0,
+      estimate_hours: row.estimate_hours || 0,
+      estimate_days: row.estimate_days || 0,
+      _level: 'crf',
+      _hasChildren: true,
+    }));
+
+    console.log(`[SDV Visit Details] Fetched ${records.length} CRFs for ${visitType}`);
+
+    return {
+      success: true,
+      data: { records }
+    };
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return { success: false, error: 'Unexpected error fetching visit details' };
+  }
+}
+
+/**
+ * Get field-level details for a CRF (lazy load on CRF expand)
+ */
+export async function getSDVCRFDetails(
+  uploadId: string,
+  siteName: string,
+  subjectId: string,
+  visitType: string,
+  crfName: string
+): Promise<ActionResponse<{ records: any[] }>> {
+  try {
+    const supabase = await createClient();
+
+    console.log(`[SDV CRF Details] Fetching fields for CRF: ${crfName}`);
+
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_sdv_field_details', {
+      p_upload_id: uploadId,
+      p_site_name: siteName,
+      p_subject_id: subjectId,
+      p_visit_type: visitType,
+      p_crf_name: crfName
+    });
+
+    if (rpcError) {
+      console.error('RPC error for field details:', rpcError);
+      return { success: false, error: 'Failed to fetch CRF details' };
+    }
+
+    const records = (rpcData || []).map((row: any) => ({
+      site_name: row.site_name,
+      subject_id: row.subject_id,
+      visit_type: row.visit_type,
+      crf_name: row.crf_name,
+      crf_field: row.crf_field,
+      data_verified: row.data_verified || 0,
+      data_entered: row.data_entered || 0,
+      data_needing_review: row.data_needing_review || 0,
+      data_expected: row.data_expected || 0,
+      sdv_percent: row.sdv_percent || 0,
+      estimate_hours: row.estimate_hours || 0,
+      estimate_days: row.estimate_days || 0,
+      _level: 'field',
+      _hasChildren: false,
+    }));
+
+    console.log(`[SDV CRF Details] Fetched ${records.length} fields for ${crfName}`);
+
+    return {
+      success: true,
+      data: { records }
+    };
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return { success: false, error: 'Unexpected error fetching CRF details' };
   }
 }
 
