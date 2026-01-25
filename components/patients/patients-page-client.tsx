@@ -402,10 +402,13 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
   const loadColumnConfigs = async (uploadId: string) => {
     const result = await getColumnConfigs(uploadId);
     if (result.success && result.data) {
-      // Ensure all columns are visible by default
+      // Columns to hide by default
+      const hiddenColumns = ['E01_V1[1].SCR_02.ECHO[1].MVRG_CVORRES__2'];
+      
+      // Ensure all columns are visible by default, except hidden columns
       const allVisibleConfigs = result.data.map(config => ({
         ...config,
-        visible: true, // Override to make all columns visible
+        visible: !hiddenColumns.includes(config.id), // Hide specific columns
       }));
       
       setColumnConfigs(allVisibleConfigs);
