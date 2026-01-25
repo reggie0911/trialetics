@@ -466,6 +466,40 @@ Deno.serve(async (req) => {
           merged_at: new Date().toISOString(),
         })
         .eq("id", primaryUploadId);
+      
+      // Refresh materialized view and cache for instant querying
+      console.log(`[CACHE] Refreshing materialized view and cache for upload ${primaryUploadId}`);
+      try {
+        const { data: cacheResult, error: cacheError } = await supabase
+          .rpc("refresh_sdv_cache_after_upload", { p_upload_id: primaryUploadId });
+        
+        if (cacheError) {
+          console.error(`[CACHE] Error refreshing cache:`, cacheError);
+        } else {
+          console.log(`[CACHE] Cache refreshed successfully:`, cacheResult);
+        }
+      } catch (cacheErr) {
+        console.error(`[CACHE] Exception refreshing cache:`, cacheErr);
+        // Don't fail the upload if cache refresh fails
+      }
+    }
+    
+    // Also refresh cache for site data uploads (on last chunk or single upload)
+    if (fileType === "sdv_site_data_entry" && isLastChunk) {
+      console.log(`[CACHE] Refreshing materialized view and cache for site data upload ${uploadId}`);
+      try {
+        const { data: cacheResult, error: cacheError } = await supabase
+          .rpc("refresh_sdv_cache_after_upload", { p_upload_id: uploadId });
+        
+        if (cacheError) {
+          console.error(`[CACHE] Error refreshing cache:`, cacheError);
+        } else {
+          console.log(`[CACHE] Cache refreshed successfully:`, cacheResult);
+        }
+      } catch (cacheErr) {
+        console.error(`[CACHE] Exception refreshing cache:`, cacheErr);
+        // Don't fail the upload if cache refresh fails
+      }
     }
 
     // Clean up: delete the CSV file from storage

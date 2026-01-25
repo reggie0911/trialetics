@@ -104,19 +104,19 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
   }, [companyId]);
 
   // Load data when upload is selected or filters change
+  // Run all initial data loads in parallel for better performance
   useEffect(() => {
     if (selectedUploadId) {
-      loadData(selectedUploadId);
+      // Execute all three API calls in parallel
+      Promise.all([
+        loadData(selectedUploadId),
+        loadFilterOptions(selectedUploadId),
+        loadAggregations(selectedUploadId)
+      ]).catch(error => {
+        console.error('Error loading initial data:', error);
+      });
     }
   }, [selectedUploadId, filters]);
-
-  // Load filter options and aggregations when upload is selected
-  useEffect(() => {
-    if (selectedUploadId) {
-      loadFilterOptions(selectedUploadId);
-      loadAggregations(selectedUploadId);
-    }
-  }, [selectedUploadId]);
 
   // Reload aggregations when filters change (with debouncing)
   useEffect(() => {
