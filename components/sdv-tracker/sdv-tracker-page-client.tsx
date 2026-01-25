@@ -5,10 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Printer, Download, RefreshCw } from "lucide-react";
 import { SDVFileUploadDialog } from "./sdv-file-upload-dialog";
-import { SDVHierarchicalTable } from "./sdv-hierarchical-table";
+import { SDVHierarchicalTable, NodeToggleInfo } from "./sdv-hierarchical-table";
 import { SDVFilters } from "./sdv-filters";
 import { SDVKPICards } from "./sdv-kpi-cards";
 import { SDVHeaderRelabelModal } from "./sdv-header-relabel-modal";
+import { SDVCalculationSettingsModal } from "./sdv-calculation-settings-modal";
 import { SDVUploadHistory } from "./sdv-upload-history";
 import { SDVUploadProgress } from "./sdv-upload-progress";
 import { useToast } from "@/hooks/use-toast";
@@ -18,6 +19,9 @@ import {
   getSDVUploads,
   getSDVSiteSummary,
   getSDVSiteDetails,
+  getSDVSubjectDetails,
+  getSDVVisitDetails,
+  getSDVCRFDetails,
   deleteSDVUpload,
   getSDVAggregations,
   getSDVFilterOptions,
@@ -38,12 +42,17 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
   const [uploads, setUploads] = useState<Tables<'sdv_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
   
-  // Data state - Tree data with lazy loading
+  // Data state - Tree data with multi-level lazy loading
   const [hierarchy, setHierarchy] = useState<HierarchyNode[]>([]);
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const [nodeDataCache, setNodeDataCache] = useState<Map<string, any[]>>(new Map());
+  const [loadingNodes, setLoadingNodes] = useState<Set<string>>(new Set());
+  const [aggregations, setAggregations] = useState<SDVAggregations | null>(null);
+  
+  // Legacy state for backward compatibility
   const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set());
   const [siteDataCache, setSiteDataCache] = useState<Map<string, any[]>>(new Map());
   const [loadingSites, setLoadingSites] = useState<Set<string>>(new Set());
-  const [aggregations, setAggregations] = useState<SDVAggregations | null>(null);
   
   const [filterOptions, setFilterOptions] = useState<{
     siteNames: string[];
@@ -207,35 +216,32 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
     setLoadingMessage("");
   };
 
-  // Handle site expand/collapse with lazy loading
-  const handleSiteToggle = async (siteName: string) => {
-    console.log('[SDV] handleSiteToggle called for:', siteName);
-    const newExpanded = new Set(expandedSites);
+  // Handle multi-level node expand/collapse with lazy loading
+  const handleNodeToggle = async (info: NodeToggleInfo) => {
+    console.log('[SDV] handleNodeToggle called:', info);
+    const { level, nodeId, siteName, subjectId, visitType, crfName } = info;
     
-    if (expandedSites.has(siteName)) {
-      // Collapse
-      console.log('[SDV] Collapsing site:', siteName);
-      newExpanded.delete(siteName);
-      setExpandedSites(newExpanded);
+    const isExpanded = expandedNodes.has(nodeId);
+    
+    if (isExpanded) {
+      // Collapse - just update state
+      console.log('[SDV] Collapsing node:', nodeId);
+      const newExpanded = new Set(expandedNodes);
+      newExpanded.delete(nodeId);
+      setExpandedNodes(newExpanded);
       
-      // Update hierarchy to collapse this site
-      setHierarchy(prevHierarchy => 
-        prevHierarchy.map(node => 
-          node.site_name === siteName 
-            ? { ...node, isCollapsed: true }
-            : node
-        )
-      );
+      // Update hierarchy to collapse this node
+      updateNodeInHierarchy(nodeId, { isCollapsed: true });
     } else {
       // Expand - check if we need to load data
-      console.log('[SDV] Expanding site:', siteName, 'Cached:', siteDataCache.has(siteName));
+      const cacheKey = nodeId;
+      console.log('[SDV] Expanding node:', nodeId, 'Cached:', nodeDataCache.has(cacheKey));
       
-      if (!siteDataCache.has(siteName) && selectedUploadId) {
+      if (!nodeDataCache.has(cacheKey) && selectedUploadId) {
         // Show loading state
-        console.log('[SDV] Fetching site details for:', siteName);
-        const newLoadingSites = new Set(loadingSites);
-        newLoadingSites.add(siteName);
-        setLoadingSites(newLoadingSites);
+        const newLoadingNodes = new Set(loadingNodes);
+        newLoadingNodes.add(nodeId);
+        setLoadingNodes(newLoadingNodes);
         
         // Prepare active filters
         const activeFilters: SDVFiltersType = {};
@@ -245,34 +251,52 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
           }
         });
         
-        // Fetch site details
-        const result = await getSDVSiteDetails(selectedUploadId, siteName, activeFilters);
+        let result;
         
-        newLoadingSites.delete(siteName);
-        setLoadingSites(newLoadingSites);
+        // Fetch data based on level
+        switch (level) {
+          case 'site':
+            // Fetch subject-level summaries for this site
+            result = await getSDVSiteDetails(selectedUploadId, siteName, activeFilters);
+            break;
+          case 'subject':
+            // Fetch visit-level summaries for this subject
+            result = await getSDVSubjectDetails(selectedUploadId, siteName, subjectId!, activeFilters);
+            break;
+          case 'visit':
+            // Fetch CRF-level summaries for this visit
+            result = await getSDVVisitDetails(selectedUploadId, siteName, subjectId!, visitType!, activeFilters);
+            break;
+          case 'crf':
+            // Fetch field-level details for this CRF
+            result = await getSDVCRFDetails(selectedUploadId, siteName, subjectId!, visitType!, crfName!);
+            break;
+          default:
+            result = { success: false, error: 'Unknown level' };
+        }
+        
+        // Clear loading state
+        newLoadingNodes.delete(nodeId);
+        setLoadingNodes(new Set(newLoadingNodes));
         
         if (result.success && result.data) {
-          console.log('[SDV] Fetched', result.data.records.length, 'records for', siteName);
+          console.log('[SDV] Fetched', result.data.records.length, 'children for', nodeId);
           
           // Cache the data
-          const newCache = new Map(siteDataCache);
-          newCache.set(siteName, result.data.records);
-          setSiteDataCache(newCache);
+          const newCache = new Map(nodeDataCache);
+          newCache.set(cacheKey, result.data.records);
+          setNodeDataCache(newCache);
           
-          // Build hierarchy for this site
-          const siteHierarchy = createHierarchy(result.data.records as any);
-          console.log('[SDV] Created hierarchy:', siteHierarchy);
+          // Convert records to child nodes
+          const childNodes = convertRecordsToNodes(result.data.records, level);
           
-          // Update hierarchy to expand and add children
-          setHierarchy(prevHierarchy => 
-            prevHierarchy.map(node => 
-              node.site_name === siteName 
-                ? { ...node, children: siteHierarchy[0]?.children || [], isCollapsed: false }
-                : node
-            )
-          );
+          // Update hierarchy with children
+          updateNodeInHierarchy(nodeId, { 
+            children: childNodes, 
+            isCollapsed: false 
+          });
         } else {
-          console.error('[SDV] Error fetching site details:', result.error);
+          console.error('[SDV] Error fetching node details:', result.error);
           toast({
             title: "Error",
             description: result.error,
@@ -281,23 +305,130 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
           return;
         }
       } else {
-        // Data already cached, just expand
-        console.log('[SDV] Using cached data for:', siteName);
-        const cachedData = siteDataCache.get(siteName);
+        // Data already cached, rebuild children and expand
+        console.log('[SDV] Using cached data for:', nodeId);
+        const cachedData = nodeDataCache.get(cacheKey);
         if (cachedData) {
-          const siteHierarchy = createHierarchy(cachedData as any);
-          setHierarchy(prevHierarchy => 
-            prevHierarchy.map(node => 
-              node.site_name === siteName 
-                ? { ...node, children: siteHierarchy[0]?.children || [], isCollapsed: false }
-                : node
-            )
-          );
+          const childNodes = convertRecordsToNodes(cachedData, level);
+          updateNodeInHierarchy(nodeId, { 
+            children: childNodes, 
+            isCollapsed: false 
+          });
         }
       }
       
-      newExpanded.add(siteName);
-      setExpandedSites(newExpanded);
+      const newExpanded = new Set(expandedNodes);
+      newExpanded.add(nodeId);
+      setExpandedNodes(newExpanded);
+    }
+  };
+
+  // Convert fetched records to hierarchy nodes
+  const convertRecordsToNodes = (records: any[], parentLevel: string): HierarchyNode[] => {
+    const childLevel = getChildLevel(parentLevel);
+    
+    return records.map((record, index) => {
+      const nodeId = generateNodeId(childLevel, record);
+      const hasChildren = record._hasChildren !== false && childLevel !== 'field';
+      
+      return {
+        id: nodeId,
+        level: childLevel as HierarchyNode['level'],
+        site_name: record.site_name,
+        subject_id: record.subject_id,
+        visit_type: record.visit_type,
+        crf_name: record.crf_name,
+        crf_field: record.crf_field,
+        data_verified: record.data_verified || 0,
+        data_entered: record.data_entered || 0,
+        data_needing_review: record.data_needing_review || 0,
+        data_expected: record.data_expected || 0,
+        sdv_percent: record.sdv_percent || 0,
+        estimate_hours: record.estimate_hours || 0,
+        estimate_days: record.estimate_days || 0,
+        children: [],
+        isCollapsed: true,
+        hasLazyChildren: hasChildren,
+      };
+    });
+  };
+
+  // Get the child level for a parent level
+  const getChildLevel = (parentLevel: string): string => {
+    switch (parentLevel) {
+      case 'site': return 'subject';
+      case 'subject': return 'visit';
+      case 'visit': return 'crf';
+      case 'crf': return 'field';
+      default: return 'field';
+    }
+  };
+
+  // Generate a unique node ID
+  const generateNodeId = (level: string, record: any): string => {
+    switch (level) {
+      case 'subject':
+        return `subject-${record.site_name}-${record.subject_id}`;
+      case 'visit':
+        return `visit-${record.site_name}-${record.subject_id}-${record.visit_type}`;
+      case 'crf':
+        return `crf-${record.site_name}-${record.subject_id}-${record.visit_type}-${record.crf_name}`;
+      case 'field':
+        return `field-${record.site_name}-${record.subject_id}-${record.visit_type}-${record.crf_name}-${record.crf_field}`;
+      default:
+        return `node-${Date.now()}-${Math.random()}`;
+    }
+  };
+
+  // Update a node in the hierarchy (recursive helper)
+  const updateNodeInHierarchy = (nodeId: string, updates: Partial<HierarchyNode>) => {
+    setHierarchy(prevHierarchy => {
+      const updateNode = (nodes: HierarchyNode[]): HierarchyNode[] => {
+        return nodes.map(node => {
+          const currentId = node.id || node.key;
+          if (currentId === nodeId) {
+            return { ...node, ...updates };
+          }
+          if (node.children && node.children.length > 0) {
+            return { ...node, children: updateNode(node.children) };
+          }
+          return node;
+        });
+      };
+      return updateNode(prevHierarchy);
+    });
+  };
+
+  // Collapse all nodes in the hierarchy
+  const handleCollapseAll = () => {
+    // Clear expanded nodes state
+    setExpandedNodes(new Set());
+    
+    // Recursively collapse all nodes in hierarchy
+    setHierarchy(prevHierarchy => {
+      const collapseNodes = (nodes: HierarchyNode[]): HierarchyNode[] => {
+        return nodes.map(node => ({
+          ...node,
+          isCollapsed: true,
+          children: node.children && node.children.length > 0 
+            ? collapseNodes(node.children) 
+            : node.children
+        }));
+      };
+      return collapseNodes(prevHierarchy);
+    });
+  };
+
+  // Legacy handler for backward compatibility
+  const handleSiteToggle = async (siteName: string) => {
+    // Find the site node and call handleNodeToggle
+    const siteNode = hierarchy.find(n => n.site_name === siteName);
+    if (siteNode) {
+      handleNodeToggle({
+        level: 'site',
+        nodeId: siteNode.id || siteNode.key || `site-${siteName}`,
+        siteName,
+      });
     }
   };
 
@@ -309,24 +440,47 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
   };
 
   const loadAggregations = async (uploadId: string) => {
-    // Check if any filters are actually selected (not empty and not "all")
-    const activeFilters: SDVFiltersType = {};
-    
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value && value.trim() !== '' && value.toLowerCase() !== 'all') {
-        activeFilters[key as keyof SDVFiltersType] = value;
+    try {
+      // Fetch the latest upload status to check merge_status
+      const supabase = await import('@/lib/client').then(m => m.createClient());
+      const { data: uploadData, error: uploadError } = await supabase
+        .from('sdv_uploads')
+        .select('merge_status')
+        .eq('id', uploadId)
+        .single();
+      
+      if (uploadError) {
+        console.error('[SDV Aggregations] Error fetching upload:', uploadError);
+        return;
       }
-    });
-    
-    const result = await getSDVAggregations(uploadId, activeFilters);
-    if (result.success && result.data) {
-      setAggregations(result.data);
-    } else if (result.error) {
-      toast({
-        title: "Error",
-        description: result.error,
-        variant: "destructive",
+      
+      // Skip aggregations if upload is still being processed
+      if (uploadData && uploadData.merge_status !== 'completed') {
+        console.log(`[SDV Aggregations] Skipping - upload merge_status is "${uploadData.merge_status}", waiting for "completed"`);
+        return;
+      }
+      
+      // Check if any filters are actually selected (not empty and not "all")
+      const activeFilters: SDVFiltersType = {};
+      
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value && value.trim() !== '' && value.toLowerCase() !== 'all') {
+          activeFilters[key as keyof SDVFiltersType] = value;
+        }
       });
+      
+      const result = await getSDVAggregations(uploadId, activeFilters);
+      if (result.success && result.data) {
+        setAggregations(result.data);
+      } else if (result.error) {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('[SDV Aggregations] Unexpected error:', error);
     }
   };
 
@@ -541,6 +695,10 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
             onSave={handleSaveHeaderMappings}
             disabled={!companyId}
           />
+          <SDVCalculationSettingsModal 
+            companyId={companyId}
+            disabled={!companyId}
+          />
           <SDVUploadHistory
             uploads={uploads}
             selectedUploadId={selectedUploadId}
@@ -554,7 +712,7 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
             size="sm"
             onClick={handleRefresh}
             disabled={!selectedUploadId || hierarchy.length === 0}
-            className="text-[11px] h-8"
+            className="text-[11px] h-8 hover:bg-accent/80 hover:scale-[1.02] transition-all duration-150"
           >
             <RefreshCw className="h-3 w-3 mr-2" />
             Refresh
@@ -564,7 +722,8 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
             size="sm"
             onClick={handlePrint}
             disabled={hierarchy.length === 0}
-            className="text-[11px] h-8"
+            className="text-[11px] h-8 hover:bg-primary/10 hover:font-medium transition-all"
+            title="Print the current view"
           >
             <Printer className="h-3 w-3 mr-2" />
             Print
@@ -574,7 +733,8 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
             size="sm"
             onClick={handleDownload}
             disabled={hierarchy.length === 0}
-            className="text-[11px] h-8"
+            className="text-[11px] h-8 hover:bg-primary/10 hover:font-medium transition-all"
+            title="Download data as CSV file"
           >
             <Download className="h-3 w-3 mr-2" />
             Download
@@ -597,6 +757,21 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
           reportDate={reportDate}
         />
       )}
+      
+      {/* Show message when upload is processing */}
+      {selectedUploadId && !aggregations && !isLoading && uploads.find(u => u.id === selectedUploadId)?.merge_status !== 'completed' && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="py-6">
+            <div className="text-center">
+              <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2 text-blue-500" />
+              <p className="text-sm font-medium text-blue-900">Processing Upload</p>
+              <p className="text-xs text-blue-700 mt-1">
+                Metrics will appear once all chunks are processed and merged
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Data Table */}
       {hierarchy.length > 0 && (
@@ -615,6 +790,9 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
             <SDVHierarchicalTable 
               hierarchy={hierarchy}
               headerMappings={headerMappings}
+              onNodeToggle={handleNodeToggle}
+              loadingNodes={loadingNodes}
+              onCollapseAll={handleCollapseAll}
               onSiteToggle={handleSiteToggle}
               loadingSites={loadingSites}
             />
@@ -638,10 +816,18 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
       {/* Background Upload Progress Indicator */}
       <SDVUploadProgress 
         companyId={companyId}
-        onComplete={async () => {
+        onComplete={async (job) => {
           // Refresh data when background upload completes
           await loadUploads();
-          if (selectedUploadId) {
+          
+          // If this job created an upload, select it and load its data
+          if (job.upload_id) {
+            setSelectedUploadId(job.upload_id);
+            await loadData(job.upload_id);
+            // Aggregations will load automatically once merge_status is completed
+            await loadAggregations(job.upload_id);
+          } else if (selectedUploadId) {
+            // Otherwise refresh the current upload
             await loadData(selectedUploadId);
             await loadAggregations(selectedUploadId);
           }

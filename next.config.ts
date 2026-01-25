@@ -19,11 +19,12 @@ const nextConfig: NextConfig = {
   },
   // Suppress hydration warnings caused by browser extensions and dev tools
   reactStrictMode: true,
-  // Increase Server Actions body size limit for large CSV uploads
+  // Increase body size limits for large CSV uploads
   experimental: {
     serverActions: {
-      bodySizeLimit: '50mb',
+      bodySizeLimit: '500mb',
     },
+    proxyClientMaxBodySize: '500mb', // For API routes with FormData
   },
 };
 

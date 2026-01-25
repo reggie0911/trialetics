@@ -118,7 +118,7 @@ export function SDVUploadHistory({
     <>
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
         <Button variant="outline" size="sm" asChild>
-          <SheetTrigger className="text-[11px] h-8">
+          <SheetTrigger className="text-[11px] h-8 hover:bg-accent/80 hover:scale-[1.02] transition-all duration-150">
             <History className="h-3 w-3 mr-2" />
             Upload History
             {primaryUploads.length > 0 && (

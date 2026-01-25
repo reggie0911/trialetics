@@ -22,6 +22,8 @@ export async function createUploadJob(params: {
   companyId: string;
   profileId: string;
   primaryUploadId: string | null;
+  skipEdgeFunction?: boolean; // Skip Edge Function invocation (for chunked uploads)
+  metadata?: Record<string, any>; // Additional metadata (for chunked uploads)
 }): Promise<FileUploadResponse> {
   try {
     const supabase = await createClient();
@@ -32,10 +34,17 @@ export async function createUploadJob(params: {
       return { success: false, error: 'Not authenticated' };
     }
 
-    const { filePath, fileName, fileSize, fileType, companyId, profileId, primaryUploadId } = params;
+    const { filePath, fileName, fileSize, fileType, companyId, profileId, primaryUploadId, skipEdgeFunction = false, metadata = {} } = params;
 
     // Get file size for record count estimation
     const estimatedRecords = Math.floor(fileSize / 100); // Rough estimate: 100 bytes per record
+
+    // Merge provided metadata with default metadata
+    const jobMetadata = {
+      filePath,
+      primaryUploadId: primaryUploadId || null,
+      ...metadata,
+    };
 
     // Create upload job
     const jobInsert: TablesInsert<'upload_jobs'> = {
@@ -48,10 +57,7 @@ export async function createUploadJob(params: {
       total_records: estimatedRecords,
       processed_records: 0,
       failed_records: 0,
-      metadata: {
-        filePath,
-        primaryUploadId: primaryUploadId || null,
-      },
+      metadata: jobMetadata,
     };
 
     const { data: jobData, error: jobError } = await supabase
@@ -66,6 +72,11 @@ export async function createUploadJob(params: {
     }
 
     const jobId = jobData.id;
+
+    // Skip Edge Function invocation for chunked uploads (will be triggered per chunk)
+    if (skipEdgeFunction) {
+      return { success: true, jobId, filePath };
+    }
 
     // Trigger Edge Function using Supabase client (handles auth properly)
     const { data: invokeData, error: invokeError } = await supabase.functions.invoke('process-csv-upload', {

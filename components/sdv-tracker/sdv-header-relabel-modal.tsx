@@ -103,7 +103,7 @@ export function SDVHeaderRelabelModal({
           <Button
             variant="outline"
             size="sm"
-            className="text-[11px] h-8"
+            className="text-[11px] h-8 hover:bg-accent/80 hover:scale-[1.02] transition-all duration-150"
             disabled={disabled}
             onClick={handleOpen}
           />

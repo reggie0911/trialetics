@@ -15,6 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { createUploadJob } from "@/lib/actions/sdv-file-upload";
 import { createClient } from "@/lib/client";
+import { splitCsvFileToChunks } from "@/lib/utils/csv-splitter-client";
+import { uploadChunksToSupabase, shouldChunkFile } from "@/lib/utils/sdv-chunk-uploader";
+import { SplitOptions } from "@/lib/types/csv-splitter";
 
 interface SDVFileUploadDialogProps {
   companyId: string;
@@ -118,53 +121,53 @@ export function SDVFileUploadDialog({
     try {
       const supabase = createClient();
 
-      // Generate unique file path
-      const timestamp = Date.now();
-      const sanitizedFileName = siteFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const filePath = `${companyId}/${timestamp}_${sanitizedFileName}`;
+      // Check if file should be chunked (automatic for files > 10MB)
+      const needsChunking = shouldChunkFile(siteFile.size);
 
-      // Upload file directly to Supabase Storage (client-side)
-      const { error: uploadError } = await supabase.storage
-        .from('csv-uploads')
-        .upload(filePath, siteFile, {
-          contentType: 'text/csv',
-          upsert: false,
-        });
+      if (needsChunking) {
+        // Read file content and split into chunks
+        const fileContent = await siteFile.text();
+        const options: SplitOptions = {
+          rowsPerChunk: 10000, // Default chunk size
+          originalFilename: siteFile.name,
+        };
 
-      if (uploadError) {
-        throw new Error(`Failed to upload file: ${uploadError.message}`);
-      }
+        const { chunks, totalChunks } = await splitCsvFileToChunks(fileContent, options);
 
-      // Create job via server action (only metadata, no file)
-      const result = await createUploadJob({
-        filePath,
-        fileName: siteFile.name,
-        fileSize: siteFile.size,
-        fileType: "sdv_site_data_entry",
-        companyId,
-        profileId,
-        primaryUploadId: null,
-      });
+        // Upload chunks sequentially
+        const uploadResult = await uploadChunksToSupabase(
+          chunks,
+          siteFile.name,
+          companyId,
+          profileId,
+          'sdv_site_data_entry',
+          null,
+          (progress) => {
+            console.log(`Chunk progress: ${progress.processedChunks}/${progress.totalChunks} (${progress.percentage}%)`);
+          }
+        );
 
-      if (result.success && result.jobId) {
-        setUploadedPrimaryJobId(result.jobId);
-
-        if (onUploadStarted) {
-          onUploadStarted(result.jobId);
+        if (!uploadResult.success || !uploadResult.jobId) {
+          throw new Error(uploadResult.error || 'Failed to upload chunks');
         }
 
-        // Wait for the job to complete and get the upload_id
-        // Poll the job until upload_id is available (Edge Function creates the sdv_uploads record)
+        setUploadedPrimaryJobId(uploadResult.jobId);
+
+        if (onUploadStarted) {
+          onUploadStarted(uploadResult.jobId);
+        }
+
+        // Poll for upload_id (same as non-chunked flow)
         const supabaseClient = createClient();
         let attempts = 0;
-        const maxAttempts = 60; // Max 60 seconds wait
+        const maxAttempts = 120; // Longer timeout for chunked uploads (2 minutes)
         
         const pollForUploadId = async () => {
           while (attempts < maxAttempts) {
             const { data: jobData, error: jobError } = await supabaseClient
               .from('upload_jobs')
               .select('upload_id, status')
-              .eq('id', result.jobId)
+              .eq('id', uploadResult.jobId)
               .single();
 
             if (jobError) {
@@ -175,6 +178,9 @@ export function SDVFileUploadDialog({
             if (jobData?.upload_id) {
               console.log('[Upload] Site Data upload_id retrieved:', jobData.upload_id);
               setUploadedPrimaryUploadId(jobData.upload_id);
+              if (onMergeComplete) {
+                onMergeComplete();
+              }
               break;
             }
 
@@ -189,15 +195,95 @@ export function SDVFileUploadDialog({
           }
         };
 
-        // Start polling in background (don't block tab switch)
+        // Start polling in background
         pollForUploadId();
 
         // Move to SDV data tab
         setActiveTab("sdv_data");
       } else {
-        // Clean up uploaded file on error
-        await supabase.storage.from('csv-uploads').remove([filePath]);
-        setSiteError(result.error || "Upload failed");
+        // Use existing non-chunked flow for small files
+        const timestamp = Date.now();
+        const sanitizedFileName = siteFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filePath = `${companyId}/${timestamp}_${sanitizedFileName}`;
+
+        // Upload file directly to Supabase Storage (client-side)
+        const { error: uploadError } = await supabase.storage
+          .from('csv-uploads')
+          .upload(filePath, siteFile, {
+            contentType: 'text/csv',
+            upsert: false,
+          });
+
+        if (uploadError) {
+          throw new Error(`Failed to upload file: ${uploadError.message}`);
+        }
+
+        // Create job via server action (only metadata, no file)
+        const result = await createUploadJob({
+          filePath,
+          fileName: siteFile.name,
+          fileSize: siteFile.size,
+          fileType: "sdv_site_data_entry",
+          companyId,
+          profileId,
+          primaryUploadId: null,
+        });
+
+        if (result.success && result.jobId) {
+          setUploadedPrimaryJobId(result.jobId);
+
+          if (onUploadStarted) {
+            onUploadStarted(result.jobId);
+          }
+
+          // Wait for the job to complete and get the upload_id
+          const supabaseClient = createClient();
+          let attempts = 0;
+          const maxAttempts = 60; // Max 60 seconds wait
+          
+          const pollForUploadId = async () => {
+            while (attempts < maxAttempts) {
+              const { data: jobData, error: jobError } = await supabaseClient
+                .from('upload_jobs')
+                .select('upload_id, status')
+                .eq('id', result.jobId)
+                .single();
+
+              if (jobError) {
+                console.error('Error polling job:', jobError);
+                break;
+              }
+
+              if (jobData?.upload_id) {
+                console.log('[Upload] Site Data upload_id retrieved:', jobData.upload_id);
+                setUploadedPrimaryUploadId(jobData.upload_id);
+                if (onMergeComplete) {
+                  onMergeComplete();
+                }
+                break;
+              }
+
+              if (jobData?.status === 'failed') {
+                console.error('[Upload] Job failed, stopping poll');
+                break;
+              }
+
+              // Wait 1 second before next poll
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              attempts++;
+            }
+          };
+
+          // Start polling in background (don't block tab switch)
+          pollForUploadId();
+
+          // Move to SDV data tab
+          setActiveTab("sdv_data");
+        } else {
+          // Clean up uploaded file on error
+          await supabase.storage.from('csv-uploads').remove([filePath]);
+          setSiteError(result.error || "Upload failed");
+        }
       }
     } catch (error) {
       setSiteError(error instanceof Error ? error.message : "Upload failed");
@@ -228,37 +314,38 @@ export function SDVFileUploadDialog({
     try {
       const supabase = createClient();
 
-      // Generate unique file path
-      const timestamp = Date.now();
-      const sanitizedFileName = sdvFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const filePath = `${companyId}/${timestamp}_${sanitizedFileName}`;
+      // Check if file should be chunked (automatic for files > 10MB)
+      const needsChunking = shouldChunkFile(sdvFile.size);
 
-      // Upload file directly to Supabase Storage (client-side)
-      const { error: uploadError } = await supabase.storage
-        .from('csv-uploads')
-        .upload(filePath, sdvFile, {
-          contentType: 'text/csv',
-          upsert: false,
-        });
+      if (needsChunking) {
+        // Read file content and split into chunks
+        const fileContent = await sdvFile.text();
+        const options: SplitOptions = {
+          rowsPerChunk: 10000, // Default chunk size
+          originalFilename: sdvFile.name,
+        };
 
-      if (uploadError) {
-        throw new Error(`Failed to upload file: ${uploadError.message}`);
-      }
+        const { chunks } = await splitCsvFileToChunks(fileContent, options);
 
-      // Create job via server action (only metadata, no file)
-      const result = await createUploadJob({
-        filePath,
-        fileName: sdvFile.name,
-        fileSize: sdvFile.size,
-        fileType: "sdv_data",
-        companyId,
-        profileId,
-        primaryUploadId: primaryId,
-      });
+        // Upload chunks sequentially
+        const uploadResult = await uploadChunksToSupabase(
+          chunks,
+          sdvFile.name,
+          companyId,
+          profileId,
+          'sdv_data',
+          primaryId,
+          (progress) => {
+            console.log(`SDV chunk progress: ${progress.processedChunks}/${progress.totalChunks} (${progress.percentage}%)`);
+          }
+        );
 
-      if (result.success && result.jobId) {
+        if (!uploadResult.success || !uploadResult.jobId) {
+          throw new Error(uploadResult.error || 'Failed to upload chunks');
+        }
+
         if (onUploadStarted) {
-          onUploadStarted(result.jobId);
+          onUploadStarted(uploadResult.jobId);
         }
 
         setSdvUploadComplete(true);
@@ -273,9 +360,55 @@ export function SDVFileUploadDialog({
           handleClose();
         }, 2000);
       } else {
-        // Clean up uploaded file on error
-        await supabase.storage.from('csv-uploads').remove([filePath]);
-        setSDVError(result.error || "Upload failed");
+        // Use existing non-chunked flow for small files
+        const timestamp = Date.now();
+        const sanitizedFileName = sdvFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const filePath = `${companyId}/${timestamp}_${sanitizedFileName}`;
+
+        // Upload file directly to Supabase Storage (client-side)
+        const { error: uploadError } = await supabase.storage
+          .from('csv-uploads')
+          .upload(filePath, sdvFile, {
+            contentType: 'text/csv',
+            upsert: false,
+          });
+
+        if (uploadError) {
+          throw new Error(`Failed to upload file: ${uploadError.message}`);
+        }
+
+        // Create job via server action (only metadata, no file)
+        const result = await createUploadJob({
+          filePath,
+          fileName: sdvFile.name,
+          fileSize: sdvFile.size,
+          fileType: "sdv_data",
+          companyId,
+          profileId,
+          primaryUploadId: primaryId,
+        });
+
+        if (result.success && result.jobId) {
+          if (onUploadStarted) {
+            onUploadStarted(result.jobId);
+          }
+
+          setSdvUploadComplete(true);
+          
+          // Trigger data refresh after upload completes
+          if (onMergeComplete) {
+            onMergeComplete();
+          }
+          
+          // Close dialog after short delay
+          setTimeout(() => {
+            handleClose();
+          }, 2000);
+        } else {
+          // Clean up uploaded file on error
+          await supabase.storage.from('csv-uploads').remove([filePath]);
+          setSDVError(result.error || "Upload failed");
+        }
       }
     } catch (error) {
       setSDVError(error instanceof Error ? error.message : "Upload failed");
@@ -310,7 +443,7 @@ export function SDVFileUploadDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
-          <Button variant="default" size="sm" className="text-[11px] h-8" />
+          <Button variant="default" size="sm" className="text-[11px] h-8 hover:bg-primary/90 hover:scale-[1.02] transition-all duration-150" />
         }
       >
         <Upload className="h-3 w-3 mr-2" />

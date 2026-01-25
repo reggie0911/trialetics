@@ -12,9 +12,23 @@ import {
 import { ChevronRight, ChevronDown, Loader2 } from "lucide-react";
 import { HierarchyNode, flattenHierarchy } from "@/lib/utils/sdv-hierarchy";
 
+// Node toggle info for multi-level lazy loading
+export interface NodeToggleInfo {
+  level: 'site' | 'subject' | 'visit' | 'crf' | 'field';
+  nodeId: string;
+  siteName: string;
+  subjectId?: string;
+  visitType?: string;
+  crfName?: string;
+}
+
 interface SDVHierarchicalTableProps {
   hierarchy: HierarchyNode[];
   headerMappings: Record<string, string>;
+  onNodeToggle?: (info: NodeToggleInfo) => void;
+  loadingNodes?: Set<string>;
+  onCollapseAll?: () => void;
+  // Legacy prop for backward compatibility
   onSiteToggle?: (siteName: string) => void;
   loadingSites?: Set<string>;
 }
@@ -46,17 +60,38 @@ function formatNumber(num: number): string {
 export function SDVHierarchicalTable({
   hierarchy,
   headerMappings,
+  onNodeToggle,
+  loadingNodes = new Set(),
+  onCollapseAll,
   onSiteToggle,
   loadingSites = new Set(),
 }: SDVHierarchicalTableProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-  const toggleExpand = (id: string, level: string, siteName: string | null | undefined) => {
-    // If it's a site-level node and we have onSiteToggle, use lazy loading
-    if (level === 'site' && siteName && onSiteToggle) {
+  const toggleExpand = (id: string, level: string, node: HierarchyNode) => {
+    const siteName = node.site_name || '';
+    const subjectId = node.subject_id || '';
+    const visitType = node.visit_type || '';
+    const crfName = node.crf_name || '';
+
+    // Use multi-level lazy loading if onNodeToggle is provided
+    if (onNodeToggle && node.hasLazyChildren) {
+      const toggleInfo: NodeToggleInfo = {
+        level: level as NodeToggleInfo['level'],
+        nodeId: id,
+        siteName,
+        subjectId: subjectId || undefined,
+        visitType: visitType || undefined,
+        crfName: crfName || undefined,
+      };
+      onNodeToggle(toggleInfo);
+    } 
+    // Legacy: site-level toggle via onSiteToggle
+    else if (level === 'site' && siteName && onSiteToggle) {
       onSiteToggle(siteName);
-    } else {
-      // For other levels, just toggle local state
+    } 
+    // Local toggle for already-loaded nodes
+    else {
       const newExpanded = new Set(expandedIds);
       if (newExpanded.has(id)) {
         newExpanded.delete(id);
@@ -65,6 +100,11 @@ export function SDVHierarchicalTable({
       }
       setExpandedIds(newExpanded);
     }
+  };
+
+  // Combined loading set (legacy + new)
+  const isNodeLoading = (nodeId: string, siteName: string) => {
+    return loadingNodes.has(nodeId) || loadingSites.has(siteName);
   };
 
   const expandAll = () => {
@@ -82,7 +122,13 @@ export function SDVHierarchicalTable({
   };
 
   const collapseAll = () => {
+    // Clear local expanded state
     setExpandedIds(new Set());
+    
+    // Notify parent to collapse all nodes
+    if (onCollapseAll) {
+      onCollapseAll();
+    }
   };
 
   // Flatten hierarchy for rendering
@@ -90,34 +136,27 @@ export function SDVHierarchicalTable({
 
   // Column headers
   const visibleColumns = [
-    { key: "expand", label: "", width: "40px", align: "left" },
-    { key: "site_name", label: headerMappings["site_name"] || "Site Name", align: "left" },
-    { key: "subject_id", label: headerMappings["subject_id"] || "Subject ID", align: "left" },
-    { key: "visit_type", label: headerMappings["visit_type"] || "Visit Type", align: "left" },
-    { key: "crf_name", label: headerMappings["crf_name"] || "CRF Name", align: "left" },
-    { key: "crf_field", label: headerMappings["crf_field"] || "CRF Field", align: "left" },
-    { key: "sdv_percent", label: headerMappings["sdv_percent"] || "SDV%", align: "center" },
-    { key: "data_verified", label: headerMappings["data_verified"] || "Data Verified", align: "center" },
-    { key: "data_needing_review", label: headerMappings["data_needing_review"] || "Data Needing Review", align: "center" },
-    { key: "data_expected", label: headerMappings["data_expected"] || "Data Expected", align: "center" },
-    { key: "estimate_hours", label: headerMappings["estimate_hours"] || "Estimate Hours", align: "center" },
-    { key: "estimate_days", label: headerMappings["estimate_days"] || "Estimate Days", align: "center" },
+    { key: "expand", label: "", width: "40px", align: "left", wrapText: false },
+    { key: "site_name", label: headerMappings["site_name"] || "Site Name", align: "left", wrapText: false },
+    { key: "subject_id", label: headerMappings["subject_id"] || "Subject ID", align: "left", wrapText: false },
+    { key: "visit_type", label: headerMappings["visit_type"] || "Visit Type", align: "left", maxWidth: "150px", wrapText: true },
+    { key: "crf_name", label: headerMappings["crf_name"] || "CRF Name", align: "left", maxWidth: "150px", wrapText: true },
+    { key: "crf_field", label: headerMappings["crf_field"] || "CRF Field", align: "left", maxWidth: "150px", wrapText: true },
+    { key: "sdv_percent", label: headerMappings["sdv_percent"] || "SDV%", align: "center", wrapText: false },
+    { key: "data_verified", label: headerMappings["data_verified"] || "Data Verified", align: "center", wrapText: false },
+    { key: "data_needing_review", label: headerMappings["data_needing_review"] || "Data Needing Review", align: "center", wrapText: false },
+    { key: "data_expected", label: headerMappings["data_expected"] || "Data Expected", align: "center", wrapText: false },
+    { key: "estimate_hours", label: headerMappings["estimate_hours"] || "Estimate Hours", align: "center", wrapText: false },
+    { key: "estimate_days", label: headerMappings["estimate_days"] || "Estimate Days", align: "center", wrapText: false },
   ];
 
   return (
     <div className="space-y-4">
-      {/* Expand/Collapse Controls */}
+      {/* Collapse Control */}
       <div className="flex gap-2">
         <button
-          onClick={expandAll}
-          className="text-[11px] text-blue-600 hover:text-blue-800 underline"
-        >
-          Expand All
-        </button>
-        <span className="text-[11px] text-muted-foreground">|</span>
-        <button
           onClick={collapseAll}
-          className="text-[11px] text-blue-600 hover:text-blue-800 underline"
+          className="text-[11px] text-blue-600 hover:text-blue-800 hover:bg-blue-50 underline px-2 py-1 rounded transition-colors duration-150 cursor-pointer"
         >
           Collapse All
         </button>
@@ -130,10 +169,15 @@ export function SDVHierarchicalTable({
               {visibleColumns.map((col) => (
                 <TableHead
                   key={col.key}
-                  className={`text-[11px] font-medium whitespace-nowrap ${
+                  className={`text-[11px] font-medium ${
+                    col.wrapText ? 'break-words whitespace-normal' : 'whitespace-nowrap'
+                  } ${
                     col.align === 'center' ? 'text-center' : 'text-left'
                   }`}
-                  style={col.width ? { width: col.width } : undefined}
+                  style={{
+                    ...(col.width ? { width: col.width } : {}),
+                    ...(col.maxWidth ? { maxWidth: col.maxWidth } : {}),
+                  }}
                 >
                   {col.label}
                 </TableHead>
@@ -164,11 +208,11 @@ export function SDVHierarchicalTable({
                     <TableCell className="p-2" style={{ paddingLeft: `${8 + indentPixels}px` }}>
                       {row.hasChildren ? (
                         <button
-                          onClick={() => toggleExpand(row.id || '', row.level, row.site_name)}
+                          onClick={() => toggleExpand(row.id || '', row.level, row)}
                           className="hover:bg-gray-200 rounded p-1"
-                          disabled={row.level === 'site' && loadingSites.has(row.site_name || '')}
+                          disabled={isNodeLoading(row.id || '', row.site_name || '')}
                         >
-                          {row.level === 'site' && loadingSites.has(row.site_name || '') ? (
+                          {isNodeLoading(row.id || '', row.site_name || '') ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                           ) : row.isExpanded || !row.isCollapsed ? (
                             <ChevronDown className="h-4 w-4" />
@@ -192,17 +236,17 @@ export function SDVHierarchicalTable({
                     </TableCell>
 
                     {/* Visit Type - show on all rows except site and subject levels */}
-                    <TableCell className={`text-[11px] ${isBold ? 'font-semibold' : ''}`}>
+                    <TableCell className={`text-[11px] max-w-[150px] break-words whitespace-normal ${isBold ? 'font-semibold' : ''}`}>
                       {row.level !== 'site' && row.level !== 'subject' ? (row.visit_type || '-') : '-'}
                     </TableCell>
 
                     {/* CRF Name - show on all rows except site, subject, and visit levels */}
-                    <TableCell className={`text-[11px] ${isBold ? 'font-semibold' : ''}`}>
+                    <TableCell className={`text-[11px] max-w-[150px] break-words whitespace-normal ${isBold ? 'font-semibold' : ''}`}>
                       {row.level !== 'site' && row.level !== 'subject' && row.level !== 'visit' ? (row.crf_name || '-') : '-'}
                     </TableCell>
 
                     {/* CRF Field - only show for field level */}
-                    <TableCell className={`text-[11px] ${isBold ? 'font-semibold' : ''}`}>
+                    <TableCell className={`text-[11px] max-w-[150px] break-words whitespace-normal ${isBold ? 'font-semibold' : ''}`}>
                       {row.level === 'field' ? (row.crf_field || '-') : '-'}
                     </TableCell>
 
