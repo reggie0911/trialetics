@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { Loader2, Printer, Download, RefreshCw } from "lucide-react";
 import { SDVFileUploadDialog } from "./sdv-file-upload-dialog";
 import { SDVHierarchicalTable, NodeToggleInfo } from "./sdv-hierarchical-table";
@@ -718,44 +717,28 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
             <RefreshCw className="h-3 w-3 mr-2" />
             Refresh
           </Button>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="inline-flex">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handlePrint}
-                  disabled={hierarchy.length === 0}
-                  className="text-[11px] h-8 hover:bg-primary/10 hover:font-medium transition-all"
-                >
-                  <Printer className="h-3 w-3 mr-2" />
-                  Print
-                </Button>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Print the current view</p>
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <div className="inline-flex">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDownload}
-                  disabled={hierarchy.length === 0}
-                  className="text-[11px] h-8 hover:bg-primary/10 hover:font-medium transition-all"
-                >
-                  <Download className="h-3 w-3 mr-2" />
-                  Download
-                </Button>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Download data as CSV file</p>
-            </TooltipContent>
-          </Tooltip>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrint}
+            disabled={hierarchy.length === 0}
+            className="text-[11px] h-8 hover:bg-primary/10 hover:font-medium transition-all"
+            title="Print the current view"
+          >
+            <Printer className="h-3 w-3 mr-2" />
+            Print
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownload}
+            disabled={hierarchy.length === 0}
+            className="text-[11px] h-8 hover:bg-primary/10 hover:font-medium transition-all"
+            title="Download data as CSV file"
+          >
+            <Download className="h-3 w-3 mr-2" />
+            Download
+          </Button>
         </div>
       </div>
 
