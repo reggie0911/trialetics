@@ -80,24 +80,19 @@ export function PatientFilters({
     return Array.from(sites).sort();
   }, [data, selectedPatientId]);
 
-  // Get unique Ref IDs and check if there are empty values
+  // Get unique Ref IDs (excluding empty values since they're filtered out of the table)
   const refIds = useMemo(() => {
     const ids = new Set<string>();
-    let hasEmpty = false;
     
     data.forEach((record) => {
       const refId = record['E01_V1[1].SCR_05.SE[1].SE_REFID'] || record['Ref#'];
-      if (refId && refId !== '' && refId !== '—') {
+      // Only include non-empty Ref IDs
+      if (refId && refId !== '' && refId !== '—' && refId !== '-') {
         ids.add(refId);
-      } else {
-        hasEmpty = true;
       }
     });
     
-    return { 
-      ids: Array.from(ids).sort(), 
-      hasEmpty 
-    };
+    return Array.from(ids).sort();
   }, [data]);
 
   const handleClearFilters = () => {
@@ -192,10 +187,7 @@ export function PatientFilters({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="">All Ref#</SelectItem>
-            {refIds.hasEmpty && (
-              <SelectItem value="__EMPTY__">(Empty)</SelectItem>
-            )}
-            {refIds.ids.map((id) => (
+            {refIds.map((id) => (
               <SelectItem key={id} value={id}>
                 {id}
               </SelectItem>

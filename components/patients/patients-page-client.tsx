@@ -412,10 +412,13 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
       }));
       
       setColumnConfigs(allVisibleConfigs);
-      setColumnOrder(allVisibleConfigs.map(c => c.id)); // Include all columns in order
       
-      // Recalculate visit group spans with all columns
-      const spans = recalculateVisitGroupSpans(allVisibleConfigs, allVisibleConfigs.map(c => c.id));
+      // Only include visible columns in order
+      const visibleColumnIds = allVisibleConfigs.filter(c => c.visible).map(c => c.id);
+      setColumnOrder(visibleColumnIds);
+      
+      // Recalculate visit group spans with only visible columns
+      const spans = recalculateVisitGroupSpans(allVisibleConfigs, visibleColumnIds);
       setVisitGroupSpans(spans);
     }
   };
@@ -947,6 +950,13 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
   const filteredData = useMemo(() => {
     let result = [...dataWithCalculations];
 
+    // ALWAYS exclude rows with empty or "-" in Ref# column
+    result = result.filter((row) => {
+      const refId = (row as any)['E01_V1[1].SCR_05.SE[1].SE_REFID'] || (row as any)['Ref#'];
+      // Keep only rows with non-empty Ref# (exclude empty, "-", and "—")
+      return refId && refId !== '' && refId !== '—' && refId !== '-';
+    });
+
     // Filter by Patient ID
     if (selectedPatientId && selectedPatientId !== '') {
       result = result.filter((row) => {
@@ -963,16 +973,10 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
       });
     }
 
-    // Filter by Ref#
+    // Filter by Ref# (now only filters among non-empty values)
     if (selectedRefId && selectedRefId !== '') {
       result = result.filter((row) => {
         const refId = (row as any)['E01_V1[1].SCR_05.SE[1].SE_REFID'] || (row as any)['Ref#'];
-        
-        // Handle special case for empty values
-        if (selectedRefId === '__EMPTY__') {
-          return !refId || refId === '' || refId === '—';
-        }
-        
         return refId === selectedRefId;
       });
     }
