@@ -1,11 +1,18 @@
 import { createClient } from './server';
-import type {
-  Profile,
-  ProfileWithCompany,
-  UserProjectWithDetails,
-  UserModuleWithDetails,
-  Project,
-} from './types/database.types';
+import type { Tables } from './types/database.types';
+
+// Type aliases for better readability
+type Profile = Tables<'profiles'>;
+type ProfileWithCompany = Tables<'profiles'> & {
+  companies: Tables<'companies'> | null;
+};
+type UserProjectWithDetails = Tables<'user_projects'> & {
+  projects: Tables<'projects'> | null;
+};
+type UserModuleWithDetails = Tables<'user_modules'> & {
+  modules: Tables<'modules'> | null;
+};
+type Project = Tables<'projects'>;
 
 /**
  * Get a user's profile by their auth user ID

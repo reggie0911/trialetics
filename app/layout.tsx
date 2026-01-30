@@ -6,6 +6,7 @@ import Footer from "@/components/layout/footer";
 import Navbar from "@/components/layout/navbar";
 import { StyleGlideProvider } from "@/components/styleglide-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { ReactQueryProvider } from "@/components/providers/react-query-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 
@@ -63,11 +64,13 @@ export default function RootLayout({
           defaultTheme="light"
           disableTransitionOnChange
         >
-          <StyleGlideProvider />
-          <Navbar />
-          <main className="flex-1">{children}</main>
-          <Footer />
-          <Toaster />
+          <ReactQueryProvider>
+            <StyleGlideProvider />
+            <Navbar />
+            <main className="flex-1">{children}</main>
+            <Footer />
+            <Toaster />
+          </ReactQueryProvider>
         </ThemeProvider>
       </body>
     </html>

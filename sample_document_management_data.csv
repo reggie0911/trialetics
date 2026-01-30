@@ -1,0 +1,52 @@
+DocumentName,DocumentType,DocumentCategory,Version,Status,SiteName,ProjectId,UploadDate,ApprovalDate,ExpirationDate,ApprovedBy,FileUrl,FileSize
+Protocol v1.0,Protocol,Regulatory,1.0,Approved,Site 001,PROT-2024-001,2024-01-15,2024-01-20,2025-01-15,Dr. Smith,https://example.com/docs/protocol-v1.pdf,2.5 MB
+ICF English,ICF,Regulatory,2.1,Approved,Site 001,PROT-2024-001,2024-01-20,2024-01-25,2025-01-20,Dr. Smith,https://example.com/docs/icf-english.pdf,1.2 MB
+IRB Approval Letter,IRB,Regulatory,1.0,Approved,Site 001,PROT-2024-001,2024-01-10,2024-01-12,2025-01-10,IRB Committee,https://example.com/docs/irb-approval.pdf,0.8 MB
+Protocol Amendment 1,Protocol,Regulatory,1.1,Under Review,Site 001,PROT-2024-001,2024-06-15,,2025-06-15,,https://example.com/docs/protocol-amendment-1.pdf,1.5 MB
+Site Agreement,Site File,Contractual,1.0,Approved,Site 002,PROT-2024-001,2024-02-01,2024-02-05,2025-02-01,Legal Team,https://example.com/docs/site-agreement-002.pdf,3.2 MB
+Investigator CV,Investigator,Regulatory,3.0,Approved,Site 002,PROT-2024-001,2024-02-10,2024-02-12,2025-02-10,Dr. Johnson,https://example.com/docs/investigator-cv.pdf,0.5 MB
+Medical License,Investigator,Regulatory,1.0,Approved,Site 002,PROT-2024-001,2024-02-10,2024-02-12,2025-02-10,Dr. Johnson,https://example.com/docs/medical-license.pdf,0.3 MB
+ICF Spanish,ICF,Regulatory,2.1,Approved,Site 003,PROT-2024-001,2024-03-01,2024-03-05,2025-03-01,Dr. Martinez,https://example.com/docs/icf-spanish.pdf,1.2 MB
+Laboratory Manual,Lab Manual,Operational,1.0,Approved,Site 001,PROT-2024-001,2024-01-25,2024-01-30,2025-01-25,Lab Director,https://example.com/docs/lab-manual.pdf,5.8 MB
+Pharmacy Manual,Pharmacy Manual,Operational,1.0,Approved,Site 001,PROT-2024-001,2024-01-25,2024-01-30,2025-01-25,Pharmacy Director,https://example.com/docs/pharmacy-manual.pdf,4.2 MB
+Case Report Form,CRF,Operational,2.0,Approved,Site 001,PROT-2024-001,2024-02-15,2024-02-20,2025-02-15,Data Manager,https://example.com/docs/crf-v2.pdf,2.1 MB
+Safety Management Plan,Safety,Regulatory,1.0,Approved,Site 001,PROT-2024-001,2024-01-18,2024-01-22,2025-01-18,Safety Officer,https://example.com/docs/safety-plan.pdf,1.8 MB
+Data Management Plan,Data Management,Operational,1.0,Approved,Site 001,PROT-2024-001,2024-01-20,2024-01-25,2025-01-20,Data Manager,https://example.com/docs/data-plan.pdf,1.5 MB
+Monitoring Plan,Monitoring,Operational,1.0,Approved,Site 001,PROT-2024-001,2024-01-22,2024-01-26,2025-01-22,Clinical Monitor,https://example.com/docs/monitoring-plan.pdf,2.3 MB
+Statistical Analysis Plan,SAP,Regulatory,1.0,Draft,Site 001,PROT-2024-001,2024-11-01,,2025-11-01,,https://example.com/docs/sap-draft.pdf,3.5 MB
+Protocol v2.0,Protocol,Regulatory,2.0,Under Review,Site 001,PROT-2024-001,2024-12-01,,2025-12-01,,https://example.com/docs/protocol-v2.pdf,2.8 MB
+ICF French,ICF,Regulatory,2.1,Approved,Site 004,PROT-2024-001,2024-04-01,2024-04-05,2025-04-01,Dr. Dubois,https://example.com/docs/icf-french.pdf,1.2 MB
+Site Agreement,Site File,Contractual,1.0,Approved,Site 003,PROT-2024-001,2024-02-15,2024-02-20,2025-02-15,Legal Team,https://example.com/docs/site-agreement-003.pdf,3.1 MB
+Investigator CV,Investigator,Regulatory,3.0,Approved,Site 003,PROT-2024-001,2024-02-20,2024-02-22,2025-02-20,Dr. Martinez,https://example.com/docs/investigator-cv-003.pdf,0.5 MB
+IRB Approval Letter,IRB,Regulatory,1.0,Approved,Site 003,PROT-2024-001,2024-02-25,2024-02-28,2025-02-25,IRB Committee,https://example.com/docs/irb-approval-003.pdf,0.8 MB
+Site Agreement,Site File,Contractual,1.0,Approved,Site 004,PROT-2024-001,2024-03-15,2024-03-20,2025-03-15,Legal Team,https://example.com/docs/site-agreement-004.pdf,3.0 MB
+Investigator CV,Investigator,Regulatory,3.0,Approved,Site 004,PROT-2024-001,2024-03-20,2024-03-22,2025-03-20,Dr. Dubois,https://example.com/docs/investigator-cv-004.pdf,0.5 MB
+IRB Approval Letter,IRB,Regulatory,1.0,Approved,Site 004,PROT-2024-001,2024-03-25,2024-03-28,2025-03-25,IRB Committee,https://example.com/docs/irb-approval-004.pdf,0.8 MB
+Protocol v1.0,Protocol,Regulatory,1.0,Approved,Site 002,PROT-2024-001,2024-02-01,2024-02-05,2025-02-01,Dr. Johnson,https://example.com/docs/protocol-v1-site2.pdf,2.5 MB
+ICF English,ICF,Regulatory,2.1,Approved,Site 002,PROT-2024-001,2024-02-05,2024-02-10,2025-02-05,Dr. Johnson,https://example.com/docs/icf-english-site2.pdf,1.2 MB
+Laboratory Manual,Lab Manual,Operational,1.0,Approved,Site 002,PROT-2024-001,2024-02-10,2024-02-15,2025-02-10,Lab Director,https://example.com/docs/lab-manual-site2.pdf,5.8 MB
+Pharmacy Manual,Pharmacy Manual,Operational,1.0,Approved,Site 002,PROT-2024-001,2024-02-10,2024-02-15,2025-02-10,Pharmacy Director,https://example.com/docs/pharmacy-manual-site2.pdf,4.2 MB
+Case Report Form,CRF,Operational,2.0,Approved,Site 002,PROT-2024-001,2024-02-20,2024-02-25,2025-02-20,Data Manager,https://example.com/docs/crf-v2-site2.pdf,2.1 MB
+Safety Management Plan,Safety,Regulatory,1.0,Approved,Site 002,PROT-2024-001,2024-02-12,2024-02-16,2025-02-12,Safety Officer,https://example.com/docs/safety-plan-site2.pdf,1.8 MB
+Data Management Plan,Data Management,Operational,1.0,Approved,Site 002,PROT-2024-001,2024-02-15,2024-02-20,2025-02-15,Data Manager,https://example.com/docs/data-plan-site2.pdf,1.5 MB
+Monitoring Plan,Monitoring,Operational,1.0,Approved,Site 002,PROT-2024-001,2024-02-18,2024-02-22,2025-02-18,Clinical Monitor,https://example.com/docs/monitoring-plan-site2.pdf,2.3 MB
+Protocol v1.0,Protocol,Regulatory,1.0,Approved,Site 003,PROT-2024-001,2024-02-15,2024-02-20,2025-02-15,Dr. Martinez,https://example.com/docs/protocol-v1-site3.pdf,2.5 MB
+Laboratory Manual,Lab Manual,Operational,1.0,Approved,Site 003,PROT-2024-001,2024-02-25,2024-03-01,2025-02-25,Lab Director,https://example.com/docs/lab-manual-site3.pdf,5.8 MB
+Pharmacy Manual,Pharmacy Manual,Operational,1.0,Approved,Site 003,PROT-2024-001,2024-02-25,2024-03-01,2025-02-25,Pharmacy Director,https://example.com/docs/pharmacy-manual-site3.pdf,4.2 MB
+Case Report Form,CRF,Operational,2.0,Approved,Site 003,PROT-2024-001,2024-03-05,2024-03-10,2025-03-05,Data Manager,https://example.com/docs/crf-v2-site3.pdf,2.1 MB
+Safety Management Plan,Safety,Regulatory,1.0,Approved,Site 003,PROT-2024-001,2024-02-28,2024-03-03,2025-02-28,Safety Officer,https://example.com/docs/safety-plan-site3.pdf,1.8 MB
+Data Management Plan,Data Management,Operational,1.0,Approved,Site 003,PROT-2024-001,2024-03-01,2024-03-05,2025-03-01,Data Manager,https://example.com/docs/data-plan-site3.pdf,1.5 MB
+Monitoring Plan,Monitoring,Operational,1.0,Approved,Site 003,PROT-2024-001,2024-03-03,2024-03-07,2025-03-03,Clinical Monitor,https://example.com/docs/monitoring-plan-site3.pdf,2.3 MB
+Protocol v1.0,Protocol,Regulatory,1.0,Approved,Site 004,PROT-2024-001,2024-03-15,2024-03-20,2025-03-15,Dr. Dubois,https://example.com/docs/protocol-v1-site4.pdf,2.5 MB
+Laboratory Manual,Lab Manual,Operational,1.0,Approved,Site 004,PROT-2024-001,2024-03-25,2024-03-30,2025-03-25,Lab Director,https://example.com/docs/lab-manual-site4.pdf,5.8 MB
+Pharmacy Manual,Pharmacy Manual,Operational,1.0,Approved,Site 004,PROT-2024-001,2024-03-25,2024-03-30,2025-03-25,Pharmacy Director,https://example.com/docs/pharmacy-manual-site4.pdf,4.2 MB
+Case Report Form,CRF,Operational,2.0,Approved,Site 004,PROT-2024-001,2024-04-05,2024-04-10,2025-04-05,Data Manager,https://example.com/docs/crf-v2-site4.pdf,2.1 MB
+Safety Management Plan,Safety,Regulatory,1.0,Approved,Site 004,PROT-2024-001,2024-03-28,2024-04-01,2025-03-28,Safety Officer,https://example.com/docs/safety-plan-site4.pdf,1.8 MB
+Data Management Plan,Data Management,Operational,1.0,Approved,Site 004,PROT-2024-001,2024-03-30,2024-04-04,2025-03-30,Data Manager,https://example.com/docs/data-plan-site4.pdf,1.5 MB
+Monitoring Plan,Monitoring,Operational,1.0,Approved,Site 004,PROT-2024-001,2024-04-01,2024-04-05,2025-04-01,Clinical Monitor,https://example.com/docs/monitoring-plan-site4.pdf,2.3 MB
+Expired Protocol,Protocol,Regulatory,1.0,Expired,Site 001,PROT-2023-001,2023-01-15,2023-01-20,2024-01-15,Dr. Smith,https://example.com/docs/expired-protocol.pdf,2.5 MB
+Expiring Soon Document,ICF,Regulatory,2.1,Approved,Site 001,PROT-2024-001,2024-01-20,2024-01-25,2025-01-26,Dr. Smith,https://example.com/docs/expiring-soon.pdf,1.2 MB
+Expiring Soon Protocol,Protocol,Regulatory,1.0,Approved,Site 002,PROT-2024-001,2024-02-01,2024-02-05,2025-02-05,Dr. Johnson,https://example.com/docs/expiring-protocol.pdf,2.5 MB
+Expired ICF,ICF,Regulatory,2.0,Expired,Site 001,PROT-2023-001,2023-01-20,2023-01-25,2024-01-20,Dr. Smith,https://example.com/docs/expired-icf.pdf,1.2 MB
+Draft Protocol Amendment,Protocol,Regulatory,1.2,Draft,Site 001,PROT-2024-001,2024-12-10,,2025-12-10,,https://example.com/docs/draft-amendment.pdf,1.8 MB
+Under Review Safety Plan,Safety,Regulatory,1.1,Under Review,Site 001,PROT-2024-001,2024-11-15,,2025-11-15,,https://example.com/docs/safety-plan-review.pdf,2.0 MB

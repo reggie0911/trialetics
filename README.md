@@ -16,6 +16,22 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Environment Variables
+
+Create a `.env.local` file in the root directory with the following variables:
+
+```env
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY=your_supabase_anon_key
+
+# Document Management Module Passcode
+# Required to access the Document Management module
+NEXT_PUBLIC_DOCUMENT_MANAGEMENT_PASSCODE=your_passcode_here
+```
+
+**Note**: The `NEXT_PUBLIC_DOCUMENT_MANAGEMENT_PASSCODE` is required to access any Document Management routes. Users will be prompted to enter this passcode when accessing the module. The verification persists only for the current browser session.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
