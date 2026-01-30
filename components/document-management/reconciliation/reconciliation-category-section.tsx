@@ -27,7 +27,7 @@ interface ReconciliationCategorySectionProps {
     statusType: "presentOnSite" | "presentInTMF",
     value: ReconciliationStatus
   ) => void;
-  onCollectedDateUpdate: (
+  onDocumentLinkUpdate: (
     categoryId: string,
     documentId: string,
     value: string | null
@@ -42,7 +42,7 @@ export function ReconciliationCategorySection({
   onToggle,
   onFieldUpdate,
   onStatusUpdate,
-  onCollectedDateUpdate,
+  onDocumentLinkUpdate,
   onAddDocument,
   onDeleteDocument,
 }: ReconciliationCategorySectionProps) {
@@ -50,7 +50,7 @@ export function ReconciliationCategorySection({
   const commonColumns = [
     { id: "presentOnSite", label: "Present On-Site?", type: "status" as const, width: 90 },
     { id: "presentInTMF", label: "Present in TMF?", type: "status" as const, width: 90 },
-    { id: "collectedDate", label: "Provide Date, if Collected this Visit", type: "date" as const, width: 150 },
+    { id: "documentLink", label: "Document Link Location", type: "url" as const, width: 250 },
   ];
 
   const allColumns = [...category.columns, ...commonColumns];
@@ -123,14 +123,15 @@ export function ReconciliationCategorySection({
                     columns={category.columns}
                     commonColumns={commonColumns}
                     isOdd={index % 2 === 1}
+                    categoryName={category.name}
                     onFieldUpdate={(fieldId, value) =>
                       onFieldUpdate(category.id, document.id, fieldId, value)
                     }
                     onStatusUpdate={(statusType, value) =>
                       onStatusUpdate(category.id, document.id, statusType, value)
                     }
-                    onCollectedDateUpdate={(value) =>
-                      onCollectedDateUpdate(category.id, document.id, value)
+                    onDocumentLinkUpdate={(value) =>
+                      onDocumentLinkUpdate(category.id, document.id, value)
                     }
                     onDelete={() => onDeleteDocument(category.id, document.id)}
                   />

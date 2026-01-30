@@ -17,6 +17,10 @@ const navItems = [
     label: "Reconciliation Tracker",
     href: "/protected/document-management/reconciliation",
   },
+  {
+    label: "Compliance Scorecard",
+    href: "/protected/document-management/scorecard",
+  },
 ];
 
 export function DocumentManagementInternalNavbar() {

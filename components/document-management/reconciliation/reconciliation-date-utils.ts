@@ -75,3 +75,41 @@ export function isoToDisplayDate(isoDate: string | null): string {
     return "";
   }
 }
+
+/**
+ * Converts date from various formats (MM/DD/YYYY, YYYY-MM-DD, etc.) to display format (DD-MMM-YY)
+ */
+export function formatDateToDDMMMYY(dateString: string | null): string {
+  if (!dateString || dateString.trim() === "") return "";
+
+  try {
+    // Try to parse the date string
+    let date: Date;
+    
+    // Handle MM/DD/YYYY format
+    if (dateString.includes("/")) {
+      const parts = dateString.split("/");
+      if (parts.length === 3) {
+        const month = parseInt(parts[0], 10) - 1; // Month is 0-indexed
+        const day = parseInt(parts[1], 10);
+        const year = parseInt(parts[2], 10);
+        date = new Date(year, month, day);
+      } else {
+        date = new Date(dateString);
+      }
+    } else {
+      date = new Date(dateString);
+    }
+
+    if (isNaN(date.getTime())) return dateString; // Return original if parsing fails
+
+    const day = date.getDate();
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const month = monthNames[date.getMonth()];
+    const year = date.getFullYear() % 100;
+
+    return `${day}-${month}-${String(year).padStart(2, "0")}`;
+  } catch {
+    return dateString; // Return original if conversion fails
+  }
+}

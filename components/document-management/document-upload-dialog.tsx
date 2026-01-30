@@ -526,7 +526,7 @@ export function DocumentUploadDialog({ onUploadComplete, companyId, profileId }:
                   <Label htmlFor="docType">Document Type *</Label>
                   <Select
                     value={singleMetadata.documentType}
-                    onValueChange={(value) => setSingleMetadata(prev => ({ ...prev, documentType: value }))}
+                    onValueChange={(value) => setSingleMetadata(prev => ({ ...prev, documentType: value || "" }))}
                   >
                     <SelectTrigger id="docType" className="text-xs h-8">
                       <SelectValue placeholder="Select type" />
@@ -565,7 +565,7 @@ export function DocumentUploadDialog({ onUploadComplete, companyId, profileId }:
                   <Label htmlFor="status" className="text-xs">Status *</Label>
                   <Select
                     value={singleMetadata.status}
-                    onValueChange={(value) => setSingleMetadata(prev => ({ ...prev, status: value }))}
+                    onValueChange={(value) => setSingleMetadata(prev => ({ ...prev, status: value || "" }))}
                   >
                     <SelectTrigger id="status" className="text-xs h-8">
                       <SelectValue />
@@ -745,7 +745,7 @@ export function DocumentUploadDialog({ onUploadComplete, companyId, profileId }:
                       <Label htmlFor="bulkDocType" className="text-xs font-medium">Document Type *</Label>
                       <Select
                         value={bulkMetadata.documentType}
-                        onValueChange={(value) => setBulkMetadata(prev => ({ ...prev, documentType: value }))}
+                        onValueChange={(value) => setBulkMetadata(prev => ({ ...prev, documentType: value || "" }))}
                       >
                         <SelectTrigger id="bulkDocType" className="text-xs h-8">
                           <SelectValue placeholder="Select type" />
@@ -784,7 +784,7 @@ export function DocumentUploadDialog({ onUploadComplete, companyId, profileId }:
                       <Label htmlFor="bulkStatus" className="text-xs font-medium">Status *</Label>
                       <Select
                         value={bulkMetadata.status}
-                        onValueChange={(value) => setBulkMetadata(prev => ({ ...prev, status: value }))}
+                        onValueChange={(value) => setBulkMetadata(prev => ({ ...prev, status: value || "" }))}
                       >
                         <SelectTrigger id="bulkStatus" className="text-xs h-8">
                           <SelectValue />

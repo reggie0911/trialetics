@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
@@ -48,6 +48,7 @@ const menuItems = [
 
 export function DocumentManagementNavbar() {
   const pathname = usePathname();
+  const router = useRouter();
 
   // Check if current path matches (handles query params)
   const isActive = (href: string) => {
@@ -76,20 +77,19 @@ export function DocumentManagementNavbar() {
         {menuItems.map((item, index) => (
           <DropdownMenuItem 
             key={index} 
-            asChild
-            className="transition-all duration-200 ease-in-out"
+            className={cn(
+              "transition-all duration-200 ease-in-out cursor-pointer",
+              isActive(item.href)
+                ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                : "hover:bg-accent hover:text-accent-foreground"
+            )}
+            onClick={() => {
+              router.push(item.href);
+            }}
           >
-            <Link
-              href={item.href}
-              className={cn(
-                "w-full cursor-pointer transition-all duration-200 ease-in-out rounded-sm px-2 py-0.5 text-xs block",
-                isActive(item.href)
-                  ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                  : "hover:bg-accent hover:text-accent-foreground"
-              )}
-            >
+            <span className="w-full block text-xs">
               {item.label}
-            </Link>
+            </span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>

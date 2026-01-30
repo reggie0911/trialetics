@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import { ProtectedNavbar } from '@/components/layout/protected-navbar';
 import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { Greeting } from '@/components/dashboard/greeting';
@@ -63,6 +64,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             firstName={profile?.first_name} 
             displayName={profile?.display_name}
           />
+        </div>
+
+        {/* Module Navigation */}
+        <div className="mb-6 sm:mb-8">
+          <Suspense fallback={<div className="h-10" />}>
+            <ModuleNavbar />
+          </Suspense>
         </div>
 
         {/* Project Info */}

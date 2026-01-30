@@ -37,7 +37,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
     ],
   },
@@ -63,7 +63,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "soi-2",
@@ -75,7 +75,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         },
         presentOnSite: null,
         presentInTMF: "no",
-        collectedDate: null,
+        documentLink: null,
         isHighlighted: true,
         highlightColor: "blue",
       },
@@ -89,7 +89,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         },
         presentOnSite: null,
         presentInTMF: "no",
-        collectedDate: null,
+        documentLink: null,
         isHighlighted: true,
         highlightColor: "blue",
       },
@@ -113,7 +113,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "21-Nov-19", investigatorName: "Theodore Schreiber, MD", version: "1, 2" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ia-2",
@@ -121,7 +121,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "21-Nov-19", investigatorName: "Thomas Lalonde, MD", version: "1, 2" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ia-3",
@@ -129,7 +129,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "21-Nov-19", investigatorName: "Amir Kaki, MD", version: "1, 2" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ia-4",
@@ -137,7 +137,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "25-Nov-19", investigatorName: "Mohammed Joumaa, MD", version: "1, 2" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ia-5",
@@ -145,7 +145,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "25-Nov-19", investigatorName: "Edouard Daher, MD", version: "1, 2" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ia-6",
@@ -153,7 +153,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "25-Nov-19", investigatorName: "David Rodriguez, MD", version: "1, 2" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ia-7",
@@ -161,7 +161,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "11-Dec-19", investigatorName: "Hiroshi Yamasaki, MD", version: "1, 2" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ia-8",
@@ -169,7 +169,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "11-Dec-19", investigatorName: "Marc Gosselin, DO", version: "1, 2" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ia-9",
@@ -177,7 +177,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "11-Dec-19", investigatorName: "Anthony Alcantara, MD", version: "1, 2" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ia-10",
@@ -185,7 +185,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "7/30/2020 (email 9/30/2020)", investigatorName: "Rami Zein, MD", version: "1, 2" },
         presentOnSite: null,
         presentInTMF: "no",
-        collectedDate: null,
+        documentLink: null,
         isHighlighted: true,
         highlightColor: "blue",
       },
@@ -195,7 +195,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "30-Jul-20", investigatorName: "Magdy Hanna, MD", version: "1, 2" },
         presentOnSite: null,
         presentInTMF: "no",
-        collectedDate: null,
+        documentLink: null,
         isHighlighted: true,
         highlightColor: "blue",
       },
@@ -205,7 +205,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "30-Jul-20", investigatorName: "Pooja Swammy, MD", version: "1, 2" },
         presentOnSite: null,
         presentInTMF: "no",
-        collectedDate: null,
+        documentLink: null,
         isHighlighted: true,
         highlightColor: "blue",
       },
@@ -215,7 +215,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "13-Aug-20", investigatorName: "Adrian Mercado- Alamo", version: "1, 2" },
         presentOnSite: null,
         presentInTMF: "no",
-        collectedDate: null,
+        documentLink: null,
         isHighlighted: true,
         highlightColor: "blue",
       },
@@ -238,7 +238,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "23-Apr-19", investigatorName: "Theodore Schreiber, MD" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ds-2",
@@ -246,7 +246,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "9-Oct-19", investigatorName: "Thomas Lalonde, MD" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ds-3",
@@ -254,7 +254,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "23-Apr-19", investigatorName: "Amir Kaki, MD" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ds-4",
@@ -262,7 +262,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "9-Oct-19", investigatorName: "Mohammed Joumaa, MD" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ds-5",
@@ -270,7 +270,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "10-Dec-19", investigatorName: "Edouard Daher, MD" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ds-6",
@@ -278,7 +278,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "10-Dec-19", investigatorName: "David Rodriguez, MD" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ds-7",
@@ -286,7 +286,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "9-Oct-19", investigatorName: "Hiroshi Yamasaki, MD" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ds-8",
@@ -294,7 +294,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "9-Oct-19", investigatorName: "Marc Gosselin, DO" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ds-9",
@@ -302,7 +302,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { signatureDate: "10-Dec-19", investigatorName: "Anthony Alcantara, MD" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
     ],
   },
@@ -330,7 +330,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "doa-1-coprincipal",
@@ -343,7 +343,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
     ],
   },
@@ -367,7 +367,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { rowLabel: "", protocolVersion: "Protocol Version 1", versionDate: "MMMM YYYY", dateSubmitted: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-pa-v1-sig",
@@ -375,7 +375,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { rowLabel: "Signature Page", protocolVersion: "", versionDate: "Thomas LaLonde/Theodore Schreiber, MD", dateSubmitted: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
         isHighlighted: true,
         highlightColor: "blue",
       },
@@ -386,7 +386,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { rowLabel: "", protocolVersion: "Protocol Version 2", versionDate: "MMMM YYYY", dateSubmitted: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-pa-v2-sig",
@@ -394,7 +394,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { rowLabel: "Signature Page", protocolVersion: "", versionDate: "Thomas LaLonde/Theodore Schreiber, MD", dateSubmitted: "14-Oct-19" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
         isHighlighted: true,
         highlightColor: "blue",
       },
@@ -405,7 +405,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { rowLabel: "", protocolVersion: "Protocol Version 3", versionDate: "", dateSubmitted: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-pa-v3-sig1",
@@ -413,7 +413,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { rowLabel: "Signature Page", protocolVersion: "", versionDate: "Theodore Schreiber, MD", dateSubmitted: "03-Oct-19" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-pa-v3-sig2",
@@ -421,7 +421,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { rowLabel: "", protocolVersion: "Protocol Version 3", versionDate: "", dateSubmitted: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-pa-v3-sig3",
@@ -429,7 +429,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { rowLabel: "Signature Page", protocolVersion: "", versionDate: "Thomas Lalonde, MD", dateSubmitted: "14-Oct-19" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       // Protocol Version 4
       {
@@ -438,7 +438,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { rowLabel: "", protocolVersion: "Protocol Version 4", versionDate: "MMMM YYYY", dateSubmitted: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-pa-v4-sig",
@@ -446,7 +446,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { rowLabel: "Signature Page", protocolVersion: "", versionDate: "Thomas LaLonde/Theodore Schreiber, MD", dateSubmitted: "3/6/2020 : 03/12/2020" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       // Protocol Version 5
       {
@@ -455,7 +455,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { rowLabel: "", protocolVersion: "Protocol Version 5", versionDate: "MMMM YYYY", dateSubmitted: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-pa-v5-sig",
@@ -463,7 +463,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { rowLabel: "Signature Page", protocolVersion: "", versionDate: "Thomas LaLonde/Theodore Schreiber, MD", dateSubmitted: "04-May-20" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
     ],
   },
@@ -484,7 +484,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { typeOfLog: "Monitor Site Visit Log", description: "Site Visit Log" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "log-2",
@@ -492,7 +492,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { typeOfLog: "Screen Log", description: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "log-3",
@@ -500,7 +500,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { typeOfLog: "Enrollment Log", description: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
     ],
   },
@@ -533,7 +533,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { dateSigned: "2/11/2019", piName: "Theodore Schreiber, MD" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
     ],
   },
@@ -620,7 +620,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "Memo", date: "22-Mar-30", title: "", ntfDescription: "V4 protocol & WIRB submission", tmfVaultNumber: "VV-TMF-16392" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ntf-2",
@@ -628,7 +628,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "", date: "24-Jun-20", title: "Note to File Dr. Alcantar", ntfDescription: "Note to File Dr. Alcantara late signature on training log", tmfVaultNumber: "VV-TMF-19475" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ntf-3",
@@ -636,7 +636,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "", date: "29-May-20", title: "", ntfDescription: "EDC entry enrolled", tmfVaultNumber: "VV-TMF-18771" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ntf-4",
@@ -644,7 +644,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "", date: "14-May-20", title: "", ntfDescription: "V5 of IRB approvals", tmfVaultNumber: "VV-TMF-18291" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ntf-5",
@@ -652,7 +652,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "", date: "29-Jul-20", title: "", ntfDescription: "Investigator's Agreement that has an incorrect footer on pages 2 and 3", tmfVaultNumber: "VV-TMF-20985" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ntf-6",
@@ -660,7 +660,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "", date: "21-Jul-20", title: "", ntfDescription: "All new Subi- training is covered in re-training powerpoint", tmfVaultNumber: "VV-TMF-20781" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ntf-7",
@@ -668,7 +668,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "", date: "21-Sep-20", title: "Rami Zein late sign", ntfDescription: "Rami Zein lat signature on training log", tmfVaultNumber: "VV-TMF-23366" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
     ],
   },
@@ -692,7 +692,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "Letter", date: "12-Dec-19", to: "Site", from: "Abiomed", subject: "V3 activation letter and checklist" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ext-2",
@@ -700,7 +700,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "Letter", date: "24-Jul-19", to: "Site", from: "Abiomed", subject: "Start-up Packet Letter" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ext-3",
@@ -708,7 +708,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "Letter", date: "02-Jul-19", to: "Site", from: "Abiomed", subject: "Site Invitation letter" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ext-4",
@@ -716,7 +716,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "Letter", date: "08-Nov-19", to: "Site", from: "Abiomed", subject: "CRA Transfer Letter - Tara West" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ext-5",
@@ -724,7 +724,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "Letter", date: "", to: "Site", from: "Abiomed", subject: "CRA Transfer Letter - Janet Ortiz" },
         presentOnSite: null,
         presentInTMF: "no",
-        collectedDate: null,
+        documentLink: null,
         isHighlighted: true,
         highlightColor: "yellow",
       },
@@ -734,7 +734,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "Letter", date: "24-Jul-20", to: "Site", from: "Abiomed", subject: "Site Re-activation letter" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ext-7",
@@ -742,7 +742,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "Letter", date: "22-Jun-20", to: "Site", from: "Abiomed", subject: "CRA Transfer Letter to Andrew Thorpe" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ext-8",
@@ -750,7 +750,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "Letter", date: "16-Aug-19", to: "Site", from: "Abiomed", subject: "Site Feasibility Questionaire" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ext-9",
@@ -758,7 +758,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "Letter", date: "21-Sep-20", to: "Site", from: "Abiomed", subject: "Edouard Daher Reactivation Letter" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ext-10",
@@ -766,7 +766,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { type: "Letter", date: "12-Feb-21", to: "Site", from: "Abiomed", subject: "Madgy Hanna Reactivation Letter" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
     ],
   },
@@ -789,7 +789,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { document: "", year: "2019", irbExpirationDate: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-cr-2019-sub",
@@ -797,7 +797,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { document: "IRB Submission Document|Submission Date:", year: "", irbExpirationDate: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-cr-2019-approval",
@@ -805,7 +805,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { document: "IRB Approval Document|IRB Effective Date:", year: "", irbExpirationDate: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-cr-2019-amend",
@@ -813,7 +813,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { document: "IRB Approval Document_CR Amendment (If applicable)|IRB Effective Date:", year: "", irbExpirationDate: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       // 2020
       {
@@ -822,7 +822,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { document: "", year: "2020", irbExpirationDate: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
         isHighlighted: true,
         highlightColor: "yellow",
       },
@@ -832,7 +832,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { document: "", year: "", irbExpirationDate: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-cr-2020-sub",
@@ -840,7 +840,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { document: "IRB Submission Document|Submission Date:", year: "", irbExpirationDate: "02-Jan-20" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-cr-2020-approval",
@@ -848,7 +848,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { document: "IRB Approval Document|IRB Effective Date:", year: "", irbExpirationDate: "01-Jun-20" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-cr-2020-amend",
@@ -856,7 +856,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { document: "IRB Approval Document_CR Amendment (If applicable)|IRB Effective Date:", year: "", irbExpirationDate: "27-Jun-21" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
     ],
   },
@@ -879,7 +879,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { nameAddress: "Ascension Michigan Lab Services\n22101 Moross Road\nDetroit, MI  48236-2148 (Martha J Higgins)", document: "CV of Lab Director", effectiveDate: "16-Oct-19", expirationDate: "" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "lab-2",
@@ -887,7 +887,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { nameAddress: "", document: "ML of Lab Director", effectiveDate: "7-Jan-88", expirationDate: "31-Jan-22" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "lab-3",
@@ -895,7 +895,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { nameAddress: "", document: "Certification:  CAP", effectiveDate: "", expirationDate: "" },
         presentOnSite: null,
         presentInTMF: "no",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "lab-4",
@@ -903,7 +903,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { nameAddress: "", document: "Certification:  CLIA", effectiveDate: "28-Feb-19", expirationDate: "27-Feb-21" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "lab-5",
@@ -911,7 +911,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { nameAddress: "", document: "Lab Reference Ranges", effectiveDate: "1-Sep-19", expirationDate: "" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
         isHighlighted: true,
         highlightColor: "blue",
       },
@@ -937,7 +937,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "2019", icfVersion: "4", icfVersionDate: "28-Aug-19", irbApprovalDate: "10/23/2019", comments: "Short ICF Checklist" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ic-2",
@@ -945,7 +945,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "2019", icfVersion: "4", icfVersionDate: "28-Aug-19", irbApprovalDate: "10/23/2019", comments: "IRB Approved short Form" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ic-3",
@@ -953,7 +953,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "2019", icfVersion: "5", icfVersionDate: "28-Aug-19", irbApprovalDate: "11/6/2019", comments: "Long ICF Checklist" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ic-4",
@@ -961,7 +961,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "2019", icfVersion: "5", icfVersionDate: "28-Aug-19", irbApprovalDate: "11/6/2019", comments: "IRB Approved Long Form" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ic-5",
@@ -969,7 +969,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "2020", icfVersion: "6", icfVersionDate: "2/11/2020", irbApprovalDate: "24-Feb-20", comments: "Short ICF Checklist" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "ic-6",
@@ -977,7 +977,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "2021", icfVersion: "7", icfVersionDate: "2/11/2020", irbApprovalDate: "2/24/2020", comments: "Full ICF Version Checklist" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
     ],
   },
@@ -1000,7 +1000,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "2019", document: "IRB Membership /Composition List", irbNameTitle: "WIRB", date: "10-Oct-19" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-2",
@@ -1008,7 +1008,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "2020", document: "IRB Membership /Composition List", irbNameTitle: "WIRB", date: "01-May-20" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-3",
@@ -1016,7 +1016,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "2021", document: "IRB Membership /Composition List", irbNameTitle: "", date: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-4",
@@ -1024,7 +1024,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "2022", document: "IRB Membership /Composition List", irbNameTitle: "", date: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-5",
@@ -1032,7 +1032,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "2023", document: "IRB Membership /Composition List", irbNameTitle: "", date: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       // IRB/IEC Acknowledgements
       {
@@ -1041,7 +1041,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "", document: "IRB/IEC Acknowledgement", irbNameTitle: "Initial Protocol Submission", date: "18-Sep-19" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-ack-2",
@@ -1049,7 +1049,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "", document: "IRB/IEC Acknowledgement", irbNameTitle: "Initial IRB Approval", date: "16-Oct-19" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-ack-3",
@@ -1057,7 +1057,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "", document: "IRB/IEC Acknowledgement", irbNameTitle: "IRB Submission - Addision of Thomas Lalonde, Revised Consent Forms", date: "17-Oct-19" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-ack-4",
@@ -1065,7 +1065,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "", document: "IRB/IEC Acknowledgement", irbNameTitle: "IRB Approval -Dr. Lalonde and Revised ICFs", date: "23-Oct-19" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-ack-5",
@@ -1073,7 +1073,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "", document: "IRB/IEC Acknowledgement", irbNameTitle: "IRB Submission - Revised ICF", date: "06-Nov-19" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-ack-6",
@@ -1081,7 +1081,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "", document: "IRB/IEC Acknowledgement", irbNameTitle: "IRB Approval - Revised ICF (long form)", date: "06-Nov-19" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-ack-7",
@@ -1089,7 +1089,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "", document: "IRB/IEC Acknowledgement", irbNameTitle: "Ascension IRB notification of modifications required", date: "16-Sep-19" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-ack-8",
@@ -1097,7 +1097,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "", document: "IRB/IEC Acknowledgement", irbNameTitle: "IRB Statement of compliance", date: "26-Mar-18" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-ack-9",
@@ -1105,7 +1105,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "", document: "IRB/IEC Acknowledgement", irbNameTitle: "OHRP registration", date: "" },
         presentOnSite: null,
         presentInTMF: null,
-        collectedDate: null,
+        documentLink: null,
       },
       {
         id: "irb-ack-10",
@@ -1113,7 +1113,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "", document: "IRB/IEC Acknowledgement", irbNameTitle: "IRB Approval -  Protocol Version 4 ICF", date: "24-Feb-20" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
       // IRB Assurance Number
       {
@@ -1122,7 +1122,7 @@ export const MOCK_CATEGORIES: ReconciliationCategory[] = [
         fields: { year: "", document: "IRB Assurance Number", irbNameTitle: "IRB00001313 (VV-TMF-12084)", date: "exp 6/22/2022" },
         presentOnSite: null,
         presentInTMF: "yes",
-        collectedDate: null,
+        documentLink: null,
       },
     ],
   },
@@ -1156,7 +1156,7 @@ export function calculateKPIMetrics(categories: ReconciliationCategory[]): {
       if (doc.presentInTMF === "yes") presentInTMF++;
       if (doc.presentInTMF === "no") missingFromTMF++;
       if (doc.presentOnSite === "yes") presentOnSite++;
-      if (!doc.collectedDate && doc.presentInTMF !== "yes") pendingCollection++;
+      if (!doc.documentLink && doc.presentInTMF !== "yes") pendingCollection++;
     });
   });
 

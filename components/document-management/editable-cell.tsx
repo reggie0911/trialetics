@@ -17,7 +17,7 @@ interface EditableCellProps {
   value: string | null | undefined;
   type?: EditableCellType;
   options?: Array<{ value: string; label: string }>;
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
   placeholder?: string;
   className?: string;
   isEdited?: boolean;
@@ -57,7 +57,7 @@ export function EditableCell({
 
   const handleBlur = () => {
     setIsEditing(false);
-    if (localValue !== value) {
+    if (localValue !== value && onChange) {
       onChange(localValue);
     }
   };
@@ -71,9 +71,12 @@ export function EditableCell({
     }
   };
 
-  const handleChange = (newValue: string) => {
-    setLocalValue(newValue);
-    onChange(newValue);
+  const handleChange = (newValue: string | null) => {
+    const value = newValue || "";
+    setLocalValue(value);
+    if (onChange) {
+      onChange(value);
+    }
   };
 
   if (readOnly || type === "readonly") {

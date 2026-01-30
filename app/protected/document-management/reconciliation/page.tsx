@@ -3,6 +3,7 @@ import { ProtectedNavbar } from '@/components/layout/protected-navbar';
 import { DocumentManagementNavbar } from '@/components/document-management/document-management-navbar';
 import { DocumentManagementInternalNavbar } from '@/components/document-management/document-management-internal-navbar';
 import { ReconciliationPageClient } from '@/components/document-management/reconciliation/reconciliation-page-client';
+import { PasscodeProtection } from '@/components/document-management/passcode-protection';
 import { createClient } from '@/lib/server';
 
 export default async function ReconciliationPage() {
@@ -26,33 +27,35 @@ export default async function ReconciliationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#E9E9E9]">
-      <ProtectedNavbar />
-      <main className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 py-4 sm:py-8">
-        {/* Header with Navigation */}
-        <div className="mb-6 sm:mb-8 flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-[32px] font-semibold tracking-[-1px]">
-                  Regulatory Document Reconciliation Tracker
-                </h1>
-                <span className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-full shadow-md animate-pulse">
-                  Beta
-                </span>
+    <PasscodeProtection>
+      <div className="min-h-screen bg-[#E9E9E9]">
+        <ProtectedNavbar />
+        <main className="mx-auto w-full max-w-[1600px] px-4 sm:px-6 py-4 sm:py-8">
+          {/* Header with Navigation */}
+          <div className="mb-6 sm:mb-8 flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-3 mb-1">
+                  <h1 className="text-[32px] font-semibold tracking-[-1px]">
+                    Regulatory Document Reconciliation Tracker
+                  </h1>
+                  <span className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-full shadow-md animate-pulse">
+                    Beta
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Track, compare, and verify regulatory documents across site files, sponsor files, and TMF for inspection readiness
+                </p>
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                Track, compare, and verify regulatory documents across site files, sponsor files, and TMF for inspection readiness
-              </p>
+              <DocumentManagementNavbar />
             </div>
-            <DocumentManagementNavbar />
+            <DocumentManagementInternalNavbar />
           </div>
-          <DocumentManagementInternalNavbar />
-        </div>
 
-        {/* Client-side component for reconciliation tracking */}
-        <ReconciliationPageClient companyId={profile.company_id || ""} />
-      </main>
-    </div>
+          {/* Client-side component for reconciliation tracking */}
+          <ReconciliationPageClient companyId={profile.company_id || ""} />
+        </main>
+      </div>
+    </PasscodeProtection>
   );
 }

@@ -8,6 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ReconciliationSite } from "./reconciliation-types";
+import { formatDateToDDMMMYY } from "./reconciliation-date-utils";
 
 interface ReconciliationHeaderProps {
   studyName: string;
@@ -40,7 +41,7 @@ export function ReconciliationHeader({
             <label className="text-[11px] font-medium whitespace-nowrap">
               Site Name (#):
             </label>
-            <Select value={selectedSiteId} onValueChange={onSiteChange}>
+            <Select value={selectedSiteId} onValueChange={(value) => onSiteChange(value || "")}>
               <SelectTrigger className="w-[120px] h-7 bg-white text-black border-0 text-[11px]">
                 <SelectValue placeholder="Select site" />
               </SelectTrigger>
@@ -59,7 +60,7 @@ export function ReconciliationHeader({
             <label className="text-[11px] font-medium whitespace-nowrap">
               Date Updated:
             </label>
-            <span className="text-[11px] font-bold">{lastUpdated}</span>
+            <span className="text-[11px] font-bold">{formatDateToDDMMMYY(lastUpdated)}</span>
           </div>
         </div>
       </div>

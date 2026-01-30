@@ -121,8 +121,8 @@ export function ReconciliationPageClient({ companyId }: ReconciliationPageClient
     );
   };
 
-  // Handle collected date update
-  const handleCollectedDateUpdate = (
+  // Handle document link update
+  const handleDocumentLinkUpdate = (
     categoryId: string,
     documentId: string,
     value: string | null
@@ -136,7 +136,7 @@ export function ReconciliationPageClient({ companyId }: ReconciliationPageClient
             if (doc.id !== documentId) return doc;
             return {
               ...doc,
-              collectedDate: value,
+              documentLink: value,
             };
           }),
         };
@@ -220,7 +220,7 @@ export function ReconciliationPageClient({ companyId }: ReconciliationPageClient
               onToggle={() => toggleCategory(category.id)}
               onFieldUpdate={handleFieldUpdate}
               onStatusUpdate={handleStatusUpdate}
-              onCollectedDateUpdate={handleCollectedDateUpdate}
+              onDocumentLinkUpdate={handleDocumentLinkUpdate}
               onAddDocument={handleAddDocument}
               onDeleteDocument={handleDeleteDocument}
             />

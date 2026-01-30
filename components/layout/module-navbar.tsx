@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   NavigationMenu,
   NavigationMenuItem,
@@ -48,23 +48,33 @@ const menuItems = [
 
 export function ModuleNavbar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Preserve projectId query param when navigating
+  const getHrefWithParams = (href: string) => {
+    const projectId = searchParams.get("projectId");
+    if (projectId && href === "/protected/dashboard") {
+      return `${href}?projectId=${projectId}`;
+    }
+    return href;
+  };
 
   // Check if current path matches (handles query params)
   const isActive = (href: string) => {
     if (href === "/protected/dashboard") {
       return pathname.startsWith("/protected/dashboard");
     }
-    return pathname === href;
+    return pathname === href || pathname.startsWith(`${href}/`);
   };
 
   return (
     <NavigationMenu className="w-auto">
-      <NavigationMenuList className="flex-col sm:flex-row justify-end gap-2">
+      <NavigationMenuList className="flex-col sm:flex-row gap-2">
         {menuItems.map((item, index) => (
           <NavigationMenuItem key={index}>
             <NavigationMenuLink asChild>
               <Link
-                href={item.href}
+                href={getHrefWithParams(item.href)}
                 className={cn(
                   navigationMenuTriggerStyle(),
                   "text-[11px] h-auto py-2 px-3 transition-all",

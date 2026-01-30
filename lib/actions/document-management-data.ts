@@ -37,7 +37,7 @@ export interface DocumentAggregations {
   
   // Chart data
   documentsByStatus: Array<{ status: string; count: number; fill: string }>;
-  documentsByType: Array<{ type: string; count: number }>;
+  documentsByTypeChart: Array<{ type: string; count: number }>;
   documentsBySite: Array<{ site: string; count: number }>;
   expirationTimeline: Array<{ date: string; count: number }>;
   documentsUploadedOverTime: Array<{ date: string; count: number }>;
@@ -725,7 +725,7 @@ export async function getDocumentAggregations(
       documentsUpdatedThisMonth,
       totalFileSizeGB,
       documentsByStatus,
-      documentsByType: documentsByType.slice(0, 10), // Top 10 for chart
+      documentsByTypeChart: documentsByType.slice(0, 10), // Top 10 for chart
       documentsBySite,
       expirationTimeline,
       documentsUploadedOverTime,

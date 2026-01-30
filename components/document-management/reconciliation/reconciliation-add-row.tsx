@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { ReconciliationStatusCell } from "./reconciliation-status-cell";
 import { ReconciliationDatePicker } from "./reconciliation-date-picker";
+import { ReconciliationDocumentLinkInput } from "./reconciliation-document-link-input";
+import { ReconciliationDocumentViewer } from "./reconciliation-document-viewer";
 import {
   ReconciliationDocument,
   ReconciliationStatus,
@@ -30,7 +32,8 @@ export function ReconciliationAddRow({
   const [fields, setFields] = useState<Record<string, string | null>>({});
   const [presentOnSite, setPresentOnSite] = useState<ReconciliationStatus>(null);
   const [presentInTMF, setPresentInTMF] = useState<ReconciliationStatus>(null);
-  const [collectedDate, setCollectedDate] = useState<string>("");
+  const [documentLink, setDocumentLink] = useState<string>("");
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
 
   const handleAdd = () => {
     const newDocument: ReconciliationDocument = {
@@ -39,14 +42,14 @@ export function ReconciliationAddRow({
       fields,
       presentOnSite,
       presentInTMF,
-      collectedDate: collectedDate || null,
+      documentLink: documentLink || null,
     };
     onAdd(newDocument);
     // Reset form
     setFields({});
     setPresentOnSite(null);
     setPresentInTMF(null);
-    setCollectedDate("");
+    setDocumentLink("");
     setIsAdding(false);
   };
 
@@ -54,7 +57,7 @@ export function ReconciliationAddRow({
     setFields({});
     setPresentOnSite(null);
     setPresentInTMF(null);
-    setCollectedDate("");
+    setDocumentLink("");
     setIsAdding(false);
   };
 
@@ -125,12 +128,16 @@ export function ReconciliationAddRow({
         />
       </td>
 
-      {/* Collected Date */}
-      <td className="p-1 border-r" style={{ width: 150 }}>
-        <ReconciliationDatePicker
-          value={collectedDate || null}
-          onChange={(value) => setCollectedDate(value || "")}
-          placeholder="DD-MMM-YY"
+      {/* Document Link Location */}
+      <td className="p-1 border-r" style={{ width: 250 }}>
+        <ReconciliationDocumentLinkInput
+          value={documentLink || null}
+          onChange={(value) => setDocumentLink(value || "")}
+          onView={() => {
+            if (documentLink) {
+              setViewerUrl(documentLink);
+            }
+          }}
           className="h-6 !text-[11px] border-0 shadow-none focus:ring-0 px-1.5 bg-white"
         />
       </td>
@@ -156,6 +163,18 @@ export function ReconciliationAddRow({
           </Button>
         </div>
       </td>
+      {/* Document Viewer Modal - Uses portal to render outside table */}
+      {viewerUrl && (
+        <ReconciliationDocumentViewer
+          open={!!viewerUrl}
+          onOpenChange={(open) => {
+            if (!open) {
+              setViewerUrl(null);
+            }
+          }}
+          url={viewerUrl}
+        />
+      )}
     </tr>
   );
 }

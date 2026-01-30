@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, Printer, Download, RefreshCw } from "lucide-react";
@@ -13,6 +14,11 @@ import { SDVCalculationSettingsModal } from "./sdv-calculation-settings-modal";
 import { SDVUploadHistory } from "./sdv-upload-history";
 import { SDVUploadProgress } from "./sdv-upload-progress";
 import { useToast } from "@/hooks/use-toast";
+import {
+  useSDVAggregations,
+  useSDVFilterOptions,
+  sdvQueryKeys,
+} from "@/hooks/use-sdv-data";
 import { 
   getSDVHeaderMappings, 
   saveSDVHeaderMappings,
@@ -38,6 +44,8 @@ interface SDVTrackerPageClientProps {
 }
 
 export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageClientProps) {
+  const queryClient = useQueryClient();
+  
   // Upload management
   const [uploads, setUploads] = useState<Tables<'sdv_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
@@ -237,7 +245,26 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
       const cacheKey = nodeId;
       console.log('[SDV] Expanding node:', nodeId, 'Cached:', nodeDataCache.has(cacheKey));
       
-      if (!nodeDataCache.has(cacheKey) && selectedUploadId) {
+      // Check React Query cache first
+      let queryKey;
+      switch (level) {
+        case 'site':
+          queryKey = sdvQueryKeys.siteDetails(selectedUploadId!, siteName, filters);
+          break;
+        case 'subject':
+          queryKey = sdvQueryKeys.subjectDetails(selectedUploadId!, siteName, subjectId!, filters);
+          break;
+        case 'visit':
+          queryKey = sdvQueryKeys.visitDetails(selectedUploadId!, siteName, subjectId!, visitType!, filters);
+          break;
+        case 'crf':
+          queryKey = sdvQueryKeys.crfDetails(selectedUploadId!, siteName, subjectId!, visitType!, crfName!, filters);
+          break;
+      }
+      
+      const cachedQuery = queryKey ? queryClient.getQueryData(queryKey) : null;
+      
+      if (!nodeDataCache.has(cacheKey) && !cachedQuery && selectedUploadId) {
         // Show loading state
         const newLoadingNodes = new Set(loadingNodes);
         newLoadingNodes.add(nodeId);
@@ -258,14 +285,53 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
           case 'site':
             // Fetch subject-level summaries for this site
             result = await getSDVSiteDetails(selectedUploadId, siteName, activeFilters);
+            
+            // Prefetch first 3 subjects in parallel
+            if (result.success && result.data?.records) {
+              const subjectsToPrefetch = result.data.records.slice(0, 3);
+              subjectsToPrefetch.forEach((subject: any) => {
+                const prefetchKey = sdvQueryKeys.subjectDetails(selectedUploadId, siteName, subject.subject_id, activeFilters);
+                queryClient.prefetchQuery({
+                  queryKey: prefetchKey,
+                  queryFn: () => getSDVSubjectDetails(selectedUploadId, siteName, subject.subject_id, activeFilters),
+                  staleTime: 5 * 60 * 1000,
+                });
+              });
+            }
             break;
           case 'subject':
             // Fetch visit-level summaries for this subject
             result = await getSDVSubjectDetails(selectedUploadId, siteName, subjectId!, activeFilters);
+            
+            // Prefetch first 3 visits in parallel
+            if (result.success && result.data?.records) {
+              const visitsToPrefetch = result.data.records.slice(0, 3);
+              visitsToPrefetch.forEach((visit: any) => {
+                const prefetchKey = sdvQueryKeys.visitDetails(selectedUploadId, siteName, subjectId!, visit.visit_type, activeFilters);
+                queryClient.prefetchQuery({
+                  queryKey: prefetchKey,
+                  queryFn: () => getSDVVisitDetails(selectedUploadId, siteName, subjectId!, visit.visit_type, activeFilters),
+                  staleTime: 5 * 60 * 1000,
+                });
+              });
+            }
             break;
           case 'visit':
             // Fetch CRF-level summaries for this visit
             result = await getSDVVisitDetails(selectedUploadId, siteName, subjectId!, visitType!, activeFilters);
+            
+            // Prefetch first 3 CRFs in parallel
+            if (result.success && result.data?.records) {
+              const crfsToPrefetch = result.data.records.slice(0, 3);
+              crfsToPrefetch.forEach((crf: any) => {
+                const prefetchKey = sdvQueryKeys.crfDetails(selectedUploadId, siteName, subjectId!, visitType!, crf.crf_name, activeFilters);
+                queryClient.prefetchQuery({
+                  queryKey: prefetchKey,
+                  queryFn: () => getSDVCRFDetails(selectedUploadId, siteName, subjectId!, visitType!, crf.crf_name),
+                  staleTime: 5 * 60 * 1000,
+                });
+              });
+            }
             break;
           case 'crf':
             // Fetch field-level details for this CRF
@@ -281,6 +347,11 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
         
         if (result.success && result.data) {
           console.log('[SDV] Fetched', result.data.records.length, 'children for', nodeId);
+          
+          // Cache in React Query
+          if (queryKey) {
+            queryClient.setQueryData(queryKey, result.data);
+          }
           
           // Cache the data
           const newCache = new Map(nodeDataCache);
@@ -307,7 +378,10 @@ export function SDVTrackerPageClient({ companyId, profileId }: SDVTrackerPageCli
       } else {
         // Data already cached, rebuild children and expand
         console.log('[SDV] Using cached data for:', nodeId);
-        const cachedData = nodeDataCache.get(cacheKey);
+        
+        const cachedData = (cachedQuery && typeof cachedQuery === 'object' && 'records' in cachedQuery 
+          ? (cachedQuery as { records: any[] }).records 
+          : null) || nodeDataCache.get(cacheKey);
         if (cachedData) {
           const childNodes = convertRecordsToNodes(cachedData, level);
           updateNodeInHierarchy(nodeId, { 

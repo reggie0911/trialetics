@@ -12,7 +12,7 @@ export interface ReconciliationSite {
 export interface ColumnDefinition {
   id: string;
   label: string;
-  type: "text" | "date" | "status" | "readonly" | "select";
+  type: "text" | "date" | "status" | "readonly" | "select" | "url";
   width?: number;
   options?: string[]; // For select type
 }
@@ -23,7 +23,7 @@ export interface ReconciliationDocument {
   fields: Record<string, string | null>;
   presentOnSite: ReconciliationStatus;
   presentInTMF: ReconciliationStatus;
-  collectedDate: string | null;
+  documentLink: string | null;
   isHighlighted?: boolean;
   highlightColor?: "yellow" | "blue" | "red";
 }
