@@ -57,13 +57,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     <div className="min-h-screen bg-background">
       <ProtectedNavbar />
       <main className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 py-4 sm:py-8">
-        {/* Welcome Message and Navigation on same row */}
-        <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        {/* Welcome Message */}
+        <div className="mb-6 sm:mb-8">
           <Greeting 
             firstName={profile?.first_name} 
             displayName={profile?.display_name}
           />
-          <ModuleNavbar />
         </div>
 
         {/* Project Info */}

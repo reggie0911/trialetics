@@ -40,6 +40,10 @@ const menuItems = [
     label: "Med Compliance",
     href: "/protected/mc",
   },
+  {
+    label: "Document Management",
+    href: "/protected/document-management",
+  },
 ];
 
 export function ModuleNavbar() {
