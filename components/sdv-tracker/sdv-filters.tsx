@@ -1,120 +1,285 @@
-"use client";
+'use client';
 
-import { Button } from "@/components/ui/button";
+import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
-import { RotateCcw, MoreHorizontal, Settings } from "lucide-react";
-import { SDVFilters as SDVFiltersType } from "@/lib/actions/sdv-tracker-data";
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { X, Filter, RefreshCw } from 'lucide-react';
+import { getSDVCascadingFilterOptions } from '@/lib/actions/sdv-tracker';
 
-interface SDVFiltersProps {
-  filters: SDVFiltersType;
-  onFiltersChange: (filters: SDVFiltersType) => void;
-  onResetAll: () => void;
-  filterOptions: {
-    siteNames: string[];
-    subjectIds: string[];
-    visitTypes: string[];
-    crfNames: string[];
-  } | null;
+export interface SDVFilterState {
+  site: string | null;
+  subject: string | null;
+  event: string | null;
+  form: string | null;
+  source: string | null;
 }
 
-export function SDVFilters({ 
-  filters, 
-  onFiltersChange, 
-  onResetAll,
-  filterOptions
+interface SDVFiltersProps {
+  reportId: string;
+  filterOptions: {
+    site_names: string[];
+    subject_ids: string[];
+    event_names: string[];
+    form_names: string[];
+    data_sources: string[];
+  };
+  filters: SDVFilterState;
+  onFiltersChange: (filters: SDVFilterState) => void;
+  onRefresh: () => void;
+  isRefreshing: boolean;
+}
+
+export function SDVFilters({
+  reportId,
+  filterOptions,
+  filters,
+  onFiltersChange,
+  onRefresh,
+  isRefreshing,
 }: SDVFiltersProps) {
-  const handleFilterChange = (key: keyof SDVFiltersType, value: string | null) => {
+  const [cascadingOptions, setCascadingOptions] = useState<{
+    subject_ids: string[];
+    event_names: string[];
+    form_names: string[];
+  }>({
+    subject_ids: filterOptions.subject_ids,
+    event_names: filterOptions.event_names,
+    form_names: filterOptions.form_names,
+  });
+
+  // Update cascading options when filters change
+  useEffect(() => {
+    const updateCascadingOptions = async () => {
+      if (filters.site || filters.subject || filters.event) {
+        const options = await getSDVCascadingFilterOptions(
+          reportId,
+          filters.site || undefined,
+          filters.subject || undefined,
+          filters.event || undefined
+        );
+        setCascadingOptions(options);
+      } else {
+        setCascadingOptions({
+          subject_ids: filterOptions.subject_ids,
+          event_names: filterOptions.event_names,
+          form_names: filterOptions.form_names,
+        });
+      }
+    };
+
+    updateCascadingOptions();
+  }, [reportId, filters.site, filters.subject, filters.event, filterOptions]);
+
+  const handleSiteChange = (value: string | null) => {
+    if (value === 'all' || value === null) {
+      onFiltersChange({ ...filters, site: null, subject: null, event: null, form: null });
+    } else {
+      onFiltersChange({ ...filters, site: value, subject: null, event: null, form: null });
+    }
+  };
+
+  const handleSubjectChange = (value: string | null) => {
+    if (value === 'all' || value === null) {
+      onFiltersChange({ ...filters, subject: null, event: null, form: null });
+    } else {
+      onFiltersChange({ ...filters, subject: value, event: null, form: null });
+    }
+  };
+
+  const handleEventChange = (value: string | null) => {
+    if (value === 'all' || value === null) {
+      onFiltersChange({ ...filters, event: null, form: null });
+    } else {
+      onFiltersChange({ ...filters, event: value, form: null });
+    }
+  };
+
+  const handleFormChange = (value: string | null) => {
+    if (value === 'all' || value === null) {
+      onFiltersChange({ ...filters, form: null });
+    } else {
+      onFiltersChange({ ...filters, form: value });
+    }
+  };
+
+  const handleSourceChange = (value: string | null) => {
+    if (value === 'all' || value === null) {
+      onFiltersChange({ ...filters, source: null });
+    } else {
+      onFiltersChange({ ...filters, source: value });
+    }
+  };
+
+  const clearFilters = () => {
     onFiltersChange({
-      ...filters,
-      [key]: value === "all" || !value ? "" : value,
+      site: null,
+      subject: null,
+      event: null,
+      form: null,
+      source: null,
     });
   };
 
+  const hasActiveFilters = filters.site || filters.subject || filters.event || filters.form || filters.source;
+
+  const getSourceLabel = (source: string) => {
+    switch (source) {
+      case 'site_data_only':
+        return 'Site Data Only';
+      case 'both':
+        return 'Both Files';
+      default:
+        return source;
+    }
+  };
+
   return (
-    <Card className="border">
-      <CardContent className="p-4">
-        <div className="flex flex-wrap items-center gap-4">
-          {/* Site Name Filter */}
-          <div className="flex-1 min-w-[200px] max-w-[200px]">
-            <label className="text-[10px] text-muted-foreground mb-1 block">
-              Site Name
-            </label>
-            <Select
-              value={filters.siteName || "all"}
-              onValueChange={(value) => handleFilterChange("siteName", value)}
-            >
-              <SelectTrigger className="h-9 text-[11px] w-full">
-                <SelectValue placeholder="Site Name" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Sites</SelectItem>
-                {filterOptions?.siteNames.map((site) => (
-                  <SelectItem key={site} value={site}>
-                    {site}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+    <div className="flex flex-wrap items-center gap-3 p-4 bg-white rounded-lg border">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Filter className="h-4 w-4" />
+        <span className="font-medium">Filters:</span>
+      </div>
 
-          {/* Subject ID Filter */}
-          <div className="flex-1 min-w-[200px] max-w-[200px]">
-            <label className="text-[10px] text-muted-foreground mb-1 block">
-              Subject ID
-            </label>
-            <Select
-              value={filters.subjectId || "all"}
-              onValueChange={(value) => handleFilterChange("subjectId", value)}
-            >
-              <SelectTrigger className="h-9 text-[11px] w-full">
-                <SelectValue placeholder="Subject ID" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Subjects</SelectItem>
-                {filterOptions?.subjectIds.map((subjectId) => (
-                  <SelectItem key={subjectId} value={subjectId}>
-                    {subjectId}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      {/* Site Filter */}
+      <Select value={filters.site || 'all'} onValueChange={handleSiteChange}>
+        <SelectTrigger className="w-[160px] h-9">
+          <SelectValue placeholder="All Sites" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Sites</SelectItem>
+          {filterOptions.site_names.map((site) => (
+            <SelectItem key={site} value={site}>
+              {site}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
-          {/* Action Buttons */}
-          <div className="flex items-end gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onResetAll}
-              className="h-9 text-[11px]"
-            >
-              <RotateCcw className="h-3 w-3 mr-1" />
-              Reset
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 text-[11px]"
-            >
-              More
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 text-[11px]"
-            >
-              Admin
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+      {/* Subject Filter */}
+      <Select 
+        value={filters.subject || 'all'} 
+        onValueChange={handleSubjectChange}
+        disabled={!filters.site && cascadingOptions.subject_ids.length === 0}
+      >
+        <SelectTrigger className="w-[160px] h-9">
+          <SelectValue placeholder="All Subjects" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Subjects</SelectItem>
+          {(filters.site ? cascadingOptions.subject_ids : filterOptions.subject_ids).map((subject) => (
+            <SelectItem key={subject} value={subject}>
+              {subject}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* Data Source Filter */}
+      <Select value={filters.source || 'all'} onValueChange={handleSourceChange}>
+        <SelectTrigger className="w-[160px] h-9">
+          <SelectValue placeholder="All Sources" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Sources</SelectItem>
+          {filterOptions.data_sources.map((source) => (
+            <SelectItem key={source} value={source}>
+              {getSourceLabel(source)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* Clear Filters Button */}
+      {hasActiveFilters && (
+        <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 gap-1">
+          <X className="h-3 w-3" />
+          Clear
+        </Button>
+      )}
+
+      {/* Refresh Button */}
+      <Button 
+        variant="outline" 
+        size="sm" 
+        onClick={onRefresh} 
+        disabled={isRefreshing}
+        className="h-9 gap-1 ml-auto"
+      >
+        <RefreshCw className={`h-3 w-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+        Refresh
+      </Button>
+    </div>
+  );
+}
+
+// Active filters display
+export function SDVActiveFilters({
+  filters,
+  onRemoveFilter,
+}: {
+  filters: SDVFilterState;
+  onRemoveFilter: (key: keyof SDVFilterState) => void;
+}) {
+  const activeFilters = Object.entries(filters).filter(([_, value]) => value !== null);
+
+  if (activeFilters.length === 0) {
+    return null;
+  }
+
+  const getFilterLabel = (key: string): string => {
+    switch (key) {
+      case 'site':
+        return 'Site';
+      case 'subject':
+        return 'Subject';
+      case 'event':
+        return 'Event';
+      case 'form':
+        return 'Form';
+      case 'source':
+        return 'Source';
+      default:
+        return key;
+    }
+  };
+
+  const getValueLabel = (key: string, value: string): string => {
+    if (key === 'source') {
+      switch (value) {
+        case 'site_data_only':
+          return 'Site Data Only';
+        case 'both':
+          return 'Both Files';
+        default:
+          return value;
+      }
+    }
+    return value;
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs text-muted-foreground">Active filters:</span>
+      {activeFilters.map(([key, value]) => (
+        <Badge key={key} variant="secondary" className="gap-1 pr-1">
+          <span className="text-xs">
+            {getFilterLabel(key)}: {getValueLabel(key, value as string)}
+          </span>
+          <button
+            onClick={() => onRemoveFilter(key as keyof SDVFilterState)}
+            className="ml-1 rounded-full p-0.5 hover:bg-muted"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </Badge>
+      ))}
+    </div>
   );
 }

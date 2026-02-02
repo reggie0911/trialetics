@@ -173,6 +173,27 @@ function consolidateDthdat(record: PatientRecord): string {
 }
 
 /**
+ * Consolidate anticoagulation values from multiple columns into a single comma-separated value
+ * Combines values from SE_AC_MED1, SE_AC_MED2, and SE_AC_MED2__2
+ */
+function consolidateAnticoagulation(record: PatientRecord): string {
+  const columns = [
+    'E01_V1[1].SCR_05.SE[1].SE_AC_MED1',
+    'E01_V1[1].SCR_05.SE[1].SE_AC_MED2',
+    'E01_V1[1].SCR_05.SE[1].SE_AC_MED2__2',
+  ];
+  
+  const values: string[] = [];
+  for (const col of columns) {
+    const value = record[col as keyof PatientRecord];
+    if (value && value !== '' && value !== '—') {
+      values.push(value);
+    }
+  }
+  return values.join(', ');
+}
+
+/**
  * Categorize a patient record into normalized fields and JSONB columns
  */
 function categorizePatientRecord(record: PatientRecord, uploadId: string): TablesInsert<'patients'> {
@@ -189,6 +210,9 @@ function categorizePatientRecord(record: PatientRecord, uploadId: string): Table
   
   // Consolidate DTHDAT from all COMMON_AE entries
   const consolidatedDthdat = consolidateDthdat(record);
+  
+  // Consolidate anticoagulation from multiple columns
+  const consolidatedAnticoagulation = consolidateAnticoagulation(record);
 
   // Categorize remaining fields
   const demographics: Record<string, string> = {};
@@ -242,6 +266,16 @@ function categorizePatientRecord(record: PatientRecord, uploadId: string): Table
       } else {
         adverseEvents[key] = value || '';
       }
+    } else if (key.includes('SE_AC_MED')) {
+      // Store consolidated anticoagulation for the SE_AC_MED1 column
+      if (key === 'E01_V1[1].SCR_05.SE[1].SE_AC_MED1' && consolidatedAnticoagulation) {
+        extraFields[key] = consolidatedAnticoagulation;
+      } else if (key.includes('SE_AC_MED2') || key.includes('SE_AC_MED2__2')) {
+        // Skip other anticoagulation columns - we consolidated into SE_AC_MED1
+        return;
+      } else {
+        extraFields[key] = value || '';
+      }
     } else {
       extraFields[key] = value || '';
     }
@@ -250,6 +284,11 @@ function categorizePatientRecord(record: PatientRecord, uploadId: string): Table
   // Ensure the consolidated DTHDAT is stored even if COMMON_AE[1] wasn't in the original record
   if (consolidatedDthdat && !adverseEvents['COMMON_AE[1].LOG_AE.AE[1].DTHDAT']) {
     adverseEvents['COMMON_AE[1].LOG_AE.AE[1].DTHDAT'] = consolidatedDthdat;
+  }
+  
+  // Ensure the consolidated anticoagulation is stored even if SE_AC_MED1 wasn't in the original record
+  if (consolidatedAnticoagulation && !extraFields['E01_V1[1].SCR_05.SE[1].SE_AC_MED1']) {
+    extraFields['E01_V1[1].SCR_05.SE[1].SE_AC_MED1'] = consolidatedAnticoagulation;
   }
 
   return {

@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation';
 import { ProtectedNavbar } from '@/components/layout/protected-navbar';
 import { ModuleNavbar } from '@/components/layout/module-navbar';
-import { SDVTrackerPageClient } from '@/components/sdv-tracker/sdv-tracker-page-client';
+import { SDVTrackerPage } from '@/components/sdv-tracker/sdv-tracker-page';
 import { createClient } from '@/lib/server';
 
-export default async function SDVTrackerPage() {
+export default async function SDVTrackerPageRoute() {
   const supabase = await createClient();
 
   // Check authentication
@@ -47,7 +47,7 @@ export default async function SDVTrackerPage() {
         </div>
 
         {/* Client-side component for data management */}
-        <SDVTrackerPageClient companyId={profile.company_id || ""} profileId={profile.id} />
+        <SDVTrackerPage companyId={profile.company_id || ""} profileId={profile.id} />
       </main>
     </div>
   );

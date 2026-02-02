@@ -1,6 +1,8 @@
-"use client";
+'use client';
 
-import { useState } from "react";
+import React, { useState, useCallback, useEffect } from 'react';
+import { ChevronRight, ChevronDown, Loader2, Building2, User, Calendar, FileText, FileCheck } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -8,297 +10,467 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { ChevronRight, ChevronDown, Loader2 } from "lucide-react";
-import { HierarchyNode, flattenHierarchy } from "@/lib/utils/sdv-hierarchy";
+} from '@/components/ui/table';
+import {
+  getSDVSubjectSummary,
+  getSDVEventSummary,
+  getSDVFormSummary,
+  getSDVItemDetails,
+  type SDVSiteSummary,
+  type SDVSubjectSummary,
+  type SDVEventSummary,
+  type SDVFormSummary,
+  type SDVItemDetail,
+} from '@/lib/actions/sdv-tracker';
 
-// Node toggle info for multi-level lazy loading
-export interface NodeToggleInfo {
-  level: 'site' | 'subject' | 'visit' | 'crf' | 'field';
-  nodeId: string;
-  siteName: string;
+// Tree node types
+type NodeLevel = 'site' | 'subject' | 'event' | 'form' | 'item';
+
+interface TreeNode {
+  id: string;
+  level: NodeLevel;
+  name: string;
+  // Core metrics
+  dataExpected: number;      // count where edit_reason = 'Initial Data Entry'
+  verifiedItems: number;     // items with SDV date (Data Verified)
+  needsReview: number;       // dataExpected - verifiedItems
+  sdvPercent: number;
+  // Estimates (1 min per item, 8 hours per day)
+  estimateHours: number;     // needsReview / 60
+  estimateDays: number;      // estimateHours / 8
+  // Legacy/internal
+  totalItems: number;
+  dataSourceBreakdown?: {
+    both: number;
+    siteOnly: number;
+  };
+  // Context for fetching children
+  siteName?: string;
   subjectId?: string;
-  visitType?: string;
-  crfName?: string;
+  eventName?: string;
+  formName?: string;
+  // Item-level details
+  itemDetail?: SDVItemDetail;
+  // Tree state
+  isExpanded: boolean;
+  isLoading: boolean;
+  children: TreeNode[];
+  hasLoadedChildren: boolean;
 }
 
 interface SDVHierarchicalTableProps {
-  hierarchy: HierarchyNode[];
-  headerMappings: Record<string, string>;
-  onNodeToggle?: (info: NodeToggleInfo) => void;
-  loadingNodes?: Set<string>;
-  onCollapseAll?: () => void;
-  // Legacy prop for backward compatibility
-  onSiteToggle?: (siteName: string) => void;
-  loadingSites?: Set<string>;
-}
-
-// SDV% badge color logic
-function getSDVBadgeColor(percent: number): string {
-  if (percent >= 100) return "bg-green-500 text-white";
-  if (percent >= 50) return "bg-amber-500 text-white";
-  return "bg-red-500 text-white";
-}
-
-// Get background color for hierarchy level
-function getLevelBackgroundColor(level: string, depth: number): string {
-  const colors = {
-    site: "bg-blue-50 hover:bg-blue-100",
-    subject: "bg-purple-50 hover:bg-purple-100",
-    visit: "bg-green-50 hover:bg-green-100",
-    crf: "bg-amber-50 hover:bg-amber-100",
-    field: "bg-white hover:bg-muted/50",
-  };
-  return colors[level as keyof typeof colors] || "bg-white hover:bg-muted/50";
-}
-
-// Format number with comma separators
-function formatNumber(num: number): string {
-  return num.toLocaleString('en-US');
+  reportId: string;
+  siteSummary: SDVSiteSummary[];
+  sourceFilter?: string;
+  isLoading: boolean;
 }
 
 export function SDVHierarchicalTable({
-  hierarchy,
-  headerMappings,
-  onNodeToggle,
-  loadingNodes = new Set(),
-  onCollapseAll,
-  onSiteToggle,
-  loadingSites = new Set(),
+  reportId,
+  siteSummary,
+  sourceFilter,
+  isLoading,
 }: SDVHierarchicalTableProps) {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  // Convert site summary to tree nodes
+  const [nodes, setNodes] = useState<TreeNode[]>([]);
 
-  const toggleExpand = (id: string, level: string, node: HierarchyNode) => {
-    const siteName = node.site_name || '';
-    const subjectId = node.subject_id || '';
-    const visitType = node.visit_type || '';
-    const crfName = node.crf_name || '';
+  // Helper to calculate estimate fields
+  const calculateEstimates = (dataExpected: number, verifiedItems: number) => {
+    const needsReview = Math.max(0, dataExpected - verifiedItems);
+    const estimateHours = needsReview / 60; // 1 min per item
+    const estimateDays = estimateHours / 8; // 8 hours per day
+    return { needsReview, estimateHours, estimateDays };
+  };
 
-    // Use multi-level lazy loading if onNodeToggle is provided
-    if (onNodeToggle && node.hasLazyChildren) {
-      const toggleInfo: NodeToggleInfo = {
-        level: level as NodeToggleInfo['level'],
-        nodeId: id,
-        siteName,
-        subjectId: subjectId || undefined,
-        visitType: visitType || undefined,
-        crfName: crfName || undefined,
-      };
-      onNodeToggle(toggleInfo);
-    } 
-    // Legacy: site-level toggle via onSiteToggle
-    else if (level === 'site' && siteName && onSiteToggle) {
-      onSiteToggle(siteName);
-    } 
-    // Local toggle for already-loaded nodes
-    else {
-      const newExpanded = new Set(expandedIds);
-      if (newExpanded.has(id)) {
-        newExpanded.delete(id);
-      } else {
-        newExpanded.add(id);
+  // Update nodes when siteSummary changes
+  useEffect(() => {
+    setNodes(
+      siteSummary.map((site) => {
+        const dataExpected = Number(site.data_expected);
+        const verifiedItems = Number(site.verified_items);
+        const estimates = calculateEstimates(dataExpected, verifiedItems);
+        
+        return {
+          id: `site-${site.site_name}`,
+          level: 'site' as NodeLevel,
+          name: site.site_name,
+          dataExpected,
+          verifiedItems,
+          needsReview: estimates.needsReview,
+          sdvPercent: Number(site.sdv_percent),
+          estimateHours: estimates.estimateHours,
+          estimateDays: estimates.estimateDays,
+          totalItems: Number(site.total_items),
+          dataSourceBreakdown: {
+            both: Number(site.both_count),
+            siteOnly: Number(site.site_data_only_count),
+          },
+          siteName: site.site_name,
+          isExpanded: false,
+          isLoading: false,
+          children: [],
+          hasLoadedChildren: false,
+        };
+      })
+    );
+  }, [siteSummary]);
+
+  // Find and update a node in the tree
+  const updateNode = useCallback((
+    nodes: TreeNode[],
+    nodeId: string,
+    updater: (node: TreeNode) => TreeNode
+  ): TreeNode[] => {
+    return nodes.map((node) => {
+      if (node.id === nodeId) {
+        return updater(node);
       }
-      setExpandedIds(newExpanded);
-    }
-  };
+      if (node.children.length > 0) {
+        return {
+          ...node,
+          children: updateNode(node.children, nodeId, updater),
+        };
+      }
+      return node;
+    });
+  }, []);
 
-  // Combined loading set (legacy + new)
-  const isNodeLoading = (nodeId: string, siteName: string) => {
-    return loadingNodes.has(nodeId) || loadingSites.has(siteName);
-  };
+  // Load children for a node
+  const loadChildren = useCallback(async (node: TreeNode) => {
+    if (node.hasLoadedChildren) return;
 
-  const expandAll = () => {
-    const allIds = new Set<string>();
-    const collectIds = (nodes: HierarchyNode[]) => {
-      for (const node of nodes) {
-        if (node.children && node.children.length > 0 && node.id) {
-          allIds.add(node.id);
-          collectIds(node.children);
+    setNodes((prev) =>
+      updateNode(prev, node.id, (n) => ({ ...n, isLoading: true }))
+    );
+
+    let children: TreeNode[] = [];
+
+    try {
+      switch (node.level) {
+        case 'site': {
+          const subjects = await getSDVSubjectSummary(
+            reportId,
+            node.siteName!,
+            sourceFilter
+          );
+          children = subjects.map((subject) => {
+            const dataExpected = Number(subject.data_expected);
+            const verifiedItems = Number(subject.verified_items);
+            const estimates = calculateEstimates(dataExpected, verifiedItems);
+            
+            return {
+              id: `subject-${node.siteName}-${subject.subject_id}`,
+              level: 'subject' as NodeLevel,
+              name: subject.subject_id,
+              dataExpected,
+              verifiedItems,
+              needsReview: estimates.needsReview,
+              sdvPercent: Number(subject.sdv_percent),
+              estimateHours: estimates.estimateHours,
+              estimateDays: estimates.estimateDays,
+              totalItems: Number(subject.total_items),
+              dataSourceBreakdown: {
+                both: Number(subject.both_count),
+                siteOnly: Number(subject.site_data_only_count),
+              },
+              siteName: node.siteName,
+              subjectId: subject.subject_id,
+              isExpanded: false,
+              isLoading: false,
+              children: [],
+              hasLoadedChildren: false,
+            };
+          });
+          break;
+        }
+        case 'subject': {
+          const events = await getSDVEventSummary(
+            reportId,
+            node.siteName!,
+            node.subjectId!,
+            sourceFilter
+          );
+          children = events.map((event) => {
+            const dataExpected = Number(event.data_expected);
+            const verifiedItems = Number(event.verified_items);
+            const estimates = calculateEstimates(dataExpected, verifiedItems);
+            
+            return {
+              id: `event-${node.siteName}-${node.subjectId}-${event.event_name}`,
+              level: 'event' as NodeLevel,
+              name: event.event_name,
+              dataExpected,
+              verifiedItems,
+              needsReview: estimates.needsReview,
+              sdvPercent: Number(event.sdv_percent),
+              estimateHours: estimates.estimateHours,
+              estimateDays: estimates.estimateDays,
+              totalItems: Number(event.total_items),
+              dataSourceBreakdown: {
+                both: Number(event.both_count),
+                siteOnly: Number(event.site_data_only_count),
+              },
+              siteName: node.siteName,
+              subjectId: node.subjectId,
+              eventName: event.event_name,
+              isExpanded: false,
+              isLoading: false,
+              children: [],
+              hasLoadedChildren: false,
+            };
+          });
+          break;
+        }
+        case 'event': {
+          const forms = await getSDVFormSummary(
+            reportId,
+            node.siteName!,
+            node.subjectId!,
+            node.eventName!,
+            sourceFilter
+          );
+          children = forms.map((form) => {
+            const dataExpected = Number(form.data_expected);
+            const verifiedItems = Number(form.verified_items);
+            const estimates = calculateEstimates(dataExpected, verifiedItems);
+            
+            return {
+              id: `form-${node.siteName}-${node.subjectId}-${node.eventName}-${form.form_name}`,
+              level: 'form' as NodeLevel,
+              name: form.form_name,
+              dataExpected,
+              verifiedItems,
+              needsReview: estimates.needsReview,
+              sdvPercent: Number(form.sdv_percent),
+              estimateHours: estimates.estimateHours,
+              estimateDays: estimates.estimateDays,
+              totalItems: Number(form.total_items),
+              dataSourceBreakdown: {
+                both: Number(form.both_count),
+                siteOnly: Number(form.site_data_only_count),
+              },
+              siteName: node.siteName,
+              subjectId: node.subjectId,
+              eventName: node.eventName,
+              formName: form.form_name,
+              isExpanded: false,
+              isLoading: false,
+              children: [],
+              hasLoadedChildren: false,
+            };
+          });
+          break;
+        }
+        case 'form': {
+          const items = await getSDVItemDetails(
+            reportId,
+            node.siteName!,
+            node.subjectId!,
+            node.eventName!,
+            node.formName!,
+            sourceFilter
+          );
+          children = items.map((item, index) => {
+            // For items: dataExpected is 1 if initial entry, 0 otherwise
+            const dataExpected = item.is_initial_entry ? 1 : 0;
+            const verifiedItems = item.is_verified ? 1 : 0;
+            const estimates = calculateEstimates(dataExpected, verifiedItems);
+            
+            return {
+              id: `item-${node.siteName}-${node.subjectId}-${node.eventName}-${node.formName}-${index}`,
+              level: 'item' as NodeLevel,
+              name: item.item_display,
+              dataExpected,
+              verifiedItems,
+              needsReview: estimates.needsReview,
+              sdvPercent: item.is_verified ? 100 : 0,
+              estimateHours: estimates.estimateHours,
+              estimateDays: estimates.estimateDays,
+              totalItems: 1,
+              siteName: node.siteName,
+              subjectId: node.subjectId,
+              eventName: node.eventName,
+              formName: node.formName,
+              itemDetail: item,
+              isExpanded: false,
+              isLoading: false,
+              children: [],
+              hasLoadedChildren: true,
+            };
+          });
+          break;
         }
       }
-    };
-    collectIds(hierarchy);
-    setExpandedIds(allIds);
-  };
+    } catch (error) {
+      console.error('Error loading children:', error);
+    }
 
-  const collapseAll = () => {
-    // Clear local expanded state
-    setExpandedIds(new Set());
-    
-    // Notify parent to collapse all nodes
-    if (onCollapseAll) {
-      onCollapseAll();
+    setNodes((prev) =>
+      updateNode(prev, node.id, (n) => ({
+        ...n,
+        isLoading: false,
+        hasLoadedChildren: true,
+        children,
+      }))
+    );
+  }, [reportId, sourceFilter, updateNode]);
+
+  // Toggle node expansion
+  const toggleNode = useCallback(async (node: TreeNode) => {
+    if (node.level === 'item') return; // Items can't be expanded
+
+    if (!node.isExpanded && !node.hasLoadedChildren) {
+      await loadChildren(node);
+    }
+
+    setNodes((prev) =>
+      updateNode(prev, node.id, (n) => ({
+        ...n,
+        isExpanded: !n.isExpanded,
+      }))
+    );
+  }, [loadChildren, updateNode]);
+
+  // Get level icon
+  const getLevelIcon = (level: NodeLevel) => {
+    switch (level) {
+      case 'site':
+        return <Building2 className="h-4 w-4 text-blue-500" />;
+      case 'subject':
+        return <User className="h-4 w-4 text-purple-500" />;
+      case 'event':
+        return <Calendar className="h-4 w-4 text-green-500" />;
+      case 'form':
+        return <FileText className="h-4 w-4 text-orange-500" />;
+      case 'item':
+        return <FileCheck className="h-4 w-4 text-gray-500" />;
     }
   };
 
-  // Flatten hierarchy for rendering
-  const flattenedData = flattenHierarchy(hierarchy, expandedIds);
+  // Get SDV percent color
+  const getSDVPercentColor = (percent: number) => {
+    if (percent >= 80) return 'text-green-600 bg-green-50';
+    if (percent >= 50) return 'text-yellow-600 bg-yellow-50';
+    return 'text-red-600 bg-red-50';
+  };
 
-  // Column headers
-  const visibleColumns = [
-    { key: "expand", label: "", width: "40px", align: "left", wrapText: false },
-    { key: "site_name", label: headerMappings["site_name"] || "Site Name", align: "left", wrapText: false },
-    { key: "subject_id", label: headerMappings["subject_id"] || "Subject ID", align: "left", wrapText: false },
-    { key: "visit_type", label: headerMappings["visit_type"] || "Visit Type", align: "left", maxWidth: "150px", wrapText: true },
-    { key: "crf_name", label: headerMappings["crf_name"] || "CRF Name", align: "left", maxWidth: "150px", wrapText: true },
-    { key: "crf_field", label: headerMappings["crf_field"] || "CRF Field", align: "left", maxWidth: "150px", wrapText: true },
-    { key: "sdv_percent", label: headerMappings["sdv_percent"] || "SDV%", align: "center", wrapText: false },
-    { key: "data_verified", label: headerMappings["data_verified"] || "Data Verified", align: "center", wrapText: false },
-    { key: "data_needing_review", label: headerMappings["data_needing_review"] || "Data Needing Review", align: "center", wrapText: false },
-    { key: "data_expected", label: headerMappings["data_expected"] || "Data Expected", align: "center", wrapText: false },
-    { key: "estimate_hours", label: headerMappings["estimate_hours"] || "Estimate Hours", align: "center", wrapText: false },
-    { key: "estimate_days", label: headerMappings["estimate_days"] || "Estimate Days", align: "center", wrapText: false },
-  ];
+  // Render a tree row
+  const renderRow = (node: TreeNode, depth: number = 0): React.ReactNode => {
+    const indent = depth * 24;
+    const canExpand = node.level !== 'item';
 
-  return (
-    <div className="space-y-4">
-      {/* Collapse Control */}
-      <div className="flex gap-2">
-        <button
-          onClick={collapseAll}
-          className="text-[11px] text-blue-600 hover:text-blue-800 hover:bg-blue-50 underline px-2 py-1 rounded transition-colors duration-150 cursor-pointer"
+    return (
+      <React.Fragment key={node.id}>
+        <TableRow
+          className={`hover:bg-muted/50 ${node.level === 'item' ? 'bg-muted/20' : ''}`}
         >
-          Collapse All
-        </button>
-      </div>
-
-      <div className="rounded-md border overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              {visibleColumns.map((col) => (
-                <TableHead
-                  key={col.key}
-                  className={`text-[11px] font-medium ${
-                    col.wrapText ? 'break-words whitespace-normal' : 'whitespace-nowrap'
-                  } ${
-                    col.align === 'center' ? 'text-center' : 'text-left'
-                  }`}
-                  style={{
-                    ...(col.width ? { width: col.width } : {}),
-                    ...(col.maxWidth ? { maxWidth: col.maxWidth } : {}),
-                  }}
+          {/* Name with expand/collapse */}
+          <TableCell className="font-medium">
+            <div
+              className="flex items-center gap-2"
+              style={{ paddingLeft: `${indent}px` }}
+            >
+              {canExpand && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={() => toggleNode(node)}
+                  disabled={node.isLoading}
                 >
-                  {col.label}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {flattenedData.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={visibleColumns.length}
-                  className="h-24 text-center text-[11px] text-muted-foreground"
-                >
-                  No data available
-                </TableCell>
-              </TableRow>
-            ) : (
-              flattenedData.map((row) => {
-                const indentPixels = row.depth * 24;
-                const isBold = row.level !== 'field';
+                  {node.isLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : node.isExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
+              {!canExpand && <div className="w-6" />}
+              {getLevelIcon(node.level)}
+              <span className="truncate max-w-[200px]">{node.name}</span>
+            </div>
+          </TableCell>
 
-                return (
-                  <TableRow
-                    key={row.id}
-                    className={getLevelBackgroundColor(row.level, row.depth)}
-                  >
-                    {/* Expand/Collapse Button with Indentation */}
-                    <TableCell className="p-2" style={{ paddingLeft: `${8 + indentPixels}px` }}>
-                      {row.hasChildren ? (
-                        <button
-                          onClick={() => toggleExpand(row.id || '', row.level, row)}
-                          className="hover:bg-gray-200 rounded p-1"
-                          disabled={isNodeLoading(row.id || '', row.site_name || '')}
-                        >
-                          {isNodeLoading(row.id || '', row.site_name || '') ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : row.isExpanded || !row.isCollapsed ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                        </button>
-                      ) : (
-                        <span className="inline-block w-6"></span>
-                      )}
-                    </TableCell>
+          {/* Data Expected */}
+          <TableCell className="text-right">
+            {node.dataExpected.toLocaleString()}
+          </TableCell>
 
-                    {/* Site Name - show on all rows */}
-                    <TableCell className={`text-[11px] max-w-[200px] truncate ${isBold ? 'font-semibold' : ''}`}>
-                      {row.site_name || '-'}
-                    </TableCell>
+          {/* Data Verified */}
+          <TableCell className="text-right text-black">
+            {node.verifiedItems.toLocaleString()}
+          </TableCell>
 
-                    {/* Subject ID - show on all rows except site level */}
-                    <TableCell className={`text-[11px] ${isBold ? 'font-semibold' : ''}`}>
-                      {row.level !== 'site' ? (row.subject_id || '-') : '-'}
-                    </TableCell>
+          {/* Data Needing Review */}
+          <TableCell className="text-right text-black">
+            {node.needsReview.toLocaleString()}
+          </TableCell>
 
-                    {/* Visit Type - show on all rows except site and subject levels */}
-                    <TableCell className={`text-[11px] max-w-[150px] break-words whitespace-normal ${isBold ? 'font-semibold' : ''}`}>
-                      {row.level !== 'site' && row.level !== 'subject' ? (row.visit_type || '-') : '-'}
-                    </TableCell>
+          {/* SDV Percent */}
+          <TableCell>
+            <div className="flex items-center gap-2 justify-end">
+              <span className={`text-sm font-medium px-1.5 py-0.5 rounded ${getSDVPercentColor(node.sdvPercent)}`}>
+                {Math.round(node.sdvPercent)}%
+              </span>
+            </div>
+          </TableCell>
+        </TableRow>
 
-                    {/* CRF Name - show on all rows except site, subject, and visit levels */}
-                    <TableCell className={`text-[11px] max-w-[150px] break-words whitespace-normal ${isBold ? 'font-semibold' : ''}`}>
-                      {row.level !== 'site' && row.level !== 'subject' && row.level !== 'visit' ? (row.crf_name || '-') : '-'}
-                    </TableCell>
+        {/* Render children if expanded */}
+        {node.isExpanded &&
+          node.children.map((child) => renderRow(child, depth + 1))}
+      </React.Fragment>
+    );
+  };
 
-                    {/* CRF Field - only show for field level */}
-                    <TableCell className={`text-[11px] max-w-[150px] break-words whitespace-normal ${isBold ? 'font-semibold' : ''}`}>
-                      {row.level === 'field' ? (row.crf_field || '-') : '-'}
-                    </TableCell>
-
-                    {/* SDV% with colored badge */}
-                    <TableCell className="text-[11px] text-center">
-                      <span
-                        className={`inline-flex items-center justify-center px-2 py-1 rounded text-[10px] font-semibold min-w-[40px] ${
-                          getSDVBadgeColor(row.sdv_percent || 0)
-                        }`}
-                      >
-                        {Math.round(row.sdv_percent || 0)}%
-                      </span>
-                    </TableCell>
-
-                    {/* Data Verified */}
-                    <TableCell className={`text-[11px] text-center ${isBold ? 'font-semibold' : ''}`}>
-                      {formatNumber(row.data_verified || 0)}
-                    </TableCell>
-
-                    {/* Data Needing Review */}
-                    <TableCell className={`text-[11px] text-center ${isBold ? 'font-semibold' : ''}`}>
-                      {formatNumber(row.data_needing_review || 0)}
-                    </TableCell>
-
-                    {/* Data Expected */}
-                    <TableCell className={`text-[11px] text-center ${isBold ? 'font-semibold' : ''}`}>
-                      {formatNumber(row.data_expected || 0)}
-                    </TableCell>
-
-                    {/* Estimate Hours */}
-                    <TableCell className={`text-[11px] text-center ${isBold ? 'font-semibold' : ''}`}>
-                      {formatNumber(Math.round(row.estimate_hours || 0))}
-                    </TableCell>
-
-                    {/* Estimate Days */}
-                    <TableCell className={`text-[11px] text-center ${isBold ? 'font-semibold' : ''}`}>
-                      {formatNumber(Math.round(row.estimate_days || 0))}
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Summary */}
-      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-        <div>
-          Showing {flattenedData.length} rows ({hierarchy.length} sites)
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-lg border p-8">
+        <div className="flex items-center justify-center gap-2 text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <span>Loading data...</span>
         </div>
       </div>
+    );
+  }
+
+  if (nodes.length === 0) {
+    return (
+      <div className="bg-white rounded-lg border p-8">
+        <div className="text-center text-muted-foreground">
+          <FileCheck className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p className="text-lg font-medium">No Data Available</p>
+          <p className="text-sm mt-1">Upload CSV files to see the SDV report.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg border overflow-hidden">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/50">
+            <TableHead className="w-[22%]">
+              <div className="flex items-center gap-2">
+                Name
+                <span className="text-[10px] text-muted-foreground font-normal">
+                  (Site → Subject → Event → Form → Item)
+                </span>
+              </div>
+            </TableHead>
+            <TableHead className="text-right w-[9%]">Site Data Entry</TableHead>
+            <TableHead className="text-right w-[9%] text-black">Data Verified</TableHead>
+            <TableHead className="text-right w-[9%] text-black">Needs Review</TableHead>
+            <TableHead className="text-right w-[10%]">SDV %</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {nodes.map((node) => renderRow(node))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

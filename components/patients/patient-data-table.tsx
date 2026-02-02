@@ -334,8 +334,8 @@ function DragAlongCell({ cell, isFirstColumn, columnConfig, groupIndex, rowData 
   return (
     <TableCell
       ref={setNodeRef}
-      className={`text-xs p-1 px-2 whitespace-nowrap text-center ${bgColorClass} group-hover:!bg-transparent ${
-        isFirstColumn ? "font-medium" : ""
+      className={`text-xs p-1 px-2 whitespace-nowrap text-center ${
+        isFirstColumn ? "bg-white font-medium" : `${bgColorClass} group-hover:!bg-transparent`
       }`}
       style={style}
     >
