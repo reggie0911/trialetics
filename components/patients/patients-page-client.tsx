@@ -318,7 +318,23 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
         }
       }
       
-      // Return record with calculated PRDAT, consolidated DTHDAT across all AE entries, BSA, remodeling percentages, and visit windows
+      // Consolidate anticoagulation from multiple columns into SE_AC_MED1
+      // This handles legacy data that wasn't consolidated during upload
+      const anticoagColumns = [
+        'E01_V1[1].SCR_05.SE[1].SE_AC_MED1',
+        'E01_V1[1].SCR_05.SE[1].SE_AC_MED2',
+        'E01_V1[1].SCR_05.SE[1].SE_AC_MED2__2',
+      ];
+      const anticoagValues: string[] = [];
+      for (const col of anticoagColumns) {
+        const value = (record as Record<string, string>)[col];
+        if (value && value !== '' && value !== '—') {
+          anticoagValues.push(value);
+        }
+      }
+      const consolidatedAnticoag = anticoagValues.join(', ');
+      
+      // Return record with calculated PRDAT, consolidated DTHDAT across all AE entries, BSA, remodeling percentages, visit windows, and consolidated anticoagulation
       return {
         ...record,
         ...dthdatOverrides, // Spread all DTHDAT overrides
@@ -328,6 +344,7 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
         '1 yr Systolic Remodeling %': systolicRemodeling || record['1 yr Systolic Remodeling %'] || '',
         'Next Visit Window Open': calculatedNextWindowOpen || record['Next Visit Window Open'] || '',
         'Next Visit': calculatedNextVisit || record['Next Visit'] || '',
+        'E01_V1[1].SCR_05.SE[1].SE_AC_MED1': consolidatedAnticoag || record['E01_V1[1].SCR_05.SE[1].SE_AC_MED1'] || '',
       };
     });
   }, [data]);
@@ -546,6 +563,11 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
       return header.endsWith('.DTHDAT') && header.includes('COMMON_AE');
     });
     
+    // Find the mapped anticoagulation column (if any) - typically SE_AC_MED1
+    const anticoagMapping = mappings.find(m => {
+      return m.originalHeader.includes('SE_AC_MED1') && !m.originalHeader.includes('__');
+    });
+    
     // Find SubjectId or Subject ID column in the data
     const subjectIdKey = Object.keys(data[0] || {}).find(key => 
       key === 'SubjectId' || key === 'Subject ID'
@@ -581,8 +603,27 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
         }
       }
       
+      // Consolidate anticoagulation: combine all non-empty values from SE_AC_MED1, SE_AC_MED2, SE_AC_MED2__2
+      if (anticoagMapping) {
+        const anticoagColumns = [
+          'E01_V1[1].SCR_05.SE[1].SE_AC_MED1',
+          'E01_V1[1].SCR_05.SE[1].SE_AC_MED2',
+          'E01_V1[1].SCR_05.SE[1].SE_AC_MED2__2',
+        ];
+        const anticoagValues: string[] = [];
+        for (const col of anticoagColumns) {
+          const value = (record as Record<string, string>)[col];
+          if (value && value !== '' && value !== '—') {
+            anticoagValues.push(value);
+          }
+        }
+        if (anticoagValues.length > 0) {
+          filteredRecord[anticoagMapping.originalHeader] = anticoagValues.join(', ');
+        }
+      }
+      
       // Then populate with actual data where available
-      // (DTHDAT fields are already handled above, so this will only overwrite if the mapped DTHDAT[1] has a value)
+      // (DTHDAT and anticoagulation fields are already handled above, so this will only overwrite if the mapped column has a value)
       Object.keys(record).forEach(key => {
         const matchedHeader = findMatchingHeader(key);
         if (matchedHeader) {
@@ -593,6 +634,9 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
             if (newValue && newValue !== '' && newValue !== '—') {
               filteredRecord[matchedHeader] = newValue;
             }
+          // Don't overwrite already-consolidated anticoagulation
+          } else if (matchedHeader === anticoagMapping?.originalHeader && filteredRecord[matchedHeader]) {
+            // Keep the consolidated anticoagulation value
           } else {
             filteredRecord[matchedHeader] = record[key as keyof PatientRecord];
           }
