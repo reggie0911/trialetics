@@ -1,0 +1,678 @@
+'use server';
+
+import { createClient } from '@/lib/server';
+import { revalidatePath } from 'next/cache';
+import {
+  Organization,
+  OrganizationWithRelations,
+  CreateOrganizationData,
+  UpdateOrganizationData,
+  OrganizationFilters,
+  AssignOrganizationToProjectData,
+  ContactsOrganizationsStats,
+  OrganizationType,
+} from '@/lib/types/contacts-organizations';
+import { logOrganizationActivity, generateOrganizationUpdateDescription } from '@/lib/utils/activity-logger';
+
+export type ActionResponse<T> = {
+  success: boolean;
+  data?: T;
+  error?: string;
+};
+
+// =============================================
+// GET ORGANIZATIONS (with pagination and filtering)
+// =============================================
+
+export async function getOrganizations(
+  companyId: string,
+  filters: OrganizationFilters = {}
+): Promise<ActionResponse<{ organizations: OrganizationWithRelations[]; total: number }>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { search, name, organization_type, status, state, country, page = 1, pageSize = 25 } = filters;
+    const offset = (page - 1) * pageSize;
+
+    // If filtering by state or country, we need to get organization IDs from addresses first
+    let organizationIds: string[] | null = null;
+    if (state && state !== 'all') {
+      const { data: addressData } = await supabase
+        .from('addresses')
+        .select('entity_id')
+        .eq('entity_type', 'organization')
+        .ilike('state', `%${state}%`);
+      organizationIds = addressData?.map((a) => a.entity_id) || [];
+    }
+    if (country && country !== 'all') {
+      const { data: addressData } = await supabase
+        .from('addresses')
+        .select('entity_id')
+        .eq('entity_type', 'organization')
+        .ilike('country', `%${country}%`);
+      const countryOrgIds = addressData?.map((a) => a.entity_id) || [];
+      // If we already have state filter, intersect the arrays
+      if (organizationIds) {
+        organizationIds = organizationIds.filter((id) => countryOrgIds.includes(id));
+      } else {
+        organizationIds = countryOrgIds;
+      }
+    }
+
+    // Build the query
+    let query = supabase
+      .from('organizations')
+      .select(`
+        *,
+        organization_contacts(id),
+        organization_projects(id)
+      `, { count: 'exact' })
+      .eq('company_id', companyId)
+      .order('name', { ascending: true });
+
+    // Apply filters
+    if (search) {
+      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+    }
+
+    if (name) {
+      query = query.ilike('name', `%${name}%`);
+    }
+
+    if (organization_type && organization_type !== 'all') {
+      query = query.eq('organization_type', organization_type);
+    }
+
+    if (status && status !== 'all') {
+      query = query.eq('status', status);
+    }
+
+    // Apply address-based filters
+    if (organizationIds !== null) {
+      if (organizationIds.length === 0) {
+        // No organizations match the address filter
+        return {
+          success: true,
+          data: {
+            organizations: [],
+            total: 0,
+          },
+        };
+      }
+      query = query.in('id', organizationIds);
+    }
+
+    // Apply pagination
+    query = query.range(offset, offset + pageSize - 1);
+
+    const { data, error, count } = await query;
+
+    if (error) {
+      console.error('Error fetching organizations:', error);
+      return { success: false, error: error.message };
+    }
+
+    // Fetch addresses for all organizations
+    const orgIds = (data || []).map((org: any) => org.id);
+    const { data: addressesData } = await supabase
+      .from('addresses')
+      .select('*')
+      .eq('entity_type', 'organization')
+      .in('entity_id', orgIds);
+
+    // Group addresses by organization ID
+    const addressesByOrgId = (addressesData || []).reduce((acc: Record<string, any[]>, addr: any) => {
+      if (!acc[addr.entity_id]) {
+        acc[addr.entity_id] = [];
+      }
+      acc[addr.entity_id].push(addr);
+      return acc;
+    }, {});
+
+    // Transform the data to include counts and addresses
+    const organizations = (data || []).map((org: any) => ({
+      ...org,
+      contacts_count: org.organization_contacts?.length || 0,
+      projects_count: org.organization_projects?.length || 0,
+      addresses: addressesByOrgId[org.id] || [],
+    }));
+
+    return {
+      success: true,
+      data: {
+        organizations,
+        total: count || 0,
+      },
+    };
+  } catch (error) {
+    console.error('Error in getOrganizations:', error);
+    return { success: false, error: 'Failed to fetch organizations' };
+  }
+}
+
+// =============================================
+// GET SINGLE ORGANIZATION (with relations)
+// =============================================
+
+export async function getOrganization(
+  organizationId: string
+): Promise<ActionResponse<OrganizationWithRelations>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { data, error } = await supabase
+      .from('organizations')
+      .select(`
+        *,
+        organization_contacts(
+          *,
+          contact:contacts(*)
+        ),
+        organization_projects(
+          *,
+          project:projects(id, protocol_number, protocol_name, protocol_status)
+        )
+      `)
+      .eq('id', organizationId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching organization:', error);
+      return { success: false, error: error.message };
+    }
+
+    // Fetch addresses separately (polymorphic relationship)
+    const { data: addresses } = await supabase
+      .from('addresses')
+      .select('*')
+      .eq('entity_type', 'organization')
+      .eq('entity_id', organizationId);
+
+    // Get primary contact
+    const primaryContactRelation = data.organization_contacts?.find(
+      (oc: any) => oc.is_primary
+    );
+
+    const organization: OrganizationWithRelations = {
+      ...data,
+      contacts: data.organization_contacts,
+      projects: data.organization_projects,
+      addresses: addresses || [],
+      primary_contact: primaryContactRelation?.contact || null,
+      contacts_count: data.organization_contacts?.length || 0,
+      projects_count: data.organization_projects?.length || 0,
+    };
+
+    return { success: true, data: organization };
+  } catch (error) {
+    console.error('Error in getOrganization:', error);
+    return { success: false, error: 'Failed to fetch organization' };
+  }
+}
+
+// =============================================
+// CREATE ORGANIZATION
+// =============================================
+
+export async function createOrganization(
+  companyId: string,
+  profileId: string,
+  creatorEmail: string,
+  data: CreateOrganizationData
+): Promise<ActionResponse<Organization>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { data: organization, error } = await supabase
+      .from('organizations')
+      .insert({
+        company_id: companyId,
+        name: data.name,
+        organization_type: data.organization_type,
+        status: data.status || 'active',
+        phone: data.phone || null,
+        email: data.email || null,
+        website: data.website || null,
+        notes: data.notes || null,
+        metadata: data.metadata || {},
+        created_by_id: profileId,
+        creator_email: creatorEmail,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating organization:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/protected/contacts-organizations');
+    return { success: true, data: organization };
+  } catch (error) {
+    console.error('Error in createOrganization:', error);
+    return { success: false, error: 'Failed to create organization' };
+  }
+}
+
+// =============================================
+// UPDATE ORGANIZATION
+// =============================================
+
+export async function updateOrganization(
+  data: UpdateOrganizationData
+): Promise<ActionResponse<Organization>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    // Get profile info for activity logging
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, email')
+      .eq('user_id', user.id)
+      .single();
+
+    const { id, ...updateData } = data;
+
+    // Fetch old data for comparison
+    const { data: oldOrg } = await supabase
+      .from('organizations')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    const { data: organization, error } = await supabase
+      .from('organizations')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating organization:', error);
+      return { success: false, error: error.message };
+    }
+
+    // Track changed fields
+    const changedFields: Record<string, { old: any; new: any }> = {};
+    if (oldOrg) {
+      Object.keys(updateData).forEach((key) => {
+        const typedKey = key as keyof typeof updateData;
+        if ((oldOrg as any)[key] !== updateData[typedKey]) {
+          changedFields[key] = { old: (oldOrg as any)[key], new: updateData[typedKey] };
+        }
+      });
+    }
+
+    // Log activity
+    if (Object.keys(changedFields).length > 0) {
+      const description = generateOrganizationUpdateDescription(changedFields);
+      await logOrganizationActivity({
+        entityId: id,
+        activityType: changedFields.status ? 'status_changed' : changedFields.organization_type ? 'type_changed' : 'updated',
+        description,
+        changedFields,
+        performedById: profile?.id,
+        performerEmail: profile?.email || user.email,
+      });
+    }
+
+    revalidatePath('/protected/contacts-organizations');
+    return { success: true, data: organization };
+  } catch (error) {
+    console.error('Error in updateOrganization:', error);
+    return { success: false, error: 'Failed to update organization' };
+  }
+}
+
+// =============================================
+// DELETE ORGANIZATION (soft delete)
+// =============================================
+
+export async function deleteOrganization(
+  organizationId: string
+): Promise<ActionResponse<null>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    // Get profile info for activity logging
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, email')
+      .eq('user_id', user.id)
+      .single();
+
+    // Get organization name for activity log
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('name')
+      .eq('id', organizationId)
+      .single();
+
+    // Soft delete by setting status to inactive
+    const { error } = await supabase
+      .from('organizations')
+      .update({ status: 'inactive' })
+      .eq('id', organizationId);
+
+    if (error) {
+      console.error('Error deleting organization:', error);
+      return { success: false, error: error.message };
+    }
+
+    // Log activity
+    await logOrganizationActivity({
+      entityId: organizationId,
+      activityType: 'deleted',
+      description: `Deleted organization "${org?.name || 'Unknown'}"`,
+      performedById: profile?.id,
+      performerEmail: profile?.email || user.email,
+    });
+
+    revalidatePath('/protected/contacts-organizations');
+    return { success: true, data: null };
+  } catch (error) {
+    console.error('Error in deleteOrganization:', error);
+    return { success: false, error: 'Failed to delete organization' };
+  }
+}
+
+// =============================================
+// ASSIGN ORGANIZATION TO PROJECT
+// =============================================
+
+export async function assignOrganizationToProject(
+  data: AssignOrganizationToProjectData
+): Promise<ActionResponse<null>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { error } = await supabase
+      .from('organization_projects')
+      .upsert({
+        organization_id: data.organization_id,
+        project_id: data.project_id,
+        role: data.role,
+        start_date: data.start_date || null,
+        end_date: data.end_date || null,
+        status: 'active',
+      }, {
+        onConflict: 'organization_id,project_id,role',
+      });
+
+    if (error) {
+      console.error('Error assigning organization to project:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/protected/contacts-organizations');
+    return { success: true, data: null };
+  } catch (error) {
+    console.error('Error in assignOrganizationToProject:', error);
+    return { success: false, error: 'Failed to assign organization to project' };
+  }
+}
+
+// =============================================
+// REMOVE ORGANIZATION FROM PROJECT
+// =============================================
+
+export async function removeOrganizationFromProject(
+  relationshipId: string
+): Promise<ActionResponse<null>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { error } = await supabase
+      .from('organization_projects')
+      .delete()
+      .eq('id', relationshipId);
+
+    if (error) {
+      console.error('Error removing organization from project:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/protected/contacts-organizations');
+    return { success: true, data: null };
+  } catch (error) {
+    console.error('Error in removeOrganizationFromProject:', error);
+    return { success: false, error: 'Failed to remove organization from project' };
+  }
+}
+
+// =============================================
+// GET ORGANIZATION CONTACTS
+// =============================================
+
+export async function getOrganizationContacts(
+  organizationId: string
+): Promise<ActionResponse<any[]>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { data, error } = await supabase
+      .from('organization_contacts')
+      .select(`
+        *,
+        contact:contacts(*)
+      `)
+      .eq('organization_id', organizationId)
+      .order('is_primary', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching organization contacts:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Error in getOrganizationContacts:', error);
+    return { success: false, error: 'Failed to fetch organization contacts' };
+  }
+}
+
+// =============================================
+// GET STATS
+// =============================================
+
+export async function getContactsOrganizationsStats(
+  companyId: string
+): Promise<ActionResponse<ContactsOrganizationsStats>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    // Get organization counts
+    const { data: orgs, error: orgsError } = await supabase
+      .from('organizations')
+      .select('id, organization_type, status')
+      .eq('company_id', companyId);
+
+    if (orgsError) {
+      return { success: false, error: orgsError.message };
+    }
+
+    // Get contact counts
+    const { data: contacts, error: contactsError } = await supabase
+      .from('contacts')
+      .select('id, status')
+      .eq('company_id', companyId);
+
+    if (contactsError) {
+      return { success: false, error: contactsError.message };
+    }
+
+    // Get investigator counts (contacts assigned as PI or Sub-I)
+    const { data: investigators, error: invError } = await supabase
+      .from('organization_contacts')
+      .select('contact_id, role, status')
+      .in('role', ['principal_investigator', 'sub_investigator'])
+      .eq('status', 'active');
+
+    // Calculate stats
+    const stats: ContactsOrganizationsStats = {
+      total_organizations: orgs?.length || 0,
+      active_organizations: orgs?.filter(o => o.status === 'active').length || 0,
+      active_sites: orgs?.filter(o => o.organization_type === 'site' && o.status === 'active').length || 0,
+      total_contacts: contacts?.length || 0,
+      active_contacts: contacts?.filter(c => c.status === 'active').length || 0,
+      active_investigators: investigators?.length || 0,
+      organizations_by_type: {
+        site: orgs?.filter(o => o.organization_type === 'site').length || 0,
+        sponsor: orgs?.filter(o => o.organization_type === 'sponsor').length || 0,
+        cro: orgs?.filter(o => o.organization_type === 'cro').length || 0,
+        vendor: orgs?.filter(o => o.organization_type === 'vendor').length || 0,
+        lab: orgs?.filter(o => o.organization_type === 'lab').length || 0,
+        irb: orgs?.filter(o => o.organization_type === 'irb').length || 0,
+        regulatory: orgs?.filter(o => o.organization_type === 'regulatory').length || 0,
+      },
+      contacts_by_status: {
+        active: contacts?.filter(c => c.status === 'active').length || 0,
+        inactive: contacts?.filter(c => c.status === 'inactive').length || 0,
+        pending: contacts?.filter(c => c.status === 'pending').length || 0,
+      },
+    };
+
+    return { success: true, data: stats };
+  } catch (error) {
+    console.error('Error in getContactsOrganizationsStats:', error);
+    return { success: false, error: 'Failed to fetch stats' };
+  }
+}
+
+// =============================================
+// GET ALL ORGANIZATIONS (for dropdowns)
+// =============================================
+
+export async function getAllOrganizations(
+  companyId: string,
+  organizationType?: OrganizationType
+): Promise<ActionResponse<Organization[]>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    let query = supabase
+      .from('organizations')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('status', 'active')
+      .order('name', { ascending: true });
+
+    if (organizationType) {
+      query = query.eq('organization_type', organizationType);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching all organizations:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Error in getAllOrganizations:', error);
+    return { success: false, error: 'Failed to fetch organizations' };
+  }
+}
+
+// =============================================
+// UPDATE SITE MILESTONES
+// =============================================
+
+export async function updateSiteMilestones(
+  organizationProjectId: string,
+  data: import('@/lib/types/contacts-organizations').UpdateSiteMilestonesData
+): Promise<ActionResponse<import('@/lib/types/contacts-organizations').OrganizationProject>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { data: updated, error } = await supabase
+      .from('organization_projects')
+      .update({
+        site_initiation_date: data.site_initiation_date,
+        site_qualification_date: data.site_qualification_date,
+        irb_approval_date: data.irb_approval_date,
+        irb_expiration_date: data.irb_expiration_date,
+        irb_approval_number: data.irb_approval_number,
+        irb_institution_name: data.irb_institution_name,
+        close_out_date: data.close_out_date,
+        first_subject_enrolled_date: data.first_subject_enrolled_date,
+        last_subject_enrolled_date: data.last_subject_enrolled_date,
+        last_completed_visit_date: data.last_completed_visit_date,
+        planned_subject_count: data.planned_subject_count,
+        enrolled_subject_count: data.enrolled_subject_count,
+        screen_failure_count: data.screen_failure_count,
+        completed_subject_count: data.completed_subject_count,
+      })
+      .eq('id', organizationProjectId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating site milestones:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/protected/contacts-organizations');
+    return { success: true, data: updated };
+  } catch (error) {
+    console.error('Error in updateSiteMilestones:', error);
+    return { success: false, error: 'Failed to update site milestones' };
+  }
+}
+

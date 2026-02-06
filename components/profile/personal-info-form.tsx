@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { AvatarUpload } from './avatar-upload';
+import { formatPhoneNumber, capitalizeFirstLetter } from '@/lib/utils';
 
 interface PersonalInfoFormProps {
   onSuccess: () => void;
@@ -44,24 +45,6 @@ export function PersonalInfoForm({ onSuccess }: PersonalInfoFormProps) {
     loadProfile();
   }, []);
 
-  const formatPhoneNumber = (phone: string): string => {
-    if (!phone) return '';
-    
-    // Remove all non-digit characters
-    const digits = phone.replace(/\D/g, '');
-    
-    // Format based on length
-    if (digits.length <= 3) {
-      return digits;
-    } else if (digits.length <= 6) {
-      return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-    } else if (digits.length <= 10) {
-      return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-    } else {
-      // Limit to 10 digits
-      return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
-    }
-  };
 
   const loadProfile = async () => {
     try {
@@ -172,6 +155,10 @@ export function PersonalInfoForm({ onSuccess }: PersonalInfoFormProps) {
     if (field === 'phone') {
       processedValue = formatPhoneNumber(value);
     }
+    // Capitalize first letter for name fields
+    else if (field === 'firstName' || field === 'lastName' || field === 'displayName' || field === 'jobTitle') {
+      processedValue = capitalizeFirstLetter(value);
+    }
     
     setFormData(prev => ({ ...prev, [field]: processedValue }));
     // Clear error when user starts typing
@@ -277,7 +264,10 @@ export function PersonalInfoForm({ onSuccess }: PersonalInfoFormProps) {
           id="phone"
           type="tel"
           value={formData.phone}
-          onChange={(e) => handleChange('phone', e.target.value)}
+          onChange={(e) => {
+            const formatted = formatPhoneNumber(e.target.value);
+            handleChange('phone', formatted);
+          }}
           placeholder="+1 (555) 123-4567"
           disabled={saving}
           aria-invalid={!!errors.phone}
