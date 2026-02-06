@@ -254,3 +254,52 @@ html.theme-transition::view-transition-new(root) {
     display: none !important;
   }
 }
+
+/* Print styles */
+@media print {
+  @page {
+    margin: 1cm;
+  }
+
+  /* Hide navigation and non-essential elements */
+  nav,
+  button:not(.print-keep),
+  [role="button"]:not(.print-keep),
+  .no-print {
+    display: none !important;
+  }
+
+  /* Ensure tables print properly */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th,
+  td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+  }
+
+  th {
+    background-color: #f2f2f2 !important;
+    font-weight: bold;
+  }
+
+  /* Ensure text is readable */
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Prevent page breaks inside table rows */
+  tr {
+    page-break-inside: avoid;
+  }
+
+  /* Ensure proper spacing */
+  .space-y-4 > * + * {
+    margin-top: 1rem;
+  }
+}
