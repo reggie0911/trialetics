@@ -56,7 +56,7 @@ export function OrganizationMap({ organizationName, address, apiKey }: Organizat
   const render = (status: Status) => {
     if (status === Status.LOADING) {
       return (
-        <Card className="p-6 h-[400px] flex items-center justify-center">
+        <Card className="p-6 h-[200px] flex items-center justify-center">
           <p className="text-xs md:text-xs text-muted-foreground">Loading map...</p>
         </Card>
       );
@@ -154,7 +154,7 @@ function MapComponent({ organizationName, address }: { organizationName: string;
     });
   }, [map, geocoder, address, organizationName]);
 
-  return <div ref={mapRef} className="w-full h-[400px]" />;
+  return <div ref={mapRef} className="w-full h-[200px]" />;
 }
 
 /**
