@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import {
   OrganizationWithRelations,
+  OrganizationNote,
   ORGANIZATION_TYPE_LABELS,
   ENTITY_STATUS_LABELS,
   CONTACT_ROLE_LABELS,
@@ -21,9 +22,13 @@ import {
 import { OrganizationFormDialog } from './organization-form-dialog';
 import { SiteMilestoneDialog } from './site-milestone-dialog';
 import { OrganizationMap } from './organization-map';
+import { ActivityTimeline } from './activity-timeline';
+import { OrganizationNotesSheet } from './organization-notes-sheet';
 
 interface SiteDetailPageClientProps {
   organization: OrganizationWithRelations;
+  activities: any[];
+  notes: OrganizationNote[];
   companyId: string;
   profileId: string;
   userEmail: string;
@@ -31,6 +36,8 @@ interface SiteDetailPageClientProps {
 
 export function SiteDetailPageClient({
   organization: initialOrg,
+  activities: initialActivities,
+  notes: initialNotes,
   companyId,
   profileId,
   userEmail,
@@ -39,6 +46,7 @@ export function SiteDetailPageClient({
   const { toast } = useToast();
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showMilestoneDialog, setShowMilestoneDialog] = useState(false);
+  const [showNotesSheet, setShowNotesSheet] = useState(false);
 
   const handleBack = () => {
     router.push('/protected/contacts-organizations');
@@ -82,10 +90,16 @@ export function SiteDetailPageClient({
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Contacts & Organizations
           </Button>
-          <Button onClick={() => setShowEditDialog(true)} className="text-xs md:text-xs">
-            <Pencil className="h-4 w-4 mr-2" />
-            Edit
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setShowNotesSheet(true)} variant="outline" className="text-xs md:text-xs">
+              <FileText className="h-4 w-4 mr-2" />
+              Notes
+            </Button>
+            <Button onClick={() => setShowEditDialog(true)} className="text-xs md:text-xs">
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+          </div>
         </div>
 
         {/* Site name and badges */}
@@ -107,10 +121,10 @@ export function SiteDetailPageClient({
           </div>
         </div>
 
-        {/* 4-Column Card Grid */}
-        <div className="grid gap-6 md:grid-cols-4">
-          {/* Contact Information Card */}
-          <Card>
+        {/* Main Content: 3x6 Grid Layout */}
+        <div className="grid grid-cols-6 gap-6">
+          {/* Contact Information Card - spans 2 columns */}
+          <Card className="col-span-2 row-span-1">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs md:text-xs font-medium">Contact Information</CardTitle>
             </CardHeader>
@@ -162,77 +176,13 @@ export function SiteDetailPageClient({
             </CardContent>
           </Card>
 
-          {/* Primary Roles Card (Top-Right) */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-xs md:text-xs font-medium">Primary Roles</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-start gap-2 text-xs md:text-xs">
-                <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <span className="text-muted-foreground">Principal Investigator: </span>
-                  <span className="font-medium">
-                    {principalInvestigator 
-                      ? `${principalInvestigator.contact.first_name} ${principalInvestigator.contact.last_name}`
-                      : 'N/A'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-start gap-2 text-xs md:text-xs">
-                <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <span className="text-muted-foreground">Research Director: </span>
-                  <span className="font-medium">
-                    {coordinator 
-                      ? `${coordinator.contact.first_name} ${coordinator.contact.last_name}`
-                      : 'N/A'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-start gap-2 text-xs md:text-xs">
-                <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <span className="text-muted-foreground">Clinical Monitor: </span>
-                  <span className="font-medium">
-                    {clinicalMonitor 
-                      ? `${clinicalMonitor.contact.first_name} ${clinicalMonitor.contact.last_name}`
-                      : 'N/A'}
-                  </span>
-                </div>
-              </div>
-
-              {/* IRB/EC Institutions Section */}
-              <div className="mt-4 pt-4 border-t">
-                <h3 className="text-xs md:text-xs font-medium mb-3">IRB/EC Institutions</h3>
-                <div className="space-y-2">
-                  <div className="flex items-start gap-2 text-xs md:text-xs">
-                    <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
-                    <div className="flex-1">
-                      <span className="text-muted-foreground">Local Institutional Review Board: </span>
-                      <span className="font-medium">{siteProject?.irb_institution_name || 'N/A'}</span>
-                    </div>
-                  </div>
-                  {siteProject?.irb_approval_number && (
-                    <div className="flex items-start gap-2 text-xs md:text-xs">
-                      <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
-                      <div className="flex-1">
-                        <span className="text-muted-foreground">IRB Approval Number: </span>
-                        <span className="font-medium">{siteProject.irb_approval_number}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Profile Information Card (Bottom-Left) */}
-          <Card>
+          {/* Profile Information Card - spans 2 columns */}
+          <Card className="col-span-2 row-span-1">
             <CardHeader className="pb-3">
               <CardTitle className="text-xs md:text-xs font-medium">Profile Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-xs md:text-xs">
+              {/* Profile Information Section */}
               <div className="flex items-start gap-2">
                 <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
                 <div className="flex-1">
@@ -288,11 +238,79 @@ export function SiteDetailPageClient({
                   )}
                 </>
               )}
+
+              {/* Primary Roles Section */}
+              <div className="mt-4 pt-4 border-t">
+                <h3 className="text-xs md:text-xs font-medium mb-3">Primary Roles</h3>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div className="flex-1">
+                      <span className="text-muted-foreground">Principal Investigator: </span>
+                      <span className="font-medium">
+                        {principalInvestigator 
+                          ? `${principalInvestigator.contact.first_name} ${principalInvestigator.contact.last_name}`
+                          : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div className="flex-1">
+                      <span className="text-muted-foreground">Research Director: </span>
+                      <span className="font-medium">
+                        {coordinator 
+                          ? `${coordinator.contact.first_name} ${coordinator.contact.last_name}`
+                          : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div className="flex-1">
+                      <span className="text-muted-foreground">Clinical Monitor: </span>
+                      <span className="font-medium">
+                        {clinicalMonitor 
+                          ? `${clinicalMonitor.contact.first_name} ${clinicalMonitor.contact.last_name}`
+                          : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* IRB/EC Institutions Section */}
+              <div className="mt-4 pt-4 border-t">
+                <h3 className="text-xs md:text-xs font-medium mb-3">IRB/EC Institutions</h3>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div className="flex-1">
+                      <span className="text-muted-foreground">Local Institutional Review Board: </span>
+                      <span className="font-medium">{siteProject?.irb_institution_name || 'N/A'}</span>
+                    </div>
+                  </div>
+                  {siteProject?.irb_approval_number && (
+                    <div className="flex items-start gap-2">
+                      <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
+                      <div className="flex-1">
+                        <span className="text-muted-foreground">IRB Approval Number: </span>
+                        <span className="font-medium">{siteProject.irb_approval_number}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </CardContent>
           </Card>
 
-          {/* Site Milestones Card (Bottom-Right) */}
-          <Card>
+          {/* Activity History - spans 2 columns and 3 rows (right side) */}
+          <div className="col-span-2 row-span-3">
+            <ActivityTimeline activities={initialActivities} />
+          </div>
+
+          {/* Site Milestones Card - spans 2 columns */}
+          <Card className="col-span-2 row-span-1">
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
               <CardTitle className="text-xs md:text-xs font-medium">Site Milestones</CardTitle>
               {siteProject && (
@@ -366,6 +384,65 @@ export function SiteDetailPageClient({
               </div>
             </CardContent>
           </Card>
+
+          {/* Active Staff Members Card - spans 2 columns */}
+          <Card className="col-span-2 row-span-1">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-xs md:text-xs font-medium">Active Staff Members</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs md:text-xs">
+              <div className="flex items-start gap-2">
+                <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-medium">Dr. Sarah Mitchell</div>
+                  <div className="text-muted-foreground">Principal Investigator</div>
+                </div>
+                <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100">
+                  Active
+                </Badge>
+              </div>
+              <div className="flex items-start gap-2">
+                <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-medium">Emily Parker</div>
+                  <div className="text-muted-foreground">Study Coordinator</div>
+                </div>
+                <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100">
+                  Active
+                </Badge>
+              </div>
+              <div className="flex items-start gap-2">
+                <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-medium">James Wilson</div>
+                  <div className="text-muted-foreground">Research Nurse</div>
+                </div>
+                <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100">
+                  Active
+                </Badge>
+              </div>
+              <div className="flex items-start gap-2">
+                <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-medium">Lisa Chen</div>
+                  <div className="text-muted-foreground">Data Manager</div>
+                </div>
+                <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100">
+                  Active
+                </Badge>
+              </div>
+              <div className="flex items-start gap-2">
+                <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-medium">Robert Taylor</div>
+                  <div className="text-muted-foreground">Lab Technician</div>
+                </div>
+                <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100">
+                  Active
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </main>
 
@@ -390,6 +467,18 @@ export function SiteDetailPageClient({
           onSuccess={handleMilestoneSuccess}
         />
       )}
+
+      {/* Notes Sheet */}
+      <OrganizationNotesSheet
+        open={showNotesSheet}
+        onOpenChange={setShowNotesSheet}
+        organizationId={initialOrg.id}
+        organizationName={initialOrg.name}
+        companyId={companyId}
+        profileId={profileId}
+        userEmail={userEmail}
+        initialNotes={initialNotes}
+      />
     </>
   );
 }

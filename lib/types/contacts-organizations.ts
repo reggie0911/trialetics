@@ -95,6 +95,17 @@ export interface Address {
   updated_at: string;
 }
 
+export interface OrganizationNote {
+  id: string;
+  organization_id: string;
+  company_id: string;
+  content: string;
+  created_by_id: string | null;
+  creator_email: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // =============================================
 // Junction Table Interfaces
 // =============================================

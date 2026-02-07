@@ -5,6 +5,7 @@ import { SiteDetailPageClient } from '@/components/contacts-organizations/site-d
 import { createClient } from '@/lib/server';
 import { getOrganization } from '@/lib/actions/organizations';
 import { getOrganizationActivity } from '@/lib/utils/activity-logger';
+import { getOrganizationNotes } from '@/lib/actions/organization-notes';
 
 export default async function OrganizationDetailPage({ 
   params 
@@ -44,6 +45,9 @@ export default async function OrganizationDetailPage({
   const activityResult = await getOrganizationActivity(id);
   const activities = activityResult.success && activityResult.data ? activityResult.data : [];
 
+  // Fetch organization notes
+  const notes = await getOrganizationNotes(id);
+
   // Route to specialized component for sites
   if (organizationResult.data.organization_type === 'site') {
     return (
@@ -51,6 +55,8 @@ export default async function OrganizationDetailPage({
         <ProtectedNavbar />
         <SiteDetailPageClient 
           organization={organizationResult.data}
+          activities={activities}
+          notes={notes}
           companyId={profile.company_id}
           profileId={profile.id}
           userEmail={profile.email || data.user.email || ''}
@@ -66,6 +72,7 @@ export default async function OrganizationDetailPage({
       <OrganizationDetailPageClient 
         organization={organizationResult.data}
         activities={activities}
+        notes={notes}
         companyId={profile.company_id}
         profileId={profile.id}
         userEmail={profile.email || data.user.email || ''}

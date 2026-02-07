@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, FolderOpen, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, FolderOpen, Plus, Trash2, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,6 +27,7 @@ import { removeContactFromOrganization } from '@/lib/actions/contacts';
 import { removeOrganizationFromProject } from '@/lib/actions/organizations';
 import {
   OrganizationWithRelations,
+  OrganizationNote,
   ORGANIZATION_TYPE_LABELS,
   ENTITY_STATUS_LABELS,
   CONTACT_ROLE_LABELS,
@@ -38,10 +39,12 @@ import { AssignContactDialog } from './assign-contact-dialog';
 import { ProjectAssignmentDialog } from './project-assignment-dialog';
 import { ActivityTimeline } from './activity-timeline';
 import { OrganizationMap } from './organization-map';
+import { OrganizationNotesSheet } from './organization-notes-sheet';
 
 interface OrganizationDetailPageClientProps {
   organization: OrganizationWithRelations;
   activities: any[];
+  notes: OrganizationNote[];
   companyId: string;
   profileId: string;
   userEmail: string;
@@ -50,6 +53,7 @@ interface OrganizationDetailPageClientProps {
 export function OrganizationDetailPageClient({
   organization: initialOrg,
   activities: initialActivities,
+  notes: initialNotes,
   companyId,
   profileId,
   userEmail,
@@ -59,6 +63,7 @@ export function OrganizationDetailPageClient({
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showAssignContact, setShowAssignContact] = useState(false);
   const [showAssignProject, setShowAssignProject] = useState(false);
+  const [showNotesSheet, setShowNotesSheet] = useState(false);
   const [removeContactConfirm, setRemoveContactConfirm] = useState<{ relationshipId: string; name: string } | null>(null);
   const [removeProjectConfirm, setRemoveProjectConfirm] = useState<{ relationshipId: string; name: string } | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
@@ -132,10 +137,16 @@ export function OrganizationDetailPageClient({
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Contacts & Organizations
           </Button>
-          <Button onClick={() => setShowEditDialog(true)} className="text-xs md:text-xs">
-            <Pencil className="h-4 w-4 mr-2" />
-            Edit
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setShowNotesSheet(true)} variant="outline" className="text-xs md:text-xs">
+              <FileText className="h-4 w-4 mr-2" />
+              Notes
+            </Button>
+            <Button onClick={() => setShowEditDialog(true)} className="text-xs md:text-xs">
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+          </div>
         </div>
 
         {/* Organization name and badges */}
@@ -520,6 +531,18 @@ export function OrganizationDetailPageClient({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Notes Sheet */}
+      <OrganizationNotesSheet
+        open={showNotesSheet}
+        onOpenChange={setShowNotesSheet}
+        organizationId={initialOrg.id}
+        organizationName={initialOrg.name}
+        companyId={companyId}
+        profileId={profileId}
+        userEmail={userEmail}
+        initialNotes={initialNotes}
+      />
     </>
   );
 }
