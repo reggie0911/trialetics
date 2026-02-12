@@ -44,20 +44,30 @@ function TabsList({
       }
     };
 
-    // Update on mount and when tabs change
-    updateActiveRect();
+    // Defer initial measurement so Radix has time to set data-state="active"
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const rafId = requestAnimationFrame(() => {
+      updateActiveRect();
+      // Retry once after a short delay in case Radix applies state asynchronously
+      timeoutId = setTimeout(updateActiveRect, 50);
+    });
 
     // Create a MutationObserver to watch for state changes
     const observer = new MutationObserver(updateActiveRect);
-    if (listRef.current) {
-      observer.observe(listRef.current, {
+    const list = listRef.current;
+    if (list) {
+      observer.observe(list, {
         attributes: true,
         subtree: true,
         attributeFilter: ['data-state'],
       });
     }
 
-    return () => observer.disconnect();
+    return () => {
+      cancelAnimationFrame(rafId);
+      clearTimeout(timeoutId!);
+      observer.disconnect();
+    };
   }, []);
 
   return (
@@ -73,7 +83,7 @@ function TabsList({
       {/* Sliding gradient background */}
       {activeRect && (
         <div
-          className="from-chart-1 via-chart-2 to-chart-3 absolute z-0 h-[calc(100%-6px)] rounded-sm bg-gradient-to-tr p-[1px] transition-all duration-200 ease-out"
+          className="from-chart-1 via-chart-2 to-chart-3 absolute z-0 top-[3px] h-[calc(100%-6px)] rounded-sm bg-gradient-to-tr p-[1px] transition-all duration-200 ease-out"
           style={{
             width: activeRect.width,
             left: activeRect.left,

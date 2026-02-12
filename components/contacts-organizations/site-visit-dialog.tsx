@@ -196,7 +196,11 @@ export function SiteVisitDialog({
                 onValueChange={(v) => v && setValue('visit_type', v as SiteVisitType)}
               >
                 <SelectTrigger className="text-xs h-8">
-                  <SelectValue />
+                  <SelectValue
+                    getDisplayLabel={(value) =>
+                      value ? SITE_VISIT_TYPE_LABELS[value as SiteVisitType] ?? value : null
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {Object.entries(SITE_VISIT_TYPE_LABELS).map(([value, label]) => (
@@ -215,7 +219,11 @@ export function SiteVisitDialog({
                 onValueChange={(v) => v && setValue('visit_status', v as SiteVisitStatus)}
               >
                 <SelectTrigger className="text-xs h-8">
-                  <SelectValue />
+                  <SelectValue
+                    getDisplayLabel={(value) =>
+                      value ? SITE_VISIT_STATUS_LABELS[value as SiteVisitStatus] ?? value : null
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {Object.entries(SITE_VISIT_STATUS_LABELS).map(([value, label]) => (
@@ -246,7 +254,14 @@ export function SiteVisitDialog({
                 onValueChange={(v) => setValue('project_id', v || '')}
               >
                 <SelectTrigger className="text-xs h-8">
-                  <SelectValue placeholder="Select project" />
+                  <SelectValue
+                    placeholder="Select project"
+                    getDisplayLabel={(value) => {
+                      if (!value) return null;
+                      const p = projects.find((pr) => pr.id === value);
+                      return p ? `${p.protocol_number} - ${p.protocol_name}` : 'Unknown project';
+                    }}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="" className="text-xs">None</SelectItem>
@@ -268,7 +283,14 @@ export function SiteVisitDialog({
                 onValueChange={(v) => setValue('assigned_to_id', v || '')}
               >
                 <SelectTrigger className="text-xs h-8">
-                  <SelectValue placeholder="Select assignee" />
+                  <SelectValue
+                    placeholder="Select assignee"
+                    getDisplayLabel={(value) => {
+                      if (!value) return null;
+                      const profile = profiles.find((p) => p.id === value);
+                      return profile ? (profile.first_name || profile.email || 'Unassigned') : 'Unknown user';
+                    }}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="" className="text-xs">Unassigned</SelectItem>

@@ -24,6 +24,7 @@ const menuItems = [
     trigger: "CTMS",
     items: [
       { label: "Contacts & Organizations", href: "/protected/contacts-organizations" },
+      { label: "Clinical Trip Reports", href: "/protected/trip-reports" },
       { label: "Document Management", href: "/protected/document-management" },
       { label: "Clinical Trials Management", href: "/protected/clinical-trials" },
       { label: "Clinical Payments", href: "/protected/clinical-payments" },
