@@ -10,6 +10,35 @@ export type ActionResponse<T> = {
   error?: string;
 };
 
+export async function getSiteVisit(
+  siteVisitId: string
+): Promise<ActionResponse<SiteVisit & { organization_id: string }>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { data, error } = await supabase
+      .from('site_visits')
+      .select('*')
+      .eq('id', siteVisitId)
+      .single();
+
+    if (error) {
+      console.error('Error fetching site visit:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data as SiteVisit & { organization_id: string } };
+  } catch (error) {
+    console.error('Error in getSiteVisit:', error);
+    return { success: false, error: 'Failed to fetch site visit' };
+  }
+}
+
 export async function getSiteVisits(
   organizationId: string
 ): Promise<ActionResponse<Array<SiteVisit & { assigned_to?: { id: string; first_name: string | null; email: string | null } | null; project?: { id: string; protocol_number: string; protocol_name: string } | null }>>> {

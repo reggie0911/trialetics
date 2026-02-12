@@ -11,6 +11,7 @@ import { getSatelliteSites, getParentSite } from '@/lib/actions/organizations';
 import { getOrganizationTeamMembers } from '@/lib/actions/organization-team-members';
 import { getOrganizationActivity } from '@/lib/utils/activity-logger';
 import { getOrganizationNotes } from '@/lib/actions/organization-notes';
+import { getTripReportsByOrganization } from '@/lib/actions/trip-reports';
 
 export default async function OrganizationDetailPage({ 
   params 
@@ -78,6 +79,22 @@ export default async function OrganizationDetailPage({
   const siteTeamMembers = organizationResult.data.organization_type === 'site'
     ? (await getOrganizationTeamMembers(id)).data ?? []
     : [];
+  const tripReportsResult = organizationResult.data.organization_type === 'site'
+    ? await getTripReportsByOrganization(id)
+    : { success: true, data: [] };
+  const tripReports = tripReportsResult.success && tripReportsResult.data
+    ? tripReportsResult.data
+    : [];
+  const siteVisitToTripReport: Record<string, string> = {};
+  const sortedByVersion = [...tripReports].sort(
+    (a, b) => ((b as { version?: number }).version ?? 0) - ((a as { version?: number }).version ?? 0)
+  );
+  for (const tr of sortedByVersion) {
+    const trData = tr as { site_visit_id: string; id: string };
+    if (!siteVisitToTripReport[trData.site_visit_id]) {
+      siteVisitToTripReport[trData.site_visit_id] = trData.id;
+    }
+  }
 
   // Route to specialized component for sites
   if (organizationResult.data.organization_type === 'site') {
@@ -99,6 +116,7 @@ export default async function OrganizationDetailPage({
           companyId={profile.company_id}
           profileId={profile.id}
           userEmail={profile.email || data.user.email || ''}
+          siteVisitToTripReport={siteVisitToTripReport}
         />
       </div>
     );

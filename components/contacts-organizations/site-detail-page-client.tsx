@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, Calendar, FileText, Archive, Plus, CalendarCheck, Trash2, FileSignature, FileCheck, Network, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -108,6 +109,7 @@ interface SiteDetailPageClientProps {
   companyId: string;
   profileId: string;
   userEmail: string;
+  siteVisitToTripReport?: Record<string, string>;
 }
 
 export function SiteDetailPageClient({
@@ -125,6 +127,7 @@ export function SiteDetailPageClient({
   companyId,
   profileId,
   userEmail,
+  siteVisitToTripReport = {},
 }: SiteDetailPageClientProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -717,6 +720,21 @@ export function SiteDetailPageClient({
                       {SITE_VISIT_STATUS_LABELS[visit.visit_status as keyof typeof SITE_VISIT_STATUS_LABELS] || visit.visit_status}
                     </Badge>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {siteVisitToTripReport[visit.id] ? (
+                        <Link href={`/protected/trip-reports/${siteVisitToTripReport[visit.id]}`}>
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" title="View Trip Report">
+                            <FileText className="h-3 w-3 mr-1" />
+                            Trip Report
+                          </Button>
+                        </Link>
+                      ) : (
+                        <Link href={`/protected/trip-reports?createFrom=${visit.id}`}>
+                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs" title="Create Trip Report">
+                            <Plus className="h-3 w-3 mr-1" />
+                            Trip Report
+                          </Button>
+                        </Link>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
