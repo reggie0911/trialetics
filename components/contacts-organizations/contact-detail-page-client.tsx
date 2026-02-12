@@ -41,6 +41,7 @@ interface ContactDetailPageClientProps {
   companyId: string;
   profileId: string;
   userEmail: string;
+  userRole?: string;
 }
 
 export function ContactDetailPageClient({
@@ -49,6 +50,7 @@ export function ContactDetailPageClient({
   companyId,
   profileId,
   userEmail,
+  userRole = 'user',
 }: ContactDetailPageClientProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -143,7 +145,9 @@ export function ContactDetailPageClient({
           </div>
           <div className="flex gap-2 items-center">
             {initialContact.title && (
-              <span className="text-xs md:text-xs text-muted-foreground">{initialContact.title}</span>
+              <span className="text-xs md:text-xs text-muted-foreground">
+                {CONTACT_ROLE_LABELS[initialContact.title as keyof typeof CONTACT_ROLE_LABELS] || initialContact.title}
+              </span>
             )}
             <Badge
               variant={initialContact.status === 'active' ? 'default' : 'secondary'}
@@ -427,6 +431,7 @@ export function ContactDetailPageClient({
         companyId={companyId}
         profileId={profileId}
         userEmail={userEmail}
+        userRole={userRole}
         onSuccess={() => {
           setShowEditDialog(false);
           router.refresh();

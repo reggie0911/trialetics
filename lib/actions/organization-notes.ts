@@ -33,6 +33,7 @@ export async function getOrganizationNotes(organizationId: string): Promise<Orga
  * @param content - The note content
  * @param createdById - The profile ID of the creator
  * @param creatorEmail - The email of the creator
+ * @param noteType - Optional note type (general, exclusion, etc.)
  * @returns The created note
  */
 export async function createOrganizationNote(
@@ -40,7 +41,8 @@ export async function createOrganizationNote(
   companyId: string,
   content: string,
   createdById: string,
-  creatorEmail: string
+  creatorEmail: string,
+  noteType?: string | null
 ): Promise<OrganizationNote> {
   const supabase = await createClient();
 
@@ -61,6 +63,7 @@ export async function createOrganizationNote(
       content: content.trim(),
       created_by_id: createdById,
       creator_email: creatorEmail,
+      note_type: noteType || 'general',
     })
     .select()
     .single();
@@ -80,11 +83,13 @@ export async function createOrganizationNote(
  * Update an existing note
  * @param noteId - The note ID
  * @param content - The updated content
+ * @param noteType - Optional note type update
  * @returns The updated note
  */
 export async function updateOrganizationNote(
   noteId: string,
-  content: string
+  content: string,
+  noteType?: string | null
 ): Promise<OrganizationNote> {
   const supabase = await createClient();
 
@@ -97,12 +102,17 @@ export async function updateOrganizationNote(
     throw new Error('Note content is too long (maximum 10000 characters)');
   }
 
+  const updatePayload: Record<string, unknown> = {
+    content: content.trim(),
+    updated_at: new Date().toISOString(),
+  };
+  if (noteType !== undefined) {
+    updatePayload.note_type = noteType || 'general';
+  }
+
   const { data, error } = await supabase
     .from('organization_notes')
-    .update({
-      content: content.trim(),
-      updated_at: new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq('id', noteId)
     .select()
     .single();

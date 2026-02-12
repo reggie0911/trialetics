@@ -20,16 +20,22 @@ function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
 
 interface SelectValueProps extends SelectPrimitive.Value.Props {
   placeholder?: string;
+  getDisplayLabel?: (value: string | null) => string | null;
 }
 
-function SelectValue({ className, placeholder, ...props }: SelectValueProps) {
+function SelectValue({ className, placeholder, getDisplayLabel, children, ...props }: SelectValueProps) {
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("flex flex-1 text-left", className)}
       {...props}
     >
-      {(value) => value ?? placeholder ?? null}
+      {children || ((value) => {
+        if (getDisplayLabel) {
+          return getDisplayLabel(value) ?? placeholder ?? null;
+        }
+        return value ?? placeholder ?? null;
+      })}
     </SelectPrimitive.Value>
   )
 }

@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, Calendar, FileText } from 'lucide-react';
+import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, Calendar, FileText, Archive, Plus, CalendarCheck, Trash2, FileSignature, FileCheck, Network, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,11 +24,87 @@ import { SiteMilestoneDialog } from './site-milestone-dialog';
 import { OrganizationMap } from './organization-map';
 import { ActivityTimeline } from './activity-timeline';
 import { OrganizationNotesSheet } from './organization-notes-sheet';
+import { ArchiveContactDialog } from './archive-contact-dialog';
+import { SiteVisitDialog } from './site-visit-dialog';
+import { SiteContractDialog } from './site-contract-dialog';
+import { SiteDocumentDialog } from './site-document-dialog';
+import { SatelliteSitesDialog } from './satellite-sites-dialog';
+import { SiteTeamMemberDialog } from './site-team-member-dialog';
+import { deleteSiteVisit } from '@/lib/actions/site-visits';
+import { deleteSiteContract } from '@/lib/actions/site-contracts';
+import { deleteSiteDocument } from '@/lib/actions/site-documents';
+import { removeOrganizationTeamMember } from '@/lib/actions/organization-team-members';
+import {
+  SITE_VISIT_TYPE_LABELS,
+  SITE_VISIT_STATUS_LABELS,
+  SITE_CONTRACT_TYPE_LABELS,
+  SITE_CONTRACT_STATUS_LABELS,
+  SITE_DOCUMENT_TYPE_LABELS,
+  SITE_DOCUMENT_STATUS_LABELS,
+  type SiteVisit,
+  type SiteVisitType,
+  type SiteContract,
+  type SiteContractType,
+  type SiteDocument,
+  type SiteDocumentType,
+} from '@/lib/types/contacts-organizations';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import type { OrganizationContactWithContact } from '@/lib/types/contacts-organizations';
+
+interface OrganizationStatusHistoryItem {
+  id: string;
+  old_status: string;
+  new_status: string;
+  changed_at: string;
+  changed_by_email: string | null;
+}
+
+interface SiteVisitItem extends SiteVisit {}
+interface SiteContractItem extends SiteContract {}
+interface SiteDocumentItem extends SiteDocument {}
+
+interface SatelliteSiteItem {
+  id: string;
+  name: string;
+  status: string;
+  organization_type: string;
+}
+
+interface ParentSiteItem {
+  id: string;
+  name: string;
+  status: string;
+}
+
+interface SiteTeamMemberItem {
+  id: string;
+  organization_id: string;
+  profile_id: string;
+  role: string;
+  profile?: { id: string; first_name: string | null; email: string | null };
+}
 
 interface SiteDetailPageClientProps {
   organization: OrganizationWithRelations;
   activities: any[];
   notes: OrganizationNote[];
+  statusHistory: OrganizationStatusHistoryItem[];
+  siteVisits: SiteVisitItem[];
+  siteContracts: SiteContractItem[];
+  siteDocuments: SiteDocumentItem[];
+  satelliteSites: SatelliteSiteItem[];
+  parentSite: ParentSiteItem | null;
+  siteTeamMembers: SiteTeamMemberItem[];
+  profiles: Array<{ id: string; first_name: string | null; email: string | null }>;
   companyId: string;
   profileId: string;
   userEmail: string;
@@ -38,6 +114,14 @@ export function SiteDetailPageClient({
   organization: initialOrg,
   activities: initialActivities,
   notes: initialNotes,
+  statusHistory = [],
+  siteVisits = [],
+  siteContracts = [],
+  siteDocuments = [],
+  satelliteSites = [],
+  parentSite = null,
+  siteTeamMembers = [],
+  profiles = [],
   companyId,
   profileId,
   userEmail,
@@ -47,6 +131,24 @@ export function SiteDetailPageClient({
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showMilestoneDialog, setShowMilestoneDialog] = useState(false);
   const [showNotesSheet, setShowNotesSheet] = useState(false);
+  const [contactToArchive, setContactToArchive] = useState<OrganizationContactWithContact | null>(null);
+  const [showSiteVisitDialog, setShowSiteVisitDialog] = useState(false);
+  const [editingVisit, setEditingVisit] = useState<SiteVisit | null>(null);
+  const [visitToDelete, setVisitToDelete] = useState<SiteVisit | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showContractDialog, setShowContractDialog] = useState(false);
+  const [editingContract, setEditingContract] = useState<SiteContract | null>(null);
+  const [contractToDelete, setContractToDelete] = useState<SiteContract | null>(null);
+  const [isDeletingContract, setIsDeletingContract] = useState(false);
+  const [showDocumentDialog, setShowDocumentDialog] = useState(false);
+  const [editingDocument, setEditingDocument] = useState<SiteDocument | null>(null);
+  const [documentToDelete, setDocumentToDelete] = useState<SiteDocument | null>(null);
+  const [isDeletingDocument, setIsDeletingDocument] = useState(false);
+  const [showSetParentDialog, setShowSetParentDialog] = useState(false);
+  const [showAddSatelliteDialog, setShowAddSatelliteDialog] = useState(false);
+  const [showTeamMemberDialog, setShowTeamMemberDialog] = useState(false);
+  const [teamMemberToRemove, setTeamMemberToRemove] = useState<SiteTeamMemberItem | null>(null);
+  const [isRemovingMember, setIsRemovingMember] = useState(false);
 
   const handleBack = () => {
     router.push('/protected/contacts-organizations');
@@ -80,6 +182,122 @@ export function SiteDetailPageClient({
     if (!dateStr) return '—';
     return new Date(dateStr).toLocaleDateString();
   };
+
+  const formatDateTime = (dateStr: string | null | undefined) => {
+    if (!dateStr) return '—';
+    return new Date(dateStr).toLocaleString(undefined, {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    });
+  };
+
+  const getAssigneeName = (profileId: string | null) => {
+    if (!profileId) return null;
+    const p = profiles.find((pr) => pr.id === profileId);
+    return p?.first_name || p?.email || null;
+  };
+
+  const handleSiteVisitSuccess = () => {
+    setShowSiteVisitDialog(false);
+    setEditingVisit(null);
+    router.refresh();
+  };
+
+  const handleDeleteVisit = async () => {
+    if (!visitToDelete) return;
+    setIsDeleting(true);
+    const result = await deleteSiteVisit(visitToDelete.id);
+    if (result.success) {
+      setVisitToDelete(null);
+      router.refresh();
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to delete visit',
+        variant: 'destructive',
+      });
+    }
+    setIsDeleting(false);
+  };
+
+  const handleContractSuccess = () => {
+    setShowContractDialog(false);
+    setEditingContract(null);
+    router.refresh();
+  };
+
+  const handleDeleteContract = async () => {
+    if (!contractToDelete) return;
+    setIsDeletingContract(true);
+    const result = await deleteSiteContract(contractToDelete.id);
+    if (result.success) {
+      setContractToDelete(null);
+      router.refresh();
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to delete contract',
+        variant: 'destructive',
+      });
+    }
+    setIsDeletingContract(false);
+  };
+
+  const handleDocumentSuccess = () => {
+    setShowDocumentDialog(false);
+    setEditingDocument(null);
+    router.refresh();
+  };
+
+  const handleDeleteDocument = async () => {
+    if (!documentToDelete) return;
+    setIsDeletingDocument(true);
+    const result = await deleteSiteDocument(documentToDelete.id);
+    if (result.success) {
+      setDocumentToDelete(null);
+      router.refresh();
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to delete document',
+        variant: 'destructive',
+      });
+    }
+    setIsDeletingDocument(false);
+  };
+
+  const getPayeeName = (contactId: string | null) => {
+    if (!contactId) return null;
+    const oc = initialOrg.contacts?.find((c) => c.contact_id === contactId);
+    return oc?.contact ? `${oc.contact.first_name || ''} ${oc.contact.last_name || ''}`.trim() || null : null;
+  };
+
+  const handleRemoveTeamMember = async () => {
+    if (!teamMemberToRemove) return;
+    setIsRemovingMember(true);
+    const result = await removeOrganizationTeamMember(teamMemberToRemove.id);
+    if (result.success) {
+      setTeamMemberToRemove(null);
+      router.refresh();
+    } else {
+      toast({ title: 'Error', description: result.error, variant: 'destructive' });
+    }
+    setIsRemovingMember(false);
+  };
+
+  const projects = initialOrg.projects?.map((p) => ({
+    id: p.project.id,
+    protocol_number: p.project.protocol_number,
+    protocol_name: p.project.protocol_name,
+  })) ?? [];
+
+  const contractContacts = Array.from(
+    new Map(
+      (initialOrg.contacts ?? [])
+        .filter((oc) => oc.contact)
+        .map((oc) => [oc.contact!.id, { id: oc.contact!.id, first_name: oc.contact!.first_name, last_name: oc.contact!.last_name }])
+    ).values()
+  );
 
   return (
     <>
@@ -391,56 +609,391 @@ export function SiteDetailPageClient({
               <CardTitle className="text-xs md:text-xs font-medium">Active Staff Members</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-xs md:text-xs">
-              <div className="flex items-start gap-2">
-                <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <div className="font-medium">Dr. Sarah Mitchell</div>
-                  <div className="text-muted-foreground">Principal Investigator</div>
-                </div>
-                <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100">
-                  Active
-                </Badge>
+              {(() => {
+                const activeContacts = (initialOrg.contacts ?? []).filter(
+                  (oc) => oc.status === 'active' && (!oc.end_date || new Date(oc.end_date) >= new Date())
+                );
+                if (activeContacts.length === 0) {
+                  return (
+                    <p className="text-muted-foreground italic">No active staff assigned</p>
+                  );
+                }
+                return activeContacts.map((oc) => (
+                  <div key={oc.id} className="flex items-start gap-2 group">
+                    <Users className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">
+                        {oc.contact?.credentials ? `${oc.contact.credentials} ` : ''}
+                        {oc.contact?.first_name} {oc.contact?.last_name}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {CONTACT_ROLE_LABELS[oc.role] || oc.role}
+                      </div>
+                    </div>
+                    <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100 flex-shrink-0">
+                      Active
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                      onClick={() => setContactToArchive(oc)}
+                      title="Archive contact"
+                    >
+                      <Archive className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ));
+              })()}
+            </CardContent>
+          </Card>
+
+          {/* Status History Card - spans 2 columns */}
+          <Card className="col-span-2 row-span-1">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-xs md:text-xs font-medium">Status History</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs md:text-xs">
+              {statusHistory.length === 0 ? (
+                <p className="text-muted-foreground italic">No status changes recorded</p>
+              ) : (
+                statusHistory.map((entry) => (
+                  <div key={entry.id} className="flex items-start gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium">
+                        {ENTITY_STATUS_LABELS[entry.old_status as keyof typeof ENTITY_STATUS_LABELS] || entry.old_status}
+                        {' → '}
+                        {ENTITY_STATUS_LABELS[entry.new_status as keyof typeof ENTITY_STATUS_LABELS] || entry.new_status}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {formatDate(entry.changed_at)}
+                        {entry.changed_by_email && (
+                          <span className="ml-1">· {entry.changed_by_email}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Site Visits Card - spans 2 columns */}
+          <Card className="col-span-2 row-span-1">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-xs md:text-xs font-medium">Site Visits</CardTitle>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditingVisit(null);
+                  setShowSiteVisitDialog(true);
+                }}
+                className="text-xs"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Visit
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs md:text-xs">
+              {siteVisits.length === 0 ? (
+                <p className="text-muted-foreground italic">No site visits scheduled</p>
+              ) : (
+                siteVisits.map((visit) => (
+                  <div key={visit.id} className="flex items-start gap-2 group">
+                    <CalendarCheck className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{visit.visit_name}</div>
+                      <div className="text-muted-foreground">
+                        {SITE_VISIT_TYPE_LABELS[visit.visit_type as SiteVisitType] || visit.visit_type}
+                        {' · '}
+                        {formatDateTime(visit.visit_start)}
+                        {getAssigneeName(visit.assigned_to_id) && (
+                          <span> · {getAssigneeName(visit.assigned_to_id)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] flex-shrink-0">
+                      {SITE_VISIT_STATUS_LABELS[visit.visit_status as keyof typeof SITE_VISIT_STATUS_LABELS] || visit.visit_status}
+                    </Badge>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        onClick={() => {
+                          setEditingVisit(visit);
+                          setShowSiteVisitDialog(true);
+                        }}
+                        title="Edit"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                        onClick={() => setVisitToDelete(visit)}
+                        title="Delete"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Contracts Card - spans 2 columns */}
+          <Card className="col-span-2 row-span-1">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-xs md:text-xs font-medium">Contracts</CardTitle>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditingContract(null);
+                  setShowContractDialog(true);
+                }}
+                className="text-xs"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Contract
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs md:text-xs">
+              {siteContracts.length === 0 ? (
+                <p className="text-muted-foreground italic">No contracts associated</p>
+              ) : (
+                siteContracts.map((contract) => (
+                  <div key={contract.id} className="flex items-start gap-2 group">
+                    <FileSignature className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">
+                        {SITE_CONTRACT_TYPE_LABELS[contract.contract_type as SiteContractType]}
+                        {contract.contract_amount != null && (
+                          <span className="text-muted-foreground ml-1">
+                            {contract.currency_code || 'USD'} {Number(contract.contract_amount).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {getPayeeName(contract.payee_contact_id) && (
+                          <span>Payee: {getPayeeName(contract.payee_contact_id)}</span>
+                        )}
+                        {contract.effective_date && (
+                          <span className="ml-1">· Effective {formatDate(contract.effective_date)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] flex-shrink-0">
+                      {SITE_CONTRACT_STATUS_LABELS[contract.status as keyof typeof SITE_CONTRACT_STATUS_LABELS]}
+                    </Badge>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        onClick={() => {
+                          setEditingContract(contract);
+                          setShowContractDialog(true);
+                        }}
+                        title="Edit"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                        onClick={() => setContractToDelete(contract)}
+                        title="Delete"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Documents Card - spans 2 columns */}
+          <Card className="col-span-2 row-span-1">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-xs md:text-xs font-medium">Documents</CardTitle>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setEditingDocument(null);
+                  setShowDocumentDialog(true);
+                }}
+                className="text-xs"
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Document
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs md:text-xs">
+              {siteDocuments.length === 0 ? (
+                <p className="text-muted-foreground italic">No documents tracked</p>
+              ) : (
+                siteDocuments.map((doc) => (
+                  <div key={doc.id} className="flex items-start gap-2 group">
+                    <FileCheck className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{doc.document_name}</div>
+                      <div className="text-muted-foreground">
+                        {SITE_DOCUMENT_TYPE_LABELS[doc.document_type as SiteDocumentType]}
+                        {doc.received_date && (
+                          <span className="ml-1">· Received {formatDate(doc.received_date)}</span>
+                        )}
+                        {doc.expiration_date && (
+                          <span className="ml-1">· Expires {formatDate(doc.expiration_date)}</span>
+                        )}
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] flex-shrink-0">
+                      {SITE_DOCUMENT_STATUS_LABELS[doc.status as keyof typeof SITE_DOCUMENT_STATUS_LABELS]}
+                    </Badge>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        onClick={() => {
+                          setEditingDocument(doc);
+                          setShowDocumentDialog(true);
+                        }}
+                        title="Edit"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                        onClick={() => setDocumentToDelete(doc)}
+                        title="Delete"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Satellite Sites Card */}
+          <Card className="col-span-2 row-span-1">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-xs md:text-xs font-medium">Satellite Sites</CardTitle>
+              <div className="flex gap-1">
+                <Button size="sm" onClick={() => setShowSetParentDialog(true)} className="text-xs">
+                  Set Parent
+                </Button>
+                <Button size="sm" onClick={() => setShowAddSatelliteDialog(true)} className="text-xs">
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add Satellite
+                </Button>
               </div>
-              <div className="flex items-start gap-2">
-                <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <div className="font-medium">Emily Parker</div>
-                  <div className="text-muted-foreground">Study Coordinator</div>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs md:text-xs">
+              {parentSite && (
+                <div className="flex items-center gap-2">
+                  <Network className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <span className="text-muted-foreground">Parent:</span>
+                  <Button variant="link" className="h-auto p-0 text-xs font-medium" onClick={() => router.push(`/protected/contacts-organizations/${parentSite.id}`)}>
+                    {parentSite.name}
+                  </Button>
                 </div>
-                <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100">
-                  Active
-                </Badge>
-              </div>
-              <div className="flex items-start gap-2">
-                <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <div className="font-medium">James Wilson</div>
-                  <div className="text-muted-foreground">Research Nurse</div>
-                </div>
-                <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100">
-                  Active
-                </Badge>
-              </div>
-              <div className="flex items-start gap-2">
-                <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <div className="font-medium">Lisa Chen</div>
-                  <div className="text-muted-foreground">Data Manager</div>
-                </div>
-                <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100">
-                  Active
-                </Badge>
-              </div>
-              <div className="flex items-start gap-2">
-                <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <div className="font-medium">Robert Taylor</div>
-                  <div className="text-muted-foreground">Lab Technician</div>
-                </div>
-                <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100">
-                  Active
-                </Badge>
-              </div>
+              )}
+              {satelliteSites.length > 0 ? (
+                satelliteSites.map((sit) => (
+                  <div key={sit.id} className="flex items-center gap-2">
+                    <Network className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <Button variant="link" className="h-auto p-0 text-xs font-medium" onClick={() => router.push(`/protected/contacts-organizations/${sit.id}`)}>
+                      {sit.name}
+                    </Button>
+                  </div>
+                ))
+              ) : !parentSite && (
+                <p className="text-muted-foreground italic">No parent or satellite sites linked</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Site Team Card */}
+          <Card className="col-span-2 row-span-1">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-xs md:text-xs font-medium">Site Team</CardTitle>
+              <Button size="sm" onClick={() => setShowTeamMemberDialog(true)} className="text-xs">
+                <UserPlus className="h-3 w-3 mr-1" />
+                Add Member
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs md:text-xs">
+              {siteTeamMembers.length === 0 ? (
+                <p className="text-muted-foreground italic">No team members assigned</p>
+              ) : (
+                siteTeamMembers.map((m) => (
+                  <div key={m.id} className="flex items-center gap-2 group">
+                    <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <span className="flex-1">{m.profile?.first_name || m.profile?.email || m.profile_id}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive"
+                      onClick={() => setTeamMemberToRemove(m)}
+                      title="Remove"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Contact History Card - spans 2 columns */}
+          <Card className="col-span-2 row-span-1">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-xs md:text-xs font-medium">Contact History</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs md:text-xs">
+              {(() => {
+                const now = new Date();
+                const archivedContacts = (initialOrg.contacts ?? []).filter(
+                  (oc) => oc.end_date != null && new Date(oc.end_date) < now
+                ).sort((a, b) => {
+                  const dateA = new Date(a.end_date!).getTime();
+                  const dateB = new Date(b.end_date!).getTime();
+                  return dateB - dateA;
+                });
+                if (archivedContacts.length === 0) {
+                  return (
+                    <p className="text-muted-foreground italic">No archived contacts</p>
+                  );
+                }
+                return archivedContacts.map((oc) => (
+                  <div key={oc.id} className="flex items-start gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0 opacity-60" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">
+                        {oc.contact?.credentials ? `${oc.contact.credentials} ` : ''}
+                        {oc.contact?.first_name} {oc.contact?.last_name}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {CONTACT_ROLE_LABELS[oc.role] || oc.role}
+                        {oc.end_date && (
+                          <span className="ml-1">· Ended {formatDate(oc.end_date)}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ));
+              })()}
             </CardContent>
           </Card>
         </div>
@@ -479,6 +1032,171 @@ export function SiteDetailPageClient({
         userEmail={userEmail}
         initialNotes={initialNotes}
       />
+
+      {/* Archive Contact Dialog */}
+      <ArchiveContactDialog
+        open={!!contactToArchive}
+        onOpenChange={(open) => !open && setContactToArchive(null)}
+        onSuccess={() => {
+          setContactToArchive(null);
+          router.refresh();
+        }}
+        organizationContact={contactToArchive}
+        organizationName={initialOrg.name}
+      />
+
+      {/* Site Visit Dialog */}
+      <SiteVisitDialog
+        open={showSiteVisitDialog}
+        onOpenChange={setShowSiteVisitDialog}
+        onSuccess={handleSiteVisitSuccess}
+        organizationId={initialOrg.id}
+        companyId={companyId}
+        visit={editingVisit}
+        projects={projects}
+      />
+
+      {/* Delete Visit Confirmation */}
+      <AlertDialog open={!!visitToDelete} onOpenChange={() => setVisitToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xs">Delete Site Visit</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">
+              Are you sure you want to delete &quot;{visitToDelete?.visit_name}&quot;? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="text-xs text-destructive hover:bg-destructive/10"
+              onClick={handleDeleteVisit}
+              disabled={isDeleting}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Site Contract Dialog */}
+      <SiteContractDialog
+        open={showContractDialog}
+        onOpenChange={setShowContractDialog}
+        onSuccess={handleContractSuccess}
+        organizationId={initialOrg.id}
+        contract={editingContract}
+        projects={projects}
+        contacts={contractContacts}
+      />
+
+      {/* Delete Contract Confirmation */}
+      <AlertDialog open={!!contractToDelete} onOpenChange={() => setContractToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xs">Delete Contract</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">
+              Are you sure you want to delete this contract? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="text-xs text-destructive hover:bg-destructive/10"
+              onClick={handleDeleteContract}
+              disabled={isDeletingContract}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Site Document Dialog */}
+      <SiteDocumentDialog
+        open={showDocumentDialog}
+        onOpenChange={setShowDocumentDialog}
+        onSuccess={handleDocumentSuccess}
+        organizationId={initialOrg.id}
+        document={editingDocument}
+        projects={projects}
+      />
+
+      {/* Delete Document Confirmation */}
+      <AlertDialog open={!!documentToDelete} onOpenChange={() => setDocumentToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xs">Delete Document</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">
+              Are you sure you want to delete &quot;{documentToDelete?.document_name}&quot;? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="text-xs text-destructive hover:bg-destructive/10"
+              onClick={handleDeleteDocument}
+              disabled={isDeletingDocument}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Satellite Sites Dialogs */}
+      <SatelliteSitesDialog
+        open={showSetParentDialog}
+        onOpenChange={setShowSetParentDialog}
+        onSuccess={() => router.refresh()}
+        mode="set_parent"
+        organizationId={initialOrg.id}
+        organizationName={initialOrg.name}
+        companyId={companyId}
+        currentParentId={parentSite?.id ?? initialOrg.parent_organization_id}
+        satelliteIds={satelliteSites.map((s) => s.id)}
+      />
+      <SatelliteSitesDialog
+        open={showAddSatelliteDialog}
+        onOpenChange={setShowAddSatelliteDialog}
+        onSuccess={() => router.refresh()}
+        mode="add_satellite"
+        organizationId={initialOrg.id}
+        organizationName={initialOrg.name}
+        companyId={companyId}
+        satelliteIds={satelliteSites.map((s) => s.id)}
+      />
+
+      {/* Site Team Member Dialog */}
+      <SiteTeamMemberDialog
+        open={showTeamMemberDialog}
+        onOpenChange={setShowTeamMemberDialog}
+        onSuccess={() => router.refresh()}
+        organizationId={initialOrg.id}
+        profiles={profiles}
+        existingMemberIds={siteTeamMembers.map((m) => m.profile_id)}
+      />
+
+      {/* Remove Team Member Confirmation */}
+      <AlertDialog open={!!teamMemberToRemove} onOpenChange={() => setTeamMemberToRemove(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xs">Remove Team Member</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs">
+              Are you sure you want to remove {teamMemberToRemove?.profile?.first_name || teamMemberToRemove?.profile?.email || 'this member'} from the site team?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="text-xs text-destructive hover:bg-destructive/10"
+              onClick={handleRemoveTeamMember}
+              disabled={isRemovingMember}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

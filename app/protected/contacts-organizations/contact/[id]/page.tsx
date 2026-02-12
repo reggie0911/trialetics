@@ -52,6 +52,7 @@ export default async function ContactDetailPage({
         companyId={profile.company_id}
         profileId={profile.id}
         userEmail={profile.email || data.user.email || ''}
+        userRole={profile.role || 'user'}
       />
     </div>
   );

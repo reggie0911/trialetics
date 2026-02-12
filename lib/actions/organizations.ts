@@ -221,6 +221,139 @@ export async function getOrganization(
 }
 
 // =============================================
+// GET ORGANIZATION STATUS HISTORY
+// =============================================
+
+export async function getOrganizationStatusHistory(
+  organizationId: string
+): Promise<{ success: boolean; data?: Array<{ id: string; old_status: string; new_status: string; changed_at: string; changed_by_email: string | null }>; error?: string }> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { data, error } = await supabase
+      .from('organization_status_history')
+      .select('id, old_status, new_status, changed_at, changed_by_email')
+      .eq('organization_id', organizationId)
+      .order('changed_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching organization status history:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Error in getOrganizationStatusHistory:', error);
+    return { success: false, error: 'Failed to fetch status history' };
+  }
+}
+
+// =============================================
+// SATELLITE SITES (Phase 6)
+// =============================================
+
+export async function getSiteOrganizationsForCompany(
+  companyId: string
+): Promise<ActionResponse<Array<{ id: string; name: string }>>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { data, error } = await supabase
+      .from('organizations')
+      .select('id, name')
+      .eq('company_id', companyId)
+      .eq('organization_type', 'site')
+      .order('name', { ascending: true });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Error in getSiteOrganizationsForCompany:', error);
+    return { success: false, error: 'Failed to fetch sites' };
+  }
+}
+
+export async function getSatelliteSites(
+  parentOrganizationId: string
+): Promise<ActionResponse<Array<{ id: string; name: string; status: string; organization_type: string }>>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { data, error } = await supabase
+      .from('organizations')
+      .select('id, name, status, organization_type')
+      .eq('parent_organization_id', parentOrganizationId)
+      .order('name', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching satellite sites:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Error in getSatelliteSites:', error);
+    return { success: false, error: 'Failed to fetch satellite sites' };
+  }
+}
+
+export async function getParentSite(
+  organizationId: string
+): Promise<ActionResponse<{ id: string; name: string; status: string } | null>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('parent_organization_id')
+      .eq('id', organizationId)
+      .single();
+
+    if (!org?.parent_organization_id) {
+      return { success: true, data: null };
+    }
+
+    const { data: parent, error } = await supabase
+      .from('organizations')
+      .select('id, name, status')
+      .eq('id', org.parent_organization_id)
+      .single();
+
+    if (error || !parent) {
+      return { success: true, data: null };
+    }
+
+    return { success: true, data: parent };
+  } catch (error) {
+    console.error('Error in getParentSite:', error);
+    return { success: false, error: 'Failed to fetch parent site' };
+  }
+}
+
+// =============================================
 // CREATE ORGANIZATION
 // =============================================
 
@@ -334,6 +467,19 @@ export async function updateOrganization(
         performedById: profile?.id,
         performerEmail: profile?.email || user.email,
       });
+    }
+
+    // Record status change in organization_status_history (Phase 3)
+    if (changedFields.status && oldOrg) {
+      await supabase
+        .from('organization_status_history')
+        .insert({
+          organization_id: id,
+          old_status: String(changedFields.status.old ?? ''),
+          new_status: String(changedFields.status.new ?? ''),
+          changed_by_id: profile?.id ?? null,
+          changed_by_email: profile?.email || user.email || null,
+        });
     }
 
     revalidatePath('/protected/contacts-organizations');

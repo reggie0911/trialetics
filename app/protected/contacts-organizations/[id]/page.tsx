@@ -3,7 +3,12 @@ import { ProtectedNavbar } from '@/components/layout/protected-navbar';
 import { OrganizationDetailPageClient } from '@/components/contacts-organizations/organization-detail-page-client';
 import { SiteDetailPageClient } from '@/components/contacts-organizations/site-detail-page-client';
 import { createClient } from '@/lib/server';
-import { getOrganization } from '@/lib/actions/organizations';
+import { getOrganization, getOrganizationStatusHistory } from '@/lib/actions/organizations';
+import { getSiteVisits, getProfilesForCompany } from '@/lib/actions/site-visits';
+import { getSiteContracts } from '@/lib/actions/site-contracts';
+import { getSiteDocuments } from '@/lib/actions/site-documents';
+import { getSatelliteSites, getParentSite } from '@/lib/actions/organizations';
+import { getOrganizationTeamMembers } from '@/lib/actions/organization-team-members';
 import { getOrganizationActivity } from '@/lib/utils/activity-logger';
 import { getOrganizationNotes } from '@/lib/actions/organization-notes';
 
@@ -48,6 +53,32 @@ export default async function OrganizationDetailPage({
   // Fetch organization notes
   const notes = await getOrganizationNotes(id);
 
+  // Fetch status history and site visits for sites
+  const statusHistory = organizationResult.data.organization_type === 'site'
+    ? (await getOrganizationStatusHistory(id)).data ?? []
+    : [];
+  const siteVisits = organizationResult.data.organization_type === 'site'
+    ? (await getSiteVisits(id)).data ?? []
+    : [];
+  const siteContracts = organizationResult.data.organization_type === 'site'
+    ? (await getSiteContracts(id)).data ?? []
+    : [];
+  const siteDocuments = organizationResult.data.organization_type === 'site'
+    ? (await getSiteDocuments(id)).data ?? []
+    : [];
+  const profiles = organizationResult.data.organization_type === 'site'
+    ? (await getProfilesForCompany(profile.company_id)).data ?? []
+    : [];
+  const satelliteSites = organizationResult.data.organization_type === 'site'
+    ? (await getSatelliteSites(id)).data ?? []
+    : [];
+  const parentSite = organizationResult.data.organization_type === 'site'
+    ? (await getParentSite(id)).data ?? null
+    : null;
+  const siteTeamMembers = organizationResult.data.organization_type === 'site'
+    ? (await getOrganizationTeamMembers(id)).data ?? []
+    : [];
+
   // Route to specialized component for sites
   if (organizationResult.data.organization_type === 'site') {
     return (
@@ -57,6 +88,14 @@ export default async function OrganizationDetailPage({
           organization={organizationResult.data}
           activities={activities}
           notes={notes}
+          statusHistory={statusHistory}
+          siteVisits={siteVisits}
+          siteContracts={siteContracts}
+          siteDocuments={siteDocuments}
+          satelliteSites={satelliteSites}
+          parentSite={parentSite}
+          siteTeamMembers={siteTeamMembers}
+          profiles={profiles}
           companyId={profile.company_id}
           profileId={profile.id}
           userEmail={profile.email || data.user.email || ''}

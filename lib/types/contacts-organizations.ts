@@ -48,6 +48,7 @@ export interface Organization {
   name: string;
   organization_type: OrganizationType;
   status: EntityStatus;
+  parent_organization_id?: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;
@@ -69,6 +70,7 @@ export interface Contact {
   title: string | null;
   credentials: string | null;
   license_number: string | null;
+  primary_specialty: string | null;
   profile_image_url: string | null;
   status: EntityStatus;
   notes: string | null;
@@ -95,16 +97,158 @@ export interface Address {
   updated_at: string;
 }
 
+export type OrganizationNoteType =
+  | 'exclusion'
+  | 'pre_existing_condition'
+  | 'permanent'
+  | 'system'
+  | 'temporary'
+  | 'business_description'
+  | 'regional_plans'
+  | 'contracts_process'
+  | 'general';
+
 export interface OrganizationNote {
   id: string;
   organization_id: string;
   company_id: string;
   content: string;
+  note_type: OrganizationNoteType | string | null;
   created_by_id: string | null;
   creator_email: string | null;
   created_at: string;
   updated_at: string;
 }
+
+export interface OrganizationStatusHistory {
+  id: string;
+  organization_id: string;
+  old_status: string;
+  new_status: string;
+  changed_at: string;
+  changed_by_id: string | null;
+  changed_by_email: string | null;
+}
+
+export type SiteVisitType = 'evaluation' | 'initiation' | 'monitoring' | 'close_out' | 'unscheduled';
+export type SiteVisitStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';
+
+export interface SiteVisit {
+  id: string;
+  organization_id: string;
+  project_id: string | null;
+  visit_name: string;
+  visit_type: SiteVisitType;
+  visit_start: string;
+  visit_status: SiteVisitStatus;
+  assigned_to_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SiteVisitWithRelations extends SiteVisit {
+  assigned_to?: { id: string; first_name: string | null; email: string | null } | null;
+  project?: { id: string; protocol_number: string; protocol_name: string } | null;
+}
+
+export const SITE_VISIT_TYPE_LABELS: Record<SiteVisitType, string> = {
+  evaluation: 'Site Evaluation',
+  initiation: 'Site Initiation',
+  monitoring: 'Site Monitoring',
+  close_out: 'Site Close-out',
+  unscheduled: 'Unscheduled',
+};
+
+export const SITE_VISIT_STATUS_LABELS: Record<SiteVisitStatus, string> = {
+  planned: 'Planned',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+  cancelled: 'Cancelled',
+};
+
+// =============================================
+// Site Contracts (Phase 5)
+// =============================================
+
+export type SiteContractType = 'clinical_trial' | 'feasibility' | 'site_budget' | 'master_service' | 'other';
+export type SiteContractStatus = 'draft' | 'pending' | 'executed' | 'terminated' | 'expired';
+
+export interface SiteContract {
+  id: string;
+  organization_id: string;
+  project_id: string | null;
+  contract_number: string | null;
+  contract_type: SiteContractType;
+  contract_amount: number | null;
+  currency_code: string | null;
+  payee_contact_id: string | null;
+  status: SiteContractStatus;
+  effective_date: string | null;
+  expiry_date: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const SITE_CONTRACT_TYPE_LABELS: Record<SiteContractType, string> = {
+  clinical_trial: 'Clinical Trial',
+  feasibility: 'Feasibility',
+  site_budget: 'Site Budget',
+  master_service: 'Master Service Agreement',
+  other: 'Other',
+};
+
+export const SITE_CONTRACT_STATUS_LABELS: Record<SiteContractStatus, string> = {
+  draft: 'Draft',
+  pending: 'Pending',
+  executed: 'Executed',
+  terminated: 'Terminated',
+  expired: 'Expired',
+};
+
+// =============================================
+// Site Documents (Phase 5)
+// =============================================
+
+export type SiteDocumentType = 'protocol' | 'icf' | 'irb' | 'regulatory' | 'site_file' | 'fda_form' | 'other';
+export type SiteDocumentStatus = 'pending' | 'sent' | 'received' | 'approved' | 'expired' | 'superseded';
+
+export interface SiteDocument {
+  id: string;
+  organization_id: string;
+  project_id: string | null;
+  document_name: string;
+  document_type: SiteDocumentType;
+  sent_date: string | null;
+  expected_date: string | null;
+  received_date: string | null;
+  expiration_date: string | null;
+  status: SiteDocumentStatus;
+  file_url: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const SITE_DOCUMENT_TYPE_LABELS: Record<SiteDocumentType, string> = {
+  protocol: 'Protocol',
+  icf: 'Informed Consent Form',
+  irb: 'IRB',
+  regulatory: 'Regulatory',
+  site_file: 'Site File',
+  fda_form: 'FDA Form',
+  other: 'Other',
+};
+
+export const SITE_DOCUMENT_STATUS_LABELS: Record<SiteDocumentStatus, string> = {
+  pending: 'Pending',
+  sent: 'Sent',
+  received: 'Received',
+  approved: 'Approved',
+  expired: 'Expired',
+  superseded: 'Superseded',
+};
 
 // =============================================
 // Junction Table Interfaces
@@ -228,6 +372,7 @@ export interface CreateOrganizationData {
 
 export interface UpdateOrganizationData extends Partial<CreateOrganizationData> {
   id: string;
+  parent_organization_id?: string | null;
 }
 
 export interface CreateContactData {
@@ -238,6 +383,7 @@ export interface CreateContactData {
   title?: string | null;
   credentials?: string | null;
   license_number?: string | null;
+  primary_specialty?: string | null;
   profile_image_url?: string | null;
   status?: EntityStatus;
   notes?: string | null;
@@ -415,4 +561,16 @@ export const ADDRESS_TYPE_LABELS: Record<AddressType, string> = {
   billing: 'Billing',
   shipping: 'Shipping',
   other: 'Other',
+};
+
+export const NOTE_TYPE_LABELS: Record<OrganizationNoteType, string> = {
+  exclusion: 'Exclusion',
+  pre_existing_condition: 'Pre-existing Condition',
+  permanent: 'Permanent',
+  system: 'System',
+  temporary: 'Temporary',
+  business_description: 'Business Description',
+  regional_plans: 'Regional Plans',
+  contracts_process: 'Contracts Process',
+  general: 'General',
 };

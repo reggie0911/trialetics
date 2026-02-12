@@ -4,45 +4,44 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   NavigationMenu,
+  NavigationMenuContent,
   NavigationMenuItem,
   NavigationMenuLink,
   NavigationMenuList,
+  NavigationMenuTrigger,
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
 import { cn } from "@/lib/utils";
 
 const menuItems = [
   {
+    type: "link" as const,
     label: "Dashboard",
     href: "/protected/dashboard",
   },
   {
-    label: "MRace Tracker - View",
-    href: "/protected/patients",
+    type: "dropdown" as const,
+    trigger: "CTMS",
+    items: [
+      { label: "Contacts & Organizations", href: "/protected/contacts-organizations" },
+      { label: "Document Management", href: "/protected/document-management" },
+      { label: "Clinical Trials Management", href: "/protected/clinical-trials" },
+      { label: "Clinical Payments", href: "/protected/clinical-payments" },
+      { label: "Visit Templates", href: "/protected/visit-templates" },
+      { label: "Source Data Verification", href: "/protected/source-data-verification" },
+    ],
   },
   {
-    label: "AE Metrics",
-    href: "/protected/ae",
-  },
-  {
-    label: "eCRF Query Tracker",
-    href: "/protected/ecrf-query-tracker",
-  },
-  {
-    label: "SDV Tracker",
-    href: "/protected/sdv-tracker",
-  },
-  {
-    label: "Visit Window",
-    href: "/protected/vw",
-  },
-  {
-    label: "Med Compliance",
-    href: "/protected/mc",
-  },
-  {
-    label: "Document Management",
-    href: "/protected/document-management",
+    type: "dropdown" as const,
+    trigger: "Trackers",
+    items: [
+      { label: "MRace Tracker - View", href: "/protected/patients" },
+      { label: "AE Metrics", href: "/protected/ae" },
+      { label: "eCRF Query Tracker", href: "/protected/ecrf-query-tracker" },
+      { label: "SDV Tracker", href: "/protected/sdv-tracker" },
+      { label: "Visit Window", href: "/protected/vw" },
+      { label: "Med Compliance", href: "/protected/mc" },
+    ],
   },
 ];
 
@@ -50,7 +49,6 @@ export function ModuleNavbar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Preserve projectId query param when navigating
   const getHrefWithParams = (href: string) => {
     const projectId = searchParams.get("projectId");
     if (projectId && href === "/protected/dashboard") {
@@ -59,7 +57,6 @@ export function ModuleNavbar() {
     return href;
   };
 
-  // Check if current path matches (handles query params)
   const isActive = (href: string) => {
     if (href === "/protected/dashboard") {
       return pathname.startsWith("/protected/dashboard");
@@ -67,27 +64,68 @@ export function ModuleNavbar() {
     return pathname === href || pathname.startsWith(`${href}/`);
   };
 
+  const isDropdownActive = (items: { href: string }[]) =>
+    items.some((item) => isActive(item.href));
+
+  const linkClasses = "text-[11px] h-auto py-2 px-3 transition-all";
+  const activeLinkClasses =
+    "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground";
+  const inactiveLinkClasses = "hover:bg-primary/10";
+
   return (
-    <NavigationMenu className="w-auto">
+    <NavigationMenu viewport={false} className="w-auto">
       <NavigationMenuList className="flex-col sm:flex-row gap-2">
-        {menuItems.map((item, index) => (
-          <NavigationMenuItem key={index}>
-            <NavigationMenuLink asChild>
-              <Link
-                href={getHrefWithParams(item.href)}
+        {menuItems.map((item, index) =>
+          item.type === "dropdown" ? (
+            <NavigationMenuItem key={index}>
+              <NavigationMenuTrigger
                 className={cn(
                   navigationMenuTriggerStyle(),
-                  "text-[11px] h-auto py-2 px-3 transition-all",
-                  isActive(item.href)
-                    ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" 
-                    : "hover:bg-primary/10"
+                  linkClasses,
+                  isDropdownActive(item.items)
+                    ? activeLinkClasses
+                    : inactiveLinkClasses
                 )}
               >
-                {item.label}
-              </Link>
-            </NavigationMenuLink>
-          </NavigationMenuItem>
-        ))}
+                {item.trigger}
+              </NavigationMenuTrigger>
+              <NavigationMenuContent>
+                <div className="w-48 p-2">
+                  {item.items.map((subItem, subIndex) => (
+                    <NavigationMenuLink asChild key={subIndex}>
+                      <Link
+                        href={getHrefWithParams(subItem.href)}
+                        className={cn(
+                          "block rounded-sm px-2 py-2 text-xs font-normal transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          isActive(subItem.href) && "bg-accent/50 font-medium"
+                        )}
+                      >
+                        {subItem.label}
+                      </Link>
+                    </NavigationMenuLink>
+                  ))}
+                </div>
+              </NavigationMenuContent>
+            </NavigationMenuItem>
+          ) : (
+            <NavigationMenuItem key={index}>
+              <NavigationMenuLink asChild>
+                <Link
+                  href={getHrefWithParams(item.href)}
+                  className={cn(
+                    navigationMenuTriggerStyle(),
+                    linkClasses,
+                    isActive(item.href)
+                      ? activeLinkClasses
+                      : inactiveLinkClasses
+                  )}
+                >
+                  {item.label}
+                </Link>
+              </NavigationMenuLink>
+            </NavigationMenuItem>
+          )
+        )}
       </NavigationMenuList>
     </NavigationMenu>
   );

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
+import { Slot } from "@radix-ui/react-slot"
 
 import { cn } from "@/lib/utils"
 import { CaretRightIcon, CheckIcon } from "@phosphor-icons/react"
@@ -14,8 +15,14 @@ function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
   return <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />
 }
 
-function DropdownMenuTrigger({ ...props }: MenuPrimitive.Trigger.Props) {
-  return <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" {...props} />
+function DropdownMenuTrigger({ asChild, className, ...props }: MenuPrimitive.Trigger.Props & { asChild?: boolean; className?: string }) {
+  if (asChild) {
+    // When asChild is true, we need to merge props with the child
+    // Extract asChild to prevent it from being passed to DOM
+    const { asChild: _, ...restProps } = props as any;
+    return <MenuPrimitive.Trigger asChild={<Slot />} data-slot="dropdown-menu-trigger" className={className} {...restProps} />
+  }
+  return <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" className={className} {...props} />
 }
 
 function DropdownMenuContent({
