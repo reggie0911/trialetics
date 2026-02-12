@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { formatDistanceToNow, format, isToday, isYesterday } from 'date-fns';
 import { Edit, Trash2, Check, X, Loader2, User } from 'lucide-react';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -16,7 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { OrganizationNote } from '@/lib/types/contacts-organizations';
+import { OrganizationNote, NOTE_TYPE_LABELS, OrganizationNoteType } from '@/lib/types/contacts-organizations';
 
 interface OrganizationNoteCardProps {
   note: OrganizationNote;
@@ -125,10 +126,15 @@ export function OrganizationNoteCard({
             {/* Header */}
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-medium truncate">{authorEmail}</span>
                   <span className="text-xs text-muted-foreground">·</span>
                   <span className="text-xs text-muted-foreground">{timeDisplay}</span>
+                  {note.note_type && note.note_type !== 'general' && (
+                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+                      {NOTE_TYPE_LABELS[note.note_type as OrganizationNoteType] || note.note_type}
+                    </Badge>
+                  )}
                   {isEdited && (
                     <>
                       <span className="text-xs text-muted-foreground">·</span>

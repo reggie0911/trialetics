@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { ProtectedNavbar } from '@/components/layout/protected-navbar';
+import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { ContactsOrganizationsPageClient } from '@/components/contacts-organizations/contacts-organizations-page-client';
 import { createClient } from '@/lib/server';
 
@@ -27,14 +28,17 @@ export default async function ContactsOrganizationsPage() {
     <div className="min-h-screen bg-[#E9E9E9]">
       <ProtectedNavbar />
       <main className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 py-4 sm:py-8">
-        {/* Header */}
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-[32px] font-semibold mb-1 tracking-[-1px]">
-            Contacts & Organizations
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            Manage organizations, sites, sponsors, and contact information for your clinical trials
-          </p>
+        {/* Header with Navigation */}
+        <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-[32px] font-semibold mb-1 tracking-[-1px]">
+              Contacts & Organizations
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Manage organizations, sites, sponsors, and contact information for your clinical trials
+            </p>
+          </div>
+          <ModuleNavbar />
         </div>
 
         {/* Client-side component for data management */}
@@ -42,6 +46,7 @@ export default async function ContactsOrganizationsPage() {
           companyId={profile.company_id} 
           profileId={profile.id}
           userEmail={profile.email || data.user.email || ''}
+          userRole={profile.role || 'user'}
         />
       </main>
     </div>

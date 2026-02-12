@@ -39,6 +39,7 @@ interface ContactsTabProps {
   companyId: string;
   profileId: string;
   userEmail: string;
+  userRole?: string;
 }
 
 export function ContactsTab({
@@ -50,6 +51,7 @@ export function ContactsTab({
   companyId,
   profileId,
   userEmail,
+  userRole = 'user',
 }: ContactsTabProps) {
   const router = useRouter();
   const [searchValue, setSearchValue] = useState(filters.search || '');
@@ -284,6 +286,7 @@ export function ContactsTab({
         companyId={companyId}
         profileId={profileId}
         userEmail={userEmail}
+        userRole={userRole}
       />
     </div>
   );

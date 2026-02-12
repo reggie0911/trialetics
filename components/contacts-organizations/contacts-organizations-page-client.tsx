@@ -28,12 +28,14 @@ interface ContactsOrganizationsPageClientProps {
   companyId: string;
   profileId: string;
   userEmail: string;
+  userRole?: string;
 }
 
 export function ContactsOrganizationsPageClient({
   companyId,
   profileId,
   userEmail,
+  userRole = 'user',
 }: ContactsOrganizationsPageClientProps) {
   const { toast } = useToast();
 
@@ -301,6 +303,7 @@ export function ContactsOrganizationsPageClient({
             companyId={companyId}
             profileId={profileId}
             userEmail={userEmail}
+            userRole={userRole}
           />
         </TabsContent>
       </Tabs>
@@ -322,6 +325,7 @@ export function ContactsOrganizationsPageClient({
         companyId={companyId}
         profileId={profileId}
         userEmail={userEmail}
+        userRole={userRole}
       />
     </div>
   );

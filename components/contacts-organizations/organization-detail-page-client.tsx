@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, FolderOpen, Plus, Trash2, FileText } from 'lucide-react';
+import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, FolderOpen, Plus, Trash2, FileText, Archive } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -40,6 +40,8 @@ import { ProjectAssignmentDialog } from './project-assignment-dialog';
 import { ActivityTimeline } from './activity-timeline';
 import { OrganizationMap } from './organization-map';
 import { OrganizationNotesSheet } from './organization-notes-sheet';
+import { ArchiveContactDialog } from './archive-contact-dialog';
+import type { OrganizationContactWithContact } from '@/lib/types/contacts-organizations';
 
 interface OrganizationDetailPageClientProps {
   organization: OrganizationWithRelations;
@@ -67,6 +69,7 @@ export function OrganizationDetailPageClient({
   const [removeContactConfirm, setRemoveContactConfirm] = useState<{ relationshipId: string; name: string } | null>(null);
   const [removeProjectConfirm, setRemoveProjectConfirm] = useState<{ relationshipId: string; name: string } | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [contactToArchive, setContactToArchive] = useState<OrganizationContactWithContact | null>(null);
 
   const handleBack = () => {
     router.push('/protected/contacts-organizations');
@@ -342,42 +345,94 @@ export function OrganizationDetailPageClient({
               <CardContent>
                 {initialOrg.contacts && initialOrg.contacts.length > 0 ? (
                   <div className="space-y-3">
-                    {initialOrg.contacts.map((oc) => (
-                      <div key={oc.id} className="flex items-center justify-between border-b pb-3 last:border-0">
-                        <div className="flex-1 text-xs md:text-xs">
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="font-medium">
-                              {oc.contact.first_name} {oc.contact.last_name}
-                            </p>
-                            {oc.is_primary && (
-                              <Badge variant="default" className="text-[10px]">Primary</Badge>
-                            )}
-                          </div>
-                          <p className="text-muted-foreground capitalize">
-                            {CONTACT_ROLE_LABELS[oc.role]}
-                          </p>
-                          {(oc.start_date || oc.end_date) && (
-                            <p className="text-muted-foreground">
-                              {oc.start_date && new Date(oc.start_date).toLocaleDateString()}
-                              {' - '}
-                              {oc.end_date ? new Date(oc.end_date).toLocaleDateString() : 'Present'}
-                            </p>
+                    {(() => {
+                      const now = new Date();
+                      const activeContacts = initialOrg.contacts.filter(
+                        (oc) => !oc.end_date || new Date(oc.end_date) >= now
+                      );
+                      const archivedContacts = initialOrg.contacts.filter(
+                        (oc) => oc.end_date != null && new Date(oc.end_date) < now
+                      ).sort((a, b) => new Date(b.end_date!).getTime() - new Date(a.end_date!).getTime());
+                      return (
+                        <>
+                          {activeContacts.length > 0 && (
+                            <div className="space-y-3 mb-4">
+                              <p className="text-xs font-medium text-muted-foreground">Current</p>
+                              {activeContacts.map((oc) => (
+                                <div key={oc.id} className="flex items-center justify-between border-b pb-3 last:border-0">
+                                  <div className="flex-1 text-xs md:text-xs">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <p className="font-medium">
+                                        {oc.contact.first_name} {oc.contact.last_name}
+                                      </p>
+                                      {oc.is_primary && (
+                                        <Badge variant="default" className="text-[10px]">Primary</Badge>
+                                      )}
+                                    </div>
+                                    <p className="text-muted-foreground capitalize">
+                                      {CONTACT_ROLE_LABELS[oc.role]}
+                                    </p>
+                                    {(oc.start_date || oc.end_date) && (
+                                      <p className="text-muted-foreground text-[10px]">
+                                        {oc.start_date && new Date(oc.start_date).toLocaleDateString()}
+                                        {' - '}
+                                        {oc.end_date ? new Date(oc.end_date).toLocaleDateString() : 'Present'}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="flex gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setContactToArchive(oc)}
+                                      title="Archive contact"
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      <Archive className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() =>
+                                        setRemoveContactConfirm({
+                                          relationshipId: oc.id,
+                                          name: `${oc.contact.first_name} ${oc.contact.last_name}`,
+                                        })
+                                      }
+                                      title="Remove contact"
+                                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
                           )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setRemoveContactConfirm({
-                              relationshipId: oc.id,
-                              name: `${oc.contact.first_name} ${oc.contact.last_name}`,
-                            })
-                          }
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
+                          {archivedContacts.length > 0 && (
+                            <div className="space-y-3 pt-2 border-t">
+                              <p className="text-xs font-medium text-muted-foreground">History</p>
+                              {archivedContacts.map((oc) => (
+                                <div key={oc.id} className="flex items-center justify-between border-b pb-3 last:border-0 opacity-75">
+                                  <div className="flex-1 text-xs md:text-xs">
+                                    <p className="font-medium">
+                                      {oc.contact.first_name} {oc.contact.last_name}
+                                    </p>
+                                    <p className="text-muted-foreground capitalize">
+                                      {CONTACT_ROLE_LABELS[oc.role]}
+                                      {oc.end_date && (
+                                        <span className="ml-1">· Ended {new Date(oc.end_date).toLocaleDateString()}</span>
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {activeContacts.length === 0 && archivedContacts.length === 0 && null}
+                        </>
+                      );
+                    })()}
                   </div>
                 ) : (
                   <p className="text-xs md:text-xs text-muted-foreground text-center py-6">
@@ -486,6 +541,18 @@ export function OrganizationDetailPageClient({
         companyId={companyId}
         existingProjectIds={existingProjectIds}
         onSuccess={handleAssignSuccess}
+      />
+
+      {/* Archive Contact Dialog */}
+      <ArchiveContactDialog
+        open={!!contactToArchive}
+        onOpenChange={(open) => !open && setContactToArchive(null)}
+        onSuccess={() => {
+          setContactToArchive(null);
+          router.refresh();
+        }}
+        organizationContact={contactToArchive}
+        organizationName={initialOrg.name}
       />
 
       {/* Remove Contact Confirmation */}

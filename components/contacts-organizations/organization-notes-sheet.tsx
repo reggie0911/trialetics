@@ -7,8 +7,15 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { OrganizationNote } from '@/lib/types/contacts-organizations';
+import { OrganizationNote, NOTE_TYPE_LABELS, OrganizationNoteType } from '@/lib/types/contacts-organizations';
 import { OrganizationNoteCard } from './organization-note-card';
 import {
   createOrganizationNote,
@@ -42,6 +49,7 @@ export function OrganizationNotesSheet({
   const { toast } = useToast();
   const [notes, setNotes] = useState<OrganizationNote[]>(initialNotes);
   const [newNoteContent, setNewNoteContent] = useState('');
+  const [newNoteType, setNewNoteType] = useState<OrganizationNoteType | 'general'>('general');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [characterCount, setCharacterCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,7 +70,10 @@ export function OrganizationNotesSheet({
     return notes.filter((note) => {
       const email = (note.creator_email || '').toLowerCase();
       const content = note.content.toLowerCase();
-      return email.includes(query) || content.includes(query);
+      const noteTypeLabel = (note.note_type && NOTE_TYPE_LABELS[note.note_type as OrganizationNoteType]) 
+        ? NOTE_TYPE_LABELS[note.note_type as OrganizationNoteType].toLowerCase() 
+        : '';
+      return email.includes(query) || content.includes(query) || noteTypeLabel.includes(query);
     });
   }, [notes, searchQuery]);
 
@@ -76,13 +87,15 @@ export function OrganizationNotesSheet({
         companyId,
         newNoteContent,
         profileId,
-        userEmail
+        userEmail,
+        newNoteType
       );
       
       // Add new note to the top of the list
       setNotes([newNote, ...notes]);
       setNewNoteContent('');
       setCharacterCount(0);
+      setNewNoteType('general');
       
       toast({
         title: 'Note added',
@@ -246,6 +259,24 @@ export function OrganizationNotesSheet({
         {/* Footer */}
         <SheetFooter className="px-4 py-3 border-t">
           <div className="w-full space-y-2">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Note type</label>
+              <Select
+                value={newNoteType}
+                onValueChange={(v) => setNewNoteType((v as OrganizationNoteType) || 'general')}
+              >
+                <SelectTrigger className="text-xs h-8">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(NOTE_TYPE_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value} className="text-xs">
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <Textarea
               value={newNoteContent}
               onChange={handleContentChange}

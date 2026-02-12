@@ -28,7 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import { createContact, updateContact, assignContactToOrganization } from '@/lib/actions/contacts';
 import { getAllOrganizations } from '@/lib/actions/organizations';
 import { createAddress, updateAddress, getAddressesByEntity } from '@/lib/actions/addresses';
-import { formatPhoneNumber, capitalizeFirstLetter } from '@/lib/utils';
+import { formatPhoneNumber } from '@/lib/utils';
 import {
   Contact,
   Organization,
@@ -49,6 +49,7 @@ const contactSchema = z.object({
   title: z.string().optional(),
   credentials: z.string().optional(),
   license_number: z.string().optional(),
+  primary_specialty: z.string().optional(),
   profile_image_url: z.string().optional(),
   status: z.enum(['active', 'inactive', 'pending']),
   notes: z.string().optional(),
@@ -64,6 +65,7 @@ interface ContactFormDialogProps {
   companyId: string;
   profileId: string;
   userEmail: string;
+  userRole?: string;
 }
 
 export function ContactFormDialog({
@@ -74,6 +76,7 @@ export function ContactFormDialog({
   companyId,
   profileId,
   userEmail,
+  userRole = 'user',
 }: ContactFormDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -102,6 +105,7 @@ export function ContactFormDialog({
       title: '',
       credentials: '',
       license_number: '',
+      primary_specialty: '',
       profile_image_url: '',
       status: 'active',
       notes: '',
@@ -141,6 +145,7 @@ export function ContactFormDialog({
           title: contact.title || '',
           credentials: contact.credentials || '',
           license_number: contact.license_number || '',
+          primary_specialty: contact.primary_specialty || '',
           profile_image_url: contact.profile_image_url || '',
           status: contact.status,
           notes: contact.notes || '',
@@ -157,6 +162,7 @@ export function ContactFormDialog({
           title: '',
           credentials: '',
           license_number: '',
+          primary_specialty: '',
           profile_image_url: '',
           status: 'active',
           notes: '',
@@ -207,6 +213,7 @@ export function ContactFormDialog({
           title: values.title || null,
           credentials: values.credentials || null,
           license_number: values.license_number || null,
+          ...(userRole === 'admin' && { primary_specialty: values.primary_specialty || null }),
           profile_image_url: uploadedImageUrl || null,
           status: values.status as EntityStatus,
           notes: values.notes || null,
@@ -221,6 +228,7 @@ export function ContactFormDialog({
           title: values.title || null,
           credentials: values.credentials || null,
           license_number: values.license_number || null,
+          ...(userRole === 'admin' && { primary_specialty: values.primary_specialty || null }),
           profile_image_url: uploadedImageUrl || null,
           status: values.status as EntityStatus,
           notes: values.notes || null,
@@ -325,16 +333,32 @@ export function ContactFormDialog({
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="title" className="text-xs">Title</Label>
-              <Input
-                id="title"
-                placeholder="Principal Investigator"
-                className="text-xs placeholder:text-xs md:text-xs h-8"
+              <Select
                 value={watch('title') || ''}
-                onChange={(e) => {
-                  const capitalized = capitalizeFirstLetter(e.target.value);
-                  setValue('title', capitalized, { shouldValidate: true });
-                }}
-              />
+                onValueChange={(v) => setValue('title', v ?? '', { shouldValidate: true })}
+              >
+                <SelectTrigger id="title" className="text-xs h-8">
+                  <SelectValue placeholder="Principal Investigator" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="" className="text-xs">
+                    —
+                  </SelectItem>
+                  {Object.entries(CONTACT_ROLE_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value} className="text-xs">
+                      {label}
+                    </SelectItem>
+                  ))}
+                  {(() => {
+                    const title = watch('title');
+                    return title && !(title in CONTACT_ROLE_LABELS) ? (
+                      <SelectItem value={title} className="text-xs">
+                        {title}
+                      </SelectItem>
+                    ) : null;
+                  })()}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1">
@@ -387,6 +411,23 @@ export function ContactFormDialog({
                 placeholder="Medical license #"
                 className="text-xs placeholder:text-xs md:text-xs h-8"
                 {...register('license_number')}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="primary_specialty" className="text-xs">
+                Primary Specialty
+                {userRole !== 'admin' && contact?.primary_specialty && (
+                  <span className="text-muted-foreground font-normal ml-1">(admin-only to edit)</span>
+                )}
+              </Label>
+              <Input
+                id="primary_specialty"
+                placeholder="e.g. Cardiology, Neurology"
+                className="text-xs placeholder:text-xs md:text-xs h-8"
+                {...register('primary_specialty')}
+                readOnly={userRole !== 'admin'}
+                disabled={userRole !== 'admin'}
               />
             </div>
 

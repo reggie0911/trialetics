@@ -234,6 +234,7 @@ export async function createContact(
         title: data.title || null,
         credentials: data.credentials || null,
         license_number: data.license_number || null,
+        primary_specialty: data.primary_specialty || null,
         profile_image_url: data.profile_image_url || null,
         status: data.status || 'active',
         notes: data.notes || null,
@@ -444,6 +445,44 @@ export async function assignContactToOrganization(
   } catch (error) {
     console.error('Error in assignContactToOrganization:', error);
     return { success: false, error: 'Failed to assign contact' };
+  }
+}
+
+// =============================================
+// ARCHIVE CONTACT FROM ORGANIZATION
+// =============================================
+
+export async function archiveOrganizationContact(
+  organizationContactId: string,
+  archiveDate: string
+): Promise<ActionResponse<null>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { error } = await supabase
+      .from('organization_contacts')
+      .update({
+        end_date: archiveDate,
+        status: 'inactive',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', organizationContactId);
+
+    if (error) {
+      console.error('Error archiving organization contact:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/protected/contacts-organizations');
+    return { success: true, data: null };
+  } catch (error) {
+    console.error('Error in archiveOrganizationContact:', error);
+    return { success: false, error: 'Failed to archive contact' };
   }
 }
 
