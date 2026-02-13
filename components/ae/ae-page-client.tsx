@@ -10,6 +10,7 @@ import { AEKPICards, KPIFilterType } from "./ae-kpi-cards";
 import { AECategoriesChart } from "./ae-categories-chart";
 import { AEHeaderRelabelModal } from "./ae-header-relabel-modal";
 import { AEUploadHistory } from "./ae-upload-history";
+import { ProtocolSelector } from "@/components/ui/protocol-selector";
 import { useToast } from "@/hooks/use-toast";
 import { 
   getAEHeaderMappings, 
@@ -26,12 +27,14 @@ import { Loader2, Printer, Download } from "lucide-react";
 interface AEPageClientProps {
   companyId: string;
   profileId: string;
+  initialProtocolId?: string | null;
 }
 
-export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
+export function AEPageClient({ companyId, profileId, initialProtocolId }: AEPageClientProps) {
   // Upload management
   const [uploads, setUploads] = useState<Tables<'ae_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
+  const [protocolId, setProtocolId] = useState<string | null>(initialProtocolId ?? null);
   
   // Data state
   const [data, setData] = useState<AERecord[]>([]);
@@ -54,13 +57,13 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
 
   const { toast } = useToast();
 
-  // Load header mappings and uploads on mount
+  // Load header mappings and uploads on mount / protocol change
   useEffect(() => {
     if (companyId) {
       loadHeaderMappings();
       loadUploads();
     }
-  }, [companyId]);
+  }, [companyId, protocolId]);
 
   // Load AE data when upload is selected
   useEffect(() => {
@@ -84,7 +87,7 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
     setIsLoading(true);
     setLoadingMessage("Loading uploads...");
     
-    const result = await getAEUploads(companyId);
+    const result = await getAEUploads(companyId, protocolId);
     if (result.success && result.data) {
       setUploads(result.data);
       
@@ -490,8 +493,17 @@ export function AEPageClient({ companyId, profileId }: AEPageClientProps) {
       )}
 
       {/* Upload Control & History */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <ProtocolSelector
+            companyId={companyId}
+            value={protocolId}
+            onValueChange={setProtocolId}
+            label="Protocol"
+            placeholder="All protocols"
+            showAllOption={true}
+            className="min-w-[200px]"
+          />
           <AECSVUploadDialog 
             onUpload={handleUpload}
             companyId={companyId}

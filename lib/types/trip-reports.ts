@@ -127,7 +127,7 @@ export interface TripReportTemplate {
   company_id: string;
   name: string;
   visit_type: SiteVisitType;
-  project_id: string | null;
+  protocol_id: string | null;
   region: string | null;
   is_active: boolean;
   created_at: string;
@@ -254,8 +254,8 @@ export interface TripReportWithRelations extends TripReport {
     visit_end?: string | null;
     visit_status: string;
     organization_id: string;
-    project_id?: string | null;
-    project?: { id: string; protocol_number: string; protocol_name: string } | null;
+    protocol_id?: string | null;
+    protocol?: { id: string; protocol_number: string; title: string } | null;
   };
   organization?: {
     id: string;
@@ -281,7 +281,7 @@ export interface TripReportAttendeeWithContact extends TripReportAttendee {
   };
 }
 
-// Extended site_visit for Study Information (includes project)
+// Extended site_visit for Study Information (includes protocol)
 export interface TripReportSiteVisitWithProject {
   id: string;
   visit_name: string;
@@ -290,8 +290,8 @@ export interface TripReportSiteVisitWithProject {
   visit_end?: string | null;
   visit_status: string;
   organization_id: string;
-  project_id?: string | null;
-  project?: { id: string; protocol_number: string; protocol_name: string } | null;
+  protocol_id?: string | null;
+  protocol?: { id: string; protocol_number: string; title: string } | null;
 }
 
 // =============================================

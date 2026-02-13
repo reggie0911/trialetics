@@ -138,13 +138,13 @@ export async function updateProfile(
 }
 
 /**
- * Assign a project to a user
+ * Assign a protocol to a user
  */
-export async function assignProtocolToUser(profileId: string, projectId: string) {
+export async function assignProtocolToUser(profileId: string, protocolId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from('user_projects')
-    .insert({ user_id: profileId, project_id: projectId })
+    .from('user_protocol_assignments')
+    .insert({ user_id: profileId, protocol_id: protocolId })
     .select()
     .single();
 
@@ -152,15 +152,15 @@ export async function assignProtocolToUser(profileId: string, projectId: string)
 }
 
 /**
- * Remove a project assignment from a user
+ * Remove a protocol assignment from a user
  */
-export async function unassignProtocolFromUser(profileId: string, projectId: string) {
+export async function unassignProtocolFromUser(profileId: string, protocolId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from('user_projects')
+    .from('user_protocol_assignments')
     .delete()
     .eq('user_id', profileId)
-    .eq('project_id', projectId);
+    .eq('protocol_id', protocolId);
 
   return { data, error };
 }

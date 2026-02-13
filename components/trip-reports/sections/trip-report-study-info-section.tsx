@@ -36,9 +36,9 @@ export function TripReportStudyInfoSection({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const sv = report.site_visit;
-  const project = sv?.project;
-  const studyName = project?.protocol_name ?? '—';
-  const studyNumber = project ? `${project.protocol_name ?? ''}: ${project.protocol_number}` : '—';
+  const protocol = sv?.protocol;
+  const studyName = protocol?.title ?? '—';
+  const studyNumber = protocol ? `${protocol.title ?? ''}: ${protocol.protocol_number}` : '—';
   const visitNumber = sv?.visit_name ?? '—';
   const visitType = sv?.visit_type ? SITE_VISIT_TYPE_LABELS[sv.visit_type as keyof typeof SITE_VISIT_TYPE_LABELS] : '—';
   const visitStart = formatDate(sv?.visit_start);

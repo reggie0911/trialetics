@@ -19,7 +19,7 @@ export type ActionResponse<T> = {
 
 export async function getTripReportTemplates(
   companyId: string,
-  filters?: { visit_type?: SiteVisitType; project_id?: string; is_active?: boolean }
+  filters?: { visit_type?: SiteVisitType; protocol_id?: string; is_active?: boolean }
 ): Promise<ActionResponse<TripReportTemplateWithDetails[]>> {
   try {
     const supabase = await createClient();
@@ -41,8 +41,8 @@ export async function getTripReportTemplates(
     if (filters?.visit_type) {
       query = query.eq('visit_type', filters.visit_type);
     }
-    if (filters?.project_id) {
-      query = query.eq('project_id', filters.project_id);
+    if (filters?.protocol_id) {
+      query = query.eq('protocol_id', filters.protocol_id);
     }
     if (filters?.is_active !== undefined) {
       query = query.eq('is_active', filters.is_active);
@@ -108,7 +108,7 @@ export async function createTripReportTemplate(
   data: {
     name: string;
     visit_type: SiteVisitType;
-    project_id?: string | null;
+    protocol_id?: string | null;
     region?: string | null;
     is_active?: boolean;
   }
@@ -127,7 +127,7 @@ export async function createTripReportTemplate(
         company_id: companyId,
         name: data.name,
         visit_type: data.visit_type,
-        project_id: data.project_id ?? null,
+        protocol_id: data.protocol_id ?? null,
         region: data.region ?? null,
         is_active: data.is_active ?? true,
       })
@@ -153,7 +153,7 @@ export async function updateTripReportTemplate(
   data: {
     name?: string;
     visit_type?: SiteVisitType;
-    project_id?: string | null;
+    protocol_id?: string | null;
     region?: string | null;
     is_active?: boolean;
   }

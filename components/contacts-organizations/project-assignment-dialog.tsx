@@ -86,7 +86,7 @@ export function ProjectAssignmentDialog({
     
     // Load projects
     const projectResult = await getUserProjects();
-    if (projectResult.success && projectResult.data) {
+    if (projectResult.success && projectResult.data && Array.isArray(projectResult.data)) {
       // Filter out projects already assigned
       const availableProjects = projectResult.data.filter(
         (p: Project) => !existingProjectIds.includes(p.id)
@@ -141,7 +141,7 @@ export function ProjectAssignmentDialog({
       if (entityType === 'organization') {
         result = await assignOrganizationToProject({
           organization_id: entityId,
-          project_id: selectedProjectId,
+          protocol_id: selectedProjectId,
           role: selectedRole as OrganizationProjectRole,
           status: 'active',
           start_date: startDate || null,
@@ -150,7 +150,7 @@ export function ProjectAssignmentDialog({
       } else {
         result = await assignContactToProject({
           contact_id: entityId,
-          project_id: selectedProjectId,
+          protocol_id: selectedProjectId,
           organization_id: selectedOrgId || null,
           role: selectedRole as ContactProjectRole,
           status: 'active',

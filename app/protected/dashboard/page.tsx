@@ -11,7 +11,7 @@ import { createClient } from '@/lib/server';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface DashboardPageProps {
-  searchParams: Promise<{ projectId?: string }>;
+  searchParams: Promise<{ projectId?: string; protocolId?: string }>;
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
@@ -23,11 +23,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     redirect('/auth/login');
   }
 
-  // Get search params
+  // Get search params (support both protocolId and legacy projectId for backwards compatibility)
   const params = await searchParams;
-  const projectId = params.projectId;
+  const protocolId = params.protocolId ?? params.projectId;
 
-  if (!projectId) {
+  if (!protocolId) {
     redirect('/protected');
   }
 
@@ -38,19 +38,19 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     .eq('user_id', data.user.id)
     .single();
 
-  // Fetch project details
-  const { data: project, error: projectError } = await supabase
-    .from('projects')
-    .select('id, protocol_number, protocol_name, company_id')
-    .eq('id', projectId)
+  // Fetch protocol details
+  const { data: protocol, error: protocolError } = await supabase
+    .from('clinical_protocols')
+    .select('id, protocol_number, title, company_id')
+    .eq('id', protocolId)
     .single();
 
-  if (projectError || !project) {
+  if (protocolError || !protocol) {
     redirect('/protected');
   }
 
-  // Verify user has access to this project
-  if (profile?.company_id !== project.company_id) {
+  // Verify user has access to this protocol
+  if (profile?.company_id !== protocol.company_id) {
     redirect('/protected');
   }
 
@@ -59,24 +59,20 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       <ProtectedNavbar />
       <main className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 py-4 sm:py-8">
         {/* Welcome Message */}
-        <div className="mb-6 sm:mb-8">
+        <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <Greeting 
             firstName={profile?.first_name} 
             displayName={profile?.display_name}
           />
-        </div>
-
-        {/* Module Navigation */}
-        <div className="mb-6 sm:mb-8">
           <Suspense fallback={<div className="h-10" />}>
             <ModuleNavbar />
           </Suspense>
         </div>
 
-        {/* Project Info */}
+        {/* Protocol Info */}
         <div className="inline-flex flex-wrap items-center gap-2 px-3 sm:px-4 py-2 mb-6 sm:mb-8 bg-card border border-input rounded-lg text-xs">
           <span className="text-muted-foreground">You are now viewing study data for</span>
-          <span className="font-semibold text-foreground">{project.protocol_name}</span>
+          <span className="font-semibold text-foreground">{protocol.title}</span>
         </div>
 
         {/* Dashboard Content */}
@@ -102,7 +98,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               <CardTitle className="text-base sm:text-lg">To-Do items</CardTitle>
             </CardHeader>
             <CardContent className="bg-muted/20 border border-muted rounded-lg">
-              <TodoList projectId={projectId} />
+              <TodoList protocolId={protocolId} />
             </CardContent>
           </Card>
         </div>

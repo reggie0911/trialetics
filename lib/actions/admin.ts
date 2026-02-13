@@ -673,3 +673,150 @@ export async function updateUserModules(
     return { success: false, error: 'Unexpected error updating modules' };
   }
 }
+
+// =====================================================
+// Update Company
+// =====================================================
+
+/**
+ * Update company profile (name, logo_url, settings)
+ * Admin of the company only
+ */
+export async function updateCompany(
+  companyId: string,
+  data: { name?: string; logo_url?: string | null; settings?: Record<string, unknown> },
+  profileId: string
+): Promise<ActionResponse<void>> {
+  try {
+    const supabase = await createClient();
+
+    // Verify caller is admin of this company
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, company_id, role')
+      .eq('id', profileId)
+      .single();
+
+    if (profileError || !profile) {
+      return { success: false, error: 'Profile not found' };
+    }
+
+    if (profile.company_id !== companyId || profile.role !== 'admin') {
+      return { success: false, error: 'Unauthorized to update this company' };
+    }
+
+    const updateData: Record<string, unknown> = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.logo_url !== undefined) updateData.logo_url = data.logo_url;
+    if (data.settings !== undefined) updateData.settings = data.settings;
+
+    if (Object.keys(updateData).length === 0) {
+      return { success: true };
+    }
+
+    const { error: updateError } = await supabase
+      .from('companies')
+      .update(updateData)
+      .eq('id', companyId);
+
+    if (updateError) {
+      console.error('Error updating company:', updateError);
+      return { success: false, error: updateError.message || 'Failed to update company' };
+    }
+
+    revalidatePath('/protected/onboarding');
+    revalidatePath('/protected');
+
+    return { success: true };
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return { success: false, error: 'Unexpected error updating company' };
+  }
+}
+
+// =====================================================
+// Upload Company Logo
+// =====================================================
+
+/**
+ * Upload company logo to storage and update company record
+ * Returns the public URL on success
+ */
+export async function uploadCompanyLogo(
+  companyId: string,
+  formData: FormData,
+  profileId: string
+): Promise<ActionResponse<{ logoUrl: string }>> {
+  try {
+    const supabase = await createClient();
+
+    // Verify caller is admin of this company
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, company_id, role')
+      .eq('id', profileId)
+      .single();
+
+    if (profileError || !profile) {
+      return { success: false, error: 'Profile not found' };
+    }
+
+    if (profile.company_id !== companyId || profile.role !== 'admin') {
+      return { success: false, error: 'Unauthorized to update this company' };
+    }
+
+    const file = formData.get('file') as File;
+    if (!file) {
+      return { success: false, error: 'No file provided' };
+    }
+
+    // Validate file (2MB, PNG/JPG/JPEG/WebP/SVG)
+    const maxSize = 2 * 1024 * 1024;
+    if (file.size > maxSize) {
+      return { success: false, error: 'File size must be less than 2MB' };
+    }
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'];
+    if (!allowedTypes.includes(file.type)) {
+      return { success: false, error: 'File must be PNG, JPG, WebP, or SVG' };
+    }
+
+    const ext = file.name.split('.').pop() || 'png';
+    const filePath = `companies/${companyId}/logo.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('Error uploading logo:', uploadError);
+      return { success: false, error: uploadError.message || 'Failed to upload logo' };
+    }
+
+    const { data: urlData } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(filePath);
+
+    // Update company with logo_url
+    const { error: updateError } = await supabase
+      .from('companies')
+      .update({ logo_url: urlData.publicUrl })
+      .eq('id', companyId);
+
+    if (updateError) {
+      console.error('Error updating company logo_url:', updateError);
+      return { success: false, error: 'Failed to save logo URL' };
+    }
+
+    revalidatePath('/protected/onboarding');
+    revalidatePath('/protected');
+
+    return { success: true, data: { logoUrl: urlData.publicUrl } };
+  } catch (error) {
+    console.error('Unexpected error:', error);
+    return { success: false, error: 'Unexpected error uploading logo' };
+  }
+}

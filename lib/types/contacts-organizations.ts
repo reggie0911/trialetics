@@ -74,6 +74,7 @@ export interface Contact {
   profile_image_url: string | null;
   status: EntityStatus;
   notes: string | null;
+  manager_id: string | null;
   metadata: Record<string, unknown>;
   created_by_id: string | null;
   creator_email: string | null;
@@ -136,7 +137,7 @@ export type SiteVisitStatus = 'planned' | 'in_progress' | 'completed' | 'cancell
 export interface SiteVisit {
   id: string;
   organization_id: string;
-  project_id: string | null;
+  protocol_id: string | null;
   visit_name: string;
   visit_type: SiteVisitType;
   visit_start: string;
@@ -149,7 +150,7 @@ export interface SiteVisit {
 
 export interface SiteVisitWithRelations extends SiteVisit {
   assigned_to?: { id: string; first_name: string | null; email: string | null } | null;
-  project?: { id: string; protocol_number: string; protocol_name: string } | null;
+  protocol?: { id: string; protocol_number: string; title: string } | null;
 }
 
 export const SITE_VISIT_TYPE_LABELS: Record<SiteVisitType, string> = {
@@ -177,7 +178,7 @@ export type SiteContractStatus = 'draft' | 'pending' | 'executed' | 'terminated'
 export interface SiteContract {
   id: string;
   organization_id: string;
-  project_id: string | null;
+  protocol_id: string | null;
   contract_number: string | null;
   contract_type: SiteContractType;
   contract_amount: number | null;
@@ -217,7 +218,8 @@ export type SiteDocumentStatus = 'pending' | 'sent' | 'received' | 'approved' | 
 export interface SiteDocument {
   id: string;
   organization_id: string;
-  project_id: string | null;
+  protocol_id: string | null;
+  clinical_site_id: string | null;
   document_name: string;
   document_type: SiteDocumentType;
   sent_date: string | null;
@@ -270,7 +272,7 @@ export interface OrganizationContact {
 export interface OrganizationProject {
   id: string;
   organization_id: string;
-  project_id: string;
+  protocol_id: string;
   role: OrganizationProjectRole;
   status: EntityStatus;
   start_date: string | null;
@@ -297,7 +299,7 @@ export interface OrganizationProject {
 export interface ContactProject {
   id: string;
   contact_id: string;
-  project_id: string;
+  protocol_id: string;
   organization_id: string | null;
   role: ContactProjectRole;
   status: EntityStatus;
@@ -320,20 +322,20 @@ export interface OrganizationContactWithOrganization extends OrganizationContact
 }
 
 export interface OrganizationProjectWithProject extends OrganizationProject {
-  project: {
+  protocol: {
     id: string;
     protocol_number: string;
-    protocol_name: string;
-    protocol_status: string;
+    title: string;
+    status: string;
   };
 }
 
 export interface ContactProjectWithProject extends ContactProject {
-  project: {
+  protocol: {
     id: string;
     protocol_number: string;
-    protocol_name: string;
-    protocol_status: string;
+    title: string;
+    status: string;
   };
   organization?: Organization | null;
 }
@@ -387,6 +389,7 @@ export interface CreateContactData {
   profile_image_url?: string | null;
   status?: EntityStatus;
   notes?: string | null;
+  manager_id?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -423,7 +426,7 @@ export interface AssignContactToOrganizationData {
 
 export interface AssignOrganizationToProjectData {
   organization_id: string;
-  project_id: string;
+  protocol_id: string;
   role: OrganizationProjectRole;
   status: EntityStatus;
   start_date?: string | null;
@@ -432,7 +435,7 @@ export interface AssignOrganizationToProjectData {
 
 export interface AssignContactToProjectData {
   contact_id: string;
-  project_id: string;
+  protocol_id: string;
   organization_id?: string | null;
   role: ContactProjectRole;
   status: EntityStatus;

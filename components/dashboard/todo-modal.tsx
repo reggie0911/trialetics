@@ -25,11 +25,11 @@ interface TodoModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   todo: Todo | null;
-  projectId: string;
+  protocolId: string;
   onSuccess: () => void;
 }
 
-export function TodoModal({ open, onOpenChange, todo, projectId, onSuccess }: TodoModalProps) {
+export function TodoModal({ open, onOpenChange, todo, protocolId, onSuccess }: TodoModalProps) {
   const [formData, setFormData] = useState<TodoFormData>({
     title: '',
     description: '',
@@ -90,7 +90,7 @@ export function TodoModal({ open, onOpenChange, todo, projectId, onSuccess }: To
         const { error } = await updateTodo(todo.id, formData);
         if (error) throw new Error(error);
       } else {
-        const { error } = await createTodo(formData, projectId);
+        const { error } = await createTodo(formData, protocolId);
         if (error) throw new Error(error);
       }
 

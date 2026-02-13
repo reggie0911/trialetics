@@ -39,7 +39,7 @@ const siteVisitSchema = z.object({
   visit_type: z.enum(['evaluation', 'initiation', 'monitoring', 'close_out', 'unscheduled']),
   visit_start: z.string().min(1, 'Visit date/time is required'),
   visit_status: z.enum(['planned', 'in_progress', 'completed', 'cancelled']),
-  project_id: z.string().optional(),
+  protocol_id: z.string().optional(),
   assigned_to_id: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -53,7 +53,7 @@ interface SiteVisitDialogProps {
   organizationId: string;
   companyId: string;
   visit?: SiteVisit | null;
-  projects?: Array<{ id: string; protocol_number: string; protocol_name: string }>;
+  protocols?: Array<{ id: string; protocol_number: string; protocol_name: string }>;
 }
 
 export function SiteVisitDialog({
@@ -63,7 +63,7 @@ export function SiteVisitDialog({
   organizationId,
   companyId,
   visit,
-  projects = [],
+  protocols = [],
 }: SiteVisitDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,7 +77,7 @@ export function SiteVisitDialog({
       visit_type: 'monitoring',
       visit_start: '',
       visit_status: 'planned',
-      project_id: '',
+      protocol_id: '',
       assigned_to_id: '',
       notes: '',
     },
@@ -103,7 +103,7 @@ export function SiteVisitDialog({
           visit_type: visit.visit_type,
           visit_start: visitStart,
           visit_status: visit.visit_status,
-          project_id: visit.project_id || '',
+          protocol_id: visit.protocol_id || '',
           assigned_to_id: visit.assigned_to_id || '',
           notes: visit.notes || '',
         });
@@ -113,7 +113,7 @@ export function SiteVisitDialog({
           visit_type: 'monitoring',
           visit_start: '',
           visit_status: 'planned',
-          project_id: '',
+          protocol_id: '',
           assigned_to_id: '',
           notes: '',
         });
@@ -129,7 +129,7 @@ export function SiteVisitDialog({
         visit_type: values.visit_type as SiteVisitType,
         visit_start: values.visit_start,
         visit_status: values.visit_status as SiteVisitStatus,
-        project_id: values.project_id || null,
+        protocol_id: values.protocol_id || null,
         assigned_to_id: values.assigned_to_id || null,
         notes: values.notes || null,
       };
@@ -246,26 +246,26 @@ export function SiteVisitDialog({
             />
           </div>
 
-          {projects.length > 0 && (
+          {protocols.length > 0 && (
             <div className="space-y-1">
-              <Label htmlFor="project_id" className="text-xs">Project (optional)</Label>
+              <Label htmlFor="protocol_id" className="text-xs">Protocol (optional)</Label>
               <Select
-                value={watch('project_id') || ''}
-                onValueChange={(v) => setValue('project_id', v || '')}
+                value={watch('protocol_id') || ''}
+                onValueChange={(v) => setValue('protocol_id', v || '')}
               >
                 <SelectTrigger className="text-xs h-8">
                   <SelectValue
-                    placeholder="Select project"
+                    placeholder="Select protocol"
                     getDisplayLabel={(value) => {
                       if (!value) return null;
-                      const p = projects.find((pr) => pr.id === value);
-                      return p ? `${p.protocol_number} - ${p.protocol_name}` : 'Unknown project';
+                      const p = protocols.find((pr) => pr.id === value);
+                      return p ? `${p.protocol_number} - ${p.protocol_name}` : 'Unknown protocol';
                     }}
                   />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="" className="text-xs">None</SelectItem>
-                  {projects.map((p) => (
+                  {protocols.map((p) => (
                     <SelectItem key={p.id} value={p.id} className="text-xs">
                       {p.protocol_number} - {p.protocol_name}
                     </SelectItem>

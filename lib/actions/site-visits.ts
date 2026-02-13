@@ -41,7 +41,7 @@ export async function getSiteVisit(
 
 export async function getSiteVisits(
   organizationId: string
-): Promise<ActionResponse<Array<SiteVisit & { assigned_to?: { id: string; first_name: string | null; email: string | null } | null; project?: { id: string; protocol_number: string; protocol_name: string } | null }>>> {
+): Promise<ActionResponse<Array<SiteVisit & { assigned_to?: { id: string; first_name: string | null; email: string | null } | null; protocol?: { id: string; protocol_number: string; title: string } | null }>>> {
   try {
     const supabase = await createClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -75,7 +75,7 @@ export async function createSiteVisit(
     visit_type: SiteVisitType;
     visit_start: string;
     visit_status?: SiteVisitStatus;
-    project_id?: string | null;
+    protocol_id?: string | null;
     assigned_to_id?: string | null;
     notes?: string | null;
   }
@@ -96,7 +96,7 @@ export async function createSiteVisit(
         visit_type: data.visit_type,
         visit_start: data.visit_start,
         visit_status: data.visit_status || 'planned',
-        project_id: data.project_id || null,
+        protocol_id: data.protocol_id || null,
         assigned_to_id: data.assigned_to_id || null,
         notes: data.notes || null,
       })
@@ -123,7 +123,7 @@ export async function updateSiteVisit(
     visit_type?: SiteVisitType;
     visit_start?: string;
     visit_status?: SiteVisitStatus;
-    project_id?: string | null;
+    protocol_id?: string | null;
     assigned_to_id?: string | null;
     notes?: string | null;
   }

@@ -225,19 +225,25 @@ export async function saveVWHeaderMappings(
 // =====================================================
 
 /**
- * Get VW uploads for a company
+ * Get VW uploads for a company, optionally filtered by protocol
  */
 export async function getVWUploads(
-  companyId: string
+  companyId: string,
+  protocolId?: string | null
 ): Promise<ActionResponse<Tables<'vw_uploads'>[]>> {
   try {
     const supabase = await createClient();
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('vw_uploads')
       .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
+      .eq('company_id', companyId);
+
+    if (protocolId) {
+      query = query.eq('protocol_id', protocolId);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching VW uploads:', error);

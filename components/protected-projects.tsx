@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, Trash2 } from 'lucide-react';
+import { ArrowRight, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -13,66 +13,34 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { CreateProjectForm } from '@/components/create-project-form';
-import { Tables } from '@/lib/types/database.types';
-import { createClient } from '@/lib/client';
-import { toast } from 'sonner';
+import { EditProjectDialog } from '@/components/edit-project-dialog';
+import type { AssignedProtocol } from '@/lib/actions/projects';
 
 interface ProtectedProjectsProps {
-  projects: Tables<'projects'>[];
+  projects: AssignedProtocol[];
 }
 
 export function ProtectedProjects({ projects }: ProtectedProjectsProps) {
   const router = useRouter();
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [projectToEdit, setProjectToEdit] = useState<AssignedProtocol | null>(null);
 
   const handleProjectCreated = () => {
-    // Refresh the page to show the new project
     router.refresh();
   };
 
-  const handleDeleteClick = (projectId: string, e: React.MouseEvent) => {
+  const handleEditClick = (project: AssignedProtocol, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setProjectToDelete(projectId);
-    setDeleteDialogOpen(true);
+    setProjectToEdit(project);
+    setEditDialogOpen(true);
   };
 
-  const handleDeleteConfirm = async () => {
-    if (!projectToDelete) return;
-    
-    setIsDeleting(true);
-    try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', projectToDelete);
-
-      if (error) throw error;
-
-      toast.success('Project deleted successfully');
-      router.refresh();
-    } catch (error) {
-      console.error('Error deleting project:', error);
-      toast.error('Failed to delete project');
-    } finally {
-      setIsDeleting(false);
-      setDeleteDialogOpen(false);
-      setProjectToDelete(null);
-    }
+  const handleEditSuccess = () => {
+    setEditDialogOpen(false);
+    setProjectToEdit(null);
+    router.refresh();
   };
 
   return (
@@ -111,11 +79,11 @@ export function ProtectedProjects({ projects }: ProtectedProjectsProps) {
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    onClick={(e) => handleDeleteClick(project.id, e)}
-                    className="shrink-0 text-muted-foreground hover:text-destructive"
-                    title="Delete project"
+                    onClick={(e) => handleEditClick(project, e)}
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                    title="Edit project"
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Pencil className="h-4 w-4" />
                   </Button>
                 </div>
               </CardHeader>
@@ -140,11 +108,11 @@ export function ProtectedProjects({ projects }: ProtectedProjectsProps) {
                     </span>
                   )}
                 </div>
-                <div className="mt-4 h-2 w-full rounded-full bg-secondary/50" />
+                <div className="mt-4 h-2 w-full rounded-full bg-black" />
               </CardContent>
               <CardFooter>
                 <Button variant="outline" className="w-full gap-2" asChild>
-                  <Link href={`/protected/dashboard?projectId=${project.id}`}>
+                  <Link href={`/protected/dashboard?protocolId=${project.id}`}>
                     View Project
                     <ArrowRight className="h-4 w-4" />
                   </Link>
@@ -155,26 +123,15 @@ export function ProtectedProjects({ projects }: ProtectedProjectsProps) {
         </div>
       )}
 
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Project</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this project? This action cannot be undone and will permanently remove the project and all associated data.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              disabled={isDeleting}
-              className="bg-destructive text-white hover:bg-destructive/90"
-            >
-              {isDeleting ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <EditProjectDialog
+        project={projectToEdit}
+        open={editDialogOpen}
+        onOpenChange={(open) => {
+          setEditDialogOpen(open);
+          if (!open) setProjectToEdit(null);
+        }}
+        onSuccess={handleEditSuccess}
+      />
     </div>
   );
 }

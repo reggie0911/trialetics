@@ -133,16 +133,22 @@ export async function saveECRFHeaderMappings(
  * Get eCRF uploads for a company
  */
 export async function getECRFUploads(
-  companyId: string
+  companyId: string,
+  protocolId?: string | null
 ): Promise<ActionResponse<Tables<'ecrf_uploads'>[]>> {
   try {
     const supabase = await createClient();
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('ecrf_uploads')
       .select('*')
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false });
+      .eq('company_id', companyId);
+
+    if (protocolId) {
+      query = query.eq('protocol_id', protocolId);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching eCRF uploads:', error);

@@ -60,6 +60,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import type { OrganizationContactWithContact } from '@/lib/types/contacts-organizations';
+import type { OrganizationClinicalTrials } from '@/lib/actions/organization-clinical-trials';
 
 interface OrganizationStatusHistoryItem {
   id: string;
@@ -98,6 +99,7 @@ interface SiteDetailPageClientProps {
   organization: OrganizationWithRelations;
   activities: any[];
   notes: OrganizationNote[];
+  clinicalTrials?: OrganizationClinicalTrials;
   statusHistory: OrganizationStatusHistoryItem[];
   siteVisits: SiteVisitItem[];
   siteContracts: SiteContractItem[];
@@ -116,6 +118,7 @@ export function SiteDetailPageClient({
   organization: initialOrg,
   activities: initialActivities,
   notes: initialNotes,
+  clinicalTrials = { clinical_sites: [], protocol_assignments: [], protocol_accounts: [] },
   statusHistory = [],
   siteVisits = [],
   siteContracts = [],
@@ -288,10 +291,10 @@ export function SiteDetailPageClient({
     setIsRemovingMember(false);
   };
 
-  const projects = initialOrg.projects?.map((p) => ({
-    id: p.project.id,
-    protocol_number: p.project.protocol_number,
-    protocol_name: p.project.protocol_name,
+  const protocols = initialOrg.projects?.map((p) => ({
+    id: p.protocol.id,
+    protocol_number: p.protocol.protocol_number,
+    protocol_name: p.protocol.title,
   })) ?? [];
 
   const contractContacts = Array.from(
@@ -682,6 +685,48 @@ export function SiteDetailPageClient({
             </CardContent>
           </Card>
 
+          {/* Clinical Trials Card - protocols this site participates in */}
+          {clinicalTrials.clinical_sites.length > 0 && (
+            <Card className="col-span-2 row-span-1">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-xs md:text-xs font-medium">Clinical Trials</CardTitle>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Protocols this site participates in
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3 text-xs md:text-xs">
+                {clinicalTrials.clinical_sites.map((cs) => (
+                  <div key={cs.id} className="flex items-center justify-between border-b pb-2 last:border-0">
+                    <div>
+                      <p className="font-medium">
+                        {cs.protocol?.protocol_number} - {cs.protocol?.title}
+                      </p>
+                      <p className="text-muted-foreground">
+                        Site {cs.site_number ?? '—'} • {cs.region?.region_name ?? '—'} • {cs.status}
+                      </p>
+                    </div>
+                    <div className="flex gap-1 flex-wrap">
+                      {[
+                        { label: 'SDV', href: '/protected/sdv-tracker' },
+                        { label: 'AE', href: '/protected/ae' },
+                        { label: 'eCRF', href: '/protected/ecrf-query-tracker' },
+                        { label: 'VW', href: '/protected/vw' },
+                        { label: 'MC', href: '/protected/mc' },
+                        { label: 'Patients', href: '/protected/patients' },
+                      ].map(({ label, href }) => (
+                        <Button key={href} variant="ghost" size="sm" asChild className="text-xs h-7">
+                          <Link href={`${href}?protocol=${cs.protocol_id}`}>
+                            {label}
+                          </Link>
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Site Visits Card - spans 2 columns */}
           <Card className="col-span-2 row-span-1">
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
@@ -1071,7 +1116,7 @@ export function SiteDetailPageClient({
         organizationId={initialOrg.id}
         companyId={companyId}
         visit={editingVisit}
-        projects={projects}
+        protocols={protocols}
       />
 
       {/* Delete Visit Confirmation */}
@@ -1103,7 +1148,7 @@ export function SiteDetailPageClient({
         onSuccess={handleContractSuccess}
         organizationId={initialOrg.id}
         contract={editingContract}
-        projects={projects}
+        protocols={protocols}
         contacts={contractContacts}
       />
 
@@ -1136,7 +1181,7 @@ export function SiteDetailPageClient({
         onSuccess={handleDocumentSuccess}
         organizationId={initialOrg.id}
         document={editingDocument}
-        projects={projects}
+        protocols={protocols}
       />
 
       {/* Delete Document Confirmation */}

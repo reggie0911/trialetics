@@ -113,6 +113,9 @@ export interface ClinicalProtocol {
   planned_sites_count: number | null;
   planned_subjects_count: number | null;
   currency_code: string;
+  actual_cost: number | null;
+  budgeted_cost: number | null;
+  revenue: number | null;
   exchange_date: string | null;
   withholding_amount: number | null;
   withholding_percent: number | null;
@@ -261,6 +264,9 @@ export interface CreateClinicalProtocolData {
   planned_sites_count?: number | null;
   planned_subjects_count?: number | null;
   currency_code?: string;
+  actual_cost?: number | null;
+  budgeted_cost?: number | null;
+  revenue?: number | null;
   exchange_date?: string | null;
   withholding_amount?: number | null;
   withholding_percent?: number | null;

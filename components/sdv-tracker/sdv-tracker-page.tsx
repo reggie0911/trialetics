@@ -9,6 +9,7 @@ import { SDVHierarchicalTable } from './sdv-hierarchical-table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileSpreadsheet, Upload, Wrench, Loader2 } from 'lucide-react';
+import { ProtocolSelector } from '@/components/ui/protocol-selector';
 import {
   getSDVReports,
   getSDVReport,
@@ -29,11 +30,13 @@ import {
 interface SDVTrackerPageProps {
   companyId: string;
   profileId: string;
+  initialProtocolId?: string | null;
 }
 
-export function SDVTrackerPage({ companyId, profileId }: SDVTrackerPageProps) {
+export function SDVTrackerPage({ companyId, profileId, initialProtocolId }: SDVTrackerPageProps) {
   // Report state
   const [reports, setReports] = useState<SDVReport[]>([]);
+  const [protocolId, setProtocolId] = useState<string | null>(initialProtocolId ?? null);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [selectedReport, setSelectedReport] = useState<SDVReport | null>(null);
 
@@ -69,7 +72,7 @@ export function SDVTrackerPage({ companyId, profileId }: SDVTrackerPageProps) {
   // Fetch reports
   const fetchReports = useCallback(async () => {
     try {
-      const reportsData = await getSDVReports(companyId);
+      const reportsData = await getSDVReports(companyId, protocolId);
       setReports(reportsData);
       
       // Auto-select the first complete report, or first draft, or null
@@ -82,7 +85,7 @@ export function SDVTrackerPage({ companyId, profileId }: SDVTrackerPageProps) {
     } catch (error) {
       console.error('Error fetching SDV reports:', error);
     }
-  }, [companyId, selectedReportId]);
+  }, [companyId, protocolId, selectedReportId]);
 
   // Fetch data for selected report
   const fetchReportData = useCallback(async (reportId: string) => {
@@ -154,10 +157,10 @@ export function SDVTrackerPage({ companyId, profileId }: SDVTrackerPageProps) {
     }
   }, [selectedReportId, filters, hasData]);
 
-  // Initial load - fetch reports
+  // Initial load and when protocol changes - fetch reports
   useEffect(() => {
     fetchReports();
-  }, []);
+  }, [fetchReports]);
 
   // Fetch data when report selection changes
   useEffect(() => {
@@ -311,8 +314,19 @@ export function SDVTrackerPage({ companyId, profileId }: SDVTrackerPageProps) {
 
   return (
     <div className="space-y-6">
-      {/* Report Selector */}
-      <div className="flex flex-col gap-1">
+      {/* Protocol filter and Report Selector */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <ProtocolSelector
+            companyId={companyId}
+            value={protocolId}
+            onValueChange={setProtocolId}
+            label="Protocol"
+            placeholder="All protocols"
+            showAllOption={true}
+            className="min-w-[200px]"
+          />
+        </div>
         <SDVReportSelector
           reports={reports}
           selectedReportId={selectedReportId}

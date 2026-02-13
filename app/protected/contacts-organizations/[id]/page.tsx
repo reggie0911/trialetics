@@ -4,6 +4,7 @@ import { OrganizationDetailPageClient } from '@/components/contacts-organization
 import { SiteDetailPageClient } from '@/components/contacts-organizations/site-detail-page-client';
 import { createClient } from '@/lib/server';
 import { getOrganization, getOrganizationStatusHistory } from '@/lib/actions/organizations';
+import { getOrganizationClinicalTrials } from '@/lib/actions/organization-clinical-trials';
 import { getSiteVisits, getProfilesForCompany } from '@/lib/actions/site-visits';
 import { getSiteContracts } from '@/lib/actions/site-contracts';
 import { getSiteDocuments } from '@/lib/actions/site-documents';
@@ -46,6 +47,12 @@ export default async function OrganizationDetailPage({
   if (!organizationResult.success || !organizationResult.data) {
     redirect('/protected/contacts-organizations');
   }
+
+  // Fetch Clinical Trials associations (clinical_sites, protocol_assignments, protocol_accounts)
+  const clinicalTrialsResult = await getOrganizationClinicalTrials(id);
+  const clinicalTrials = clinicalTrialsResult.success && clinicalTrialsResult.data
+    ? clinicalTrialsResult.data
+    : { clinical_sites: [], protocol_assignments: [], protocol_accounts: [] };
 
   // Fetch activity history
   const activityResult = await getOrganizationActivity(id);
@@ -105,6 +112,7 @@ export default async function OrganizationDetailPage({
           organization={organizationResult.data}
           activities={activities}
           notes={notes}
+          clinicalTrials={clinicalTrials}
           statusHistory={statusHistory}
           siteVisits={siteVisits}
           siteContracts={siteContracts}
@@ -130,6 +138,7 @@ export default async function OrganizationDetailPage({
         organization={organizationResult.data}
         activities={activities}
         notes={notes}
+        clinicalTrials={clinicalTrials}
         companyId={profile.company_id}
         profileId={profile.id}
         userEmail={profile.email || data.user.email || ''}

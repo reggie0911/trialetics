@@ -139,7 +139,7 @@ export function OrganizationDetailSheet({
   if (!initialOrg) return null;
 
   const existingContactIds = organization?.contacts?.map((oc) => oc.contact.id) || [];
-  const existingProjectIds = organization?.projects?.map((op) => op.project.id) || [];
+  const existingProjectIds = organization?.projects?.map((op) => op.protocol.id) || [];
 
   return (
     <>
@@ -364,9 +364,9 @@ export function OrganizationDetailSheet({
                           <div className="flex items-center gap-2">
                             <FolderOpen className="h-3 w-3 text-muted-foreground" />
                             <div>
-                              <p className="font-medium text-xs">{op.project.protocol_name}</p>
+                              <p className="font-medium text-xs">{op.protocol.title}</p>
                               <p className="text-xs text-muted-foreground">
-                                {op.project.protocol_number} • {ORGANIZATION_PROJECT_ROLE_LABELS[op.role]}
+                                {op.protocol.protocol_number} • {ORGANIZATION_PROJECT_ROLE_LABELS[op.role]}
                               </p>
                             </div>
                           </div>
@@ -376,7 +376,7 @@ export function OrganizationDetailSheet({
                             className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                             onClick={() => setRemoveProjectConfirm({
                               relationshipId: op.id,
-                              name: op.project.protocol_name,
+                              name: op.protocol.title,
                             })}
                           >
                             <Trash2 className="h-3 w-3" />

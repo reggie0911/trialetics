@@ -138,7 +138,7 @@ export function ContactDetailSheet({
 
   const fullName = `${initialContact.first_name} ${initialContact.last_name}`;
   const existingOrgIds = contact?.organizations?.map((oc) => oc.organization.id) || [];
-  const existingProjectIds = contact?.projects?.map((cp) => cp.project.id) || [];
+  const existingProjectIds = contact?.projects?.map((cp) => cp.protocol.id) || [];
 
   return (
     <>
@@ -347,9 +347,9 @@ export function ContactDetailSheet({
                           <div className="flex items-center gap-2">
                             <FolderOpen className="h-3 w-3 text-muted-foreground" />
                             <div>
-                              <p className="font-medium text-xs">{cp.project.protocol_name}</p>
+                              <p className="font-medium text-xs">{cp.protocol.title}</p>
                               <p className="text-xs text-muted-foreground">
-                                {cp.project.protocol_number} • {CONTACT_PROJECT_ROLE_LABELS[cp.role]}
+                                {cp.protocol.protocol_number} • {CONTACT_PROJECT_ROLE_LABELS[cp.role]}
                                 {cp.organization && ` • ${cp.organization.name}`}
                               </p>
                             </div>
@@ -360,7 +360,7 @@ export function ContactDetailSheet({
                             className="h-6 w-6 p-0 text-destructive hover:text-destructive"
                             onClick={() => setRemoveProjectConfirm({
                               relationshipId: cp.id,
-                              name: cp.project.protocol_name,
+                              name: cp.protocol.title,
                             })}
                           >
                             <Trash2 className="h-3 w-3" />

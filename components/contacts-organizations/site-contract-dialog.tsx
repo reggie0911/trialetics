@@ -39,7 +39,7 @@ const siteContractSchema = z.object({
   contract_amount: z.string().optional(),
   currency_code: z.string().optional(),
   payee_contact_id: z.string().optional(),
-  project_id: z.string().optional(),
+  protocol_id: z.string().optional(),
   status: z.enum(['draft', 'pending', 'executed', 'terminated', 'expired']),
   effective_date: z.string().optional(),
   expiry_date: z.string().optional(),
@@ -54,7 +54,7 @@ interface SiteContractDialogProps {
   onSuccess: () => void;
   organizationId: string;
   contract?: SiteContract | null;
-  projects?: Array<{ id: string; protocol_number: string; protocol_name: string }>;
+  protocols?: Array<{ id: string; protocol_number: string; protocol_name: string }>;
   contacts?: Array<{ id: string; first_name: string | null; last_name: string | null }>;
 }
 
@@ -64,7 +64,7 @@ export function SiteContractDialog({
   onSuccess,
   organizationId,
   contract,
-  projects = [],
+  protocols = [],
   contacts = [],
 }: SiteContractDialogProps) {
   const { toast } = useToast();
@@ -78,7 +78,7 @@ export function SiteContractDialog({
       contract_amount: '',
       currency_code: 'USD',
       payee_contact_id: '',
-      project_id: '',
+      protocol_id: '',
       status: 'draft',
       effective_date: '',
       expiry_date: '',
@@ -94,7 +94,7 @@ export function SiteContractDialog({
           contract_amount: contract.contract_amount != null ? String(contract.contract_amount) : '',
           currency_code: contract.currency_code || 'USD',
           payee_contact_id: contract.payee_contact_id || '',
-          project_id: contract.project_id || '',
+          protocol_id: contract.protocol_id || '',
           status: contract.status,
           effective_date: contract.effective_date || '',
           expiry_date: contract.expiry_date || '',
@@ -106,7 +106,7 @@ export function SiteContractDialog({
           contract_amount: '',
           currency_code: 'USD',
           payee_contact_id: '',
-          project_id: '',
+          protocol_id: '',
           status: 'draft',
           effective_date: '',
           expiry_date: '',
@@ -124,7 +124,7 @@ export function SiteContractDialog({
         contract_amount: values.contract_amount ? parseFloat(values.contract_amount) : null,
         currency_code: values.currency_code || 'USD',
         payee_contact_id: values.payee_contact_id || null,
-        project_id: values.project_id || null,
+        protocol_id: values.protocol_id || null,
         status: values.status as SiteContractStatus,
         effective_date: values.effective_date || null,
         expiry_date: values.expiry_date || null,
@@ -261,19 +261,19 @@ export function SiteContractDialog({
             </div>
           )}
 
-          {projects.length > 0 && (
+          {protocols.length > 0 && (
             <div className="space-y-1">
-              <Label htmlFor="project_id" className="text-xs">Project</Label>
+              <Label htmlFor="protocol_id" className="text-xs">Protocol</Label>
               <Select
-                value={watch('project_id') || ''}
-                onValueChange={(v) => setValue('project_id', v || '')}
+                value={watch('protocol_id') || ''}
+                onValueChange={(v) => setValue('protocol_id', v || '')}
               >
                 <SelectTrigger className="text-xs h-8">
-                  <SelectValue placeholder="Select project" />
+                  <SelectValue placeholder="Select protocol" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="" className="text-xs">None</SelectItem>
-                  {projects.map((p) => (
+                  {protocols.map((p) => (
                     <SelectItem key={p.id} value={p.id} className="text-xs">
                       {p.protocol_number} - {p.protocol_name}
                     </SelectItem>

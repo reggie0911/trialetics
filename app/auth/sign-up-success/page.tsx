@@ -1,9 +1,42 @@
-import Link from 'next/link';
+'use client';
 
+import Link from 'next/link';
+import { useState } from 'react';
 import Logo from '@/components/layout/logo';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { createClient } from '@/lib/client';
 
 export default function SignUpSuccessPage() {
+  const [email, setEmail] = useState('');
+  const [resendStatus, setResendStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [resendError, setResendError] = useState<string | null>(null);
+
+  const handleResend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      setResendError('Please enter your email address');
+      return;
+    }
+    setResendStatus('loading');
+    setResendError(null);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim(),
+        options: {
+          emailRedirectTo: `${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}/auth/callback?next=/protected`,
+        },
+      });
+      if (error) throw error;
+      setResendStatus('success');
+    } catch (err) {
+      setResendStatus('error');
+      setResendError(err instanceof Error ? err.message : 'Failed to resend email');
+    }
+  };
+
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
       <div className="container w-full max-w-sm self-center justify-self-center">
@@ -22,6 +55,29 @@ export default function SignUpSuccessPage() {
               You&apos;ve successfully signed up. Please check your email to confirm your account
               before signing in.
             </p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Don&apos;t see the email? Check your spam folder.
+            </p>
+          </div>
+          <div className="mt-6 grid gap-4">
+            <form onSubmit={handleResend} className="flex flex-col gap-2">
+              <input
+                type="email"
+                placeholder="Enter your email to resend"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+              />
+              <Button type="submit" variant="outline" size="sm" disabled={resendStatus === 'loading'}>
+                {resendStatus === 'loading' ? 'Sending...' : 'Resend confirmation email'}
+              </Button>
+              {resendStatus === 'success' && (
+                <p className="text-sm text-green-600">Email sent! Check your inbox.</p>
+              )}
+              {resendStatus === 'error' && resendError && (
+                <p className="text-sm text-red-500">{resendError}</p>
+              )}
+            </form>
           </div>
           <div className="mt-8 text-center text-sm">
             <Link href="/auth/login" className="font-medium hover:underline">

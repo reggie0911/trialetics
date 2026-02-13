@@ -4,7 +4,13 @@ import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { PatientsPageClient } from '@/components/patients/patients-page-client';
 import { createClient } from '@/lib/server';
 
-export default async function PatientsPage() {
+export default async function PatientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ protocol?: string }>;
+}) {
+  const params = await searchParams;
+  const protocolId = params.protocol || null;
   const supabase = await createClient();
 
   // Check authentication
@@ -45,6 +51,7 @@ export default async function PatientsPage() {
         <PatientsPageClient 
           companyId={profile.company_id} 
           profileId={profile.id}
+          initialProtocolId={protocolId}
         />
       </main>
     </div>

@@ -41,7 +41,7 @@ const siteDocumentSchema = z.object({
   expected_date: z.string().optional(),
   received_date: z.string().optional(),
   expiration_date: z.string().optional(),
-  project_id: z.string().optional(),
+  protocol_id: z.string().optional(),
   status: z.enum(['pending', 'sent', 'received', 'approved', 'expired', 'superseded']),
   file_url: z.string().optional(),
   notes: z.string().optional(),
@@ -55,7 +55,7 @@ interface SiteDocumentDialogProps {
   onSuccess: () => void;
   organizationId: string;
   document?: SiteDocument | null;
-  projects?: Array<{ id: string; protocol_number: string; protocol_name: string }>;
+  protocols?: Array<{ id: string; protocol_number: string; protocol_name: string }>;
 }
 
 export function SiteDocumentDialog({
@@ -64,7 +64,7 @@ export function SiteDocumentDialog({
   onSuccess,
   organizationId,
   document,
-  projects = [],
+  protocols = [],
 }: SiteDocumentDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -79,7 +79,7 @@ export function SiteDocumentDialog({
       expected_date: '',
       received_date: '',
       expiration_date: '',
-      project_id: '',
+          protocol_id: '',
       status: 'pending',
       file_url: '',
       notes: '',
@@ -96,7 +96,7 @@ export function SiteDocumentDialog({
           expected_date: document.expected_date || '',
           received_date: document.received_date || '',
           expiration_date: document.expiration_date || '',
-          project_id: document.project_id || '',
+          protocol_id: document.protocol_id || '',
           status: document.status,
           file_url: document.file_url || '',
           notes: document.notes || '',
@@ -109,7 +109,7 @@ export function SiteDocumentDialog({
           expected_date: '',
           received_date: '',
           expiration_date: '',
-          project_id: '',
+          protocol_id: '',
           status: 'pending',
           file_url: '',
           notes: '',
@@ -128,7 +128,7 @@ export function SiteDocumentDialog({
         expected_date: values.expected_date || null,
         received_date: values.received_date || null,
         expiration_date: values.expiration_date || null,
-        project_id: values.project_id || null,
+        protocol_id: values.protocol_id || null,
         status: values.status as SiteDocumentStatus,
         file_url: values.file_url || null,
         notes: values.notes || null,
@@ -270,19 +270,19 @@ export function SiteDocumentDialog({
             </div>
           </div>
 
-          {projects.length > 0 && (
+          {protocols.length > 0 && (
             <div className="space-y-1">
-              <Label htmlFor="project_id" className="text-xs">Project</Label>
+              <Label htmlFor="protocol_id" className="text-xs">Protocol</Label>
               <Select
-                value={watch('project_id') || ''}
-                onValueChange={(v) => setValue('project_id', v || '')}
+                value={watch('protocol_id') || ''}
+                onValueChange={(v) => setValue('protocol_id', v || '')}
               >
                 <SelectTrigger className="text-xs h-8">
                   <SelectValue placeholder="Select project" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="" className="text-xs">None</SelectItem>
-                  {projects.map((p) => (
+                  {protocols.map((p) => (
                     <SelectItem key={p.id} value={p.id} className="text-xs">
                       {p.protocol_number} - {p.protocol_name}
                     </SelectItem>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   Table,
   TableBody,
@@ -14,9 +15,16 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Edit, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { MoreHorizontal, Edit, Trash2, Users, BarChart3, FileText } from 'lucide-react';
+import { ProtocolContactsSheet } from './protocol-contacts-sheet';
+import { ProtocolStatusReportSheet } from './protocol-status-report-sheet';
 import { PROTOCOL_STATUS_LABELS, PROTOCOL_PHASE_LABELS } from '@/lib/types/clinical-trials';
 import type { ClinicalProtocolWithRelations } from '@/lib/types/clinical-trials';
 import { deleteClinicalProtocol } from '@/lib/actions/clinical-protocols';
@@ -35,8 +43,12 @@ export function ProtocolsDataTable({
   isLoading,
   onEdit,
   onRefresh,
+  companyId,
 }: ProtocolsDataTableProps) {
   const { toast } = useToast();
+  const router = useRouter();
+  const [contactsSheetProtocol, setContactsSheetProtocol] = useState<ClinicalProtocolWithRelations | null>(null);
+  const [statusReportProtocol, setStatusReportProtocol] = useState<ClinicalProtocolWithRelations | null>(null);
 
   const handleDelete = async (protocolId: string) => {
     if (!confirm('Are you sure you want to delete this protocol? This will also delete all associated regions and sites.')) return;
@@ -70,6 +82,7 @@ export function ProtocolsDataTable({
   }
 
   return (
+    <>
     <div className="rounded-md border">
       <Table>
         <TableHeader>
@@ -114,6 +127,37 @@ export function ProtocolsDataTable({
                     <MoreHorizontal className="h-3 w-3" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setContactsSheetProtocol(protocol)}>
+                      <Users className="mr-2 h-3 w-3" />
+                      Contacts & Partners
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setStatusReportProtocol(protocol)}>
+                      <FileText className="mr-2 h-3 w-3" />
+                      Status Report
+                    </DropdownMenuItem>
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger className="flex items-center">
+                        <BarChart3 className="mr-2 h-3 w-3" />
+                        View in Trackers
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {[
+                          { label: 'AE Metrics', href: '/protected/ae' },
+                          { label: 'eCRF Query', href: '/protected/ecrf-query-tracker' },
+                          { label: 'SDV Tracker', href: '/protected/sdv-tracker' },
+                          { label: 'Visit Window', href: '/protected/vw' },
+                          { label: 'Med Compliance', href: '/protected/mc' },
+                          { label: 'Patients', href: '/protected/patients' },
+                        ].map(({ label, href }) => (
+                          <DropdownMenuItem
+                            key={href}
+                            onClick={() => router.push(`${href}?protocol=${protocol.id}`)}
+                          >
+                            {label}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
                     <DropdownMenuItem onClick={() => onEdit(protocol)}>
                       <Edit className="mr-2 h-3 w-3" />
                       Edit
@@ -133,5 +177,29 @@ export function ProtocolsDataTable({
         </TableBody>
       </Table>
     </div>
+
+    {contactsSheetProtocol && (
+      <ProtocolContactsSheet
+        open={!!contactsSheetProtocol}
+        onOpenChange={(open) => !open && setContactsSheetProtocol(null)}
+        protocolId={contactsSheetProtocol.id}
+        protocolNumber={contactsSheetProtocol.protocol_number}
+        protocolTitle={contactsSheetProtocol.title}
+        companyId={companyId}
+        onSuccess={onRefresh}
+      />
+    )}
+    {statusReportProtocol && (
+      <ProtocolStatusReportSheet
+        open={!!statusReportProtocol}
+        onOpenChange={(open) => !open && setStatusReportProtocol(null)}
+        protocolId={statusReportProtocol.id}
+        protocolNumber={statusReportProtocol.protocol_number}
+        protocolTitle={statusReportProtocol.title}
+        companyId={companyId}
+        onSuccess={onRefresh}
+      />
+    )}
+    </>
   );
 }
