@@ -24,6 +24,7 @@ import {
 import { ColumnFiltersState } from "@tanstack/react-table";
 import { Tables } from "@/lib/types/database.types";
 import { transformToPivotData } from "@/lib/utils/mc-pivot-transformer";
+import { ProtocolSelector } from "@/components/ui/protocol-selector";
 
 // View mode type
 type ViewMode = 'standard' | 'pivot';
@@ -31,12 +32,14 @@ type ViewMode = 'standard' | 'pivot';
 interface MCPageClientProps {
   companyId: string;
   profileId: string;
+  initialProtocolId?: string | null;
 }
 
-export function MCPageClient({ companyId, profileId }: MCPageClientProps) {
+export function MCPageClient({ companyId, profileId, initialProtocolId }: MCPageClientProps) {
   // Upload management
   const [uploads, setUploads] = useState<Tables<'mc_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
+  const [protocolId, setProtocolId] = useState<string | null>(initialProtocolId ?? null);
   
   // View mode state
   const [viewMode, setViewMode] = useState<ViewMode>('standard');
@@ -104,7 +107,7 @@ export function MCPageClient({ companyId, profileId }: MCPageClientProps) {
       loadHeaderMappings();
       loadUploads();
     }
-  }, [companyId]);
+  }, [companyId, protocolId]);
 
   // Load MC data when upload is selected
   useEffect(() => {
@@ -132,7 +135,7 @@ export function MCPageClient({ companyId, profileId }: MCPageClientProps) {
     setIsLoading(true);
     setLoadingMessage("Loading uploads...");
     
-    const result = await getMCUploads(companyId);
+    const result = await getMCUploads(companyId, protocolId);
     if (result.success && result.data) {
       setUploads(result.data);
       
@@ -640,8 +643,17 @@ export function MCPageClient({ companyId, profileId }: MCPageClientProps) {
       )}
 
       {/* Upload Control & History */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <ProtocolSelector
+            companyId={companyId}
+            value={protocolId}
+            onValueChange={setProtocolId}
+            label="Protocol"
+            placeholder="All protocols"
+            showAllOption={true}
+            className="min-w-[200px]"
+          />
           <MCCSVUploadDialog 
             onUpload={handleUpload}
             companyId={companyId}

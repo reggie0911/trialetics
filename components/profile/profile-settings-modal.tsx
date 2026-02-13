@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Dialog,
   DialogContent,
@@ -9,22 +10,28 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Lock } from 'lucide-react';
+import { User, Lock, Building2 } from 'lucide-react';
 import { PersonalInfoForm } from './personal-info-form';
 import { PasswordChangeForm } from './password-change-form';
+import { CompanySettingsForm } from './company-settings-form';
 
 interface ProfileSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Called when profile/company data is saved - use to refresh navbar, etc. */
+  onDataSaved?: () => void;
 }
 
-export function ProfileSettingsModal({ open, onOpenChange }: ProfileSettingsModalProps) {
+export function ProfileSettingsModal({ open, onOpenChange, onDataSaved }: ProfileSettingsModalProps) {
+  const router = useRouter();
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [activeTab, setActiveTab] = useState('personal');
 
   const handleSuccess = (message: string) => {
     setSuccessMessage(message);
-    
+    router.refresh();
+    onDataSaved?.();
+
     // Show success message briefly
     setTimeout(() => {
       setSuccessMessage('');
@@ -58,10 +65,14 @@ export function ProfileSettingsModal({ open, onOpenChange }: ProfileSettingsModa
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="personal" className="gap-2">
               <User className="h-4 w-4" />
               Personal Information
+            </TabsTrigger>
+            <TabsTrigger value="company" className="gap-2">
+              <Building2 className="h-4 w-4" />
+              Company
             </TabsTrigger>
             <TabsTrigger value="security" className="gap-2">
               <Lock className="h-4 w-4" />
@@ -72,6 +83,12 @@ export function ProfileSettingsModal({ open, onOpenChange }: ProfileSettingsModa
           <TabsContent value="personal" className="mt-6">
             <PersonalInfoForm 
               onSuccess={() => handleSuccess('Profile updated successfully!')} 
+            />
+          </TabsContent>
+
+          <TabsContent value="company" className="mt-6">
+            <CompanySettingsForm 
+              onSuccess={() => handleSuccess('Company updated successfully!')} 
             />
           </TabsContent>
 

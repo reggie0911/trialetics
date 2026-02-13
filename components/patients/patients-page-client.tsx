@@ -28,10 +28,12 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Printer, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ProtocolSelector } from "@/components/ui/protocol-selector";
 
 interface PatientsPageClientProps {
   companyId: string;
   profileId: string;
+  initialProtocolId?: string | null;
 }
 
 // Helper function to parse a date string in various formats (MM/DD/YYYY, YYYY-MM-DD, or standard Date parseable)
@@ -194,10 +196,11 @@ function formatDateForDisplay(dateStr: string): string {
   }
 }
 
-export function PatientsPageClient({ companyId, profileId }: PatientsPageClientProps) {
+export function PatientsPageClient({ companyId, profileId, initialProtocolId }: PatientsPageClientProps) {
   // Upload selection (removed project selection)
   const [uploads, setUploads] = useState<Tables<'patient_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
+  const [protocolId, setProtocolId] = useState<string | null>(initialProtocolId ?? null);
 
   // Data state
   const [data, setData] = useState<PatientRecord[]>([]);
@@ -349,13 +352,13 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
     });
   }, [data]);
 
-  // Load uploads on mount
+  // Load uploads on mount and when protocol changes
   useEffect(() => {
     if (companyId) {
       loadUploads(companyId);
       loadHeaderMappings(companyId);
     }
-  }, [companyId]);
+  }, [companyId, protocolId]);
 
   // Load patient data when upload changes
   useEffect(() => {
@@ -370,7 +373,7 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
     setIsLoading(true);
     setLoadingMessage("Loading uploads...");
     
-    const result = await getPatientUploads(projectId);
+    const result = await getPatientUploads(projectId, protocolId);
     if (result.success && result.data) {
       setUploads(result.data);
       // Auto-select most recent upload
@@ -1191,6 +1194,15 @@ export function PatientsPageClient({ companyId, profileId }: PatientsPageClientP
       {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <div className="flex items-center gap-2 flex-wrap">
+          <ProtocolSelector
+            companyId={companyId}
+            value={protocolId}
+            onValueChange={setProtocolId}
+            label="Protocol"
+            placeholder="All protocols"
+            showAllOption={true}
+            className="min-w-[200px]"
+          />
           <CSVUploadDialog onUpload={handleUpload} />
           <HeaderMappingUpload 
             onMappingLoad={handleMappingLoad}

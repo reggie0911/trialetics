@@ -118,7 +118,7 @@ export function ContactDetailPageClient({
   };
 
   const existingOrgIds = initialContact.organizations?.map((oc) => oc.organization.id) || [];
-  const existingProjectIds = initialContact.projects?.map((cp) => cp.project.id) || [];
+  const existingProjectIds = initialContact.projects?.map((cp) => cp.protocol.id) || [];
 
   return (
     <>
@@ -381,7 +381,7 @@ export function ContactDetailPageClient({
                       <div key={cp.id} className="flex items-center justify-between border-b pb-3 last:border-0">
                         <div className="flex-1 text-xs md:text-xs">
                           <p className="font-medium">
-                            {cp.project.protocol_number} - {cp.project.protocol_name}
+                            {cp.protocol.protocol_number} - {cp.protocol.title}
                           </p>
                           <p className="text-muted-foreground capitalize">
                             {CONTACT_PROJECT_ROLE_LABELS[cp.role]}
@@ -403,7 +403,7 @@ export function ContactDetailPageClient({
                           onClick={() =>
                             setRemoveProjectConfirm({
                               relationshipId: cp.id,
-                              name: `${cp.project.protocol_number} - ${cp.project.protocol_name}`,
+                              name: `${cp.protocol.protocol_number} - ${cp.protocol.title}`,
                             })
                           }
                         >

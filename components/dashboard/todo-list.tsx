@@ -9,13 +9,13 @@ import { Button } from '@/components/ui/button';
 import { ArrowUpDown } from 'lucide-react';
 
 interface TodoListProps {
-  projectId: string;
+  protocolId: string;
 }
 
 type SortBy = 'due_date' | 'created_at' | 'title';
 type SortOrder = 'asc' | 'desc';
 
-export function TodoList({ projectId }: TodoListProps) {
+export function TodoList({ protocolId }: TodoListProps) {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<SortBy>('due_date');
@@ -27,11 +27,11 @@ export function TodoList({ projectId }: TodoListProps) {
 
   useEffect(() => {
     loadTodos();
-  }, [projectId]);
+  }, [protocolId]);
 
   const loadTodos = async () => {
     setLoading(true);
-    const { data, error } = await getTodos(projectId);
+    const { data, error } = await getTodos(protocolId);
     if (data) {
       setTodos(data);
     }
@@ -228,7 +228,7 @@ export function TodoList({ projectId }: TodoListProps) {
           if (!open) handleModalClose(false);
         }}
         todo={editingTodo}
-        projectId={projectId}
+        protocolId={protocolId}
         onSuccess={() => handleModalClose(true)}
       />
     </div>

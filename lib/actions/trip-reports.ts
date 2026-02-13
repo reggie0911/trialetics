@@ -162,9 +162,9 @@ export async function getTripReport(
           visit_end,
           visit_status,
           organization_id,
-          project_id,
+          protocol_id,
           organization:organizations (id, name),
-          project:projects (id, protocol_number, protocol_name)
+          protocol:clinical_protocols (id, protocol_number, title)
         ),
         template:trip_report_templates (*),
         reviewer:profiles!reviewer_id (id, first_name, email),
@@ -226,9 +226,9 @@ export async function getTripReportBySiteVisit(
           visit_end,
           visit_status,
           organization_id,
-          project_id,
+          protocol_id,
           organization:organizations (id, name),
-          project:projects (id, protocol_number, protocol_name)
+          protocol:clinical_protocols (id, protocol_number, title)
         ),
         template:trip_report_templates (*),
         reviewer:profiles!reviewer_id (id, first_name, email),

@@ -1,7 +1,7 @@
 export interface Todo {
   id: string;
   user_id: string;
-  project_id: string;
+  protocol_id: string;
   title: string;
   description: string | null;
   completed: boolean;

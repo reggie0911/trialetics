@@ -22,16 +22,19 @@ import {
 } from "@/lib/actions/vw-data";
 import { ColumnFiltersState } from "@tanstack/react-table";
 import { Tables } from "@/lib/types/database.types";
+import { ProtocolSelector } from "@/components/ui/protocol-selector";
 
 interface VWPageClientProps {
   companyId: string;
   profileId: string;
+  initialProtocolId?: string | null;
 }
 
-export function VWPageClient({ companyId, profileId }: VWPageClientProps) {
+export function VWPageClient({ companyId, profileId, initialProtocolId }: VWPageClientProps) {
   // Upload management
   const [uploads, setUploads] = useState<Tables<'vw_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
+  const [protocolId, setProtocolId] = useState<string | null>(initialProtocolId ?? null);
   
   // Data state
   const [data, setData] = useState<VWRecord[]>([]);
@@ -90,7 +93,7 @@ export function VWPageClient({ companyId, profileId }: VWPageClientProps) {
       loadHeaderMappings();
       loadUploads();
     }
-  }, [companyId]);
+  }, [companyId, protocolId]);
 
   // Load VW data when upload is selected
   useEffect(() => {
@@ -118,7 +121,7 @@ export function VWPageClient({ companyId, profileId }: VWPageClientProps) {
     setIsLoading(true);
     setLoadingMessage("Loading uploads...");
     
-    const result = await getVWUploads(companyId);
+    const result = await getVWUploads(companyId, protocolId);
     if (result.success && result.data) {
       setUploads(result.data);
       
@@ -483,8 +486,17 @@ export function VWPageClient({ companyId, profileId }: VWPageClientProps) {
       )}
 
       {/* Upload Control & History */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <ProtocolSelector
+            companyId={companyId}
+            value={protocolId}
+            onValueChange={setProtocolId}
+            label="Protocol"
+            placeholder="All protocols"
+            showAllOption={true}
+            className="min-w-[200px]"
+          />
           <VWCSVUploadDialog 
             onUpload={handleUpload}
             companyId={companyId}

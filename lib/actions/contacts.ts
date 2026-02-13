@@ -47,7 +47,7 @@ export async function getContacts(
           id,
           organization:organizations(id, name, organization_type)
         ),
-        contact_projects(id)
+        contact_protocols(id)
       `, { count: 'exact' })
       .eq('company_id', companyId)
       .order('last_name', { ascending: true });
@@ -78,7 +78,7 @@ export async function getContacts(
     // Transform the data to include counts and primary organization
     let contacts = (data || []).map((contact: any) => {
       const orgRelations = contact.organization_contacts || [];
-      const projectRelations = contact.contact_projects || [];
+      const projectRelations = contact.contact_protocols || [];
       const primaryOrgRelation = orgRelations.find((oc: any) => oc.is_primary);
 
       return {
@@ -162,9 +162,9 @@ export async function getContact(contactId: string): Promise<ActionResponse<Cont
           *,
           organization:organizations(*)
         ),
-        contact_projects(
+        contact_protocols(
           *,
-          project:projects(id, protocol_number, protocol_name, protocol_status),
+          protocol:clinical_protocols(id, protocol_number, title, status),
           organization:organizations(id, name)
         )
       `)
@@ -191,11 +191,11 @@ export async function getContact(contactId: string): Promise<ActionResponse<Cont
     const contact: ContactWithRelations = {
       ...data,
       organizations: data.organization_contacts,
-      projects: data.contact_projects,
+      projects: data.contact_protocols,
       addresses: addresses || [],
       primary_organization: primaryOrgRelation?.organization || null,
       organizations_count: data.organization_contacts?.length || 0,
-      projects_count: data.contact_projects?.length || 0,
+      projects_count: data.contact_protocols?.length || 0,
     };
 
     return { success: true, data: contact };
@@ -238,6 +238,7 @@ export async function createContact(
         profile_image_url: data.profile_image_url || null,
         status: data.status || 'active',
         notes: data.notes || null,
+        manager_id: data.manager_id ?? null,
         metadata: data.metadata || {},
         created_by_id: profileId,
         creator_email: creatorEmail,
@@ -535,10 +536,10 @@ export async function assignContactToProject(
     }
 
     const { error } = await supabase
-      .from('contact_projects')
+      .from('contact_protocols')
       .insert({
         contact_id: data.contact_id,
-        project_id: data.project_id,
+        protocol_id: data.protocol_id,
         organization_id: data.organization_id || null,
         role: data.role,
         status: data.status,
@@ -575,7 +576,7 @@ export async function removeContactFromProject(
     }
 
     const { error } = await supabase
-      .from('contact_projects')
+      .from('contact_protocols')
       .delete()
       .eq('id', relationshipId);
 

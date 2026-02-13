@@ -37,13 +37,18 @@ export default function SignUpPage() {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/protected`,
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/protected`,
         },
       });
       if (error) throw error;
       router.push('/auth/sign-up-success');
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'An error occurred');
+      const message = error instanceof Error ? error.message : 'An error occurred';
+      if (message.includes('already registered') || message.includes('User already registered')) {
+        setError('An account with this email already exists. Try signing in or use a different email.');
+      } else {
+        setError(message);
+      }
     } finally {
       setIsLoading(false);
     }

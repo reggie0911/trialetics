@@ -4,7 +4,13 @@ import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { ECRFQueryTrackerPageClient } from '@/components/ecrf-query-tracker/ecrf-query-tracker-page-client';
 import { createClient } from '@/lib/server';
 
-export default async function ECRFQueryTrackerPage() {
+export default async function ECRFQueryTrackerPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ protocol?: string }>;
+}) {
+  const params = await searchParams;
+  const protocolId = params.protocol || null;
   const supabase = await createClient();
 
   // Check authentication
@@ -47,7 +53,7 @@ export default async function ECRFQueryTrackerPage() {
         </div>
 
         {/* Client-side component for data management */}
-        <ECRFQueryTrackerPageClient companyId={profile.company_id || ""} profileId={profile.id} />
+        <ECRFQueryTrackerPageClient companyId={profile.company_id || ""} profileId={profile.id} initialProtocolId={protocolId} />
       </main>
     </div>
   );

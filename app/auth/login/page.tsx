@@ -33,7 +33,12 @@ export default function LoginPage() {
       if (error) throw error;
       router.push('/protected');
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'An error occurred');
+      const message = error instanceof Error ? error.message : 'An error occurred';
+      if (message.includes('Invalid login credentials') || message.includes('invalid_credentials')) {
+        setError('Invalid email or password. If you just signed up, please check your email to confirm your account first.');
+      } else {
+        setError(message);
+      }
     } finally {
       setIsLoading(false);
     }

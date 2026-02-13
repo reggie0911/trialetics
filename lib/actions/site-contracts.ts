@@ -46,7 +46,7 @@ export async function createSiteContract(
     contract_amount?: number | null;
     currency_code?: string | null;
     payee_contact_id?: string | null;
-    project_id?: string | null;
+    protocol_id?: string | null;
     status?: SiteContractStatus;
     effective_date?: string | null;
     expiry_date?: string | null;
@@ -69,7 +69,7 @@ export async function createSiteContract(
         contract_amount: data.contract_amount ?? null,
         currency_code: data.currency_code ?? 'USD',
         payee_contact_id: data.payee_contact_id ?? null,
-        project_id: data.project_id ?? null,
+        protocol_id: data.protocol_id ?? null,
         status: data.status ?? 'draft',
         effective_date: data.effective_date ?? null,
         expiry_date: data.expiry_date ?? null,
@@ -98,7 +98,7 @@ export async function updateSiteContract(
     contract_amount?: number | null;
     currency_code?: string | null;
     payee_contact_id?: string | null;
-    project_id?: string | null;
+    protocol_id?: string | null;
     status?: SiteContractStatus;
     effective_date?: string | null;
     expiry_date?: string | null;

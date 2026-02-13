@@ -148,20 +148,51 @@ export interface SDVFilterOptions {
 // REPORT MANAGEMENT
 // =====================================================
 
-export async function getSDVReports(companyId: string): Promise<SDVReport[]> {
+export async function getSDVReports(
+  companyId: string,
+  protocolId?: string | null
+): Promise<SDVReport[]> {
   const supabase = await createClient();
-  
+
+  if (protocolId) {
+    // Filter reports by protocol: include reports where site or SDV upload has this protocol_id
+    const { data: uploads } = await supabase
+      .from('sdv_uploads')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('protocol_id', protocolId);
+    const uploadIds = (uploads || []).map((u) => u.id);
+    if (uploadIds.length === 0) {
+      return [];
+    }
+    const orFilter = [
+      `site_data_upload_id.in.(${uploadIds.join(',')})`,
+      `sdv_data_upload_id.in.(${uploadIds.join(',')})`,
+    ].join(',');
+    const { data, error } = await supabase
+      .from('sdv_reports')
+      .select('*')
+      .eq('company_id', companyId)
+      .or(orFilter)
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('Error fetching SDV reports:', error);
+      return [];
+    }
+    return data || [];
+  }
+
   const { data, error } = await supabase
     .from('sdv_reports')
     .select('*')
     .eq('company_id', companyId)
     .order('created_at', { ascending: false });
-  
+
   if (error) {
     console.error('Error fetching SDV reports:', error);
     return [];
   }
-  
+
   return data || [];
 }
 
@@ -249,14 +280,22 @@ export async function deleteSDVReport(reportId: string): Promise<{ success: bool
 // UPLOAD MANAGEMENT
 // =====================================================
 
-export async function getSDVUploads(companyId: string): Promise<SDVUpload[]> {
+export async function getSDVUploads(
+  companyId: string,
+  protocolId?: string | null
+): Promise<SDVUpload[]> {
   const supabase = await createClient();
   
-  const { data, error } = await supabase
+  let query = supabase
     .from('sdv_uploads')
     .select('*')
-    .eq('company_id', companyId)
-    .order('created_at', { ascending: false });
+    .eq('company_id', companyId);
+
+  if (protocolId) {
+    query = query.eq('protocol_id', protocolId);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
   
   if (error) {
     console.error('Error fetching SDV uploads:', error);

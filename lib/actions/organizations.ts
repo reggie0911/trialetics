@@ -70,7 +70,7 @@ export async function getOrganizations(
       .select(`
         *,
         organization_contacts(id),
-        organization_projects(id)
+        organization_protocols(id)
       `, { count: 'exact' })
       .eq('company_id', companyId)
       .order('name', { ascending: true });
@@ -138,7 +138,7 @@ export async function getOrganizations(
     const organizations = (data || []).map((org: any) => ({
       ...org,
       contacts_count: org.organization_contacts?.length || 0,
-      projects_count: org.organization_projects?.length || 0,
+      projects_count: org.organization_protocols?.length || 0,
       addresses: addressesByOrgId[org.id] || [],
     }));
 
@@ -178,9 +178,9 @@ export async function getOrganization(
           *,
           contact:contacts(*)
         ),
-        organization_projects(
+        organization_protocols(
           *,
-          project:projects(id, protocol_number, protocol_name, protocol_status)
+          protocol:clinical_protocols(id, protocol_number, title, status)
         )
       `)
       .eq('id', organizationId)
@@ -206,11 +206,11 @@ export async function getOrganization(
     const organization: OrganizationWithRelations = {
       ...data,
       contacts: data.organization_contacts,
-      projects: data.organization_projects,
+      projects: data.organization_protocols,
       addresses: addresses || [],
       primary_contact: primaryContactRelation?.contact || null,
       contacts_count: data.organization_contacts?.length || 0,
-      projects_count: data.organization_projects?.length || 0,
+      projects_count: data.organization_protocols?.length || 0,
     };
 
     return { success: true, data: organization };
@@ -563,16 +563,16 @@ export async function assignOrganizationToProject(
     }
 
     const { error } = await supabase
-      .from('organization_projects')
+      .from('organization_protocols')
       .upsert({
         organization_id: data.organization_id,
-        project_id: data.project_id,
+        protocol_id: data.protocol_id,
         role: data.role,
         start_date: data.start_date || null,
         end_date: data.end_date || null,
         status: 'active',
       }, {
-        onConflict: 'organization_id,project_id,role',
+        onConflict: 'organization_id,protocol_id,role',
       });
 
     if (error) {
@@ -604,7 +604,7 @@ export async function removeOrganizationFromProject(
     }
 
     const { error } = await supabase
-      .from('organization_projects')
+      .from('organization_protocols')
       .delete()
       .eq('id', relationshipId);
 
@@ -788,7 +788,7 @@ export async function updateSiteMilestones(
     }
 
     const { data: updated, error } = await supabase
-      .from('organization_projects')
+      .from('organization_protocols')
       .update({
         site_initiation_date: data.site_initiation_date,
         site_qualification_date: data.site_qualification_date,

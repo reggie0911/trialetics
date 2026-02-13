@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { LogOut, Settings, Shield } from 'lucide-react';
+import { LogOut, Settings, Shield, Rocket, ListChecks } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
-import Link from 'next/link';
 
 import Logo from '@/components/layout/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -22,33 +21,80 @@ export function ProtectedNavbar() {
   const [showSettings, setShowSettings] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [showCompleteSetup, setShowCompleteSetup] = useState(false);
+  const [companyName, setCompanyName] = useState<string | null>(null);
 
   useEffect(() => {
     loadUserProfile();
-  }, []);
+  }, [pathname]);
 
   const loadUserProfile = async () => {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('avatar_url, role')
-          .eq('user_id', user.id)
+      if (!user) {
+        console.log('No user found');
+        return;
+      }
+
+      console.log('Loading profile for user:', user.id);
+      
+      // Simplified query - just get profile data without nested company join
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('avatar_url, role, onboarding_completed_at, company_id')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (error) {
+        console.error('Profile query error - code:', error.code, 'message:', error.message);
+        return;
+      }
+      
+      if (!profile) {
+        console.log('No profile found for user');
+        return;
+      }
+      
+      console.log('Profile loaded, company_id:', profile.company_id);
+      
+      if (profile.avatar_url) {
+        setAvatarUrl(`${profile.avatar_url}?t=${Date.now()}`);
+      }
+      if (profile.role) {
+        setUserRole(profile.role);
+      }
+      
+      // Fetch company name separately if company_id exists
+      let companyNameValue: string | null = null;
+      
+      if (profile.company_id) {
+        console.log('Fetching company name for ID:', profile.company_id);
+        const { data: company, error: companyError } = await supabase
+          .from('companies')
+          .select('name')
+          .eq('id', profile.company_id)
           .single();
         
-        if (profile?.avatar_url) {
-          // Add timestamp to force reload
-          setAvatarUrl(`${profile.avatar_url}?t=${Date.now()}`);
-        }
-        if (profile?.role) {
-          setUserRole(profile.role);
+        if (companyError) {
+          console.error('Company query error - code:', companyError.code, 'message:', companyError.message);
+        } else if (company) {
+          companyNameValue = company.name ?? null;
+          console.log('Company name loaded:', companyNameValue);
         }
       }
+      
+      console.log('Setting company name to:', companyNameValue);
+      setCompanyName(companyNameValue);
+      
+      setShowCompleteSetup(
+        profile.role === 'admin' &&
+        !profile.onboarding_completed_at &&
+        pathname !== '/protected/onboarding'
+      );
     } catch (error) {
-      console.error('Error loading profile:', error);
+      console.error('Unexpected error in loadUserProfile:', error);
     }
   };
 
@@ -68,9 +114,9 @@ export function ProtectedNavbar() {
 
   const isAdmin = userRole === 'admin';
 
-  // Determine the label based on the current route
+  // Determine the label based on company name or route fallback
   const isDashboard = pathname?.startsWith('/protected/dashboard');
-  const label = isDashboard ? 'CTMS' : 'Polares Custom Modules';
+  const label = companyName ?? (isDashboard ? 'CTMS' : 'Trialetics');
 
   return (
     <>
@@ -92,6 +138,24 @@ export function ProtectedNavbar() {
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
+                {showCompleteSetup && (
+                  <DropdownMenuItem
+                    onClick={() => router.push('/protected/onboarding')}
+                    className="cursor-pointer"
+                  >
+                    <Rocket className="mr-2 h-4 w-4" />
+                    <span>Complete setup</span>
+                  </DropdownMenuItem>
+                )}
+                {pathname !== '/protected/onboarding' && (
+                  <DropdownMenuItem
+                    onClick={() => router.push('/protected/onboarding')}
+                    className="cursor-pointer"
+                  >
+                    <ListChecks className="mr-2 h-4 w-4" />
+                    <span>Setup wizard</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem 
                   onClick={() => setShowSettings(true)} 
                   className="cursor-pointer"
@@ -117,7 +181,8 @@ export function ProtectedNavbar() {
 
       <ProfileSettingsModal 
         open={showSettings} 
-        onOpenChange={handleSettingsClose} 
+        onOpenChange={handleSettingsClose}
+        onDataSaved={loadUserProfile}
       />
     </>
   );

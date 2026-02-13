@@ -4,7 +4,13 @@ import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { AEPageClient } from '@/components/ae/ae-page-client';
 import { createClient } from '@/lib/server';
 
-export default async function AEPage() {
+export default async function AEPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ protocol?: string }>;
+}) {
+  const params = await searchParams;
+  const protocolId = params.protocol || null;
   const supabase = await createClient();
 
   // Check authentication
@@ -42,7 +48,7 @@ export default async function AEPage() {
         </div>
 
         {/* Client-side component for data management */}
-        <AEPageClient companyId={profile.company_id || ""} profileId={profile.id} />
+        <AEPageClient companyId={profile.company_id || ""} profileId={profile.id} initialProtocolId={protocolId} />
       </main>
     </div>
   );

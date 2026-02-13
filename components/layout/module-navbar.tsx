@@ -24,9 +24,12 @@ const menuItems = [
     trigger: "CTMS",
     items: [
       { label: "Contacts & Organizations", href: "/protected/contacts-organizations" },
+      { label: "Org Chart", href: "/protected/contacts-organizations/org-chart" },
       { label: "Clinical Trip Reports", href: "/protected/trip-reports" },
       { label: "Document Management", href: "/protected/document-management" },
       { label: "Clinical Trials Management", href: "/protected/clinical-trials" },
+      { label: "Activity Calendar", href: "/protected/clinical-trials/calendar" },
+      { label: "Rate Lists", href: "/protected/clinical-trials/rate-lists" },
       { label: "Clinical Payments", href: "/protected/clinical-payments" },
       { label: "Visit Templates", href: "/protected/visit-templates" },
       { label: "Source Data Verification", href: "/protected/source-data-verification" },
@@ -51,9 +54,9 @@ export function ModuleNavbar() {
   const searchParams = useSearchParams();
 
   const getHrefWithParams = (href: string) => {
-    const projectId = searchParams.get("projectId");
-    if (projectId && href === "/protected/dashboard") {
-      return `${href}?projectId=${projectId}`;
+    const protocolId = searchParams.get("protocolId") ?? searchParams.get("projectId");
+    if (protocolId && href === "/protected/dashboard") {
+      return `${href}?protocolId=${protocolId}`;
     }
     return href;
   };

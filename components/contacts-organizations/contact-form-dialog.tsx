@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { createContact, updateContact, assignContactToOrganization } from '@/lib/actions/contacts';
+import { createContact, updateContact, assignContactToOrganization, getContacts } from '@/lib/actions/contacts';
 import { getAllOrganizations } from '@/lib/actions/organizations';
 import { createAddress, updateAddress, getAddressesByEntity } from '@/lib/actions/addresses';
 import { formatPhoneNumber } from '@/lib/utils';
@@ -85,6 +85,8 @@ export function ContactFormDialog({
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
   const [selectedRole, setSelectedRole] = useState<ContactRole>('other');
+  const [selectedManagerId, setSelectedManagerId] = useState<string>('');
+  const [contacts, setContacts] = useState<Array<{ id: string; first_name: string; last_name: string }>>([]);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string>('');
   const isEditing = !!contact;
 
@@ -119,12 +121,17 @@ export function ContactFormDialog({
     ? organizations.find((org) => org.id === selectedOrgId)
     : null;
 
-  // Load organizations when dialog opens
+  // Load organizations and contacts when dialog opens
   useEffect(() => {
-    if (open && !isEditing) {
-      loadOrganizations();
+    if (open) {
+      if (!isEditing) loadOrganizations();
+      getContacts(companyId, { pageSize: 500 }).then((r) => {
+        if (r.success && r.data) {
+          setContacts(r.data.contacts.map((c) => ({ id: c.id, first_name: c.first_name, last_name: c.last_name })));
+        }
+      });
     }
-  }, [open, isEditing]);
+  }, [open, isEditing, companyId]);
 
   const loadOrganizations = async () => {
     const result = await getAllOrganizations(companyId);
@@ -151,6 +158,7 @@ export function ContactFormDialog({
           notes: contact.notes || '',
         });
         setUploadedImageUrl(contact.profile_image_url || '');
+        setSelectedManagerId((contact as any).manager_id || '');
         // Load existing address if editing
         loadExistingAddress(contact.id);
       } else {
@@ -172,6 +180,7 @@ export function ContactFormDialog({
         setExistingAddressId(null);
         setSelectedOrgId('');
         setSelectedRole('other');
+        setSelectedManagerId('');
       }
     }
   }, [open, contact, reset]);
@@ -217,6 +226,7 @@ export function ContactFormDialog({
           profile_image_url: uploadedImageUrl || null,
           status: values.status as EntityStatus,
           notes: values.notes || null,
+          manager_id: selectedManagerId || null,
         });
         contactId = contact.id;
       } else {
@@ -232,6 +242,7 @@ export function ContactFormDialog({
           profile_image_url: uploadedImageUrl || null,
           status: values.status as EntityStatus,
           notes: values.notes || null,
+          manager_id: selectedManagerId || null,
         });
         contactId = result.data?.id || '';
       }
@@ -430,6 +441,30 @@ export function ContactFormDialog({
                 disabled={userRole !== 'admin'}
               />
             </div>
+
+            {isEditing && contacts.length > 0 && (
+              <div className="space-y-1">
+                <Label htmlFor="manager" className="text-xs">Reports To (Manager)</Label>
+                <Select
+                  value={selectedManagerId}
+                  onValueChange={(v) => setSelectedManagerId(v || '')}
+                >
+                  <SelectTrigger className="text-xs h-8 w-full">
+                    <SelectValue placeholder="No manager" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="" className="text-xs">None</SelectItem>
+                    {contacts
+                      .filter((c) => c.id !== contact?.id)
+                      .map((c) => (
+                        <SelectItem key={c.id} value={c.id} className="text-xs">
+                          {c.first_name} {c.last_name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="space-y-1">
               <Label htmlFor="status" className="text-xs">Status</Label>

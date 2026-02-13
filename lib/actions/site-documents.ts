@@ -48,7 +48,8 @@ export async function createSiteDocument(
     expected_date?: string | null;
     received_date?: string | null;
     expiration_date?: string | null;
-    project_id?: string | null;
+    protocol_id?: string | null;
+    clinical_site_id?: string | null;
     status?: SiteDocumentStatus;
     file_url?: string | null;
     notes?: string | null;
@@ -72,7 +73,8 @@ export async function createSiteDocument(
         expected_date: data.expected_date ?? null,
         received_date: data.received_date ?? null,
         expiration_date: data.expiration_date ?? null,
-        project_id: data.project_id ?? null,
+        protocol_id: data.protocol_id ?? null,
+        clinical_site_id: data.clinical_site_id ?? null,
         status: data.status ?? 'pending',
         file_url: data.file_url ?? null,
         notes: data.notes ?? null,
@@ -102,7 +104,8 @@ export async function updateSiteDocument(
     expected_date?: string | null;
     received_date?: string | null;
     expiration_date?: string | null;
-    project_id?: string | null;
+    protocol_id?: string | null;
+    clinical_site_id?: string | null;
     status?: SiteDocumentStatus;
     file_url?: string | null;
     notes?: string | null;

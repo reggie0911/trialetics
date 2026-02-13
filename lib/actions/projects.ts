@@ -2,7 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/server';
-import { Tables } from '@/lib/types/database.types';
+import { createClinicalProtocol, updateClinicalProtocol } from '@/lib/actions/clinical-protocols';
+import type { CreateClinicalProtocolData, UpdateClinicalProtocolData } from '@/lib/types/clinical-trials';
 
 export interface CreateProjectInput {
   programName?: string;
@@ -19,22 +20,130 @@ export interface CreateProjectInput {
   plannedEndDate?: string;
 }
 
+export type UpdateProjectInput = CreateProjectInput;
+
+export interface AssignedProtocol {
+  id: string;
+  protocol_number: string;
+  protocol_name: string;
+  protocol_description: string | null;
+  country_name: string | null;
+  country_region: string | null;
+  protocol_status: string;
+  planned_sites: number | null;
+  planned_subjects: number | null;
+  planned_start_date: string | null;
+  planned_end_date: string | null;
+  trial_phase: string | null;
+  created_by_id: string | null;
+  creator_email: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ActionResponse {
   success: boolean;
   error?: string;
-  data?: any;
+  data?: AssignedProtocol[] | AssignedProtocol | unknown;
+}
+
+/** Map protocol_status from clinical_protocols to legacy display format */
+function statusToLegacy(status: string): string {
+  const map: Record<string, string> = {
+    planned: 'planning',
+    in_progress: 'approved',
+    on_hold: 'planning',
+    completed: 'closed',
+    terminated: 'closed',
+  };
+  return map[status] ?? status;
+}
+
+/** Map phase from clinical_protocols to legacy display format */
+function phaseToLegacy(phase: string | null): string | null {
+  if (!phase) return null;
+  const map: Record<string, string> = {
+    phase_i: 'Phase I',
+    phase_ii: 'Phase II',
+    phase_iii: 'Phase III',
+    phase_iv: 'Phase IV',
+    observational: 'Observational',
+  };
+  return map[phase] ?? phase;
+}
+
+/** Map legacy status to protocol_status */
+function legacyToStatus(legacy: string): string {
+  const map: Record<string, string> = {
+    planning: 'planned',
+    approved: 'in_progress',
+    closed: 'completed',
+  };
+  return map[legacy] ?? 'planned';
+}
+
+/** Map legacy phase to protocol_phase */
+function legacyToPhase(legacy: string): string | null {
+  const map: Record<string, string> = {
+    'Phase I': 'phase_i',
+    'Phase II': 'phase_ii',
+    'Phase III': 'phase_iii',
+    'Phase IV': 'phase_iv',
+    'Pilot Stage': 'observational',
+    'Pivotal': 'observational',
+    'Post Market': 'observational',
+    'Early Feasibility Study': 'observational',
+    'First In-Human': 'observational',
+    'Observational': 'observational',
+  };
+  return map[legacy] ?? 'observational';
+}
+
+function toAssignedProtocol(row: {
+  id: string;
+  protocol_number: string;
+  title: string;
+  objective: string | null;
+  status: string;
+  phase: string | null;
+  planned_sites_count: number | null;
+  planned_subjects_count: number | null;
+  planned_start_date: string | null;
+  planned_end_date: string | null;
+  created_by_id: string | null;
+  creator_email: string | null;
+  created_at: string;
+  updated_at: string;
+}): AssignedProtocol {
+  return {
+    id: row.id,
+    protocol_number: row.protocol_number,
+    protocol_name: row.title,
+    protocol_description: row.objective,
+    country_name: null,
+    country_region: null,
+    protocol_status: statusToLegacy(row.status),
+    planned_sites: row.planned_sites_count,
+    planned_subjects: row.planned_subjects_count,
+    planned_start_date: row.planned_start_date,
+    planned_end_date: row.planned_end_date,
+    trial_phase: phaseToLegacy(row.phase),
+    created_by_id: row.created_by_id,
+    creator_email: row.creator_email,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
 }
 
 /**
- * Fetches projects visible to the current user
- * - Admin users: See ALL projects in their company
- * - Regular users: See only projects explicitly assigned to them
+ * Fetches protocols visible to the current user
+ * - Admin users: See ALL protocols in their company
+ * - Regular users: See only protocols explicitly assigned to them
  */
 export async function getUserProjects(): Promise<ActionResponse> {
   try {
     const supabase = await createClient();
 
-    // Get current user
     const {
       data: { user },
       error: userError,
@@ -44,7 +153,6 @@ export async function getUserProjects(): Promise<ActionResponse> {
       return { success: false, error: 'User not authenticated' };
     }
 
-    // Get user's profile to access the profile id, role, and company
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id, company_id, email, role')
@@ -55,24 +163,22 @@ export async function getUserProjects(): Promise<ActionResponse> {
       return { success: false, error: 'Profile not found' };
     }
 
-    // Admin users see ALL company projects
+    // Admin users see ALL company protocols
     if (profile.role === 'admin' && profile.company_id) {
-      const { data: allProjects, error: projectsError } = await supabase
-        .from('projects')
+      const { data: protocols, error } = await supabase
+        .from('clinical_protocols')
         .select(
           `
           id,
           protocol_number,
-          protocol_name,
-          protocol_description,
-          country_name,
-          country_region,
-          protocol_status,
-          planned_sites,
-          planned_subjects,
+          title,
+          objective,
+          status,
+          phase,
+          planned_sites_count,
+          planned_subjects_count,
           planned_start_date,
           planned_end_date,
-          trial_phase,
           created_by_id,
           creator_email,
           created_at,
@@ -82,32 +188,31 @@ export async function getUserProjects(): Promise<ActionResponse> {
         .eq('company_id', profile.company_id)
         .order('created_at', { ascending: false });
 
-      if (projectsError) {
-        return { success: false, error: projectsError.message };
+      if (error) {
+        return { success: false, error: error.message };
       }
 
-      return { success: true, data: allProjects || [] };
+      const mapped = (protocols || []).map(toAssignedProtocol);
+      return { success: true, data: mapped };
     }
 
-    // Regular users see only assigned projects
-    const { data: userProjects, error: projectsError } = await supabase
-      .from('user_projects')
+    // Regular users see only assigned protocols
+    const { data: assignments, error } = await supabase
+      .from('user_protocol_assignments')
       .select(
         `
-        project_id,
-        projects (
+        protocol_id,
+        clinical_protocols (
           id,
           protocol_number,
-          protocol_name,
-          protocol_description,
-          country_name,
-          country_region,
-          protocol_status,
-          planned_sites,
-          planned_subjects,
+          title,
+          objective,
+          status,
+          phase,
+          planned_sites_count,
+          planned_subjects_count,
           planned_start_date,
           planned_end_date,
-          trial_phase,
           created_by_id,
           creator_email,
           created_at,
@@ -117,16 +222,18 @@ export async function getUserProjects(): Promise<ActionResponse> {
       )
       .eq('user_id', profile.id);
 
-    if (projectsError) {
-      return { success: false, error: projectsError.message };
+    if (error) {
+      return { success: false, error: error.message };
     }
 
-    // Extract and flatten the projects
-    const projects = userProjects?.map((up: any) => up.projects) || [];
+    const protocols = (assignments || [])
+      .map((a: { clinical_protocols: unknown }) => a.clinical_protocols)
+      .filter((p): p is Parameters<typeof toAssignedProtocol>[0] => p != null)
+      .map(toAssignedProtocol);
 
-    return { success: true, data: projects };
+    return { success: true, data: protocols };
   } catch (error) {
-    console.error('Error fetching user projects:', error);
+    console.error('Error fetching user protocols:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -135,15 +242,12 @@ export async function getUserProjects(): Promise<ActionResponse> {
 }
 
 /**
- * Creates a new project and assigns it to the current user
+ * Creates a new clinical protocol and assigns it to the current user
  */
-export async function createProject(
-  input: CreateProjectInput
-): Promise<ActionResponse> {
+export async function createProject(input: CreateProjectInput): Promise<ActionResponse> {
   try {
     const supabase = await createClient();
 
-    // Get current user
     const {
       data: { user },
       error: userError,
@@ -153,14 +257,12 @@ export async function createProject(
       return { success: false, error: 'User not authenticated' };
     }
 
-    // Get user's profile and company_id
     let { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id, company_id, email')
       .eq('user_id', user.id)
       .single();
 
-    // If profile doesn't exist, create it
     if (profileError || !profile) {
       const { data: newProfile, error: createProfileError } = await supabase
         .from('profiles')
@@ -182,7 +284,6 @@ export async function createProject(
       profile = newProfile;
     }
 
-    // If user doesn't have a company, create a default one
     if (!profile.company_id) {
       const { data: newCompany, error: companyError } = await supabase
         .from('companies')
@@ -202,7 +303,6 @@ export async function createProject(
         };
       }
 
-      // Update profile with new company_id
       const { error: updateProfileError } = await supabase
         .from('profiles')
         .update({ company_id: newCompany.id })
@@ -218,7 +318,6 @@ export async function createProject(
       profile.company_id = newCompany.id;
     }
 
-    // Validate required fields
     if (!input.protocolName || !input.protocolNumber || !input.trialPhase) {
       return {
         success: false,
@@ -226,7 +325,6 @@ export async function createProject(
       };
     }
 
-    // Validate date logic if both dates are provided
     if (input.plannedStartDate && input.plannedEndDate) {
       const startDate = new Date(input.plannedStartDate);
       const endDate = new Date(input.plannedEndDate);
@@ -238,7 +336,6 @@ export async function createProject(
       }
     }
 
-    // Validate positive integers for sites and subjects
     if (input.plannedSites !== undefined && input.plannedSites < 0) {
       return { success: false, error: 'Planned Sites must be a positive number' };
     }
@@ -249,64 +346,131 @@ export async function createProject(
       };
     }
 
-    // Insert the new project with creator tracking
-    const { data: newProject, error: insertError } = await supabase
-      .from('projects')
-      .insert({
-        company_id: profile.company_id,
-        protocol_number: input.protocolNumber,
-        protocol_name: input.protocolName,
-        protocol_description: input.protocolDescription || null,
-        country_name: input.countryName || null,
-        country_region: input.countryRegion || null,
-        protocol_status: input.protocolStatus,
-        planned_sites: input.plannedSites || null,
-        planned_subjects: input.plannedSubjects || null,
-        planned_start_date: input.plannedStartDate || null,
-        planned_end_date: input.plannedEndDate || null,
-        trial_phase: input.trialPhase,
-        created_by_id: profile.id,
-        creator_email: profile.email || user.email,
-      })
-      .select()
-      .single();
+    const protocolData: CreateClinicalProtocolData = {
+      protocol_number: input.protocolNumber,
+      title: input.protocolName,
+      objective: input.protocolDescription || null,
+      phase: (legacyToPhase(input.trialPhase) ?? undefined) as import('@/lib/types/clinical-trials').ProtocolPhase | undefined,
+      status: legacyToStatus(input.protocolStatus) as 'planned' | 'in_progress' | 'completed',
+      planned_sites_count: input.plannedSites ?? null,
+      planned_subjects_count: input.plannedSubjects ?? null,
+      planned_start_date: input.plannedStartDate || null,
+      planned_end_date: input.plannedEndDate || null,
+    };
 
-    if (insertError) {
-      // Check for unique constraint violation
-      if (insertError.code === '23505') {
-        return {
-          success: false,
-          error: 'A project with this number already exists for your company',
-        };
-      }
-      return { success: false, error: insertError.message };
+    const result = await createClinicalProtocol(
+      profile.company_id,
+      profile.id,
+      profile.email || user.email,
+      protocolData
+    );
+
+    if (!result.success || !result.data) {
+      return {
+        success: false,
+        error: result.error || 'Failed to create protocol',
+      };
     }
 
-    // Assign the project to the current user with creator tracking
+    const newProtocol = result.data;
+
+    // Assign the protocol to the current user
     const { error: assignmentError } = await supabase
-      .from('user_projects')
+      .from('user_protocol_assignments')
       .insert({
         user_id: profile.id,
-        project_id: newProject.id,
+        protocol_id: newProtocol.id,
         created_by_id: profile.id,
         creator_email: profile.email || user.email,
       });
 
     if (assignmentError) {
-      // If assignment fails, we should ideally rollback, but for now just log
-      console.error('Failed to assign project to user:', assignmentError);
+      console.error('Failed to assign protocol to user:', assignmentError);
       return {
         success: false,
-        error: 'Project created but failed to assign to user',
+        error: 'Protocol created but failed to assign to user',
       };
     }
 
-    // Revalidate the protected page to show the new project
     revalidatePath('/protected');
 
-    return { success: true, data: newProject };
+    return { success: true, data: toAssignedProtocol(newProtocol as Parameters<typeof toAssignedProtocol>[0]) };
   } catch (error) {
     console.error('Error creating project:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Updates an existing clinical protocol
+ */
+export async function updateProject(
+  protocolId: string,
+  input: UpdateProjectInput
+): Promise<ActionResponse> {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    if (!input.protocolName || !input.protocolNumber || !input.trialPhase) {
+      return {
+        success: false,
+        error: 'Project Name, Project Number, and Trial Phase are required',
+      };
+    }
+
+    if (input.plannedStartDate && input.plannedEndDate) {
+      const startDate = new Date(input.plannedStartDate);
+      const endDate = new Date(input.plannedEndDate);
+      if (endDate < startDate) {
+        return {
+          success: false,
+          error: 'Planned End Date must be after Planned Start Date',
+        };
+      }
+    }
+
+    if (input.plannedSites !== undefined && input.plannedSites < 0) {
+      return { success: false, error: 'Planned Sites must be a positive number' };
+    }
+    if (input.plannedSubjects !== undefined && input.plannedSubjects < 0) {
+      return {
+        success: false,
+        error: 'Planned Subjects must be a positive number',
+      };
+    }
+
+    const updateData: UpdateClinicalProtocolData = {
+      id: protocolId,
+      protocol_number: input.protocolNumber,
+      title: input.protocolName,
+      objective: input.protocolDescription || null,
+      phase: (legacyToPhase(input.trialPhase) ?? undefined) as import('@/lib/types/clinical-trials').ProtocolPhase | undefined,
+      status: legacyToStatus(input.protocolStatus) as 'planned' | 'in_progress' | 'completed',
+      planned_sites_count: input.plannedSites ?? null,
+      planned_subjects_count: input.plannedSubjects ?? null,
+      planned_start_date: input.plannedStartDate || null,
+      planned_end_date: input.plannedEndDate || null,
+    };
+
+    await updateClinicalProtocol(updateData);
+
+    revalidatePath('/protected');
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating project:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',

@@ -4,7 +4,13 @@ import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { SDVTrackerPage } from '@/components/sdv-tracker/sdv-tracker-page';
 import { createClient } from '@/lib/server';
 
-export default async function SDVTrackerPageRoute() {
+export default async function SDVTrackerPageRoute({
+  searchParams,
+}: {
+  searchParams: Promise<{ protocol?: string }>;
+}) {
+  const params = await searchParams;
+  const protocolId = params.protocol || null;
   const supabase = await createClient();
 
   // Check authentication
@@ -47,7 +53,7 @@ export default async function SDVTrackerPageRoute() {
         </div>
 
         {/* Client-side component for data management */}
-        <SDVTrackerPage companyId={profile.company_id || ""} profileId={profile.id} />
+        <SDVTrackerPage companyId={profile.company_id || ""} profileId={profile.id} initialProtocolId={protocolId} />
       </main>
     </div>
   );

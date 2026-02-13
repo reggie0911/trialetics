@@ -4,7 +4,7 @@ import { createClient } from '@/lib/server';
 import { Todo, TodoFormData } from '@/lib/types/todo';
 import { revalidatePath } from 'next/cache';
 
-export async function getTodos(projectId: string): Promise<{ data: Todo[] | null; error: string | null }> {
+export async function getTodos(protocolId: string): Promise<{ data: Todo[] | null; error: string | null }> {
   try {
     const supabase = await createClient();
     
@@ -16,7 +16,7 @@ export async function getTodos(projectId: string): Promise<{ data: Todo[] | null
     const { data, error } = await supabase
       .from('todos')
       .select('*')
-      .eq('project_id', projectId)
+      .eq('protocol_id', protocolId)
       .order('position', { ascending: true })
       .order('created_at', { ascending: false });
 
@@ -34,7 +34,7 @@ export async function getTodos(projectId: string): Promise<{ data: Todo[] | null
 
 export async function createTodo(
   formData: TodoFormData,
-  projectId: string
+  protocolId: string
 ): Promise<{ data: Todo | null; error: string | null }> {
   try {
     const supabase = await createClient();
@@ -48,7 +48,7 @@ export async function createTodo(
       .from('todos')
       .insert({
         user_id: user.id,
-        project_id: projectId,
+        protocol_id: protocolId,
         title: formData.title,
         description: formData.description || null,
         due_date: formData.due_date || null,

@@ -7,11 +7,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, FolderOpen, Plus, Trash2, FileText, Archive } from 'lucide-react';
+import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, FolderOpen, Plus, Trash2, FileText, Archive, Briefcase } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,11 +42,14 @@ import { OrganizationMap } from './organization-map';
 import { OrganizationNotesSheet } from './organization-notes-sheet';
 import { ArchiveContactDialog } from './archive-contact-dialog';
 import type { OrganizationContactWithContact } from '@/lib/types/contacts-organizations';
+import type { OrganizationClinicalTrials } from '@/lib/actions/organization-clinical-trials';
+import { ACCOUNT_TYPE_LABELS } from '@/lib/types/clinical-trials';
 
 interface OrganizationDetailPageClientProps {
   organization: OrganizationWithRelations;
   activities: any[];
   notes: OrganizationNote[];
+  clinicalTrials?: OrganizationClinicalTrials;
   companyId: string;
   profileId: string;
   userEmail: string;
@@ -56,6 +59,7 @@ export function OrganizationDetailPageClient({
   organization: initialOrg,
   activities: initialActivities,
   notes: initialNotes,
+  clinicalTrials = { clinical_sites: [], protocol_assignments: [], protocol_accounts: [] },
   companyId,
   profileId,
   userEmail,
@@ -128,7 +132,7 @@ export function OrganizationDetailPageClient({
   };
 
   const existingContactIds = initialOrg.contacts?.map((oc) => oc.contact.id) || [];
-  const existingProjectIds = initialOrg.projects?.map((op) => op.project.id) || [];
+  const existingProjectIds = initialOrg.projects?.map((op) => op.protocol.id) || [];
   const primaryAddress = initialOrg.addresses?.find((addr) => addr.address_type === 'primary');
 
   return (
@@ -179,8 +183,8 @@ export function OrganizationDetailPageClient({
             <TabsTrigger value="contacts" className="text-xs md:text-xs">
               Contacts ({initialOrg.contacts?.length || 0})
             </TabsTrigger>
-            <TabsTrigger value="projects" className="text-xs md:text-xs">
-              Projects ({initialOrg.projects?.length || 0})
+            <TabsTrigger value="clinical-trials" className="text-xs md:text-xs">
+              Clinical Trials ({clinicalTrials.clinical_sites.length + (initialOrg.projects?.length || 0) + clinicalTrials.protocol_accounts.length})
             </TabsTrigger>
           </TabsList>
 
@@ -443,65 +447,138 @@ export function OrganizationDetailPageClient({
             </Card>
           </TabsContent>
 
-          {/* Projects Tab */}
-          <TabsContent value="projects" className="mt-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <CardTitle className="text-xs md:text-xs font-medium flex items-center gap-2">
-                  <FolderOpen className="h-4 w-4" />
-                  Assigned Projects
-                </CardTitle>
-                <Button
-                  onClick={() => setShowAssignProject(true)}
-                  size="sm"
-                  className="text-xs md:text-xs"
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Assign Project
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {initialOrg.projects && initialOrg.projects.length > 0 ? (
-                  <div className="space-y-3">
-                    {initialOrg.projects.map((op) => (
-                      <div key={op.id} className="flex items-center justify-between border-b pb-3 last:border-0">
-                        <div className="flex-1 text-xs md:text-xs">
-                          <p className="font-medium">
-                            {op.project.protocol_number} - {op.project.protocol_name}
-                          </p>
-                          <p className="text-muted-foreground capitalize">
-                            {ORGANIZATION_PROJECT_ROLE_LABELS[op.role]}
-                          </p>
-                          {(op.start_date || op.end_date) && (
-                            <p className="text-muted-foreground">
-                              {op.start_date && new Date(op.start_date).toLocaleDateString()}
-                              {' - '}
-                              {op.end_date ? new Date(op.end_date).toLocaleDateString() : 'Present'}
+          {/* Clinical Trials Tab */}
+          <TabsContent value="clinical-trials" className="mt-6">
+            <div className="space-y-6">
+              {/* Clinical Sites (when org is a site for a protocol) */}
+              {clinicalTrials.clinical_sites.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-xs md:text-xs font-medium flex items-center gap-2">
+                      <Building2 className="h-4 w-4" />
+                      Clinical Sites
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Sites where this organization participates in protocols
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {clinicalTrials.clinical_sites.map((cs) => (
+                        <div key={cs.id} className="flex items-center justify-between border-b pb-3 last:border-0">
+                          <div className="flex-1 text-xs md:text-xs">
+                            <p className="font-medium">
+                              {cs.protocol?.protocol_number} - {cs.protocol?.title}
                             </p>
-                          )}
+                            <p className="text-muted-foreground">
+                              Site {cs.site_number ?? '—'} • {cs.region?.region_name ?? '—'} • {cs.status}
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            asChild
+                            className="text-xs"
+                          >
+                            <a href={`/protected/clinical-trials?tab=sites&protocol=${cs.protocol_id}`}>
+                              View
+                            </a>
+                          </Button>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setRemoveProjectConfirm({
-                              relationshipId: op.id,
-                              name: `${op.project.protocol_number} - ${op.project.protocol_name}`,
-                            })
-                          }
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs md:text-xs text-muted-foreground text-center py-6">
-                    No projects assigned
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Protocol Assignments (organization_protocols) */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-3">
+                  <CardTitle className="text-xs md:text-xs font-medium flex items-center gap-2">
+                    <FolderOpen className="h-4 w-4" />
+                    Assigned Protocols
+                  </CardTitle>
+                  <Button
+                    onClick={() => setShowAssignProject(true)}
+                    size="sm"
+                    className="text-xs md:text-xs"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Assign Protocol
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  {(initialOrg.projects && initialOrg.projects.length > 0) || clinicalTrials.protocol_assignments.length > 0 ? (
+                    <div className="space-y-3">
+                      {(initialOrg.projects || []).map((op) => (
+                        <div key={op.id} className="flex items-center justify-between border-b pb-3 last:border-0">
+                          <div className="flex-1 text-xs md:text-xs">
+                            <p className="font-medium">
+                              {op.protocol.protocol_number} - {op.protocol.title}
+                            </p>
+                            <p className="text-muted-foreground capitalize">
+                              {ORGANIZATION_PROJECT_ROLE_LABELS[op.role]}
+                            </p>
+                            {(op.start_date || op.end_date) && (
+                              <p className="text-muted-foreground">
+                                {op.start_date && new Date(op.start_date).toLocaleDateString()}
+                                {' - '}
+                                {op.end_date ? new Date(op.end_date).toLocaleDateString() : 'Present'}
+                              </p>
+                            )}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setRemoveProjectConfirm({
+                                relationshipId: op.id,
+                                name: `${op.protocol.protocol_number} - ${op.protocol.title}`,
+                              })
+                            }
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs md:text-xs text-muted-foreground text-center py-6">
+                      No protocol assignments. Use &quot;Assign Protocol&quot; to link this organization to a clinical trial.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Protocol Accounts (partners: CRO, IRB, etc.) */}
+              {clinicalTrials.protocol_accounts.length > 0 && (
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-xs md:text-xs font-medium flex items-center gap-2">
+                      <Briefcase className="h-4 w-4" />
+                      Partner Accounts
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Protocol-level account associations (CRO, IRB, labs, etc.)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {clinicalTrials.protocol_accounts.map((pa) => (
+                        <div key={pa.id} className="border-b pb-3 last:border-0">
+                          <p className="font-medium text-xs md:text-xs">
+                            {pa.protocol?.protocol_number} - {pa.protocol?.title}
+                          </p>
+                          <p className="text-muted-foreground text-xs capitalize">
+                            {ACCOUNT_TYPE_LABELS[pa.account_type as keyof typeof ACCOUNT_TYPE_LABELS] ?? pa.account_type}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
       </main>

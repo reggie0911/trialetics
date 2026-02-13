@@ -25,16 +25,19 @@ import {
 } from "@/lib/actions/ecrf-query-tracker-data";
 import { ColumnFiltersState } from "@tanstack/react-table";
 import { Tables } from "@/lib/types/database.types";
+import { ProtocolSelector } from "@/components/ui/protocol-selector";
 
 interface ECRFQueryTrackerPageClientProps {
   companyId: string;
   profileId: string;
+  initialProtocolId?: string | null;
 }
 
-export function ECRFQueryTrackerPageClient({ companyId, profileId }: ECRFQueryTrackerPageClientProps) {
+export function ECRFQueryTrackerPageClient({ companyId, profileId, initialProtocolId }: ECRFQueryTrackerPageClientProps) {
   // Upload management
   const [uploads, setUploads] = useState<Tables<'ecrf_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
+  const [protocolId, setProtocolId] = useState<string | null>(initialProtocolId ?? null);
   
   // Data state
   const [data, setData] = useState<ECRFRecord[]>([]);
@@ -90,13 +93,13 @@ export function ECRFQueryTrackerPageClient({ companyId, profileId }: ECRFQueryTr
 
   const { toast } = useToast();
 
-  // Load header mappings and uploads on mount
+  // Load header mappings and uploads on mount / protocol change
   useEffect(() => {
     if (companyId) {
       loadHeaderMappings();
       loadUploads();
     }
-  }, [companyId]);
+  }, [companyId, protocolId]);
 
   // Load data when upload is selected, pagination changes, or filters change
   useEffect(() => {
@@ -159,7 +162,7 @@ export function ECRFQueryTrackerPageClient({ companyId, profileId }: ECRFQueryTr
     setIsLoading(true);
     setLoadingMessage("Loading uploads...");
     
-    const result = await getECRFUploads(companyId);
+    const result = await getECRFUploads(companyId, protocolId);
     if (result.success && result.data) {
       setUploads(result.data);
       
@@ -531,8 +534,17 @@ export function ECRFQueryTrackerPageClient({ companyId, profileId }: ECRFQueryTr
       )}
 
       {/* Upload Control & History */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <ProtocolSelector
+            companyId={companyId}
+            value={protocolId}
+            onValueChange={setProtocolId}
+            label="Protocol"
+            placeholder="All protocols"
+            showAllOption={true}
+            className="min-w-[200px]"
+          />
           <ECRFCSVUploadDialog 
             onUpload={handleUpload}
             companyId={companyId}
