@@ -5,12 +5,15 @@ import { ECRFQueryTrackerPageClient } from '@/components/ecrf-query-tracker/ecrf
 import { createClient } from '@/lib/server';
 
 export default async function ECRFQueryTrackerPage({
+  params,
   searchParams,
 }: {
+  params?: Promise<Record<string, string | string[]>>;
   searchParams: Promise<{ protocol?: string }>;
 }) {
-  const params = await searchParams;
-  const protocolId = params.protocol || null;
+  const resolvedSearchParams = await searchParams;
+  if (params) await params;
+  const protocolId = resolvedSearchParams.protocol || null;
   const supabase = await createClient();
 
   // Check authentication
@@ -41,9 +44,6 @@ export default async function ECRFQueryTrackerPage({
               <h1 className="text-[32px] font-semibold tracking-[-1px]">
                 eCRF Query Tracker
               </h1>
-              <span className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-full shadow-md animate-pulse">
-                Beta
-              </span>
             </div>
             <p className="text-[11px] text-muted-foreground">
               Track and monitor eCRF query volume, status, aging, and resolution trends
@@ -53,7 +53,12 @@ export default async function ECRFQueryTrackerPage({
         </div>
 
         {/* Client-side component for data management */}
-        <ECRFQueryTrackerPageClient companyId={profile.company_id || ""} profileId={profile.id} initialProtocolId={protocolId} />
+        <ECRFQueryTrackerPageClient
+          companyId={profile.company_id || ""}
+          profileId={profile.id}
+          initialProtocolId={protocolId}
+          isAdmin={profile.role === "admin"}
+        />
       </main>
     </div>
   );

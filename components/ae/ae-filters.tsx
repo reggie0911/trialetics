@@ -16,6 +16,7 @@ import { RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
 import { AERecord } from "./ae-csv-upload-dialog";
 
 interface AEFiltersProps {
+  uploadDate?: string | null;
   filters: {
     siteName: string;
     subjectId: string;
@@ -30,7 +31,7 @@ interface AEFiltersProps {
   data: AERecord[];
 }
 
-export function AEFilters({ filters, onFiltersChange, onResetAll, data }: AEFiltersProps) {
+export function AEFilters({ uploadDate, filters, onFiltersChange, onResetAll, data }: AEFiltersProps) {
   const [isOpen, setIsOpen] = useState(true);
   
   // Get unique values for each filter
@@ -278,8 +279,20 @@ export function AEFilters({ filters, onFiltersChange, onResetAll, data }: AEFilt
           </div>
         </div>
         
-        {/* Reset Button Row */}
-        <div className="mt-3 flex justify-end">
+        {/* Upload date and Reset Button Row */}
+        <div className="mt-3 flex items-center justify-between">
+          <span className="text-[11px] text-muted-foreground">
+            {uploadDate
+              ? `Viewing upload from ${new Date(uploadDate).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true,
+                })}`
+              : "Select an upload from the history to view data"}
+          </span>
           <Button
             variant="outline"
             size="sm"

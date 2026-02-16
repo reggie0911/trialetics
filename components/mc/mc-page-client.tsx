@@ -24,7 +24,6 @@ import {
 import { ColumnFiltersState } from "@tanstack/react-table";
 import { Tables } from "@/lib/types/database.types";
 import { transformToPivotData } from "@/lib/utils/mc-pivot-transformer";
-import { ProtocolSelector } from "@/components/ui/protocol-selector";
 
 // View mode type
 type ViewMode = 'standard' | 'pivot';
@@ -33,9 +32,10 @@ interface MCPageClientProps {
   companyId: string;
   profileId: string;
   initialProtocolId?: string | null;
+  isAdmin?: boolean;
 }
 
-export function MCPageClient({ companyId, profileId, initialProtocolId }: MCPageClientProps) {
+export function MCPageClient({ companyId, profileId, initialProtocolId, isAdmin = false }: MCPageClientProps) {
   // Upload management
   const [uploads, setUploads] = useState<Tables<'mc_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
@@ -645,25 +645,20 @@ export function MCPageClient({ companyId, profileId, initialProtocolId }: MCPage
       {/* Upload Control & History */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 flex-wrap">
-          <ProtocolSelector
-            companyId={companyId}
-            value={protocolId}
-            onValueChange={setProtocolId}
-            label="Protocol"
-            placeholder="All protocols"
-            showAllOption={true}
-            className="min-w-[200px]"
-          />
-          <MCCSVUploadDialog 
-            onUpload={handleUpload}
-            companyId={companyId}
-            profileId={profileId}
-          />
-          <MCHeaderRelabelModal 
-            currentMappings={headerMappings}
-            onSave={handleSaveHeaderMappings}
-            disabled={!companyId}
-          />
+          {isAdmin && (
+            <>
+              <MCCSVUploadDialog 
+                onUpload={handleUpload}
+                companyId={companyId}
+                profileId={profileId}
+              />
+              <MCHeaderRelabelModal 
+                currentMappings={headerMappings}
+                onSave={handleSaveHeaderMappings}
+                disabled={!companyId}
+              />
+            </>
+          )}
           <MCUploadHistory
             uploads={uploads}
             selectedUploadId={selectedUploadId}
@@ -699,6 +694,7 @@ export function MCPageClient({ companyId, profileId, initialProtocolId }: MCPage
       {data.length > 0 && (
         <>
           <MCFilters 
+            uploadDate={uploads.find((u) => u.id === selectedUploadId)?.created_at ?? null}
             filters={filters} 
             onFiltersChange={setFilters} 
             onResetAll={handleResetAllFilters}

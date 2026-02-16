@@ -16,10 +16,13 @@ export async function generateStaticParams() {
 
 export default async function BlogPostPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<Record<string, string | string[]>>;
 }) {
   const { slug } = await params;
+  if (searchParams) await searchParams;
   const post = getBlogBySlug(slug);
 
   if (!post) {

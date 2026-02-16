@@ -31,9 +31,6 @@ export function Greeting({ firstName, displayName }: GreetingProps) {
       <h1 className="text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight">
         {greeting}{nameToDisplay ? ` ${nameToDisplay}` : ''}!
       </h1>
-      <span className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-full shadow-md animate-pulse">
-        Beta
-      </span>
     </div>
   );
 }

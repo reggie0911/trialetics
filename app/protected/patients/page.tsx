@@ -5,12 +5,15 @@ import { PatientsPageClient } from '@/components/patients/patients-page-client';
 import { createClient } from '@/lib/server';
 
 export default async function PatientsPage({
+  params,
   searchParams,
 }: {
+  params?: Promise<Record<string, string | string[]>>;
   searchParams: Promise<{ protocol?: string }>;
 }) {
-  const params = await searchParams;
-  const protocolId = params.protocol || null;
+  const resolvedSearchParams = await searchParams;
+  if (params) await params;
+  const protocolId = resolvedSearchParams.protocol || null;
   const supabase = await createClient();
 
   // Check authentication
@@ -48,10 +51,11 @@ export default async function PatientsPage({
         </div>
 
         {/* Client-side component for data management */}
-        <PatientsPageClient 
-          companyId={profile.company_id} 
+        <PatientsPageClient
+          companyId={profile.company_id}
           profileId={profile.id}
           initialProtocolId={protocolId}
+          isAdmin={profile.role === "admin"}
         />
       </main>
     </div>

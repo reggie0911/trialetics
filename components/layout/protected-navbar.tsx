@@ -147,7 +147,7 @@ export function ProtectedNavbar() {
                     <span>Complete setup</span>
                   </DropdownMenuItem>
                 )}
-                {pathname !== '/protected/onboarding' && (
+                {isAdmin && pathname !== '/protected/onboarding' && (
                   <DropdownMenuItem
                     onClick={() => router.push('/protected/onboarding')}
                     className="cursor-pointer"

@@ -22,9 +22,10 @@ import {
 } from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { MoreHorizontal, Edit, Trash2, Users, BarChart3, FileText } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Users, BarChart3, FileText, GraduationCap } from 'lucide-react';
 import { ProtocolContactsSheet } from './protocol-contacts-sheet';
 import { ProtocolStatusReportSheet } from './protocol-status-report-sheet';
+import { ProtocolTrainingSheet } from '@/components/clinical-training/protocol-training-sheet';
 import { PROTOCOL_STATUS_LABELS, PROTOCOL_PHASE_LABELS } from '@/lib/types/clinical-trials';
 import type { ClinicalProtocolWithRelations } from '@/lib/types/clinical-trials';
 import { deleteClinicalProtocol } from '@/lib/actions/clinical-protocols';
@@ -49,6 +50,7 @@ export function ProtocolsDataTable({
   const router = useRouter();
   const [contactsSheetProtocol, setContactsSheetProtocol] = useState<ClinicalProtocolWithRelations | null>(null);
   const [statusReportProtocol, setStatusReportProtocol] = useState<ClinicalProtocolWithRelations | null>(null);
+  const [trainingSheetProtocol, setTrainingSheetProtocol] = useState<ClinicalProtocolWithRelations | null>(null);
 
   const handleDelete = async (protocolId: string) => {
     if (!confirm('Are you sure you want to delete this protocol? This will also delete all associated regions and sites.')) return;
@@ -135,6 +137,10 @@ export function ProtocolsDataTable({
                       <FileText className="mr-2 h-3 w-3" />
                       Status Report
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setTrainingSheetProtocol(protocol)}>
+                      <GraduationCap className="mr-2 h-3 w-3" />
+                      Training
+                    </DropdownMenuItem>
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger className="flex items-center">
                         <BarChart3 className="mr-2 h-3 w-3" />
@@ -198,6 +204,15 @@ export function ProtocolsDataTable({
         protocolTitle={statusReportProtocol.title}
         companyId={companyId}
         onSuccess={onRefresh}
+      />
+    )}
+    {trainingSheetProtocol && (
+      <ProtocolTrainingSheet
+        open={!!trainingSheetProtocol}
+        onOpenChange={(open) => !open && setTrainingSheetProtocol(null)}
+        protocolId={trainingSheetProtocol.id}
+        protocolNumber={trainingSheetProtocol.protocol_number}
+        protocolTitle={trainingSheetProtocol.title}
       />
     )}
     </>

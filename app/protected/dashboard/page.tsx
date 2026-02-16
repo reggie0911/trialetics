@@ -3,18 +3,23 @@ import { Suspense } from 'react';
 import { ProtectedNavbar } from '@/components/layout/protected-navbar';
 import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { Greeting } from '@/components/dashboard/greeting';
-import { SiteMetricsHeatmap } from '@/components/dashboard/site-metrics-heatmap';
-import { TodoList } from '@/components/dashboard/todo-list';
 import { ModuleMetrics } from '@/components/dashboard/module-metrics/module-metrics';
 import { AIAssistantButton } from '@/components/ai-assistant';
 import { createClient } from '@/lib/server';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getDashboardTrackerMetrics } from '@/lib/actions/dashboard-metrics';
+import { buildModuleMetricsFromTrackerData } from '@/lib/utils/dashboard-metrics';
 
 interface DashboardPageProps {
+  params?: Promise<Record<string, string | string[]>>;
   searchParams: Promise<{ projectId?: string; protocolId?: string }>;
 }
 
-export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+export default async function DashboardPage({ params, searchParams }: DashboardPageProps) {
+  // Await dynamic APIs first (Next.js 16 - prevents sync access/enumeration errors from tooling)
+  const resolvedSearchParams = await searchParams;
+  if (params) await params;
+  const protocolId = resolvedSearchParams.protocolId ?? resolvedSearchParams.projectId;
+
   const supabase = await createClient();
 
   // Check authentication
@@ -22,10 +27,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   if (error || !data?.user) {
     redirect('/auth/login');
   }
-
-  // Get search params (support both protocolId and legacy projectId for backwards compatibility)
-  const params = await searchParams;
-  const protocolId = params.protocolId ?? params.projectId;
 
   if (!protocolId) {
     redirect('/protected');
@@ -54,6 +55,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     redirect('/protected');
   }
 
+  const companyId = profile?.company_id || '';
+
+  const trackerMetrics = await getDashboardTrackerMetrics(companyId, protocolId);
+
+  const moduleMetrics = buildModuleMetricsFromTrackerData(
+    trackerMetrics,
+    protocolId
+  );
+
   return (
     <div className="min-h-screen bg-background">
       <ProtectedNavbar />
@@ -76,31 +86,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
 
         {/* Dashboard Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
-          <div className="lg:col-span-3 space-y-4 sm:space-y-6">
-            {/* Site Metrics Heatmap */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base sm:text-lg">Site Metrics Heatmap</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <SiteMetricsHeatmap />
-              </CardContent>
-            </Card>
-
-            {/* Module Metrics */}
-            <ModuleMetrics />
-          </div>
-
-          {/* Todo List Sidebar */}
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle className="text-base sm:text-lg">To-Do items</CardTitle>
-            </CardHeader>
-            <CardContent className="bg-muted/20 border border-muted rounded-lg">
-              <TodoList protocolId={protocolId} />
-            </CardContent>
-          </Card>
+        <div className="space-y-4 sm:space-y-6">
+          {/* Module Metrics */}
+          <ModuleMetrics metrics={moduleMetrics} />
         </div>
       </main>
 

@@ -25,15 +25,20 @@ import {
 } from "@/lib/actions/ecrf-query-tracker-data";
 import { ColumnFiltersState } from "@tanstack/react-table";
 import { Tables } from "@/lib/types/database.types";
-import { ProtocolSelector } from "@/components/ui/protocol-selector";
 
 interface ECRFQueryTrackerPageClientProps {
   companyId: string;
   profileId: string;
   initialProtocolId?: string | null;
+  isAdmin?: boolean;
 }
 
-export function ECRFQueryTrackerPageClient({ companyId, profileId, initialProtocolId }: ECRFQueryTrackerPageClientProps) {
+export function ECRFQueryTrackerPageClient({
+  companyId,
+  profileId,
+  initialProtocolId,
+  isAdmin = false,
+}: ECRFQueryTrackerPageClientProps) {
   // Upload management
   const [uploads, setUploads] = useState<Tables<'ecrf_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
@@ -536,25 +541,20 @@ export function ECRFQueryTrackerPageClient({ companyId, profileId, initialProtoc
       {/* Upload Control & History */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 flex-wrap">
-          <ProtocolSelector
-            companyId={companyId}
-            value={protocolId}
-            onValueChange={setProtocolId}
-            label="Protocol"
-            placeholder="All protocols"
-            showAllOption={true}
-            className="min-w-[200px]"
-          />
-          <ECRFCSVUploadDialog 
-            onUpload={handleUpload}
-            companyId={companyId}
-            profileId={profileId}
-          />
-          <ECRFHeaderRelabelModal 
-            currentMappings={headerMappings}
-            onSave={handleSaveHeaderMappings}
-            disabled={!companyId}
-          />
+          {isAdmin && (
+            <>
+              <ECRFCSVUploadDialog
+                onUpload={handleUpload}
+                companyId={companyId}
+                profileId={profileId}
+              />
+              <ECRFHeaderRelabelModal
+                currentMappings={headerMappings}
+                onSave={handleSaveHeaderMappings}
+                disabled={!companyId}
+              />
+            </>
+          )}
           <ECRFUploadHistory
             uploads={uploads}
             selectedUploadId={selectedUploadId}
@@ -588,9 +588,14 @@ export function ECRFQueryTrackerPageClient({ companyId, profileId, initialProtoc
 
       {data.length > 0 && (
         <>
-          <ECRFFilters 
-            filters={filters} 
-            onFiltersChange={setFilters} 
+          <ECRFFilters
+            uploadDate={
+              selectedUploadId
+                ? uploads.find((u) => u.id === selectedUploadId)?.created_at ?? null
+                : null
+            }
+            filters={filters}
+            onFiltersChange={setFilters}
             onResetAll={handleResetAllFilters}
             data={filteredData}
             filterOptions={filterOptions}

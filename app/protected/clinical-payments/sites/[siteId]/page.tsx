@@ -6,10 +6,13 @@ import { PaymentSiteDetailPageClient } from '@/components/clinical-payments/paym
 
 export default async function ClinicalPaymentSitePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ siteId: string }>;
+  searchParams?: Promise<Record<string, string | string[]>>;
 }) {
   const { siteId } = await params;
+  if (searchParams) await searchParams;
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();

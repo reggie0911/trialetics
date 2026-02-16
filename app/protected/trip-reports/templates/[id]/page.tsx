@@ -9,10 +9,13 @@ import { ArrowLeft } from 'lucide-react';
 
 export default async function TemplateEditPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[]>>;
 }) {
   const { id } = await params;
+  if (searchParams) await searchParams;
 
   if (id === 'new') {
     redirect('/protected/trip-reports/templates/new');

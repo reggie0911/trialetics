@@ -5,13 +5,15 @@ import { createClient } from '@/lib/server';
 import { getContact } from '@/lib/actions/contacts';
 import { getContactActivity } from '@/lib/utils/activity-logger';
 
-export default async function ContactDetailPage({ 
-  params 
-}: { 
-  params: Promise<{ id: string }> 
+export default async function ContactDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[]>>;
 }) {
-  // Await params in Next.js 15+
   const { id } = await params;
+  if (searchParams) await searchParams;
   
   const supabase = await createClient();
 

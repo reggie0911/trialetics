@@ -13,6 +13,7 @@ import { X } from "lucide-react";
 import { ECRFRecord } from "./ecrf-csv-upload-dialog";
 
 interface ECRFFiltersProps {
+  uploadDate?: string | null;
   filters: {
     siteName: string;
     subjectId: string;
@@ -38,7 +39,12 @@ interface ECRFFiltersProps {
   } | null;
 }
 
-export function ECRFFilters({ filters, onFiltersChange, onResetAll, data, filterOptions }: ECRFFiltersProps) {
+function toDisplayLabel(value: string): string {
+  if (!value || value === "all") return value;
+  return value.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+}
+
+export function ECRFFilters({ uploadDate, filters, onFiltersChange, onResetAll, data, filterOptions }: ECRFFiltersProps) {
   const hasActiveFilters = Object.values(filters).some((value) => value !== "");
 
   if (!filterOptions) {
@@ -75,12 +81,17 @@ export function ECRFFilters({ filters, onFiltersChange, onResetAll, data, filter
               }
             >
               <SelectTrigger className="h-8 text-[11px] w-full">
-                <SelectValue placeholder="All Sites" />
+                <SelectValue
+                  placeholder="All Sites"
+                  getDisplayLabel={(v) => (v === "all" || !v ? "All Sites" : toDisplayLabel(v))}
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Sites</SelectItem>
                 {filterOptions.siteNames.map((site) => (
-                  <SelectItem key={site} value={site} className="text-[11px]">{site}</SelectItem>
+                  <SelectItem key={site} value={site} className="text-[11px]">
+                    {toDisplayLabel(site)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -97,12 +108,17 @@ export function ECRFFilters({ filters, onFiltersChange, onResetAll, data, filter
               }
             >
               <SelectTrigger className="h-8 text-[11px] w-full">
-                <SelectValue placeholder="All Subjects" />
+                <SelectValue
+                  placeholder="All Subjects"
+                  getDisplayLabel={(v) => (v === "all" || !v ? "All Subjects" : toDisplayLabel(v))}
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Subjects</SelectItem>
                 {filterOptions.subjectIds.map((subject) => (
-                  <SelectItem key={subject} value={subject} className="text-[11px]">{subject}</SelectItem>
+                  <SelectItem key={subject} value={subject} className="text-[11px]">
+                    {toDisplayLabel(subject)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -119,12 +135,17 @@ export function ECRFFilters({ filters, onFiltersChange, onResetAll, data, filter
               }
             >
               <SelectTrigger className="h-8 text-[11px] w-full">
-                <SelectValue placeholder="All Events" />
+                <SelectValue
+                  placeholder="All Events"
+                  getDisplayLabel={(v) => (v === "all" || !v ? "All Events" : toDisplayLabel(v))}
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Events</SelectItem>
                 {filterOptions.eventNames.map((event) => (
-                  <SelectItem key={event} value={event} className="text-[11px]">{event}</SelectItem>
+                  <SelectItem key={event} value={event} className="text-[11px]">
+                    {toDisplayLabel(event)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -141,12 +162,17 @@ export function ECRFFilters({ filters, onFiltersChange, onResetAll, data, filter
               }
             >
               <SelectTrigger className="h-8 text-[11px] w-full">
-                <SelectValue placeholder="All Forms" />
+                <SelectValue
+                  placeholder="All Forms"
+                  getDisplayLabel={(v) => (v === "all" || !v ? "All Forms" : toDisplayLabel(v))}
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Forms</SelectItem>
                 {filterOptions.formNames.map((form) => (
-                  <SelectItem key={form} value={form} className="text-[11px]">{form}</SelectItem>
+                  <SelectItem key={form} value={form} className="text-[11px]">
+                    {toDisplayLabel(form)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -163,12 +189,17 @@ export function ECRFFilters({ filters, onFiltersChange, onResetAll, data, filter
               }
             >
               <SelectTrigger className="h-8 text-[11px] w-full">
-                <SelectValue placeholder="All Types" />
+                <SelectValue
+                  placeholder="All Types"
+                  getDisplayLabel={(v) => (v === "all" || !v ? "All Types" : toDisplayLabel(v))}
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
                 {filterOptions.queryTypes.map((type) => (
-                  <SelectItem key={type} value={type} className="text-[11px]">{type}</SelectItem>
+                  <SelectItem key={type} value={type} className="text-[11px]">
+                    {toDisplayLabel(type)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -185,12 +216,17 @@ export function ECRFFilters({ filters, onFiltersChange, onResetAll, data, filter
               }
             >
               <SelectTrigger className="h-8 text-[11px] w-full">
-                <SelectValue placeholder="All States" />
+                <SelectValue
+                  placeholder="All States"
+                  getDisplayLabel={(v) => (v === "all" || !v ? "All States" : toDisplayLabel(v))}
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All States</SelectItem>
                 {filterOptions.queryStates.map((state) => (
-                  <SelectItem key={state} value={state} className="text-[11px]">{state}</SelectItem>
+                  <SelectItem key={state} value={state} className="text-[11px]">
+                    {toDisplayLabel(state)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -207,12 +243,17 @@ export function ECRFFilters({ filters, onFiltersChange, onResetAll, data, filter
               }
             >
               <SelectTrigger className="h-8 text-[11px] w-full">
-                <SelectValue placeholder="All User Roles" />
+                <SelectValue
+                  placeholder="All User Roles"
+                  getDisplayLabel={(v) => (v === "all" || !v ? "All User Roles" : toDisplayLabel(v))}
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All User Roles</SelectItem>
                 {filterOptions.userRoles.map((role) => (
-                  <SelectItem key={role} value={role} className="text-[11px]">{role}</SelectItem>
+                  <SelectItem key={role} value={role} className="text-[11px]">
+                    {toDisplayLabel(role)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -229,12 +270,17 @@ export function ECRFFilters({ filters, onFiltersChange, onResetAll, data, filter
               }
             >
               <SelectTrigger className="h-8 text-[11px] w-full">
-                <SelectValue placeholder="All Roles" />
+                <SelectValue
+                  placeholder="All Roles"
+                  getDisplayLabel={(v) => (v === "all" || !v ? "All Roles" : toDisplayLabel(v))}
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Roles</SelectItem>
                 {filterOptions.queryRaisedByRoles.map((role) => (
-                  <SelectItem key={role} value={role} className="text-[11px]">{role}</SelectItem>
+                  <SelectItem key={role} value={role} className="text-[11px]">
+                    {toDisplayLabel(role)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -242,7 +288,16 @@ export function ECRFFilters({ filters, onFiltersChange, onResetAll, data, filter
         </div>
 
         <div className="mt-3 text-[11px] text-muted-foreground">
-          Showing {data.length} query records
+          {uploadDate
+            ? `Viewing upload from ${new Date(uploadDate).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true,
+              })}`
+            : "Select an upload to view data"}
         </div>
       </CardContent>
     </Card>

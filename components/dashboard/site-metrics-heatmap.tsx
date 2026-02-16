@@ -2,18 +2,31 @@
 
 import { useState, useMemo } from 'react';
 import { SiteSquare } from './site-square';
-import { mockSiteMetrics, SiteMetrics } from '@/lib/mock-data/site-metrics';
+import type { SiteMetrics } from '@/lib/types/dashboard-metrics';
 
-export function SiteMetricsHeatmap() {
+interface SiteMetricsHeatmapProps {
+  siteMetrics: SiteMetrics[] | null;
+  protocolTitle?: string;
+}
+
+export function SiteMetricsHeatmap({
+  siteMetrics,
+  protocolTitle = '',
+}: SiteMetricsHeatmapProps) {
   const [hoveredSite, setHoveredSite] = useState<SiteMetrics | null>(null);
   const [pinnedSite, setPinnedSite] = useState<SiteMetrics | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
+  const metrics = siteMetrics ?? [];
+
   // Memoize the counts to prevent hydration mismatches
-  const { compliantCount, notCompliantCount } = useMemo(() => ({
-    compliantCount: mockSiteMetrics.filter(s => s.isCompliant).length,
-    notCompliantCount: mockSiteMetrics.filter(s => !s.isCompliant).length,
-  }), []);
+  const { compliantCount, notCompliantCount } = useMemo(
+    () => ({
+      compliantCount: metrics.filter((s) => s.isCompliant).length,
+      notCompliantCount: metrics.filter((s) => !s.isCompliant).length,
+    }),
+    [metrics]
+  );
 
   const handleSiteHover = (site: SiteMetrics, event: React.MouseEvent) => {
     // Only show hover tooltip if no site is pinned
@@ -54,13 +67,28 @@ export function SiteMetricsHeatmap() {
   // Show tooltip for either pinned or hovered site
   const displaySite = pinnedSite || hoveredSite;
 
+  if (metrics.length === 0) {
+    return (
+      <div className="w-full rounded-lg border border-dashed border-muted-foreground/30 bg-muted/20 p-8 text-center">
+        <p className="text-sm text-muted-foreground">
+          No sites for this protocol. Add sites in Clinical Trials or upload
+          tracker data (eCRF, SDV) to see site metrics.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full flex flex-col md:flex-row gap-4">
       <div className="flex flex-col gap-2">
         {/* Site Count Display */}
         <div className="flex items-end gap-2">
-          <div className="text-4xl sm:text-5xl font-bold tracking-tight">{mockSiteMetrics.length}</div>
-          <div className="pb-1 text-xs sm:text-sm font-normal text-muted-foreground">Total Sites</div>
+          <div className="text-4xl sm:text-5xl font-bold tracking-tight">
+            {metrics.length}
+          </div>
+          <div className="pb-1 text-xs sm:text-sm font-normal text-muted-foreground">
+            Total Sites
+          </div>
         </div>
 
         {/* Legend */}
@@ -83,9 +111,9 @@ export function SiteMetricsHeatmap() {
       {/* Heatmap Grid */}
       <div className="relative overflow-x-auto">
         <div className="grid grid-cols-13 gap-1 w-fit min-w-max">
-          {mockSiteMetrics.map((site) => (
+          {metrics.map((site) => (
             <div
-              key={site.siteNumber}
+              key={`${site.siteNumber}-${site.siteName}`}
               onMouseEnter={(e) => handleSiteHover(site, e)}
               onMouseLeave={handleSiteLeave}
             >

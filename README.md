@@ -28,9 +28,15 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY=your_supabase_anon_key
 # Document Management Module Passcode
 # Required to access the Document Management module
 NEXT_PUBLIC_DOCUMENT_MANAGEMENT_PASSCODE=your_passcode_here
+
+# Patients / MRACE Header Mapping & Columns Passcode (admin users only)
+# Required for admins to access Upload Patient Data, Load Header Map, and Columns
+NEXT_PUBLIC_PATIENTS_MAPPING_PASSCODE=your_passcode_here
 ```
 
 **Note**: The `NEXT_PUBLIC_DOCUMENT_MANAGEMENT_PASSCODE` is required to access any Document Management routes. Users will be prompted to enter this passcode when accessing the module. The verification persists only for the current browser session.
+
+**Note**: The `NEXT_PUBLIC_PATIENTS_MAPPING_PASSCODE` is required for admin users to access Upload Patient Data, Header Mapping, and Columns on the Patients (MRACE Performance Tracker) page. Only admins see these controls; they must enter the passcode to use them. Verification persists for the current browser session.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 

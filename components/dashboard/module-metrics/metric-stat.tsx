@@ -1,6 +1,17 @@
 import { MetricStat as MetricStatType } from '@/lib/types/module-metrics';
 import { cn } from '@/lib/utils';
 
+function formatValue(value: string | number): string {
+  if (typeof value === 'number') {
+    return value.toLocaleString();
+  }
+  const num = parseFloat(value);
+  if (!isNaN(num) && !value.includes('%')) {
+    return num.toLocaleString();
+  }
+  return value;
+}
+
 interface MetricStatProps {
   stat: MetricStatType;
 }
@@ -18,7 +29,7 @@ export function MetricStat({ stat }: MetricStatProps) {
             stat.highlight && 'text-destructive'
           )}
         >
-          {stat.value}
+          {formatValue(stat.value)}
         </span>
         {stat.delta !== undefined && (
           <span className="text-[10px] text-destructive font-semibold">

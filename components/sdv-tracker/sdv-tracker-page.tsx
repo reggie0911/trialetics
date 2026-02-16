@@ -9,7 +9,6 @@ import { SDVHierarchicalTable } from './sdv-hierarchical-table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileSpreadsheet, Upload, Wrench, Loader2 } from 'lucide-react';
-import { ProtocolSelector } from '@/components/ui/protocol-selector';
 import {
   getSDVReports,
   getSDVReport,
@@ -31,9 +30,15 @@ interface SDVTrackerPageProps {
   companyId: string;
   profileId: string;
   initialProtocolId?: string | null;
+  isAdmin?: boolean;
 }
 
-export function SDVTrackerPage({ companyId, profileId, initialProtocolId }: SDVTrackerPageProps) {
+export function SDVTrackerPage({
+  companyId,
+  profileId,
+  initialProtocolId,
+  isAdmin = false,
+}: SDVTrackerPageProps) {
   // Report state
   const [reports, setReports] = useState<SDVReport[]>([]);
   const [protocolId, setProtocolId] = useState<string | null>(initialProtocolId ?? null);
@@ -48,7 +53,7 @@ export function SDVTrackerPage({ companyId, profileId, initialProtocolId }: SDVT
     subject_ids: [],
     event_names: [],
     form_names: [],
-    data_sources: ['site_data_only', 'both'],
+    data_sources: [],
   });
 
   // Loading state
@@ -121,7 +126,7 @@ export function SDVTrackerPage({ companyId, profileId, initialProtocolId }: SDVT
           subject_ids: [],
           event_names: [],
           form_names: [],
-          data_sources: ['site_data_only', 'both'],
+          data_sources: [],
         });
       }
     } catch (error) {
@@ -316,23 +321,13 @@ export function SDVTrackerPage({ companyId, profileId, initialProtocolId }: SDVT
     <div className="space-y-6">
       {/* Protocol filter and Report Selector */}
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          <ProtocolSelector
-            companyId={companyId}
-            value={protocolId}
-            onValueChange={setProtocolId}
-            label="Protocol"
-            placeholder="All protocols"
-            showAllOption={true}
-            className="min-w-[200px]"
-          />
-        </div>
         <SDVReportSelector
           reports={reports}
           selectedReportId={selectedReportId}
           onReportSelect={handleReportSelect}
           onCreateReport={handleCreateReport}
           onDeleteReport={handleDeleteReport}
+          isAdmin={isAdmin}
         />
       </div>
 

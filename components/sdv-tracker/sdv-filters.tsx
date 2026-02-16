@@ -28,7 +28,6 @@ interface SDVFiltersProps {
     subject_ids: string[];
     event_names: string[];
     form_names: string[];
-    data_sources: string[];
   };
   filters: SDVFilterState;
   onFiltersChange: (filters: SDVFilterState) => void;
@@ -109,14 +108,6 @@ export function SDVFilters({
     }
   };
 
-  const handleSourceChange = (value: string | null) => {
-    if (value === 'all' || value === null) {
-      onFiltersChange({ ...filters, source: null });
-    } else {
-      onFiltersChange({ ...filters, source: value });
-    }
-  };
-
   const clearFilters = () => {
     onFiltersChange({
       site: null,
@@ -129,16 +120,8 @@ export function SDVFilters({
 
   const hasActiveFilters = filters.site || filters.subject || filters.event || filters.form || filters.source;
 
-  const getSourceLabel = (source: string) => {
-    switch (source) {
-      case 'site_data_only':
-        return 'Site Data Only';
-      case 'both':
-        return 'Both Files';
-      default:
-        return source;
-    }
-  };
+  const toDisplayLabel = (value: string) =>
+    value.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 
   return (
     <div className="flex flex-wrap items-center gap-3 p-4 bg-white rounded-lg border">
@@ -148,53 +131,50 @@ export function SDVFilters({
       </div>
 
       {/* Site Filter */}
-      <Select value={filters.site || 'all'} onValueChange={handleSiteChange}>
-        <SelectTrigger className="w-[160px] h-9">
-          <SelectValue placeholder="All Sites" />
-        </SelectTrigger>
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] font-medium text-muted-foreground">Site</label>
+        <Select value={filters.site || 'all'} onValueChange={handleSiteChange}>
+          <SelectTrigger className="w-[160px] h-9">
+            <SelectValue
+              placeholder="All Sites"
+              getDisplayLabel={(v) => (v === 'all' || !v ? 'All Sites' : toDisplayLabel(v))}
+            />
+          </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Sites</SelectItem>
           {filterOptions.site_names.map((site) => (
             <SelectItem key={site} value={site}>
-              {site}
+              {toDisplayLabel(site)}
             </SelectItem>
           ))}
         </SelectContent>
-      </Select>
+        </Select>
+      </div>
 
       {/* Subject Filter */}
-      <Select 
+      <div className="flex flex-col gap-1">
+        <label className="text-[11px] font-medium text-muted-foreground">Subject</label>
+        <Select 
         value={filters.subject || 'all'} 
         onValueChange={handleSubjectChange}
         disabled={!filters.site && cascadingOptions.subject_ids.length === 0}
       >
         <SelectTrigger className="w-[160px] h-9">
-          <SelectValue placeholder="All Subjects" />
+          <SelectValue
+            placeholder="All Subjects"
+            getDisplayLabel={(v) => (v === 'all' || !v ? 'All Subjects' : toDisplayLabel(v))}
+          />
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Subjects</SelectItem>
           {(filters.site ? cascadingOptions.subject_ids : filterOptions.subject_ids).map((subject) => (
             <SelectItem key={subject} value={subject}>
-              {subject}
+              {toDisplayLabel(subject)}
             </SelectItem>
           ))}
         </SelectContent>
-      </Select>
-
-      {/* Data Source Filter */}
-      <Select value={filters.source || 'all'} onValueChange={handleSourceChange}>
-        <SelectTrigger className="w-[160px] h-9">
-          <SelectValue placeholder="All Sources" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All Sources</SelectItem>
-          {filterOptions.data_sources.map((source) => (
-            <SelectItem key={source} value={source}>
-              {getSourceLabel(source)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+        </Select>
+      </div>
 
       {/* Clear Filters Button */}
       {hasActiveFilters && (

@@ -39,9 +39,6 @@ export default async function ReconciliationPage() {
                   <h1 className="text-[32px] font-semibold tracking-[-1px]">
                     Regulatory Document Reconciliation Tracker
                   </h1>
-                  <span className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-full shadow-md animate-pulse">
-                    Beta
-                  </span>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
                   Track, compare, and verify regulatory documents across site files, sponsor files, and TMF for inspection readiness

@@ -31,6 +31,7 @@ const menuItems = [
       { label: "Activity Calendar", href: "/protected/clinical-trials/calendar" },
       { label: "Rate Lists", href: "/protected/clinical-trials/rate-lists" },
       { label: "Clinical Payments", href: "/protected/clinical-payments" },
+      { label: "Clinical Training", href: "/protected/clinical-training" },
       { label: "Visit Templates", href: "/protected/visit-templates" },
       { label: "Source Data Verification", href: "/protected/source-data-verification" },
     ],
@@ -54,9 +55,25 @@ export function ModuleNavbar() {
   const searchParams = useSearchParams();
 
   const getHrefWithParams = (href: string) => {
-    const protocolId = searchParams.get("protocolId") ?? searchParams.get("projectId");
-    if (protocolId && href === "/protected/dashboard") {
+    const protocolId =
+      searchParams.get("protocolId") ??
+      searchParams.get("projectId") ??
+      searchParams.get("protocol");
+    if (!protocolId) return href;
+    if (href === "/protected/dashboard") {
       return `${href}?protocolId=${protocolId}`;
+    }
+    // Tracker pages use ?protocol= in the URL
+    const trackerHrefs = [
+      "/protected/patients",
+      "/protected/ae",
+      "/protected/ecrf-query-tracker",
+      "/protected/sdv-tracker",
+      "/protected/vw",
+      "/protected/mc",
+    ];
+    if (trackerHrefs.includes(href)) {
+      return `${href}?protocol=${protocolId}`;
     }
     return href;
   };
