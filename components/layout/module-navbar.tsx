@@ -32,6 +32,7 @@ const menuItems = [
       { label: "Rate Lists", href: "/protected/clinical-trials/rate-lists" },
       { label: "Clinical Payments", href: "/protected/clinical-payments" },
       { label: "Clinical Training", href: "/protected/clinical-training" },
+      { label: "Permissions", href: "/protected/permissions" },
       { label: "Visit Templates", href: "/protected/visit-templates" },
       { label: "Source Data Verification", href: "/protected/source-data-verification" },
     ],
