@@ -1,11 +1,11 @@
-import { ModuleMetric } from '@/lib/types/module-metrics';
 import { MetricProgressBar } from './metric-progress-bar';
 import { MetricStat } from './metric-stat';
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
+import type { DashboardModuleMetric } from '@/lib/types/dashboard-metrics';
 
 interface MetricCardProps {
-  metric: ModuleMetric;
+  metric: DashboardModuleMetric;
 }
 
 export function MetricCard({ metric }: MetricCardProps) {

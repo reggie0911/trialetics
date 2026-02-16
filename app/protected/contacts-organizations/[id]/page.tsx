@@ -14,13 +14,15 @@ import { getOrganizationActivity } from '@/lib/utils/activity-logger';
 import { getOrganizationNotes } from '@/lib/actions/organization-notes';
 import { getTripReportsByOrganization } from '@/lib/actions/trip-reports';
 
-export default async function OrganizationDetailPage({ 
-  params 
-}: { 
-  params: Promise<{ id: string }> 
+export default async function OrganizationDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[]>>;
 }) {
-  // Await params in Next.js 15+
   const { id } = await params;
+  if (searchParams) await searchParams;
   
   const supabase = await createClient();
 

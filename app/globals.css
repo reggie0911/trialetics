@@ -302,4 +302,38 @@ html.theme-transition::view-transition-new(root) {
   .space-y-4 > * + * {
     margin-top: 1rem;
   }
+
+  /* Patient/MRACE table: allow full table to print (fix blank sections from overflow) */
+  .print-table-container {
+    overflow: visible !important;
+    max-width: none !important;
+  }
+
+  .print-table-container table {
+    width: 100%;
+  }
+
+  /* Ensure table cells have visible content when printing */
+  .print-table-container td,
+  .print-table-container th {
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Ensure table body rows are visible */
+  .print-table-container tbody tr {
+    display: table-row !important;
+  }
+
+  .print-table-container tbody td {
+    border: 1px solid #ddd !important;
+    padding: 6px 8px !important;
+  }
+
+  /* Reset DnD transforms that can cause blank/cropped cells in print */
+  .print-table-container td[style*="transform"],
+  .print-table-container th[style*="transform"] {
+    transform: none !important;
+  }
 }

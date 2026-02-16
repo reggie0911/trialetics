@@ -41,6 +41,7 @@ interface SDVReportSelectorProps {
   onReportSelect: (reportId: string | null) => void;
   onCreateReport: (name: string, description?: string) => Promise<SDVReport | null>;
   onDeleteReport: (reportId: string) => Promise<void>;
+  isAdmin?: boolean;
 }
 
 export function SDVReportSelector({
@@ -49,6 +50,7 @@ export function SDVReportSelector({
   onReportSelect,
   onCreateReport,
   onDeleteReport,
+  isAdmin = false,
 }: SDVReportSelectorProps) {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -128,18 +130,22 @@ export function SDVReportSelector({
         </div>
         
         {reports.length === 0 ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => {
-              setNewReportName(getDefaultReportName());
-              setIsCreateDialogOpen(true);
-            }}
-          >
-            <Plus className="h-3 w-3" />
-            Create First Report
-          </Button>
+          isAdmin ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => {
+                setNewReportName(getDefaultReportName());
+                setIsCreateDialogOpen(true);
+              }}
+            >
+              <Plus className="h-3 w-3" />
+              Create First Report
+            </Button>
+          ) : (
+            <span className="text-sm text-muted-foreground">No reports available</span>
+          )
         ) : (
           <>
             <Select
@@ -147,7 +153,14 @@ export function SDVReportSelector({
               onValueChange={(value) => onReportSelect(value)}
             >
               <SelectTrigger className="w-[280px] h-9">
-                <SelectValue placeholder="Select a report" />
+                <SelectValue
+                  placeholder="Select a report"
+                  getDisplayLabel={(value) => {
+                    if (!value) return null;
+                    const report = reports.find((r) => r.id === value);
+                    return report?.name ?? "Select a report";
+                  }}
+                />
               </SelectTrigger>
               <SelectContent>
                 {reports.map((report) => (
@@ -161,18 +174,20 @@ export function SDVReportSelector({
               </SelectContent>
             </Select>
 
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1 h-9"
-              onClick={() => {
-                setNewReportName(getDefaultReportName());
-                setIsCreateDialogOpen(true);
-              }}
-            >
-              <Plus className="h-3 w-3" />
-              New
-            </Button>
+            {isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1 h-9"
+                onClick={() => {
+                  setNewReportName(getDefaultReportName());
+                  setIsCreateDialogOpen(true);
+                }}
+              >
+                <Plus className="h-3 w-3" />
+                New
+              </Button>
+            )}
           </>
         )}
       </div>

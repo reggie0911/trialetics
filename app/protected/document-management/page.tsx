@@ -39,9 +39,6 @@ export default async function DocumentManagementPage() {
                   <h1 className="text-[32px] font-semibold tracking-[-1px]">
                     Document Management
                   </h1>
-                  <span className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-full shadow-md animate-pulse">
-                    Beta
-                  </span>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
                   Upload, organize, track, and manage clinical trial documents with version control and expiration tracking

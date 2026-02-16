@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ProtocolSelector } from '@/components/ui/protocol-selector';
 import { getProtocolActivitiesForCalendar } from '@/lib/actions/protocol-activities';
 import type { ProtocolActivityWithProtocol } from '@/lib/actions/protocol-activities';
 import {
@@ -102,15 +101,6 @@ export function ActivityCalendarClient({ companyId }: ActivityCalendarClientProp
           {format(currentMonth, 'MMMM yyyy')}
         </CardTitle>
         <div className="flex items-center gap-2 flex-wrap">
-          <ProtocolSelector
-            companyId={companyId}
-            value={protocolId}
-            onValueChange={setProtocolId}
-            label="Protocol"
-            placeholder="All protocols"
-            showAllOption={true}
-            className="min-w-[200px]"
-          />
           <div className="flex gap-1">
             <Button
               variant="outline"

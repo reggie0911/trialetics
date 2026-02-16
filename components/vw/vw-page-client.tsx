@@ -22,15 +22,15 @@ import {
 } from "@/lib/actions/vw-data";
 import { ColumnFiltersState } from "@tanstack/react-table";
 import { Tables } from "@/lib/types/database.types";
-import { ProtocolSelector } from "@/components/ui/protocol-selector";
 
 interface VWPageClientProps {
   companyId: string;
   profileId: string;
   initialProtocolId?: string | null;
+  isAdmin?: boolean;
 }
 
-export function VWPageClient({ companyId, profileId, initialProtocolId }: VWPageClientProps) {
+export function VWPageClient({ companyId, profileId, initialProtocolId, isAdmin = false }: VWPageClientProps) {
   // Upload management
   const [uploads, setUploads] = useState<Tables<'vw_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
@@ -488,25 +488,20 @@ export function VWPageClient({ companyId, profileId, initialProtocolId }: VWPage
       {/* Upload Control & History */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 flex-wrap">
-          <ProtocolSelector
-            companyId={companyId}
-            value={protocolId}
-            onValueChange={setProtocolId}
-            label="Protocol"
-            placeholder="All protocols"
-            showAllOption={true}
-            className="min-w-[200px]"
-          />
-          <VWCSVUploadDialog 
-            onUpload={handleUpload}
-            companyId={companyId}
-            profileId={profileId}
-          />
-          <VWHeaderRelabelModal 
-            currentMappings={headerMappings}
-            onSave={handleSaveHeaderMappings}
-            disabled={!companyId}
-          />
+          {isAdmin && (
+            <>
+              <VWCSVUploadDialog 
+                onUpload={handleUpload}
+                companyId={companyId}
+                profileId={profileId}
+              />
+              <VWHeaderRelabelModal 
+                currentMappings={headerMappings}
+                onSave={handleSaveHeaderMappings}
+                disabled={!companyId}
+              />
+            </>
+          )}
           <VWUploadHistory
             uploads={uploads}
             selectedUploadId={selectedUploadId}
@@ -542,6 +537,7 @@ export function VWPageClient({ companyId, profileId, initialProtocolId }: VWPage
       {data.length > 0 && (
         <>
           <VWFilters 
+            uploadDate={uploads.find((u) => u.id === selectedUploadId)?.created_at ?? null}
             filters={filters} 
             onFiltersChange={setFilters} 
             onResetAll={handleResetAllFilters}

@@ -5,12 +5,15 @@ import { SDVTrackerPage } from '@/components/sdv-tracker/sdv-tracker-page';
 import { createClient } from '@/lib/server';
 
 export default async function SDVTrackerPageRoute({
+  params,
   searchParams,
 }: {
+  params?: Promise<Record<string, string | string[]>>;
   searchParams: Promise<{ protocol?: string }>;
 }) {
-  const params = await searchParams;
-  const protocolId = params.protocol || null;
+  const resolvedSearchParams = await searchParams;
+  if (params) await params;
+  const protocolId = resolvedSearchParams.protocol || null;
   const supabase = await createClient();
 
   // Check authentication
@@ -41,9 +44,6 @@ export default async function SDVTrackerPageRoute({
               <h1 className="text-[32px] font-semibold tracking-[-1px]">
                 Source Data Verification Report
               </h1>
-              <span className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider bg-gradient-to-r from-amber-400 to-orange-500 text-white rounded-full shadow-md animate-pulse">
-                Beta
-              </span>
             </div>
             <p className="text-[11px] text-muted-foreground">
               Monitor SDV completion rates across clinical trials with real-time percentage dashboards
@@ -53,7 +53,12 @@ export default async function SDVTrackerPageRoute({
         </div>
 
         {/* Client-side component for data management */}
-        <SDVTrackerPage companyId={profile.company_id || ""} profileId={profile.id} initialProtocolId={protocolId} />
+        <SDVTrackerPage
+          companyId={profile.company_id || ""}
+          profileId={profile.id}
+          initialProtocolId={protocolId}
+          isAdmin={profile.role === "admin"}
+        />
       </main>
     </div>
   );

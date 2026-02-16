@@ -171,7 +171,7 @@ export function PatientDataTable({
       )}
 
       <div
-        className="overflow-x-auto border rounded-md"
+        className="print-table-container overflow-x-auto border rounded-md"
         onScroll={handleScroll}
       >
         <DndContext

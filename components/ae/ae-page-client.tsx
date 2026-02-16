@@ -10,7 +10,6 @@ import { AEKPICards, KPIFilterType } from "./ae-kpi-cards";
 import { AECategoriesChart } from "./ae-categories-chart";
 import { AEHeaderRelabelModal } from "./ae-header-relabel-modal";
 import { AEUploadHistory } from "./ae-upload-history";
-import { ProtocolSelector } from "@/components/ui/protocol-selector";
 import { useToast } from "@/hooks/use-toast";
 import { 
   getAEHeaderMappings, 
@@ -28,9 +27,15 @@ interface AEPageClientProps {
   companyId: string;
   profileId: string;
   initialProtocolId?: string | null;
+  isAdmin?: boolean;
 }
 
-export function AEPageClient({ companyId, profileId, initialProtocolId }: AEPageClientProps) {
+export function AEPageClient({
+  companyId,
+  profileId,
+  initialProtocolId,
+  isAdmin = false,
+}: AEPageClientProps) {
   // Upload management
   const [uploads, setUploads] = useState<Tables<'ae_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
@@ -495,25 +500,20 @@ export function AEPageClient({ companyId, profileId, initialProtocolId }: AEPage
       {/* Upload Control & History */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 flex-wrap">
-          <ProtocolSelector
-            companyId={companyId}
-            value={protocolId}
-            onValueChange={setProtocolId}
-            label="Protocol"
-            placeholder="All protocols"
-            showAllOption={true}
-            className="min-w-[200px]"
-          />
-          <AECSVUploadDialog 
-            onUpload={handleUpload}
-            companyId={companyId}
-            profileId={profileId}
-          />
-          <AEHeaderRelabelModal 
-            currentMappings={headerMappings}
-            onSave={handleSaveHeaderMappings}
-            disabled={!companyId}
-          />
+          {isAdmin && (
+            <>
+              <AECSVUploadDialog
+                onUpload={handleUpload}
+                companyId={companyId}
+                profileId={profileId}
+              />
+              <AEHeaderRelabelModal
+                currentMappings={headerMappings}
+                onSave={handleSaveHeaderMappings}
+                disabled={!companyId}
+              />
+            </>
+          )}
           <AEUploadHistory
             uploads={uploads}
             selectedUploadId={selectedUploadId}
@@ -549,6 +549,7 @@ export function AEPageClient({ companyId, profileId, initialProtocolId }: AEPage
       {data.length > 0 && (
         <>
           <AEFilters 
+            uploadDate={uploads.find((u) => u.id === selectedUploadId)?.created_at ?? null}
             filters={filters} 
             onFiltersChange={setFilters} 
             onResetAll={handleResetAllFilters}

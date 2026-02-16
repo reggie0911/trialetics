@@ -1,6 +1,6 @@
 'use client';
 
-import { SiteMetrics } from '@/lib/mock-data/site-metrics';
+import type { SiteMetrics } from '@/lib/types/dashboard-metrics';
 
 interface SiteSquareProps {
   siteNumber: string;

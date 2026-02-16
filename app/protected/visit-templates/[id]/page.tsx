@@ -4,8 +4,15 @@ import { createClient } from '@/lib/server';
 import { getVisitTemplateById } from '@/lib/actions/subject-visit-templates';
 import { getAllClinicalProtocols } from '@/lib/actions/clinical-protocols';
 
-export default async function TemplateDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function TemplateDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<Record<string, string | string[]>>;
+}) {
   const { id } = await params;
+  if (searchParams) await searchParams;
   const supabase = await createClient();
   
   // Get user and company_id server-side

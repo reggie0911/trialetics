@@ -15,10 +15,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Edit, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { MoreHorizontal, Edit, Trash2, GraduationCap } from 'lucide-react';
 import type { ClinicalRegionWithRelations } from '@/lib/types/clinical-trials';
 import { deleteClinicalRegion } from '@/lib/actions/clinical-regions';
 import { useToast } from '@/hooks/use-toast';
+import { RegionTrainingSheet } from '@/components/clinical-training/region-training-sheet';
 
 interface RegionsDataTableProps {
   regions: ClinicalRegionWithRelations[];
@@ -35,6 +37,7 @@ export function RegionsDataTable({
   onRefresh,
 }: RegionsDataTableProps) {
   const { toast } = useToast();
+  const [trainingSheetRegion, setTrainingSheetRegion] = useState<ClinicalRegionWithRelations | null>(null);
 
   const handleDelete = async (regionId: string) => {
     if (!confirm('Are you sure you want to delete this region? This will also delete all associated sites.')) return;
@@ -68,6 +71,7 @@ export function RegionsDataTable({
   }
 
   return (
+    <>
     <div className="rounded-md border">
       <Table>
         <TableHeader>
@@ -100,6 +104,10 @@ export function RegionsDataTable({
                     <MoreHorizontal className="h-3 w-3" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setTrainingSheetRegion(region)}>
+                      <GraduationCap className="mr-2 h-3 w-3" />
+                      Training
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => onEdit(region)}>
                       <Edit className="mr-2 h-3 w-3" />
                       Edit
@@ -119,5 +127,14 @@ export function RegionsDataTable({
         </TableBody>
       </Table>
     </div>
+    {trainingSheetRegion && (
+      <RegionTrainingSheet
+        open={!!trainingSheetRegion}
+        onOpenChange={(open) => !open && setTrainingSheetRegion(null)}
+        regionId={trainingSheetRegion.id}
+        regionName={trainingSheetRegion.region_name}
+      />
+    )}
+    </>
   );
 }

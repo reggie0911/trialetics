@@ -16,6 +16,7 @@ import { RotateCcw, ChevronDown, ChevronUp } from "lucide-react";
 import { VWRecord } from "./vw-csv-upload-dialog";
 
 interface VWFiltersProps {
+  uploadDate?: string | null;
   filters: {
     siteName: string;
     subjectId: string;
@@ -28,7 +29,7 @@ interface VWFiltersProps {
   data: VWRecord[];
 }
 
-export function VWFilters({ filters, onFiltersChange, onResetAll, data }: VWFiltersProps) {
+export function VWFilters({ uploadDate, filters, onFiltersChange, onResetAll, data }: VWFiltersProps) {
   const [isOpen, setIsOpen] = useState(true);
   
   // Get unique values for each filter
@@ -215,8 +216,20 @@ export function VWFilters({ filters, onFiltersChange, onResetAll, data }: VWFilt
           </div>
         </div>
         
-        {/* Reset Button Row */}
-        <div className="mt-3 flex justify-end">
+        {/* Upload date and Reset Button Row */}
+        <div className="mt-3 flex items-center justify-between">
+          <span className="text-[11px] text-muted-foreground">
+            {uploadDate
+              ? `Viewing upload from ${new Date(uploadDate).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                  hour12: true,
+                })}`
+              : "Select an upload from the history to view data"}
+          </span>
           <Button
             variant="outline"
             size="sm"

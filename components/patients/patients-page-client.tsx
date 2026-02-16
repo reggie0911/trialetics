@@ -6,6 +6,7 @@ import { CSVUploadDialog } from "./csv-upload-dialog";
 import { PatientDataTable } from "./patient-data-table";
 import { ColumnVisibilityToggle } from "./column-visibility-toggle";
 import { HeaderMappingUpload } from "./header-mapping-upload";
+import { PasscodeGate } from "@/components/ui/passcode-gate";
 import { GroupedColumnVisibility } from "./grouped-column-visibility";
 import { UploadHistory } from "./upload-history";
 import { PatientEditModal } from "./patient-edit-modal";
@@ -28,12 +29,12 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Printer, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ProtocolSelector } from "@/components/ui/protocol-selector";
 
 interface PatientsPageClientProps {
   companyId: string;
   profileId: string;
   initialProtocolId?: string | null;
+  isAdmin?: boolean;
 }
 
 // Helper function to parse a date string in various formats (MM/DD/YYYY, YYYY-MM-DD, or standard Date parseable)
@@ -196,7 +197,12 @@ function formatDateForDisplay(dateStr: string): string {
   }
 }
 
-export function PatientsPageClient({ companyId, profileId, initialProtocolId }: PatientsPageClientProps) {
+export function PatientsPageClient({
+  companyId,
+  profileId,
+  initialProtocolId,
+  isAdmin = false,
+}: PatientsPageClientProps) {
   // Upload selection (removed project selection)
   const [uploads, setUploads] = useState<Tables<'patient_uploads'>[]>([]);
   const [selectedUploadId, setSelectedUploadId] = useState<string | null>(null);
@@ -1183,7 +1189,7 @@ export function PatientsPageClient({ companyId, profileId, initialProtocolId }: 
     <div className="space-y-4">
       {/* Loading Indicator */}
       {isLoading && (
-        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div className="no-print fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="bg-card border rounded-lg p-6 shadow-lg flex flex-col items-center space-y-4 min-w-[200px]">
             <Loader2 className="h-12 w-12 text-primary animate-spin" />
             <p className="text-sm font-medium text-center">{loadingMessage}</p>
@@ -1192,34 +1198,36 @@ export function PatientsPageClient({ companyId, profileId, initialProtocolId }: 
       )}
       
       {/* Controls */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+      <div className="no-print flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <div className="flex items-center gap-2 flex-wrap">
-          <ProtocolSelector
-            companyId={companyId}
-            value={protocolId}
-            onValueChange={setProtocolId}
-            label="Protocol"
-            placeholder="All protocols"
-            showAllOption={true}
-            className="min-w-[200px]"
-          />
-          <CSVUploadDialog onUpload={handleUpload} />
-          <HeaderMappingUpload 
-            onMappingLoad={handleMappingLoad}
-            hasExistingMapping={headerMappings.length > 0}
-            mappingCount={headerMappings.length}
-          />
-          {headerMappings.length > 0 ? (
-            <GroupedColumnVisibility
-              columns={columnConfigs}
-              onColumnsChange={handleColumnsChange}
-              onVisitGroupSpansChange={handleVisitGroupSpansChange}
-            />
-          ) : (
-            <ColumnVisibilityToggle
-              columns={columnConfigs}
-              onColumnsChange={handleColumnsChange}
-            />
+          {isAdmin && (
+            <PasscodeGate
+              storageKey="patients-mapping-passcode-verified"
+              envVarName="NEXT_PUBLIC_PATIENTS_MAPPING_PASSCODE"
+              title="Header Mapping & Columns Access"
+              description="This feature requires a passcode to access header mapping and column configuration."
+            >
+              <>
+                <CSVUploadDialog onUpload={handleUpload} />
+                <HeaderMappingUpload
+                  onMappingLoad={handleMappingLoad}
+                  hasExistingMapping={headerMappings.length > 0}
+                  mappingCount={headerMappings.length}
+                />
+                {headerMappings.length > 0 ? (
+                  <GroupedColumnVisibility
+                    columns={columnConfigs}
+                    onColumnsChange={handleColumnsChange}
+                    onVisitGroupSpansChange={handleVisitGroupSpansChange}
+                  />
+                ) : (
+                  <ColumnVisibilityToggle
+                    columns={columnConfigs}
+                    onColumnsChange={handleColumnsChange}
+                  />
+                )}
+              </>
+            </PasscodeGate>
           )}
           <UploadHistory
             uploads={uploads}
@@ -1280,6 +1288,7 @@ export function PatientsPageClient({ companyId, profileId, initialProtocolId }: 
           {data.length > 0 ? (
               <>
                 {/* Filters */}
+                <div className="no-print">
                 <PatientFilters
                   data={dataWithCalculations}
                   selectedPatientId={selectedPatientId}
@@ -1291,6 +1300,7 @@ export function PatientsPageClient({ companyId, profileId, initialProtocolId }: 
                   onRefIdChange={setSelectedRefId}
                   onSearchChange={setSearchQuery}
                 />
+                </div>
                 
                 <PatientDataTable
                   data={paginatedData}
@@ -1304,7 +1314,7 @@ export function PatientsPageClient({ companyId, profileId, initialProtocolId }: 
                 />
                 
                 {/* Pagination Controls */}
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t">
+                <div className="no-print flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t">
                   <div className="text-xs text-muted-foreground">
                     Showing {startRecord} to {endRecord} of {filteredData.length} patients
                     {filteredData.length !== totalPatients && (
