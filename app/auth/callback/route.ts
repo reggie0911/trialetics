@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const supabase = await createClient()
-    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+    const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
     if (exchangeError) {
       console.error('Code exchange failed:', exchangeError)
@@ -36,6 +36,19 @@ export async function GET(request: NextRequest) {
           request.url
         )
       )
+    }
+
+    // Redirect deactivated users to deactivated page instead of protected
+    if (data?.user && next.startsWith('/protected')) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_active')
+        .eq('user_id', data.user.id)
+        .single()
+
+      if (profile?.is_active === false) {
+        return NextResponse.redirect(new URL('/auth/deactivated', request.url))
+      }
     }
   }
 

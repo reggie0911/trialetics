@@ -21,6 +21,8 @@ export interface UserWithModules {
   role: string;
   is_active: boolean;
   created_at: string | null;
+  deactivated_at: string | null;
+  updated_at: string | null;
   modules: Array<{
     id: string;
     name: string;
@@ -49,23 +51,62 @@ export interface UserStats {
 
 /**
  * Get all users in a company with their module access
+ * Uses service role to bypass RLS and ensure all company users are returned
  */
 export async function getCompanyUsers(
   companyId: string
 ): Promise<ActionResponse<UserWithModules[]>> {
   try {
+    if (!companyId || companyId.trim() === '') {
+      return { success: false, error: 'Company ID is required' };
+    }
+
     const supabase = await createClient();
 
-    console.log('Fetching users for company:', companyId);
-
-    // Fetch all profiles for the company
-    const { data: profiles, error: profilesError } = await supabase
+    // Verify caller is admin for this company
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { success: false, error: 'Unauthorized' };
+    }
+    const { data: callerProfile } = await supabase
       .from('profiles')
-      .select('id, email, first_name, last_name, display_name, role, is_active, created_at')
+      .select('id, company_id, role')
+      .eq('user_id', user.id)
+      .single();
+    if (!callerProfile || callerProfile.company_id !== companyId || callerProfile.role !== 'admin') {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    // Use service role to bypass RLS - ensures all company users are returned
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) {
+      return { success: false, error: 'Server configuration error' };
+    }
+    const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // Fetch all profiles for the company (bypasses RLS)
+    let profilesResult = await adminClient
+      .from('profiles')
+      .select('id, email, first_name, last_name, display_name, role, is_active, created_at, deactivated_at, updated_at')
       .eq('company_id', companyId)
       .order('created_at', { ascending: false });
 
-    console.log('Profiles query result:', { count: profiles?.length, error: profilesError });
+    if (profilesResult.error) {
+      const msg = (profilesResult.error as { message?: string }).message || '';
+      if (/deactivated_at|column.*does not exist/i.test(msg)) {
+        const fallback = await adminClient
+          .from('profiles')
+          .select('id, email, first_name, last_name, display_name, role, is_active, created_at, updated_at')
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: false });
+        profilesResult = fallback as typeof profilesResult;
+      }
+    }
+
+    const { data: profiles, error: profilesError } = profilesResult;
 
     if (profilesError) {
       console.error('Error fetching profiles:', profilesError);
@@ -78,7 +119,7 @@ export async function getCompanyUsers(
 
     // Fetch user_modules for all users in the company
     const profileIds = profiles.map(p => p.id);
-    const { data: userModules, error: modulesError } = await supabase
+    const { data: userModules, error: modulesError } = await adminClient
       .from('user_modules')
       .select('user_id, module_id, modules(id, name)')
       .in('user_id', profileIds);
@@ -111,6 +152,8 @@ export async function getCompanyUsers(
       role: profile.role,
       is_active: profile.is_active,
       created_at: profile.created_at,
+      deactivated_at: profile.deactivated_at ?? null,
+      updated_at: (profile as { updated_at?: string | null }).updated_at ?? null,
       modules: userModulesMap.get(profile.id) || [],
     }));
 
@@ -210,8 +253,29 @@ export async function getCompanyUserStats(
   try {
     const supabase = await createClient();
 
-    // Get all profiles for the company
-    const { data: profiles, error: profilesError } = await supabase
+    // Verify caller is admin for this company
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
+    const { data: callerProfile } = await supabase
+      .from('profiles')
+      .select('company_id, role')
+      .eq('user_id', user.id)
+      .single();
+    if (!callerProfile || callerProfile.company_id !== companyId || callerProfile.role !== 'admin') {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) {
+      return { success: false, error: 'Server configuration error' };
+    }
+    const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    // Get all profiles for the company (bypasses RLS - matches getCompanyUsers)
+    const { data: profiles, error: profilesError } = await adminClient
       .from('profiles')
       .select('id, role, user_id')
       .eq('company_id', companyId);
@@ -222,53 +286,29 @@ export async function getCompanyUserStats(
     }
 
     if (!profiles || profiles.length === 0) {
-      return { 
-        success: true, 
-        data: { totalUsers: 0, adminUsers: 0, pendingInvites: 0 } 
+      return {
+        success: true,
+        data: { totalUsers: 0, adminUsers: 0, pendingInvites: 0 },
       };
     }
 
-    // Count total and admin users
     const totalUsers = profiles.length;
     const adminUsers = profiles.filter(p => p.role === 'admin').length;
 
-    // Get pending invites by checking auth.users for unconfirmed emails
-    // Create admin client to access auth.users table
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
     let pendingInvites = 0;
+    const userIds = profiles.map(p => p.user_id);
 
-    if (supabaseUrl && serviceRoleKey) {
-      try {
-        const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
-          auth: {
-            autoRefreshToken: false,
-            persistSession: false,
-          },
-        });
+    const { data: authUsers, error: authError } = await adminClient.auth.admin.listUsers();
 
-        // Get all user IDs from this company
-        const userIds = profiles.map(p => p.user_id);
-
-        // Query auth.users for unconfirmed users
-        const { data: authUsers, error: authError } = await adminClient.auth.admin.listUsers();
-
-        if (!authError && authUsers?.users) {
-          // Count users who haven't confirmed their email and belong to this company
-          pendingInvites = authUsers.users.filter(user => 
-            userIds.includes(user.id) && !user.email_confirmed_at
-          ).length;
-        }
-      } catch (error) {
-        console.error('Error checking pending invites:', error);
-        // Continue with pendingInvites = 0 rather than failing
-      }
+    if (!authError && authUsers?.users) {
+      pendingInvites = authUsers.users.filter(user =>
+        userIds.includes(user.id) && !user.email_confirmed_at
+      ).length;
     }
 
-    return { 
-      success: true, 
-      data: { totalUsers, adminUsers, pendingInvites } 
+    return {
+      success: true,
+      data: { totalUsers, adminUsers, pendingInvites },
     };
   } catch (error) {
     console.error('Unexpected error:', error);
@@ -467,23 +507,37 @@ export async function updateUserRole(
   try {
     const supabase = await createClient();
 
-    // Verify the user belongs to the same company
-    const { data: targetProfile, error: fetchError } = await supabase
+    // Verify caller is admin for this company
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
+    const { data: callerProfile } = await supabase
+      .from('profiles')
+      .select('company_id, role')
+      .eq('user_id', user.id)
+      .single();
+    if (!callerProfile || callerProfile.company_id !== companyId || callerProfile.role !== 'admin') {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return { success: false, error: 'Server configuration error' };
+    const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const { data: targetProfile, error: fetchError } = await adminClient
       .from('profiles')
       .select('id, company_id')
       .eq('id', userId)
       .single();
 
-    if (fetchError || !targetProfile) {
-      return { success: false, error: 'User not found' };
-    }
-
+    if (fetchError || !targetProfile) return { success: false, error: 'User not found' };
     if (targetProfile.company_id !== companyId) {
       return { success: false, error: 'Cannot update users from other companies' };
     }
 
-    // Update the role
-    const { error: updateError } = await supabase
+    const { error: updateError } = await adminClient
       .from('profiles')
       .update({ role: newRole })
       .eq('id', userId);
@@ -494,7 +548,6 @@ export async function updateUserRole(
     }
 
     revalidatePath('/protected/admin');
-
     return { success: true };
   } catch (error) {
     console.error('Unexpected error:', error);
@@ -517,34 +570,65 @@ export async function toggleUserActiveStatus(
   try {
     const supabase = await createClient();
 
-    // Verify the user belongs to the same company
-    const { data: targetProfile, error: fetchError } = await supabase
+    // Verify caller is admin for this company
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
+    const { data: callerProfile } = await supabase
+      .from('profiles')
+      .select('company_id, role')
+      .eq('user_id', user.id)
+      .single();
+    if (!callerProfile || callerProfile.company_id !== companyId || callerProfile.role !== 'admin') {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return { success: false, error: 'Server configuration error' };
+    const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const { data: targetProfile, error: fetchError } = await adminClient
       .from('profiles')
       .select('id, company_id')
       .eq('id', userId)
       .single();
 
-    if (fetchError || !targetProfile) {
-      return { success: false, error: 'User not found' };
-    }
-
+    if (fetchError || !targetProfile) return { success: false, error: 'User not found' };
     if (targetProfile.company_id !== companyId) {
       return { success: false, error: 'Cannot update users from other companies' };
     }
 
-    // Update the active status
-    const { error: updateError } = await supabase
+    const updatePayload: Record<string, unknown> = { is_active: isActive };
+    if (!isActive) {
+      updatePayload.deactivated_at = new Date().toISOString();
+    } else {
+      updatePayload.deactivated_at = null;
+    }
+
+    const { error: updateError } = await adminClient
       .from('profiles')
-      .update({ is_active: isActive })
+      .update(updatePayload)
       .eq('id', userId);
 
     if (updateError) {
+      const msg = (updateError as { message?: string }).message || String(updateError);
+      if (/deactivated_at|column.*does not exist|does not exist/i.test(msg)) {
+        const { error: fallbackError } = await adminClient
+          .from('profiles')
+          .update({ is_active: isActive })
+          .eq('id', userId);
+        if (!fallbackError) {
+          revalidatePath('/protected/admin');
+          return { success: true };
+        }
+      }
       console.error('Error updating active status:', updateError);
       return { success: false, error: 'Failed to update user status' };
     }
 
     revalidatePath('/protected/admin');
-
     return { success: true };
   } catch (error) {
     console.error('Unexpected error:', error);
@@ -567,34 +651,46 @@ export async function removeUserFromCompany(
   try {
     const supabase = await createClient();
 
-    // Verify the user belongs to the same company
-    const { data: targetProfile, error: fetchError } = await supabase
+    // Verify caller is admin for this company
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { success: false, error: 'Unauthorized' };
+    const { data: callerProfile } = await supabase
+      .from('profiles')
+      .select('company_id, role')
+      .eq('user_id', user.id)
+      .single();
+    if (!callerProfile || callerProfile.company_id !== companyId || callerProfile.role !== 'admin') {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !serviceRoleKey) return { success: false, error: 'Server configuration error' };
+    const adminClient = createAdminClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const { data: targetProfile, error: fetchError } = await adminClient
       .from('profiles')
       .select('id, company_id')
       .eq('id', userId)
       .single();
 
-    if (fetchError || !targetProfile) {
-      return { success: false, error: 'User not found' };
-    }
-
+    if (fetchError || !targetProfile) return { success: false, error: 'User not found' };
     if (targetProfile.company_id !== companyId) {
       return { success: false, error: 'Cannot remove users from other companies' };
     }
 
-    // Remove all user_modules entries
-    const { error: modulesError } = await supabase
+    const { error: modulesError } = await adminClient
       .from('user_modules')
       .delete()
       .eq('user_id', userId);
 
     if (modulesError) {
       console.error('Error removing user modules:', modulesError);
-      // Continue anyway
     }
 
-    // Set company_id to NULL (removes from company without deleting profile)
-    const { error: updateError } = await supabase
+    const { error: updateError } = await adminClient
       .from('profiles')
       .update({ company_id: null, role: 'user' })
       .eq('id', userId);
@@ -605,7 +701,6 @@ export async function removeUserFromCompany(
     }
 
     revalidatePath('/protected/admin');
-
     return { success: true };
   } catch (error) {
     console.error('Unexpected error:', error);

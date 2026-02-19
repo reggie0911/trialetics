@@ -61,6 +61,27 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Block deactivated users from accessing protected routes
+  const isProtectedRoute = request.nextUrl.pathname === '/protected' || request.nextUrl.pathname.startsWith('/protected/')
+  const isDeactivatedPage = request.nextUrl.pathname === '/auth/deactivated'
+
+  if (user && isProtectedRoute && !isDeactivatedPage) {
+    const userId = (user as { sub?: string })?.sub
+    if (userId) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_active')
+        .eq('user_id', userId)
+        .single()
+
+      if (profile && profile.is_active === false) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/auth/deactivated'
+        return NextResponse.redirect(url)
+      }
+    }
+  }
+
   // IMPORTANT: You *must* return the supabaseResponse object as it is.
   // If you're creating a new response object with NextResponse.next() make sure to:
   // 1. Pass the request in it, like so:

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Users, Shield, User, Trash2, MoreHorizontal, Loader2, Ban, CheckCircle } from 'lucide-react';
+import { Users, Shield, User, MoreHorizontal, Loader2, Ban, CheckCircle } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -23,21 +23,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { UserWithModules, updateUserRole, removeUserFromCompany, toggleUserActiveStatus } from '@/lib/actions/admin';
+import { UserWithModules, updateUserRole, toggleUserActiveStatus } from '@/lib/actions/admin';
 
 interface UsersTableProps {
   users: UserWithModules[];
@@ -54,7 +43,6 @@ export function UsersTable({
 }: UsersTableProps) {
   const { toast } = useToast();
   const [loadingUserId, setLoadingUserId] = useState<string | null>(null);
-  const [confirmRemove, setConfirmRemove] = useState<UserWithModules | null>(null);
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '-';
@@ -151,37 +139,6 @@ export function UsersTable({
     }
   };
 
-  const handleRemoveUser = async (user: UserWithModules) => {
-    setConfirmRemove(null);
-    setLoadingUserId(user.id);
-
-    try {
-      const result = await removeUserFromCompany(user.id, companyId);
-
-      if (result.success) {
-        toast({
-          title: 'User removed',
-          description: `${getUserDisplayName(user)} has been removed from the company`,
-        });
-        onRefresh();
-      } else {
-        toast({
-          title: 'Failed to remove user',
-          description: result.error || 'An unexpected error occurred',
-          variant: 'destructive',
-        });
-      }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'An unexpected error occurred',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoadingUserId(null);
-    }
-  };
-
   return (
     <>
       <Card>
@@ -190,34 +147,35 @@ export function UsersTable({
             <Users className="h-5 w-5" />
             Company Users
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs">
             {users.length} {users.length === 1 ? 'user' : 'users'} in your company
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border">
-            <Table>
+            <Table className="text-xs">
               <TableHeader>
                 <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Active Status</TableHead>
-                  <TableHead>Joined</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
+                  <TableHead className="text-xs">User</TableHead>
+                  <TableHead className="text-xs">Email</TableHead>
+                  <TableHead className="text-xs">Role</TableHead>
+                  <TableHead className="text-xs">Active Status</TableHead>
+                  <TableHead className="text-xs">Joined</TableHead>
+                  <TableHead className="text-xs">Deactivated</TableHead>
+                  <TableHead className="w-[50px] text-xs"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground text-xs">
                       No users found
                     </TableCell>
                   </TableRow>
                 ) : (
                   users.map(user => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium text-xs">
                         <div className="flex items-center gap-2">
                           {user.role === 'admin' ? (
                             <Shield className="h-4 w-4 text-amber-500" />
@@ -232,31 +190,37 @@ export function UsersTable({
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="text-muted-foreground text-xs">
                         {user.email || '-'}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-xs">
                         <Badge
                           variant={user.role === 'admin' ? 'default' : 'secondary'}
+                          className="text-xs"
                         >
-                          {user.role}
+                          {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-xs">
                         {user.is_active ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800">
+                          <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 text-xs">
                             Active
                           </Badge>
                         ) : (
-                          <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700">
+                          <Badge className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-slate-200 dark:border-slate-700 text-xs">
                             Inactive
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
+                      <TableCell className="text-muted-foreground text-xs">
                         {formatDate(user.created_at)}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        {user.is_active
+                          ? '-'
+                          : formatDate(user.deactivated_at ?? user.updated_at)}
+                      </TableCell>
+                      <TableCell className="text-xs">
                         {loadingUserId === user.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : user.id !== currentUserId ? (
@@ -295,14 +259,6 @@ export function UsersTable({
                                   Activate User
                                 </DropdownMenuItem>
                               )}
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => setConfirmRemove(user)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Remove from Company
-                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         ) : null}
@@ -315,29 +271,6 @@ export function UsersTable({
           </div>
         </CardContent>
       </Card>
-
-      {/* Confirmation Dialog */}
-      <AlertDialog open={!!confirmRemove} onOpenChange={() => setConfirmRemove(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove User from Company?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will remove <strong>{confirmRemove && getUserDisplayName(confirmRemove)}</strong> from 
-              your company and revoke all their module access. They will no longer be able to access 
-              company data. This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => confirmRemove && handleRemoveUser(confirmRemove)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Remove User
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

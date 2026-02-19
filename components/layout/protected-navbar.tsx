@@ -130,9 +130,9 @@ export function ProtectedNavbar() {
           <div className="flex items-center gap-6">
             <DropdownMenu>
               <DropdownMenuTrigger className="cursor-pointer outline-none" suppressHydrationWarning>
-                <Avatar className="h-8 w-8">
+                <Avatar className="h-8 w-8" suppressHydrationWarning>
                   {avatarUrl && <AvatarImage src={avatarUrl} alt="User" />}
-                  <AvatarFallback>
+                  <AvatarFallback suppressHydrationWarning>
                     <Settings className="h-4 w-4" />
                   </AvatarFallback>
                 </Avatar>

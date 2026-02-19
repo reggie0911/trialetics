@@ -3142,6 +3142,7 @@ export type Database = {
           created_at: string | null
           created_by_id: string | null
           creator_email: string | null
+          deactivated_at: string | null
           display_name: string | null
           email: string | null
           first_name: string | null
@@ -3163,6 +3164,7 @@ export type Database = {
           created_at?: string | null
           created_by_id?: string | null
           creator_email?: string | null
+          deactivated_at?: string | null
           display_name?: string | null
           email?: string | null
           first_name?: string | null
@@ -3184,6 +3186,7 @@ export type Database = {
           created_at?: string | null
           created_by_id?: string | null
           creator_email?: string | null
+          deactivated_at?: string | null
           display_name?: string | null
           email?: string | null
           first_name?: string | null
