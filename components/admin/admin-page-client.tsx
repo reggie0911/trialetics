@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { UsersTable } from './users-table';
 import { InviteUserForm } from './invite-user-form';
-import { ModulesList } from './modules-list';
 import { UserStatsCards } from './user-stats-cards';
 import {
   getCompanyUsers,
@@ -157,8 +156,6 @@ export function AdminPageClient({
             modules={modules}
             onSuccess={handleRefresh}
           />
-          
-          <ModulesList modules={modules} />
         </div>
       </div>
     </div>

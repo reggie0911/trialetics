@@ -167,7 +167,8 @@ export function AEPageClient({
         profileId,
         fileName,
         newData,
-        columnConfigs
+        columnConfigs,
+        protocolId
       );
 
       if (result.success && result.data) {

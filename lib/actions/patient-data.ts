@@ -23,7 +23,8 @@ export async function uploadPatientData(
   companyId: string,
   fileName: string,
   patientRecords: PatientRecord[],
-  columnConfigs: ColumnConfig[]
+  columnConfigs: ColumnConfig[],
+  protocolId?: string | null
 ): Promise<ActionResponse<{ uploadId: string }>> {
   try {
     const supabase = await createClient();
@@ -52,6 +53,7 @@ export async function uploadPatientData(
       row_count: patientRecords.length,
       column_count: columnConfigs.length,
       filter_preferences: {},
+      protocol_id: protocolId || null,
     };
 
     const { data: upload, error: uploadError } = await supabase

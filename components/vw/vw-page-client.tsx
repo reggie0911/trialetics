@@ -196,7 +196,8 @@ export function VWPageClient({ companyId, profileId, initialProtocolId, isAdmin 
         profileId,
         fileName,
         newData,
-        columnConfigs
+        columnConfigs,
+        protocolId
       );
 
       if (result.success && result.data) {

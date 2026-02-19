@@ -154,42 +154,26 @@ export async function getSDVReports(
 ): Promise<SDVReport[]> {
   const supabase = await createClient();
 
-  if (protocolId) {
-    // Filter reports by protocol: include reports where site or SDV upload has this protocol_id
-    const { data: uploads } = await supabase
-      .from('sdv_uploads')
-      .select('id')
-      .eq('company_id', companyId)
-      .eq('protocol_id', protocolId);
-    const uploadIds = (uploads || []).map((u) => u.id);
-    if (uploadIds.length === 0) {
-      return [];
-    }
-    const orFilter = [
-      `site_data_upload_id.in.(${uploadIds.join(',')})`,
-      `sdv_data_upload_id.in.(${uploadIds.join(',')})`,
-    ].join(',');
-    const { data, error } = await supabase
-      .from('sdv_reports')
-      .select('*')
-      .eq('company_id', companyId)
-      .or(orFilter)
-      .order('created_at', { ascending: false });
-    if (error) {
-      console.error('Error fetching SDV reports:', error);
-      return [];
-    }
-    return data || [];
+  // Debug: Check if we have a valid session
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    console.error('[getSDVReports] No authenticated user:', authError?.message);
+    return [];
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('sdv_reports')
     .select('*')
-    .eq('company_id', companyId)
-    .order('created_at', { ascending: false });
+    .eq('company_id', companyId);
+
+  if (protocolId) {
+    query = query.eq('protocol_id', protocolId);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error fetching SDV reports:', error);
+    console.error('[getSDVReports] Error fetching reports:', error);
     return [];
   }
 
@@ -217,7 +201,8 @@ export async function createSDVReport(
   companyId: string,
   profileId: string,
   name: string,
-  description?: string
+  description?: string,
+  protocolId?: string | null
 ): Promise<{ data: SDVReport | null; error: string | null }> {
   const supabase = await createClient();
   
@@ -228,7 +213,8 @@ export async function createSDVReport(
       profile_id: profileId,
       name,
       description: description || null,
-      status: 'draft'
+      status: 'draft',
+      protocol_id: protocolId || null,
     })
     .select()
     .single();
@@ -310,7 +296,8 @@ export async function createSDVUpload(
   profileId: string,
   reportId: string,
   fileType: 'site_data_entry' | 'sdv_data',
-  fileName: string
+  fileName: string,
+  protocolId?: string | null
 ): Promise<{ data: SDVUpload | null; error: string | null }> {
   const supabase = await createClient();
   
@@ -323,7 +310,8 @@ export async function createSDVUpload(
       file_type: fileType,
       file_name: fileName,
       status: 'processing',
-      record_count: 0
+      record_count: 0,
+      protocol_id: protocolId || null,
     })
     .select()
     .single();

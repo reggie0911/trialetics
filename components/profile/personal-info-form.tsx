@@ -15,7 +15,6 @@ interface PersonalInfoFormProps {
 interface ProfileFormData {
   firstName: string;
   lastName: string;
-  displayName: string;
   jobTitle: string;
   phone: string;
   avatarUrl: string;
@@ -35,7 +34,6 @@ export function PersonalInfoForm({ onSuccess }: PersonalInfoFormProps) {
   const [formData, setFormData] = useState<ProfileFormData>({
     firstName: '',
     lastName: '',
-    displayName: '',
     jobTitle: '',
     phone: '',
     avatarUrl: '',
@@ -69,7 +67,6 @@ export function PersonalInfoForm({ onSuccess }: PersonalInfoFormProps) {
         setFormData({
           firstName: profile.first_name || '',
           lastName: profile.last_name || '',
-          displayName: profile.display_name || '',
           jobTitle: profile.job_title || '',
           phone: formatPhoneNumber(profile.phone || ''),
           avatarUrl: profile.avatar_url || '',
@@ -95,10 +92,6 @@ export function PersonalInfoForm({ onSuccess }: PersonalInfoFormProps) {
       newErrors.lastName = 'Last name is required';
     } else if (formData.lastName.length > 50) {
       newErrors.lastName = 'Last name must be 50 characters or less';
-    }
-
-    if (formData.displayName && formData.displayName.length > 50) {
-      newErrors.displayName = 'Display name must be 50 characters or less';
     }
 
     if (formData.jobTitle && formData.jobTitle.length > 100) {
@@ -129,7 +122,7 @@ export function PersonalInfoForm({ onSuccess }: PersonalInfoFormProps) {
         .update({
           first_name: formData.firstName,
           last_name: formData.lastName,
-          display_name: formData.displayName || null,
+          display_name: formData.firstName || null,
           job_title: formData.jobTitle || null,
           phone: formData.phone || null,
           avatar_url: formData.avatarUrl || null,
@@ -156,7 +149,7 @@ export function PersonalInfoForm({ onSuccess }: PersonalInfoFormProps) {
       processedValue = formatPhoneNumber(value);
     }
     // Capitalize first letter for name fields
-    else if (field === 'firstName' || field === 'lastName' || field === 'displayName' || field === 'jobTitle') {
+    else if (field === 'firstName' || field === 'lastName' || field === 'jobTitle') {
       processedValue = capitalizeFirstLetter(value);
     }
     
@@ -226,21 +219,6 @@ export function PersonalInfoForm({ onSuccess }: PersonalInfoFormProps) {
             <p className="text-sm text-destructive">{errors.lastName}</p>
           )}
         </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="displayName">Display Name</Label>
-        <Input
-          id="displayName"
-          value={formData.displayName}
-          onChange={(e) => handleChange('displayName', e.target.value)}
-          placeholder="How your name appears in the UI"
-          disabled={saving}
-          aria-invalid={!!errors.displayName}
-        />
-        {errors.displayName && (
-          <p className="text-sm text-destructive">{errors.displayName}</p>
-        )}
       </div>
 
       <div className="space-y-2">

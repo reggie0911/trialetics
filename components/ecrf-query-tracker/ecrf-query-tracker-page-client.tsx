@@ -291,7 +291,8 @@ export function ECRFQueryTrackerPageClient({
         profileId,
         fileName,
         newData,
-        columnConfigs
+        columnConfigs,
+        protocolId
       );
 
       if (result.success && result.data) {

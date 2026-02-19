@@ -5,7 +5,6 @@ import { Loader2, Puzzle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { type ModuleWithUserCount } from '@/lib/actions/admin';
-import Link from 'next/link';
 
 interface OnboardingStepModulesProps {
   modules: ModuleWithUserCount[];
@@ -33,7 +32,7 @@ export function OnboardingStepModules({ modules, onComplete }: OnboardingStepMod
           Module Configuration
         </CardTitle>
         <CardDescription>
-          Review your available modules. You can configure module access for users in the Admin panel.
+          Review the modules available to your organization.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -68,9 +67,6 @@ export function OnboardingStepModules({ modules, onComplete }: OnboardingStepMod
             ) : (
               'Complete Setup'
             )}
-          </Button>
-          <Button variant="link" asChild className="text-[12px]">
-            <Link href="/protected/admin">Manage modules in Admin panel</Link>
           </Button>
         </div>
       </CardContent>

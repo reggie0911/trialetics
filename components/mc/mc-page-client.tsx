@@ -213,7 +213,8 @@ export function MCPageClient({ companyId, profileId, initialProtocolId, isAdmin 
         profileId,
         fileName,
         newData,
-        columnConfigs
+        columnConfigs,
+        protocolId
       );
 
       if (result.success && result.data) {

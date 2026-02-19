@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { SDVUploadWizardV2 } from './sdv-upload-wizard-v2';
 import { SDVReportSelector } from './sdv-report-selector';
 import { SDVKPICards } from './sdv-kpi-cards';
@@ -25,11 +25,13 @@ import {
   type SDVSiteSummary,
   type SDVFilterOptions,
 } from '@/lib/actions/sdv-tracker';
+import { computeAggregationsFromSiteSummary } from '@/lib/utils/sdv-aggregations';
 
 interface SDVTrackerPageProps {
   companyId: string;
   profileId: string;
   initialProtocolId?: string | null;
+  initialReports?: SDVReport[];
   isAdmin?: boolean;
 }
 
@@ -37,10 +39,11 @@ export function SDVTrackerPage({
   companyId,
   profileId,
   initialProtocolId,
+  initialReports = [],
   isAdmin = false,
 }: SDVTrackerPageProps) {
   // Report state
-  const [reports, setReports] = useState<SDVReport[]>([]);
+  const [reports, setReports] = useState<SDVReport[]>(initialReports);
   const [protocolId, setProtocolId] = useState<string | null>(initialProtocolId ?? null);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [selectedReport, setSelectedReport] = useState<SDVReport | null>(null);
@@ -57,6 +60,7 @@ export function SDVTrackerPage({
   });
 
   // Loading state
+  const [isLoadingReports, setIsLoadingReports] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -74,14 +78,23 @@ export function SDVTrackerPage({
   const hasSDVData = selectedReport?.sdv_data_upload_id != null;
   const hasData = selectedReport?.status === 'complete';
 
-  // Fetch reports
+  // Keep a ref so fetchReports can read the latest selectedReportId without
+  // being in the dependency array (avoids re-running the fetch on every selection)
+  const selectedReportIdRef = useRef<string | null>(selectedReportId);
+  useEffect(() => {
+    selectedReportIdRef.current = selectedReportId;
+  }, [selectedReportId]);
+
+  // Fetch reports — depends only on companyId / protocolId so it does NOT
+  // re-fire every time a report is selected (which previously could clear `reports`).
   const fetchReports = useCallback(async () => {
+    setIsLoadingReports(true);
     try {
       const reportsData = await getSDVReports(companyId, protocolId);
       setReports(reportsData);
       
-      // Auto-select the first complete report, or first draft, or null
-      if (reportsData.length > 0 && !selectedReportId) {
+      // Auto-select the first complete report if nothing is selected yet
+      if (reportsData.length > 0 && !selectedReportIdRef.current) {
         const completeReport = reportsData.find(r => r.status === 'complete');
         const firstReport = completeReport || reportsData[0];
         setSelectedReportId(firstReport.id);
@@ -89,8 +102,10 @@ export function SDVTrackerPage({
       }
     } catch (error) {
       console.error('Error fetching SDV reports:', error);
+    } finally {
+      setIsLoadingReports(false);
     }
-  }, [companyId, protocolId, selectedReportId]);
+  }, [companyId, protocolId]); // selectedReportId intentionally excluded — use ref instead
 
   // Fetch data for selected report
   const fetchReportData = useCallback(async (reportId: string) => {
@@ -114,7 +129,16 @@ export function SDVTrackerPage({
           getSDVFilterOptions(reportId),
         ]);
 
-        setAggregations(agg);
+        // Fallback: if aggregations RPC fails but site summary has data, compute KPIs from sites.
+        // Only accurate when no site/subject/event/form filters (site summary doesn't apply those).
+        const filteredSites =
+          filters.site && sites?.length
+            ? sites.filter((s) => s.site_name === filters.site)
+            : sites;
+        const effectiveAgg =
+          agg ??
+          (filteredSites?.length ? computeAggregationsFromSiteSummary(filteredSites) : null);
+        setAggregations(effectiveAgg);
         setSiteSummary(sites);
         setFilterOptions(options);
       } else {
@@ -153,7 +177,14 @@ export function SDVTrackerPage({
         getSDVSiteSummary(selectedReportId, filters.source || undefined),
       ]);
 
-      setAggregations(agg);
+      const filteredSites =
+        filters.site && sites?.length
+          ? sites.filter((s) => s.site_name === filters.site)
+          : sites;
+      const effectiveAgg =
+        agg ??
+        (filteredSites?.length ? computeAggregationsFromSiteSummary(filteredSites) : null);
+      setAggregations(effectiveAgg);
       setSiteSummary(sites);
     } catch (error) {
       console.error('Error refreshing SDV data:', error);
@@ -162,10 +193,31 @@ export function SDVTrackerPage({
     }
   }, [selectedReportId, filters, hasData]);
 
-  // Initial load and when protocol changes - fetch reports
+  // Initial load - don't fetch if we already have initialReports, just use them
   useEffect(() => {
-    fetchReports();
-  }, [fetchReports]);
+    if (initialReports.length > 0) {
+      // We already have reports from the server, skip the fetch
+      setIsLoadingReports(false);
+      
+      // Auto-select first report
+      if (!selectedReportIdRef.current) {
+        const completeReport = initialReports.find(r => r.status === 'complete');
+        const firstReport = completeReport || initialReports[0];
+        setSelectedReportId(firstReport.id);
+        setSelectedReport(firstReport);
+      }
+    } else {
+      // No initial reports, fetch them
+      fetchReports();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Re-fetch when protocol changes (but not on mount if we have initialReports)
+  useEffect(() => {
+    if (protocolId !== initialProtocolId) {
+      fetchReports();
+    }
+  }, [protocolId, initialProtocolId, fetchReports]);
 
   // Fetch data when report selection changes
   useEffect(() => {
@@ -220,7 +272,7 @@ export function SDVTrackerPage({
 
   // Handle create report
   const handleCreateReport = useCallback(async (name: string, description?: string): Promise<SDVReport | null> => {
-    const { data, error } = await createSDVReport(companyId, profileId, name, description);
+    const { data, error } = await createSDVReport(companyId, profileId, name, description, protocolId);
     if (error || !data) {
       console.error('Error creating report:', error);
       return null;
@@ -335,13 +387,22 @@ export function SDVTrackerPage({
       {!selectedReportId && reports.length === 0 && (
         <Card className="border-dashed">
           <CardHeader className="text-center">
-            <CardTitle className="flex items-center justify-center gap-2 text-muted-foreground">
-              <FileSpreadsheet className="h-6 w-6" />
-              No Reports Yet
-            </CardTitle>
-            <CardDescription>
-              Create your first SDV report to start uploading and analyzing data.
-            </CardDescription>
+            {isLoadingReports ? (
+              <CardTitle className="flex items-center justify-center gap-2 text-muted-foreground">
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Loading reports...
+              </CardTitle>
+            ) : (
+              <>
+                <CardTitle className="flex items-center justify-center gap-2 text-muted-foreground">
+                  <FileSpreadsheet className="h-6 w-6" />
+                  No Reports Yet
+                </CardTitle>
+                <CardDescription>
+                  Create your first SDV report to start uploading and analyzing data.
+                </CardDescription>
+              </>
+            )}
           </CardHeader>
         </Card>
       )}
@@ -393,6 +454,7 @@ export function SDVTrackerPage({
               hasSiteData={hasSiteData}
               hasSDVData={hasSDVData}
               onUploadComplete={handleUploadComplete}
+              protocolId={protocolId}
             />
           </CardContent>
         </Card>

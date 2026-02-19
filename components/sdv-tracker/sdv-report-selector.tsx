@@ -149,7 +149,7 @@ export function SDVReportSelector({
         ) : (
           <>
             <Select
-              value={selectedReportId || undefined}
+              value={selectedReportId ?? ""}
               onValueChange={(value) => onReportSelect(value)}
             >
               <SelectTrigger className="w-[280px] h-9">

@@ -137,7 +137,8 @@ export async function uploadMCData(
     columnId: string;
     label: string;
     tableOrder: number;
-  }>
+  }>,
+  protocolId?: string | null
 ): Promise<ActionResponse<string>> {
   try {
     const supabase = await createClient();
@@ -150,6 +151,7 @@ export async function uploadMCData(
       row_count: records.length,
       column_count: columnConfigs.length,
       filter_preferences: {},
+      protocol_id: protocolId || null,
     };
 
     const { data: uploadData, error: uploadError } = await supabase

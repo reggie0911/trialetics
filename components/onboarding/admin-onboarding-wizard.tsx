@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { OnboardingStepCompany } from './onboarding-step-company';
 import { OnboardingStepProject } from './onboarding-step-project';
 import { OnboardingStepInvite } from './onboarding-step-invite';
-import { OnboardingStepModules } from './onboarding-step-modules';
+import { OnboardingStepPersonalInfo } from './onboarding-step-personal-info';
 import { completeOnboarding, skipOnboarding } from '@/lib/actions/onboarding';
 import { getActiveModules, type ModuleWithUserCount } from '@/lib/actions/admin';
 import { useToast } from '@/hooks/use-toast';
@@ -16,7 +16,7 @@ const STEPS = [
   { id: 1, title: 'Company Setup' },
   { id: 2, title: 'First Project' },
   { id: 3, title: 'Invite Team' },
-  { id: 4, title: 'Modules' },
+  { id: 4, title: 'Personal Information' },
 ];
 
 interface AdminOnboardingWizardProps {
@@ -127,10 +127,7 @@ export function AdminOnboardingWizard({
       )}
 
       {step === 4 && (
-        <OnboardingStepModules
-          modules={modules}
-          onComplete={handleComplete}
-        />
+        <OnboardingStepPersonalInfo onComplete={handleComplete} />
       )}
 
       {/* Skip all */}

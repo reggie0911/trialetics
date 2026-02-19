@@ -70,10 +70,7 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
       <main className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 py-4 sm:py-8">
         {/* Welcome Message */}
         <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <Greeting 
-            firstName={profile?.first_name} 
-            displayName={profile?.display_name}
-          />
+          <Greeting firstName={profile?.first_name} />
           <Suspense fallback={<div className="h-10" />}>
             <ModuleNavbar />
           </Suspense>

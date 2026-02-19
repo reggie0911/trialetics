@@ -4,10 +4,9 @@ import { useEffect, useState } from 'react';
 
 interface GreetingProps {
   firstName?: string | null;
-  displayName?: string | null;
 }
 
-export function Greeting({ firstName, displayName }: GreetingProps) {
+export function Greeting({ firstName }: GreetingProps) {
   const [greeting, setGreeting] = useState('');
 
   useEffect(() => {
@@ -23,8 +22,8 @@ export function Greeting({ firstName, displayName }: GreetingProps) {
     setGreeting(greetingText);
   }, []);
 
-  // Use display name if provided, otherwise use first name
-  const nameToDisplay = displayName || firstName;
+  // First name is used as the display name
+  const nameToDisplay = firstName;
 
   return (
     <div className="flex items-center gap-3">

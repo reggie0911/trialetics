@@ -3,6 +3,7 @@ import { ProtectedNavbar } from '@/components/layout/protected-navbar';
 import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { SDVTrackerPage } from '@/components/sdv-tracker/sdv-tracker-page';
 import { createClient } from '@/lib/server';
+import { getSDVReports } from '@/lib/actions/sdv-tracker';
 
 export default async function SDVTrackerPageRoute({
   params,
@@ -33,6 +34,9 @@ export default async function SDVTrackerPageRoute({
     redirect('/auth/login');
   }
 
+  // Fetch reports on the server to ensure we have a valid session
+  const initialReports = await getSDVReports(profile.company_id || '', protocolId);
+
   return (
     <div className="min-h-screen bg-[#E9E9E9]">
       <ProtectedNavbar />
@@ -57,6 +61,7 @@ export default async function SDVTrackerPageRoute({
           companyId={profile.company_id || ""}
           profileId={profile.id}
           initialProtocolId={protocolId}
+          initialReports={initialReports}
           isAdmin={profile.role === "admin"}
         />
       </main>

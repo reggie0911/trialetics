@@ -6,13 +6,9 @@ type Profile = Tables<'profiles'>;
 type ProfileWithCompany = Tables<'profiles'> & {
   companies: Tables<'companies'> | null;
 };
-type UserProjectWithDetails = Tables<'user_projects'> & {
-  projects: Tables<'projects'> | null;
-};
 type UserModuleWithDetails = Tables<'user_modules'> & {
   modules: Tables<'modules'> | null;
 };
-type Project = Tables<'projects'>;
 
 /**
  * Get a user's profile by their auth user ID
@@ -43,12 +39,11 @@ export async function getProfileById(profileId: string) {
 }
 
 /**
- * Get all projects assigned to a user
+ * Get all protocols assigned to a user
  */
 export async function getUserProtocols(userId: string) {
   const supabase = await createClient();
   
-  // First get the profile ID from user_id
   const { data: profile } = await supabase
     .from('profiles')
     .select('id')
@@ -60,11 +55,11 @@ export async function getUserProtocols(userId: string) {
   }
 
   const { data, error } = await supabase
-    .from('user_projects')
-    .select('*, projects(*)')
+    .from('user_protocol_assignments')
+    .select('*, clinical_protocols(*)')
     .eq('user_id', profile.id);
 
-  return { data: data as UserProjectWithDetails[] | null, error };
+  return { data, error };
 }
 
 /**
@@ -106,17 +101,17 @@ export async function getCompanyProfiles(companyId: string) {
 }
 
 /**
- * Get all projects for a company
+ * Get all protocols for a company
  */
 export async function getCompanyProtocols(companyId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
-    .from('projects')
+    .from('clinical_protocols')
     .select('*')
     .eq('company_id', companyId)
     .order('created_at', { ascending: false });
 
-  return { data: data as Project[] | null, error };
+  return { data, error };
 }
 
 /**

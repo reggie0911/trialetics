@@ -503,7 +503,8 @@ export function PatientsPageClient({
         companyId,
         fileName,
         filteredData,
-        newConfigs
+        newConfigs,
+        protocolId
       );
       
       if (result.success && result.data) {

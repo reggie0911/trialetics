@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
@@ -12,6 +13,9 @@ import {
   navigationMenuTriggerStyle,
 } from "@/components/ui/navigation-menu";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/client";
+
+const CTMS_DISABLED_COMPANY_ID = "397cadc7-e336-4497-ae17-6ec178de33c1";
 
 const menuItems = [
   {
@@ -53,6 +57,27 @@ const menuItems = [
 export function ModuleNavbar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [companyId, setCompanyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadCompanyId = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("company_id")
+        .eq("user_id", user.id)
+        .single();
+      if (profile?.company_id) setCompanyId(profile.company_id);
+    };
+    loadCompanyId();
+  }, []);
+
+  const hideCtms = companyId === CTMS_DISABLED_COMPANY_ID;
+  const visibleMenuItems = hideCtms
+    ? menuItems.filter((item) => !(item.type === "dropdown" && item.trigger === "CTMS"))
+    : menuItems;
 
   const getHrefWithParams = (href: string) => {
     const protocolId =
@@ -96,7 +121,7 @@ export function ModuleNavbar() {
   return (
     <NavigationMenu viewport={false} className="w-auto">
       <NavigationMenuList className="flex-col sm:flex-row gap-2">
-        {menuItems.map((item, index) =>
+        {visibleMenuItems.map((item, index) =>
           item.type === "dropdown" ? (
             <NavigationMenuItem key={index}>
               <NavigationMenuTrigger

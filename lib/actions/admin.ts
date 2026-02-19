@@ -310,12 +310,19 @@ export async function inviteUser(
       },
     });
 
-    // Check if user with this email already exists
-    const { data: existingUser } = await adminClient.auth.admin.listUsers();
-    const userExists = existingUser?.users?.some(u => u.email === email);
+    const supabase = await createClient();
 
-    if (userExists) {
-      return { success: false, error: 'A user with this email already exists' };
+    // Check if user is already in this organization (profiles table)
+    const emailNorm = email.trim().toLowerCase();
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('company_id', companyId)
+      .ilike('email', emailNorm)
+      .maybeSingle();
+
+    if (existingProfile) {
+      return { success: false, error: 'A user with this email is already in your organization' };
     }
 
     // Invite user via Supabase Auth
@@ -331,7 +338,15 @@ export async function inviteUser(
 
     if (inviteError) {
       console.error('Error inviting user:', inviteError);
-      return { success: false, error: inviteError.message || 'Failed to send invitation' };
+      const msg = inviteError.message || 'Failed to send invitation';
+      // Surface common Supabase errors in a user-friendly way
+      if (msg.includes('already been registered') || msg.includes('already exists') || msg.includes('23505') || msg.includes('duplicate key')) {
+        return { success: false, error: 'A user with this email address already has an account. They can sign in or use password reset.' };
+      }
+      if (msg.includes('is invalid') && email.includes('+')) {
+        return { success: false, error: 'Email addresses with a plus sign (+) are not supported. Please use the base email (e.g., greg@syncoresearch.com) or another address.' };
+      }
+      return { success: false, error: msg };
     }
 
     if (!inviteData?.user) {
@@ -341,7 +356,6 @@ export async function inviteUser(
     const newUserId = inviteData.user.id;
 
     // Wait for trigger to create profile (with retries)
-    const supabase = await createClient();
     let profileData = null;
     let retries = 5;
     
@@ -428,11 +442,13 @@ export async function inviteUser(
     }
 
     revalidatePath('/protected/admin');
+    revalidatePath('/protected/onboarding');
 
     return { success: true, data: { userId: newUserId } };
   } catch (error) {
     console.error('Unexpected error inviting user:', error);
-    return { success: false, error: 'Unexpected error sending invitation' };
+    const msg = error instanceof Error ? error.message : 'Unexpected error sending invitation';
+    return { success: false, error: msg };
   }
 }
 
