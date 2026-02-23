@@ -12,7 +12,13 @@ import { getToolHandler } from './tool-registry';
 import { agentRegistry, findAgentForPage } from './agents';
 import { createSSEStream } from './stream';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let _openai: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!_openai) {
+    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return _openai;
+}
 
 const FALLBACK_AGENT_ID = 'dashboard-narrator';
 
@@ -77,7 +83,7 @@ async function* runAgent(
   const MAX_TOOL_ROUNDS = 5;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const stream = await openai.chat.completions.create({
+    const stream = await getOpenAI().chat.completions.create({
       model: agent.model ?? 'gpt-4o',
       messages,
       tools: tools.length > 0 ? tools : undefined,
