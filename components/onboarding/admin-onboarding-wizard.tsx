@@ -19,18 +19,29 @@ const STEPS = [
   { id: 4, title: 'Personal Information' },
 ];
 
+interface InitialProject {
+  protocolName: string;
+  protocolNumber: string;
+  trialPhase: string;
+  protocolStatus: string;
+}
+
 interface AdminOnboardingWizardProps {
   companyId: string;
   profileId: string;
+  companyName?: string | null;
   companyLogoUrl?: string | null;
   userEmail: string;
+  initialProject?: InitialProject | null;
 }
 
 export function AdminOnboardingWizard({
   companyId,
   profileId,
+  companyName,
   companyLogoUrl,
   userEmail,
+  initialProject,
 }: AdminOnboardingWizardProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -103,7 +114,7 @@ export function AdminOnboardingWizard({
         <OnboardingStepCompany
           companyId={companyId}
           profileId={profileId}
-          initialName=""
+          initialName={companyName ?? ''}
           initialLogoUrl={companyLogoUrl}
           onSaved={() => setStep(2)}
         />
@@ -111,6 +122,7 @@ export function AdminOnboardingWizard({
 
       {step === 2 && (
         <OnboardingStepProject
+          initialProject={initialProject}
           onCreated={() => setStep(3)}
           onSkip={() => setStep(3)}
         />
@@ -130,12 +142,14 @@ export function AdminOnboardingWizard({
         <OnboardingStepPersonalInfo onComplete={handleComplete} />
       )}
 
-      {/* Skip all */}
-      <div className="flex justify-center pt-4">
-        <Button variant="ghost" size="sm" onClick={handleSkipAll} className="text-[12px]">
-          Skip all
-        </Button>
-      </div>
+      {/* Skip and go to study setup - hidden on step 1 */}
+      {step !== 1 && (
+        <div className="flex justify-center pt-4">
+          <Button variant="ghost" size="sm" onClick={handleSkipAll} className="text-[12px]">
+            Skip and Go to Study Setup
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

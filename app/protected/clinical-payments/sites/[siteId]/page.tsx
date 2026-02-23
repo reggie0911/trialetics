@@ -4,14 +4,14 @@ import { ProtectedNavbar } from '@/components/layout/protected-navbar';
 import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { PaymentSiteDetailPageClient } from '@/components/clinical-payments/payment-site-detail-page-client';
 
-export default async function ClinicalPaymentSitePage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ siteId: string }>;
-  searchParams?: Promise<Record<string, string | string[]>>;
-}) {
-  const { siteId } = await params;
+export default async function ClinicalPaymentSitePage(
+  props: {
+    params: Promise<{ siteId: string }>;
+    searchParams?: Promise<Record<string, string | string[]>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const { siteId } = await props.params;
   if (searchParams) await searchParams;
   const supabase = await createClient();
 

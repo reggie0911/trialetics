@@ -1,12 +1,27 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AIAssistantPanel } from './ai-assistant-panel';
 
+const TRACKER_ROUTES = [
+  '/protected/patients',
+  '/protected/ae',
+  '/protected/ecrf-query-tracker',
+  '/protected/sdv-tracker',
+  '/protected/vw',
+  '/protected/mc',
+];
+
 export function AIAssistantButton() {
   const [isOpen, setIsOpen] = useState(false);
+  const pathname = usePathname();
+
+  if (TRACKER_ROUTES.some(route => pathname.startsWith(route))) {
+    return null;
+  }
 
   return (
     <>

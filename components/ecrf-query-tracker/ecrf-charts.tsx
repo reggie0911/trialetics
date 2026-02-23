@@ -107,7 +107,7 @@ export function ECRFCharts({ chartData, filters, onFilterChange }: ECRFChartsPro
                 <Bar 
                   dataKey="count" 
                   radius={[4, 4, 0, 0]}
-                  onClick={(data) => {
+                  onClick={(data: any) => {
                     console.log('[Chart Click] Role:', data.role, 'Current filter:', filters.queryRaisedByRole);
                     onFilterChange('queryRaisedByRole', data.role === filters.queryRaisedByRole ? '' : data.role);
                   }}
@@ -144,7 +144,7 @@ export function ECRFCharts({ chartData, filters, onFilterChange }: ECRFChartsPro
                 <Bar 
                   dataKey="count" 
                   radius={[0, 4, 4, 0]}
-                  onClick={(data) => {
+                  onClick={(data: any) => {
                     onFilterChange('siteName', data.site === filters.siteName ? '' : data.site);
                   }}
                   cursor="pointer"
@@ -180,9 +180,9 @@ export function ECRFCharts({ chartData, filters, onFilterChange }: ECRFChartsPro
                   cx="50%"
                   cy="50%"
                   outerRadius={80}
-                  label={({ state, count }) => `${state}: ${count}`}
+                  label={({ state, count }: any) => `${state}: ${count}`}
                   labelLine={{ style: { fontSize: 10 } }}
-                  onClick={(data) => {
+                  onClick={(data: any) => {
                     onFilterChange('queryState', data.state === filters.queryState ? '' : data.state);
                   }}
                   cursor="pointer"
@@ -218,7 +218,7 @@ export function ECRFCharts({ chartData, filters, onFilterChange }: ECRFChartsPro
                 <Bar 
                   dataKey="count" 
                   radius={[4, 4, 0, 0]}
-                  onClick={(data) => {
+                  onClick={(data: any) => {
                     onFilterChange('queryType', data.type === filters.queryType ? '' : data.type);
                   }}
                   cursor="pointer"
@@ -254,7 +254,7 @@ export function ECRFCharts({ chartData, filters, onFilterChange }: ECRFChartsPro
                 <Bar 
                   dataKey="avgDays" 
                   radius={[0, 4, 4, 0]}
-                  onClick={(data) => {
+                  onClick={(data: any) => {
                     onFilterChange('siteName', data.site === filters.siteName ? '' : data.site);
                   }}
                   cursor="pointer"
@@ -290,7 +290,7 @@ export function ECRFCharts({ chartData, filters, onFilterChange }: ECRFChartsPro
                 <Bar 
                   dataKey="count" 
                   radius={[4, 4, 0, 0]}
-                  onClick={(data) => {
+                  onClick={(data: any) => {
                     onFilterChange('formName', data.form === filters.formName ? '' : data.form);
                   }}
                   cursor="pointer"

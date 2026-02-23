@@ -5,16 +5,16 @@ import { createClient } from '@/lib/server';
 import { getContact } from '@/lib/actions/contacts';
 import { getContactActivity } from '@/lib/utils/activity-logger';
 
-export default async function ContactDetailPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams?: Promise<Record<string, string | string[]>>;
-}) {
-  const { id } = await params;
+export default async function ContactDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<Record<string, string | string[]>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const { id } = await props.params;
   if (searchParams) await searchParams;
-  
+
   const supabase = await createClient();
 
   // Check authentication
@@ -36,7 +36,7 @@ export default async function ContactDetailPage({
 
   // Fetch contact data
   const contactResult = await getContact(id);
-  
+
   if (!contactResult.success || !contactResult.data) {
     redirect('/protected/contacts-organizations');
   }

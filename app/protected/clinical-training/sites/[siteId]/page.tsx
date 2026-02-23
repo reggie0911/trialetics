@@ -4,14 +4,14 @@ import { ProtectedNavbar } from '@/components/layout/protected-navbar';
 import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { SiteTrainingClient } from '@/components/clinical-training/site-training-client';
 
-export default async function SiteTrainingPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ siteId: string }>;
-  searchParams?: Promise<Record<string, string | string[]>>;
-}) {
-  const { siteId } = await params;
+export default async function SiteTrainingPage(
+  props: {
+    params: Promise<{ siteId: string }>;
+    searchParams?: Promise<Record<string, string | string[]>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const { siteId } = await props.params;
   if (searchParams) await searchParams;
   const supabase = await createClient();
 

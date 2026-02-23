@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { MoreHorizontal, Eye, Pencil, Trash2, ChevronLeft, ChevronRight, Building2, Users, FolderOpen, Download, Printer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { formatFieldName } from '@/lib/utils';
 import { deleteOrganization } from '@/lib/actions/organizations';
 import {
   OrganizationWithRelations,
@@ -110,7 +111,7 @@ export function OrganizationsDataTable({
         const type = row.getValue('organization_type') as string;
         return (
           <Badge variant="outline" className="text-xs">
-            {ORGANIZATION_TYPE_LABELS[type as keyof typeof ORGANIZATION_TYPE_LABELS] || type}
+            {ORGANIZATION_TYPE_LABELS[type as keyof typeof ORGANIZATION_TYPE_LABELS] || formatFieldName(type)}
           </Badge>
         );
       },
@@ -125,7 +126,7 @@ export function OrganizationsDataTable({
             variant={status === 'active' ? 'default' : 'secondary'}
             className="text-xs"
           >
-            {ENTITY_STATUS_LABELS[status as keyof typeof ENTITY_STATUS_LABELS] || status}
+            {ENTITY_STATUS_LABELS[status as keyof typeof ENTITY_STATUS_LABELS] || formatFieldName(status)}
           </Badge>
         );
       },
@@ -224,8 +225,8 @@ export function OrganizationsDataTable({
       // Create simplified columns for CSV export
       const csvColumns = [
         { header: 'Name', getValue: (o: OrganizationWithRelations) => o.name },
-        { header: 'Type', getValue: (o: OrganizationWithRelations) => ORGANIZATION_TYPE_LABELS[o.organization_type] || o.organization_type },
-        { header: 'Status', getValue: (o: OrganizationWithRelations) => ENTITY_STATUS_LABELS[o.status] || o.status },
+        { header: 'Type', getValue: (o: OrganizationWithRelations) => ORGANIZATION_TYPE_LABELS[o.organization_type] || formatFieldName(o.organization_type) },
+        { header: 'Status', getValue: (o: OrganizationWithRelations) => ENTITY_STATUS_LABELS[o.status] || formatFieldName(o.status) },
         { header: 'State', getValue: (o: OrganizationWithRelations) => {
           const addresses = o.addresses || [];
           const primaryAddress = addresses.find((a: any) => a.is_primary) || addresses[0];

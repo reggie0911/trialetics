@@ -115,15 +115,15 @@ export function MultiLevelVWHeader({
                     onColumnFilterChange(columnId, value === "all" ? undefined : (value || undefined));
                   }}
                 >
-                  <SelectTrigger className="h-3.5 text-[11px] bg-background text-muted-foreground border-0 shadow-none pb-2 justify-start">
+                  <SelectTrigger className={`h-3.5 text-[11px] text-muted-foreground border-0 shadow-none pb-2 justify-start capitalize ${bgColorClass}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px]">
-                    <SelectItem value="all" className="text-[11px]">
+                    <SelectItem value="all" className="text-[11px] capitalize">
                       All
                     </SelectItem>
                     {uniqueValues.map((value) => (
-                      <SelectItem key={value} value={value} className="text-[11px]">
+                      <SelectItem key={value} value={value} className="text-[11px] capitalize">
                         {value}
                       </SelectItem>
                     ))}

@@ -4,8 +4,25 @@ import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, LabelList } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, LabelList, Text } from "recharts";
 import { X } from "lucide-react";
+
+function CustomAxisTick(props: { x?: number; y?: number; payload?: { value: string }; [key: string]: unknown }) {
+  const { x = 0, y = 0, payload } = props;
+  const value = payload?.value ?? "";
+  return (
+    <Text
+      x={x}
+      y={y}
+      textAnchor="middle"
+      angle={0}
+      verticalAnchor="start"
+      style={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
+    >
+      {value}
+    </Text>
+  );
+}
 
 interface MCCategoriesChartProps {
   data: Array<{ [key: string]: string | undefined }>;
@@ -105,7 +122,7 @@ export function MCCategoriesChart({ data, selectedCategory, onCategoryClick }: M
             <BarChart
               data={chartData}
               margin={{ top: 20, right: 20, left: 20, bottom: 60 }}
-              onClick={(e) => {
+              onClick={(e: any) => {
                 if (e && e.activePayload && e.activePayload[0]) {
                   handleBarClick(e.activePayload[0].payload);
                 }
@@ -115,9 +132,9 @@ export function MCCategoriesChart({ data, selectedCategory, onCategoryClick }: M
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="category"
-                angle={-45}
-                textAnchor="end"
-                height={60}
+                angle={0}
+                textAnchor="middle"
+                height={40}
                 interval={0}
                 tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
               />

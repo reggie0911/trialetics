@@ -4,7 +4,6 @@ import { ProtectedNavbar } from '@/components/layout/protected-navbar';
 import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { Greeting } from '@/components/dashboard/greeting';
 import { ModuleMetrics } from '@/components/dashboard/module-metrics/module-metrics';
-import { AIAssistantButton } from '@/components/ai-assistant';
 import { createClient } from '@/lib/server';
 import { getDashboardTrackerMetrics } from '@/lib/actions/dashboard-metrics';
 import { buildModuleMetricsFromTrackerData } from '@/lib/utils/dashboard-metrics';
@@ -14,10 +13,9 @@ interface DashboardPageProps {
   searchParams: Promise<{ projectId?: string; protocolId?: string }>;
 }
 
-export default async function DashboardPage({ params, searchParams }: DashboardPageProps) {
-  // Await dynamic APIs first (Next.js 16 - prevents sync access/enumeration errors from tooling)
-  const resolvedSearchParams = await searchParams;
-  if (params) await params;
+export default async function DashboardPage(props: DashboardPageProps) {
+  const resolvedSearchParams = await props.searchParams;
+  if (props.params) await props.params;
   const protocolId = resolvedSearchParams.protocolId ?? resolvedSearchParams.projectId;
 
   const supabase = await createClient();
@@ -88,9 +86,6 @@ export default async function DashboardPage({ params, searchParams }: DashboardP
           <ModuleMetrics metrics={moduleMetrics} />
         </div>
       </main>
-
-      {/* AI Assistant Floating Button */}
-      <AIAssistantButton />
     </div>
   );
 }

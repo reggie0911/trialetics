@@ -27,7 +27,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { createOrganization, updateOrganization } from '@/lib/actions/organizations';
 import { createAddress, updateAddress, getAddressesByEntity } from '@/lib/actions/addresses';
-import { formatPhoneNumber, capitalizeFirstLetter } from '@/lib/utils';
+import { formatPhoneNumber, capitalizeFirstLetter, formatFieldName } from '@/lib/utils';
 import {
   Organization,
   OrganizationType,
@@ -261,7 +261,7 @@ export function OrganizationFormDialog({
               >
                 <SelectTrigger className="text-xs h-8 w-full">
                   <span className="text-xs">
-                    {selectedType ? ORGANIZATION_TYPE_LABELS[selectedType as OrganizationType] || selectedType : 'Select type'}
+                    {selectedType ? ORGANIZATION_TYPE_LABELS[selectedType as OrganizationType] || formatFieldName(selectedType) : 'Select type'}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
@@ -331,7 +331,7 @@ export function OrganizationFormDialog({
               >
                 <SelectTrigger className="text-xs h-8 w-full">
                   <span className="text-xs capitalize">
-                    {selectedStatus ? ENTITY_STATUS_LABELS[selectedStatus as EntityStatus] || selectedStatus : 'Select status'}
+                    {selectedStatus ? ENTITY_STATUS_LABELS[selectedStatus as EntityStatus] || formatFieldName(selectedStatus) : 'Select status'}
                   </span>
                 </SelectTrigger>
                 <SelectContent>

@@ -43,6 +43,7 @@ import {
   ContactWithRelations,
   ENTITY_STATUS_LABELS,
 } from '@/lib/types/contacts-organizations';
+import { formatFieldName } from '@/lib/utils';
 import { exportToCSV, printTable } from '@/lib/utils/table-export';
 
 interface ContactsDataTableProps {
@@ -152,7 +153,7 @@ export function ContactsDataTable({
             variant={status === 'active' ? 'default' : 'secondary'}
             className="text-xs"
           >
-            {ENTITY_STATUS_LABELS[status as keyof typeof ENTITY_STATUS_LABELS] || status}
+            {ENTITY_STATUS_LABELS[status as keyof typeof ENTITY_STATUS_LABELS] || formatFieldName(status)}
           </Badge>
         );
       },
@@ -227,7 +228,7 @@ export function ContactsDataTable({
         { header: 'Email', getValue: (c: ContactWithRelations) => c.email || '' },
         { header: 'Phone', getValue: (c: ContactWithRelations) => c.phone || '' },
         { header: 'Organization', getValue: (c: ContactWithRelations) => c.primary_organization?.name || '' },
-        { header: 'Status', getValue: (c: ContactWithRelations) => ENTITY_STATUS_LABELS[c.status] || c.status },
+        { header: 'Status', getValue: (c: ContactWithRelations) => ENTITY_STATUS_LABELS[c.status] || formatFieldName(c.status) },
         { header: 'Projects', getValue: (c: ContactWithRelations) => String(c.projects_count || 0) },
       ];
 

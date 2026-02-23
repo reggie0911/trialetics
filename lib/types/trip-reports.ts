@@ -309,3 +309,33 @@ export interface TripReportSummary {
   crf_total: number;
   attendees_count: number;
 }
+
+// =============================================
+// eVR Enhancement: Structured Findings
+// =============================================
+
+export type FindingCategory = 'critical' | 'major' | 'minor' | 'observation';
+export type FindingSeverity = 'high' | 'medium' | 'low';
+
+export const FINDING_CATEGORY_LABELS: Record<FindingCategory, string> = {
+  critical: 'Critical',
+  major: 'Major',
+  minor: 'Minor',
+  observation: 'Observation',
+};
+
+export const FINDING_SEVERITY_LABELS: Record<FindingSeverity, string> = {
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+};
+
+export interface StandardizedFinding {
+  id: string;
+  category: FindingCategory;
+  severity: FindingSeverity;
+  description: string;
+  area: string;
+  recommendation: string;
+  requires_capa: boolean;
+}

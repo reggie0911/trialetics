@@ -52,3 +52,11 @@ export function capitalizeFirstLetter(value: string): string {
   if (!value) return '';
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
+
+/**
+ * Converts a snake_case string to Title Case for display as a fallback label.
+ */
+export function formatFieldName(snake: string): string {
+  if (!snake) return '';
+  return snake.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}

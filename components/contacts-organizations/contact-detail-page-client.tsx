@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { removeContactFromOrganization, removeContactFromProject } from '@/lib/actions/contacts';
+import { formatFieldName } from '@/lib/utils';
 import {
   ContactWithRelations,
   ENTITY_STATUS_LABELS,
@@ -146,7 +147,7 @@ export function ContactDetailPageClient({
           <div className="flex gap-2 items-center">
             {initialContact.title && (
               <span className="text-xs md:text-xs text-muted-foreground">
-                {CONTACT_ROLE_LABELS[initialContact.title as keyof typeof CONTACT_ROLE_LABELS] || initialContact.title}
+                {CONTACT_ROLE_LABELS[initialContact.title as keyof typeof CONTACT_ROLE_LABELS] || formatFieldName(initialContact.title)}
               </span>
             )}
             <Badge

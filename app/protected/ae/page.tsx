@@ -4,14 +4,14 @@ import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { AEPageClient } from '@/components/ae/ae-page-client';
 import { createClient } from '@/lib/server';
 
-export default async function AEPage({
-  params,
-  searchParams,
-}: {
-  params?: Promise<Record<string, string | string[]>>;
-  searchParams: Promise<{ protocol?: string }>;
-}) {
-  const resolvedSearchParams = await searchParams;
+export default async function AEPage(
+  props: {
+    params?: Promise<Record<string, string | string[]>>;
+    searchParams: Promise<{ protocol?: string }>;
+  }
+) {
+  const params = await props.params;
+  const resolvedSearchParams = await props.searchParams;
   if (params) await params;
   const protocolId = resolvedSearchParams.protocol || null;
   const supabase = await createClient();

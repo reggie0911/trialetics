@@ -25,6 +25,7 @@ import { getUserProjects } from '@/lib/actions/projects';
 import { assignOrganizationToProject } from '@/lib/actions/organizations';
 import { assignContactToProject } from '@/lib/actions/contacts';
 import { getAllOrganizations } from '@/lib/actions/organizations';
+import { formatFieldName } from '@/lib/utils';
 import {
   Organization,
   OrganizationProjectRole,
@@ -242,7 +243,7 @@ export function ProjectAssignmentDialog({
               >
                 <SelectTrigger className="text-xs md:text-xs w-full">
                   <span className="text-xs capitalize">
-                    {selectedRole ? roleLabels[selectedRole as keyof typeof roleLabels] || selectedRole : 'Select role'}
+                    {selectedRole ? roleLabels[selectedRole as keyof typeof roleLabels] || formatFieldName(selectedRole) : 'Select role'}
                   </span>
                 </SelectTrigger>
                 <SelectContent>

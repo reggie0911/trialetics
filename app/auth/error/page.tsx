@@ -1,14 +1,14 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
-export default async function Page({
-  params,
-  searchParams,
-}: {
-  params?: Promise<Record<string, string | string[]>>;
-  searchParams: Promise<{ error?: string }>;
-}) {
-  const resolvedSearchParams = await searchParams;
-  if (params) await params;
+export default async function Page(
+  props: {
+    params?: Promise<Record<string, string | string[]>>;
+    searchParams: Promise<{ error?: string }>;
+  }
+) {
+  const params = await props.params;
+  const resolvedSearchParams = await props.searchParams;
+  if (props.params) await props.params;
 
   return (
     <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">

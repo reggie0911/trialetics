@@ -100,3 +100,92 @@ export async function skipOnboarding(
 ): Promise<ActionResponse<void>> {
   return completeOnboarding(profileId);
 }
+
+function mapPhaseToDisplay(phase: string | null): string {
+  if (!phase) return 'Phase I';
+  const map: Record<string, string> = {
+    phase_i: 'Phase I',
+    phase_ii: 'Phase II',
+    phase_iii: 'Phase III',
+    phase_iv: 'Phase IV',
+    observational: 'Observational',
+  };
+  return map[phase] ?? phase;
+}
+
+function mapStatusToDisplay(status: string | null): string {
+  if (!status) return 'planning';
+  const map: Record<string, string> = {
+    planned: 'planning',
+    in_progress: 'approved',
+    on_hold: 'planning',
+    completed: 'closed',
+    terminated: 'closed',
+  };
+  return map[status] ?? status;
+}
+
+export interface InitialProject {
+  protocolName: string;
+  protocolNumber: string;
+  trialPhase: string;
+  protocolStatus: string;
+}
+
+/**
+ * Fetch the most recent project for the current user's company (for pre-populating First Project step)
+ */
+export async function getFirstProjectForOnboarding(): Promise<
+  ActionResponse<InitialProject | null>
+> {
+  try {
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('company_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (profileError || !profile?.company_id) {
+      return { success: false, error: 'No company found' };
+    }
+
+    const { data: firstProject, error } = await supabase
+      .from('clinical_protocols')
+      .select('title, protocol_number, phase, status')
+      .eq('company_id', profile.company_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error fetching first project:', error);
+      return { success: false, error: 'Failed to fetch project' };
+    }
+
+    if (!firstProject) {
+      return { success: true, data: null };
+    }
+
+    return {
+      success: true,
+      data: {
+        protocolName: firstProject.title ?? '',
+        protocolNumber: firstProject.protocol_number ?? '',
+        trialPhase: mapPhaseToDisplay(firstProject.phase),
+        protocolStatus: mapStatusToDisplay(firstProject.status),
+      },
+    };
+  } catch (err) {
+    console.error('Unexpected error in getFirstProjectForOnboarding:', err);
+    return { success: false, error: 'Failed to fetch project' };
+  }
+}

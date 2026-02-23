@@ -115,7 +115,7 @@ export function MultiLevelMCHeader({
                     onColumnFilterChange(columnId, value === "all" ? undefined : (value || undefined));
                   }}
                 >
-                  <SelectTrigger className="h-3.5 text-[11px] bg-background text-muted-foreground border-0 shadow-none pb-2 justify-start">
+                  <SelectTrigger className={`h-3.5 text-[11px] text-muted-foreground border-0 shadow-none pb-2 justify-start capitalize ${bgColorClass}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px]">

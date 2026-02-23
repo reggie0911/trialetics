@@ -45,7 +45,7 @@ export function PsdvCharts({ chartData }: PsdvChartsProps) {
                   innerRadius={50}
                   outerRadius={80}
                   paddingAngle={2}
-                  label={({ name, value }) => `${name}: ${value}`}
+                  label={({ name, value }: any) => `${name}: ${value}`}
                 >
                   {chartData.overviewPie.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -97,7 +97,7 @@ export function PsdvCharts({ chartData }: PsdvChartsProps) {
                   innerRadius={50}
                   outerRadius={80}
                   paddingAngle={2}
-                  label={({ status, count }) => `${status}: ${count}`}
+                  label={({ status, count }: any) => `${status}: ${count}`}
                 >
                   {chartData.crfVerificationStatus.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.fill} />

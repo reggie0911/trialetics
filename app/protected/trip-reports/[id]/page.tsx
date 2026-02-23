@@ -8,14 +8,14 @@ import { getProfilesForCompany } from '@/lib/actions/site-visits';
 import { getTripReportTemplates } from '@/lib/actions/trip-report-templates';
 import { getOrganizationContacts } from '@/lib/actions/organizations';
 
-export default async function TripReportDetailPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams?: Promise<Record<string, string | string[]>>;
-}) {
-  const { id } = await params;
+export default async function TripReportDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<Record<string, string | string[]>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const { id } = await props.params;
   if (searchParams) await searchParams;
   const supabase = await createClient();
 
