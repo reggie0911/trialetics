@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/collapsible';
 import { OrganizationsDataTable } from './organizations-data-table';
 import { OrganizationFormDialog } from './organization-form-dialog';
+import { formatFieldName } from '@/lib/utils';
 import {
   OrganizationWithRelations,
   OrganizationFilters,
@@ -254,7 +255,7 @@ export function OrganizationsTab({
                   <SelectTrigger id="status" className="text-xs h-8 w-full capitalize">
                     <SelectValue placeholder="Status">
                       {filters.status && filters.status !== 'all' 
-                        ? ENTITY_STATUS_LABELS[filters.status as EntityStatus] || filters.status
+                        ? ENTITY_STATUS_LABELS[filters.status as EntityStatus] || formatFieldName(filters.status)
                         : 'All Status'}
                     </SelectValue>
                   </SelectTrigger>

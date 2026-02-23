@@ -14,16 +14,16 @@ import { getOrganizationActivity } from '@/lib/utils/activity-logger';
 import { getOrganizationNotes } from '@/lib/actions/organization-notes';
 import { getTripReportsByOrganization } from '@/lib/actions/trip-reports';
 
-export default async function OrganizationDetailPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams?: Promise<Record<string, string | string[]>>;
-}) {
-  const { id } = await params;
+export default async function OrganizationDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<Record<string, string | string[]>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const { id } = await props.params;
   if (searchParams) await searchParams;
-  
+
   const supabase = await createClient();
 
   // Check authentication
@@ -45,7 +45,7 @@ export default async function OrganizationDetailPage({
 
   // Fetch organization data
   const organizationResult = await getOrganization(id);
-  
+
   if (!organizationResult.success || !organizationResult.data) {
     redirect('/protected/contacts-organizations');
   }

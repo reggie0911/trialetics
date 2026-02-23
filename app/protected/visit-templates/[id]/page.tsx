@@ -4,17 +4,17 @@ import { createClient } from '@/lib/server';
 import { getVisitTemplateById } from '@/lib/actions/subject-visit-templates';
 import { getAllClinicalProtocols } from '@/lib/actions/clinical-protocols';
 
-export default async function TemplateDetailPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams?: Promise<Record<string, string | string[]>>;
-}) {
-  const { id } = await params;
+export default async function TemplateDetailPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<Record<string, string | string[]>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const { id } = await props.params;
   if (searchParams) await searchParams;
   const supabase = await createClient();
-  
+
   // Get user and company_id server-side
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {

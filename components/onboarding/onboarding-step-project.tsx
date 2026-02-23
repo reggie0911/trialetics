@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FolderPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { createProject, type CreateProjectInput } from '@/lib/actions/projects';
+import { getFirstProjectForOnboarding, type InitialProject } from '@/lib/actions/onboarding';
 import { useToast } from '@/hooks/use-toast';
 
 const TRIAL_PHASES = [
@@ -37,11 +38,12 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 interface OnboardingStepProjectProps {
+  initialProject?: InitialProject | null;
   onCreated: () => void;
   onSkip: () => void;
 }
 
-export function OnboardingStepProject({ onCreated, onSkip }: OnboardingStepProjectProps) {
+export function OnboardingStepProject({ initialProject, onCreated, onSkip }: OnboardingStepProjectProps) {
   const { toast } = useToast();
   const [isPending, setIsPending] = useState(false);
   const [formData, setFormData] = useState<Partial<CreateProjectInput> & {
@@ -50,14 +52,48 @@ export function OnboardingStepProject({ onCreated, onSkip }: OnboardingStepProje
     trialPhase: string;
     protocolStatus: string;
   }>({
-    protocolName: '',
-    protocolNumber: '',
-    trialPhase: 'Phase I',
+    protocolName: initialProject?.protocolName ?? '',
+    protocolNumber: initialProject?.protocolNumber ?? '',
+    trialPhase: initialProject?.trialPhase ?? 'Phase I',
     protocolDescription: '',
-    protocolStatus: 'planning',
+    protocolStatus: initialProject?.protocolStatus ?? 'planning',
     plannedSites: undefined,
     plannedSubjects: undefined,
   });
+
+  // Sync from initialProject prop (server-rendered)
+  useEffect(() => {
+    if (initialProject) {
+      setFormData((prev) => ({
+        ...prev,
+        protocolName: initialProject.protocolName,
+        protocolNumber: initialProject.protocolNumber,
+        trialPhase: initialProject.trialPhase,
+        protocolStatus: initialProject.protocolStatus,
+      }));
+    }
+  }, [initialProject]);
+
+  // Fetch fresh project data when step mounts (client-side, ensures latest data)
+  useEffect(() => {
+    let cancelled = false;
+    getFirstProjectForOnboarding().then((result) => {
+      if (cancelled || !result.success) return;
+      const project = result.data;
+      if (project) {
+        setFormData((prev) => ({
+          ...prev,
+          protocolName: project.protocolName,
+          protocolNumber: project.protocolNumber,
+          trialPhase: project.trialPhase,
+          protocolStatus: project.protocolStatus,
+        }));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

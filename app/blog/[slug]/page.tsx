@@ -14,14 +14,14 @@ export async function generateStaticParams() {
   }));
 }
 
-export default async function BlogPostPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ slug: string }>;
-  searchParams?: Promise<Record<string, string | string[]>>;
-}) {
-  const { slug } = await params;
+export default async function BlogPostPage(
+  props: {
+    params: Promise<{ slug: string }>;
+    searchParams?: Promise<Record<string, string | string[]>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const { slug } = await props.params;
   if (searchParams) await searchParams;
   const post = getBlogBySlug(slug);
 

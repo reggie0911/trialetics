@@ -4,10 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { Loader2, RefreshCw, Home } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { UsersTable } from './users-table';
 import { InviteUserForm } from './invite-user-form';
 import { UserStatsCards } from './user-stats-cards';
+import { PermissionsManager } from './permissions-manager';
+import { AccessAuditLog } from './access-audit-log';
 import {
   getCompanyUsers,
   getActiveModules,
@@ -108,10 +111,8 @@ export function AdminPageClient({
 
   return (
     <div className="space-y-6">
-      {/* User Statistics */}
       {stats && <UserStatsCards stats={stats} />}
 
-      {/* Action Buttons */}
       <div className="flex justify-end gap-2">
         <Button
           variant="outline"
@@ -136,28 +137,42 @@ export function AdminPageClient({
         </Button>
       </div>
 
-      {/* Main Grid Layout */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left Column - Users Table (spans 2 columns on large screens) */}
-        <div className="lg:col-span-2 space-y-6">
-          <UsersTable
-            users={users}
-            currentUserId={profileId}
-            companyId={companyId}
-            onRefresh={handleRefresh}
-          />
-        </div>
+      <Tabs defaultValue="users">
+        <TabsList>
+          <TabsTrigger value="users">Users</TabsTrigger>
+          <TabsTrigger value="permissions">Permissions</TabsTrigger>
+          <TabsTrigger value="audit">Access Audit</TabsTrigger>
+        </TabsList>
 
-        {/* Right Column - Invite Form and Modules */}
-        <div className="space-y-6">
-          <InviteUserForm
-            companyId={companyId}
-            profileId={profileId}
-            modules={modules}
-            onSuccess={handleRefresh}
-          />
-        </div>
-      </div>
+        <TabsContent value="users">
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className="lg:col-span-2 space-y-6">
+              <UsersTable
+                users={users}
+                currentUserId={profileId}
+                companyId={companyId}
+                onRefresh={handleRefresh}
+              />
+            </div>
+            <div className="space-y-6">
+              <InviteUserForm
+                companyId={companyId}
+                profileId={profileId}
+                modules={modules}
+                onSuccess={handleRefresh}
+              />
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="permissions">
+          <PermissionsManager companyId={companyId} />
+        </TabsContent>
+
+        <TabsContent value="audit">
+          <AccessAuditLog companyId={companyId} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

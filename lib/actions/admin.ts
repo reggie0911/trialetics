@@ -365,10 +365,11 @@ export async function inviteUser(
       return { success: false, error: 'A user with this email is already in your organization' };
     }
 
-    // Invite user via Supabase Auth
-    const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/callback`,
-      data: {
+    // Create user in Supabase (without sending email)
+    const { data: userData, error: createError } = await adminClient.auth.admin.createUser({
+      email: email,
+      email_confirm: true,
+      user_metadata: {
         first_name: firstName,
         last_name: lastName,
         company_id: companyId,
@@ -376,9 +377,9 @@ export async function inviteUser(
       },
     });
 
-    if (inviteError) {
-      console.error('Error inviting user:', inviteError);
-      const msg = inviteError.message || 'Failed to send invitation';
+    if (createError) {
+      console.error('Error creating user:', createError);
+      const msg = createError.message || 'Failed to create user';
       // Surface common Supabase errors in a user-friendly way
       if (msg.includes('already been registered') || msg.includes('already exists') || msg.includes('23505') || msg.includes('duplicate key')) {
         return { success: false, error: 'A user with this email address already has an account. They can sign in or use password reset.' };
@@ -389,27 +390,101 @@ export async function inviteUser(
       return { success: false, error: msg };
     }
 
-    if (!inviteData?.user) {
-      return { success: false, error: 'Failed to create user invitation' };
+    if (!userData?.user) {
+      return { success: false, error: 'Failed to create user' };
     }
 
-    const newUserId = inviteData.user.id;
+    const newUserId = userData.user.id;
 
-    // Wait for trigger to create profile (with retries)
+    // Generate password reset link for the new user
+    const { data: linkData, error: linkError } = await adminClient.auth.admin.generateLink({
+      type: 'magiclink',
+      email: email,
+      options: {
+        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/callback`,
+      },
+    });
+
+    if (linkError || !linkData?.properties?.action_link) {
+      console.error('Error generating invite link:', linkError);
+      return { success: false, error: 'Failed to generate invitation link' };
+    }
+
+    // Send invitation email via Loops (direct API call, no self-referencing fetch)
+    const loopsApiKey = process.env.LOOPS_API_KEY;
+    const loopsTemplateId = process.env.LOOPS_INVITE_TEMPLATE_ID;
+
+    if (loopsApiKey && loopsTemplateId) {
+      try {
+        console.log('Sending Loops invitation email to:', email);
+
+        const loopsResponse = await fetch('https://app.loops.so/api/v1/transactional', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${loopsApiKey}`,
+          },
+          body: JSON.stringify({
+            transactionalId: loopsTemplateId,
+            email,
+            addToAudience: true,
+            dataVariables: {
+              firstName: firstName || '',
+              lastName: lastName || '',
+              inviteLink: linkData.properties.action_link,
+            },
+          }),
+        });
+
+        const loopsData = await loopsResponse.json();
+        console.log('Loops transactional response:', { status: loopsResponse.status, data: loopsData });
+
+        if (!loopsResponse.ok) {
+          console.error('Failed to send Loops invitation email:', loopsData);
+        } else {
+          console.log('Successfully sent Loops invitation email');
+        }
+      } catch (error) {
+        console.error('Error sending Loops invitation:', error);
+      }
+
+      // Also add to Loops contacts (for audience tracking)
+      try {
+        await fetch('https://app.loops.so/api/v1/contacts/update', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${loopsApiKey}`,
+          },
+          body: JSON.stringify({ email, firstName: firstName || '' }),
+        });
+      } catch (error) {
+        console.error('Failed to add invited user to Loops contacts:', error);
+      }
+    } else {
+      console.warn('LOOPS_API_KEY or LOOPS_INVITE_TEMPLATE_ID not configured, skipping Loops email');
+    }
+
+    // Wait for trigger to create profile (with retries, using adminClient to bypass RLS)
     let profileData = null;
-    let retries = 5;
+    let retries = 10;
     
     while (retries > 0 && !profileData) {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 800));
       
-      const { data, error } = await supabase
+      const { data, error } = await adminClient
         .from('profiles')
-        .select('id')
+        .select('id, company_id, role, email')
         .eq('user_id', newUserId)
         .maybeSingle();
 
+      if (error) {
+        console.error(`Profile check error (retry ${11 - retries}):`, error);
+      }
+
       if (data) {
         profileData = data;
+        console.log(`Profile found via trigger after ${11 - retries} retries:`, profileData);
         break;
       }
       
@@ -418,8 +493,15 @@ export async function inviteUser(
 
     // If trigger didn't create profile, create it manually as fallback
     if (!profileData) {
-      console.warn('Trigger did not create profile, creating manually for user:', newUserId);
-      console.log('Creating profile with company_id:', companyId, 'role:', role);
+      console.warn('Trigger did not create profile after retries, creating manually for user:', newUserId);
+      console.log('Creating profile with:', { 
+        user_id: newUserId,
+        email, 
+        first_name: firstName,
+        last_name: lastName,
+        company_id: companyId, 
+        role 
+      });
       
       // Get inviter's email for audit
       const { data: inviterProfile } = await supabase
@@ -446,11 +528,52 @@ export async function inviteUser(
 
       if (profileError) {
         console.error('Error creating profile manually:', profileError);
-        return { success: false, error: 'Failed to create user profile' };
+        
+        // If it's a duplicate key error, the profile was created by trigger - fetch it
+        if (profileError.code === '23505' || profileError.message?.includes('duplicate key')) {
+          console.log('Profile was created by trigger (duplicate key error), fetching it...');
+          
+          // Wait a bit for the profile to be fully committed
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
+          // Use adminClient to fetch (bypasses RLS)
+          const { data: existingProfile, error: fetchError } = await adminClient
+            .from('profiles')
+            .select('id, company_id, role, email')
+            .eq('user_id', newUserId)
+            .single();
+          
+          if (existingProfile) {
+            console.log('Successfully fetched existing profile:', existingProfile);
+            profileData = existingProfile;
+          } else {
+            console.error('Could not fetch existing profile:', fetchError);
+            return { 
+              success: false, 
+              error: 'Profile creation race condition - please try again' 
+            };
+          }
+        } else {
+          // Some other error
+          console.error('Profile error details:', JSON.stringify(profileError, null, 2));
+          console.error('Attempted to create profile with:', {
+            user_id: newUserId,
+            email,
+            first_name: firstName,
+            last_name: lastName,
+            company_id: companyId,
+            role,
+          });
+          
+          return { 
+            success: false, 
+            error: `Failed to create user profile: ${profileError.message || profileError.code || 'Unknown error'}` 
+          };
+        }
+      } else {
+        console.log('Profile created successfully:', manualProfile);
+        profileData = manualProfile;
       }
-      
-      console.log('Profile created successfully:', manualProfile);
-      profileData = manualProfile;
     } else {
       console.log('Profile created by trigger:', profileData);
     }

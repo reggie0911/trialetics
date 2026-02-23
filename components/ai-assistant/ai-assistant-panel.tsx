@@ -13,7 +13,7 @@ export function AIAssistantPanel({ open, onOpenChange }: AIAssistantPanelProps) 
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent 
         side="right" 
-        className="w-full max-w-[400px] p-0 flex flex-col"
+        className="w-full max-w-[480px] p-0 flex flex-col"
         showCloseButton={true}
       >
         <AIAssistantChat />

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import { ProtectedNavbar } from '@/components/layout/protected-navbar';
-import { DocumentManagementNavbar } from '@/components/document-management/document-management-navbar';
+import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { DocumentManagementInternalNavbar } from '@/components/document-management/document-management-internal-navbar';
 import { DocumentManagementPageClient } from '@/components/document-management/document-management-page-client';
 import { PasscodeProtection } from '@/components/document-management/passcode-protection';
@@ -44,7 +45,9 @@ export default async function DocumentManagementPage() {
                   Upload, organize, track, and manage clinical trial documents with version control and expiration tracking
                 </p>
               </div>
-              <DocumentManagementNavbar />
+              <Suspense fallback={<div className="h-10" />}>
+                <ModuleNavbar />
+              </Suspense>
             </div>
             <DocumentManagementInternalNavbar />
           </div>

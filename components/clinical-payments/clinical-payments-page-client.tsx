@@ -326,7 +326,7 @@ export function ClinicalPaymentsPageClient({
                       <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                       <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `$${v}`} />
                       <Tooltip
-                        formatter={(value: number) => [`$${Number(value).toFixed(2)}`, '']}
+                        formatter={(value: any) => [`$${Number(value).toFixed(2)}`, '']}
                         labelStyle={{ fontSize: 12 }}
                         contentStyle={{ fontSize: 12 }}
                       />

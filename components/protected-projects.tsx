@@ -11,11 +11,34 @@ import {
   CardDescription,
   CardFooter,
   CardHeader,
-  CardTitle,
 } from '@/components/ui/card';
 import { CreateProjectForm } from '@/components/create-project-form';
 import { EditProjectDialog } from '@/components/edit-project-dialog';
 import type { AssignedProtocol } from '@/lib/actions/projects';
+
+const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
+  approved: { bg: 'bg-emerald-500/15', text: 'text-emerald-700 dark:text-emerald-400' },
+  planning: { bg: 'bg-blue-500/15', text: 'text-blue-700 dark:text-blue-400' },
+  on_hold: { bg: 'bg-amber-500/15', text: 'text-amber-700 dark:text-amber-400' },
+  closed: { bg: 'bg-slate-500/15', text: 'text-slate-600 dark:text-slate-400' },
+  terminated: { bg: 'bg-red-500/15', text: 'text-red-700 dark:text-red-400' },
+};
+
+function getStatusStyles(status: string) {
+  const key = status.toLowerCase().replace(/\s+/g, '_');
+  return STATUS_COLORS[key] ?? { bg: 'bg-primary/10', text: 'text-primary' };
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const { bg, text } = getStatusStyles(status);
+  return (
+    <span
+      className={`rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${bg} ${text}`}
+    >
+      {status}
+    </span>
+  );
+}
 
 interface ProtectedProjectsProps {
   projects: AssignedProtocol[];
@@ -59,59 +82,76 @@ export function ProtectedProjects({ projects }: ProtectedProjectsProps) {
           </CardDescription>
         </Card>
       ) : (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-4 gap-4">
           {projects.map((project) => (
             <Card
               key={project.id}
-              className="overflow-hidden transition-colors duration-300 hover:bg-[#e9e9e9]"
+              className="group flex flex-col overflow-hidden rounded-xl border shadow-sm transition-all duration-200 hover:shadow-md hover:border-muted-foreground/20"
             >
-              <CardHeader className="pb-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="text-xl">
-                      {project.protocol_number}
-                    </CardTitle>
-                    <CardDescription className="text-base">
-                      {project.protocol_name}
-                      {project.trial_phase && ` | ${project.trial_phase}`}
-                    </CardDescription>
+              <CardHeader className="items-center space-y-3 pb-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="min-w-0 flex-1 font-semibold text-lg leading-tight tracking-tight text-foreground">
+                    {project.protocol_name}
+                  </h3>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {project.protocol_status && (
+                      <StatusBadge status={project.protocol_status} />
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={(e) => handleEditClick(project, e)}
+                      className="h-8 w-8 shrink-0 text-muted-foreground opacity-70 transition-opacity hover:opacity-100 hover:text-foreground"
+                      title="Edit project"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={(e) => handleEditClick(project, e)}
-                    className="shrink-0 text-muted-foreground hover:text-foreground"
-                    title="Edit project"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
                 </div>
-              </CardHeader>
-              <CardContent className="pb-4">
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  {project.protocol_description && (
-                    <p className="line-clamp-2">{project.protocol_description}</p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-muted-foreground">
+                  {project.trial_phase && (
+                    <span>
+                      <span className="font-medium text-muted-foreground/80">Phase</span>{' '}
+                      {project.trial_phase}
+                    </span>
                   )}
-                  {(project.planned_sites || project.planned_subjects) && (
-                    <div className="flex gap-4">
-                      {project.planned_sites && (
-                        <span>Sites: {project.planned_sites}</span>
-                      )}
-                      {project.planned_subjects && (
-                        <span>Subjects: {project.planned_subjects}</span>
-                      )}
-                    </div>
-                  )}
-                  {project.protocol_status && (
-                    <span className="inline-block rounded-full bg-secondary px-2 py-1 text-xs capitalize">
-                      {project.protocol_status}
+                  {project.protocol_number && project.protocol_number !== '-' && (
+                    <span>
+                      <span className="font-medium text-muted-foreground/80">Protocol</span>{' '}
+                      {project.protocol_number}
                     </span>
                   )}
                 </div>
-                <div className="mt-4 h-2 w-full rounded-full bg-black" />
+              </CardHeader>
+              <CardContent className="flex-1 space-y-3 pb-3">
+                {project.protocol_description && (
+                  <p className="line-clamp-2 text-sm text-muted-foreground">
+                    {project.protocol_description}
+                  </p>
+                )}
+                {(project.planned_sites || project.planned_subjects) && (
+                  <div className="flex gap-4 text-sm text-muted-foreground">
+                    {project.planned_sites && (
+                      <span>
+                        <span className="font-medium text-muted-foreground/80">Sites</span>{' '}
+                        {project.planned_sites}
+                      </span>
+                    )}
+                    {project.planned_subjects && (
+                      <span>
+                        <span className="font-medium text-muted-foreground/80">Subjects</span>{' '}
+                        {project.planned_subjects}
+                      </span>
+                    )}
+                  </div>
+                )}
               </CardContent>
-              <CardFooter>
-                <Button variant="outline" className="w-full gap-2" asChild>
+              <CardFooter className="border-t bg-muted/30 pt-3">
+                <Button
+                  variant="secondary"
+                  className="w-full gap-2 font-medium"
+                  asChild
+                >
                   <Link href={`/protected/dashboard?protocolId=${project.id}`}>
                     View Project
                     <ArrowRight className="h-4 w-4" />

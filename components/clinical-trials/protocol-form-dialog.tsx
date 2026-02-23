@@ -47,7 +47,7 @@ const protocolSchema = z.object({
   protocol_number: z.string().min(1, 'Protocol number is required'),
   title: z.string().min(1, 'Title is required'),
   program_id: z.string().optional(),
-  phase: z.enum(['phase_i', 'phase_ii', 'phase_iii', 'phase_iv', 'observational']).optional(),
+  phase: z.enum(['phase_i', 'phase_ii', 'phase_iii', 'phase_iv', 'observational', 'early_feasibility_study', 'first_in_human', 'pilot_stage', 'pivotal', 'post_market']).optional(),
   status: z.enum(['planned', 'in_progress', 'on_hold', 'completed', 'terminated']),
   design: z.enum(['randomized', 'open_label', 'double_blind', 'single_blind', 'crossover', 'parallel', 'observational']).optional(),
   regions_required: z.boolean(),

@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
+import { Suspense } from 'react';
 import { ProtectedNavbar } from '@/components/layout/protected-navbar';
-import { DocumentManagementNavbar } from '@/components/document-management/document-management-navbar';
+import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { DocumentManagementInternalNavbar } from '@/components/document-management/document-management-internal-navbar';
 import { ScorecardPageClient } from '@/components/document-management/scorecard/scorecard-page-client';
 import { PasscodeProtection } from '@/components/document-management/passcode-protection';
@@ -44,7 +45,9 @@ export default async function ScorecardPage() {
                   Track regulatory document reconciliation completeness across all study sites
                 </p>
               </div>
-              <DocumentManagementNavbar />
+              <Suspense fallback={<div className="h-10" />}>
+                <ModuleNavbar />
+              </Suspense>
             </div>
             <DocumentManagementInternalNavbar />
           </div>

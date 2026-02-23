@@ -21,6 +21,7 @@ import {
 import { ContactsDataTable } from './contacts-data-table';
 import { ContactFormDialog } from './contact-form-dialog';
 import { getAllOrganizations } from '@/lib/actions/organizations';
+import { formatFieldName } from '@/lib/utils';
 import {
   ContactWithRelations,
   ContactFilters,
@@ -246,7 +247,7 @@ export function ContactsTab({
                   <SelectTrigger id="status" className="text-xs h-8 w-full capitalize">
                     <SelectValue placeholder="Status">
                       {filters.status && filters.status !== 'all' 
-                        ? ENTITY_STATUS_LABELS[filters.status as EntityStatus] || filters.status
+                        ? ENTITY_STATUS_LABELS[filters.status as EntityStatus] || formatFieldName(filters.status)
                         : 'All Status'}
                     </SelectValue>
                   </SelectTrigger>

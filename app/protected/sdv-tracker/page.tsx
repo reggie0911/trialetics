@@ -5,14 +5,14 @@ import { SDVTrackerPage } from '@/components/sdv-tracker/sdv-tracker-page';
 import { createClient } from '@/lib/server';
 import { getSDVReports } from '@/lib/actions/sdv-tracker';
 
-export default async function SDVTrackerPageRoute({
-  params,
-  searchParams,
-}: {
-  params?: Promise<Record<string, string | string[]>>;
-  searchParams: Promise<{ protocol?: string }>;
-}) {
-  const resolvedSearchParams = await searchParams;
+export default async function SDVTrackerPageRoute(
+  props: {
+    params?: Promise<Record<string, string | string[]>>;
+    searchParams: Promise<{ protocol?: string }>;
+  }
+) {
+  const params = await props.params;
+  const resolvedSearchParams = await props.searchParams;
   if (params) await params;
   const protocolId = resolvedSearchParams.protocol || null;
   const supabase = await createClient();

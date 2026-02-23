@@ -68,6 +68,11 @@ function phaseToLegacy(phase: string | null): string | null {
     phase_iii: 'Phase III',
     phase_iv: 'Phase IV',
     observational: 'Observational',
+    early_feasibility_study: 'Early Feasibility Study',
+    first_in_human: 'First In-Human',
+    pilot_stage: 'Pilot Stage',
+    pivotal: 'Pivotal',
+    post_market: 'Post Market',
   };
   return map[phase] ?? phase;
 }
@@ -89,11 +94,11 @@ function legacyToPhase(legacy: string): string | null {
     'Phase II': 'phase_ii',
     'Phase III': 'phase_iii',
     'Phase IV': 'phase_iv',
-    'Pilot Stage': 'observational',
-    'Pivotal': 'observational',
-    'Post Market': 'observational',
-    'Early Feasibility Study': 'observational',
-    'First In-Human': 'observational',
+    'Pilot Stage': 'pilot_stage',
+    'Pivotal': 'pivotal',
+    'Post Market': 'post_market',
+    'Early Feasibility Study': 'early_feasibility_study',
+    'First In-Human': 'first_in_human',
     'Observational': 'observational',
   };
   return map[legacy] ?? 'observational';

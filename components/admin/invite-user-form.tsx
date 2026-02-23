@@ -151,9 +151,6 @@ export function InviteUserForm({
                 {...register('email')}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Plus-addressed emails (e.g. user+tag@domain.com) are not supported.
-            </p>
             {errors.email && (
               <p className="text-sm text-destructive">{errors.email.message}</p>
             )}
@@ -234,7 +231,7 @@ export function InviteUserForm({
           )}
 
           {/* Submit */}
-          <Button type="submit" disabled className="w-full">
+          <Button type="submit" disabled={isSubmitting} className="w-full">
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

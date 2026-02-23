@@ -33,10 +33,12 @@ export function OnboardingStepCompany({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (initialLogoUrl) {
-      setLogoUrl(initialLogoUrl);
-      setPreviewUrl(initialLogoUrl);
-    }
+    setName(initialName);
+  }, [initialName]);
+
+  useEffect(() => {
+    setLogoUrl(initialLogoUrl ?? null);
+    setPreviewUrl(initialLogoUrl ?? null);
   }, [initialLogoUrl]);
 
   const validateFile = (file: File): string | null => {
@@ -138,7 +140,7 @@ export function OnboardingStepCompany({
       <CardContent className="space-y-6">
         <div className="space-y-2">
           <Label htmlFor="companyName" className="text-[12px]">
-            Company Name
+            Company Name <span className="text-destructive">*</span>
           </Label>
           <Input
             id="companyName"

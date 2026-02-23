@@ -109,7 +109,7 @@ export function VWCategoriesChart({ data, selectedCategory, onCategoryClick }: V
             <BarChart
               data={chartData}
               margin={{ top: 20, right: 20, left: 20, bottom: 60 }}
-              onClick={(e) => {
+              onClick={(e: any) => {
                 if (e && e.activePayload && e.activePayload[0]) {
                   handleBarClick(e.activePayload[0].payload);
                 }

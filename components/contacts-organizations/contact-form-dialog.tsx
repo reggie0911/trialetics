@@ -28,7 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import { createContact, updateContact, assignContactToOrganization, getContacts } from '@/lib/actions/contacts';
 import { getAllOrganizations } from '@/lib/actions/organizations';
 import { createAddress, updateAddress, getAddressesByEntity } from '@/lib/actions/addresses';
-import { formatPhoneNumber } from '@/lib/utils';
+import { formatPhoneNumber, formatFieldName } from '@/lib/utils';
 import {
   Contact,
   Organization,
@@ -474,7 +474,7 @@ export function ContactFormDialog({
               >
                 <SelectTrigger className="text-xs h-8 w-full">
                   <span className="text-xs capitalize">
-                    {selectedStatus ? ENTITY_STATUS_LABELS[selectedStatus as EntityStatus] || selectedStatus : 'Select status'}
+                    {selectedStatus ? ENTITY_STATUS_LABELS[selectedStatus as EntityStatus] || formatFieldName(selectedStatus) : 'Select status'}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
@@ -546,7 +546,7 @@ export function ContactFormDialog({
                     >
                       <SelectTrigger className="text-xs h-8 w-full">
                         <span className="text-xs capitalize">
-                          {selectedRole ? CONTACT_ROLE_LABELS[selectedRole] || selectedRole : 'Select role'}
+                          {selectedRole ? CONTACT_ROLE_LABELS[selectedRole] || formatFieldName(selectedRole) : 'Select role'}
                         </span>
                       </SelectTrigger>
                       <SelectContent>

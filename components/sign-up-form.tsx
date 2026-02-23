@@ -17,6 +17,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 
 export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
+  const [firstName, setFirstName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [repeatPassword, setRepeatPassword] = useState('')
@@ -41,10 +42,28 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
         email,
         password,
         options: {
+          data: { first_name: firstName },
           emailRedirectTo: `${window.location.origin}/protected`,
         },
       })
       if (error) throw error
+      
+      // Add contact to Loops (fire-and-forget with logging)
+      fetch('/api/loops/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, firstName }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (!data.success) {
+            console.error('Failed to add contact to Loops:', data.message)
+          } else {
+            console.log('Successfully added contact to Loops')
+          }
+        })
+        .catch(err => console.error('Error calling Loops API:', err))
+      
       router.push('/auth/sign-up-success')
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
@@ -63,6 +82,17 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
         <CardContent>
           <form onSubmit={handleSignUp}>
             <div className="flex flex-col gap-6">
+              <div className="grid gap-2">
+                <Label htmlFor="first-name">First name</Label>
+                <Input
+                  id="first-name"
+                  type="text"
+                  placeholder="Jane"
+                  required
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                />
+              </div>
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
                 <Input

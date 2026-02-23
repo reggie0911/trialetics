@@ -7,14 +7,14 @@ import { createClient } from '@/lib/server';
 import { getTripReportTemplate } from '@/lib/actions/trip-report-templates';
 import { ArrowLeft } from 'lucide-react';
 
-export default async function TemplateEditPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams?: Promise<Record<string, string | string[]>>;
-}) {
-  const { id } = await params;
+export default async function TemplateEditPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<Record<string, string | string[]>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const { id } = await props.params;
   if (searchParams) await searchParams;
 
   if (id === 'new') {

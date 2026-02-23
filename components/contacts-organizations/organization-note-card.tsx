@@ -17,6 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { formatFieldName } from '@/lib/utils';
 import { OrganizationNote, NOTE_TYPE_LABELS, OrganizationNoteType } from '@/lib/types/contacts-organizations';
 
 interface OrganizationNoteCardProps {
@@ -132,7 +133,7 @@ export function OrganizationNoteCard({
                   <span className="text-xs text-muted-foreground">{timeDisplay}</span>
                   {note.note_type && note.note_type !== 'general' && (
                     <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
-                      {NOTE_TYPE_LABELS[note.note_type as OrganizationNoteType] || note.note_type}
+                      {NOTE_TYPE_LABELS[note.note_type as OrganizationNoteType] || formatFieldName(note.note_type)}
                     </Badge>
                   )}
                   {isEdited && (

@@ -59,6 +59,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { formatFieldName } from '@/lib/utils';
 import type { OrganizationContactWithContact } from '@/lib/types/contacts-organizations';
 import type { OrganizationClinicalTrials } from '@/lib/actions/organization-clinical-trials';
 
@@ -633,7 +634,7 @@ export function SiteDetailPageClient({
                         {oc.contact?.first_name} {oc.contact?.last_name}
                       </div>
                       <div className="text-muted-foreground">
-                        {CONTACT_ROLE_LABELS[oc.role] || oc.role}
+                        {CONTACT_ROLE_LABELS[oc.role] || formatFieldName(oc.role)}
                       </div>
                     </div>
                     <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100 flex-shrink-0">
@@ -668,9 +669,9 @@ export function SiteDetailPageClient({
                     <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium">
-                        {ENTITY_STATUS_LABELS[entry.old_status as keyof typeof ENTITY_STATUS_LABELS] || entry.old_status}
+                        {ENTITY_STATUS_LABELS[entry.old_status as keyof typeof ENTITY_STATUS_LABELS] || formatFieldName(entry.old_status)}
                         {' → '}
-                        {ENTITY_STATUS_LABELS[entry.new_status as keyof typeof ENTITY_STATUS_LABELS] || entry.new_status}
+                        {ENTITY_STATUS_LABELS[entry.new_status as keyof typeof ENTITY_STATUS_LABELS] || formatFieldName(entry.new_status)}
                       </div>
                       <div className="text-muted-foreground">
                         {formatDate(entry.changed_at)}
@@ -753,7 +754,7 @@ export function SiteDetailPageClient({
                     <div className="flex-1 min-w-0">
                       <div className="font-medium truncate">{visit.visit_name}</div>
                       <div className="text-muted-foreground">
-                        {SITE_VISIT_TYPE_LABELS[visit.visit_type as SiteVisitType] || visit.visit_type}
+                        {SITE_VISIT_TYPE_LABELS[visit.visit_type as SiteVisitType] || formatFieldName(visit.visit_type)}
                         {' · '}
                         {formatDateTime(visit.visit_start)}
                         {getAssigneeName(visit.assigned_to_id) && (
@@ -762,7 +763,7 @@ export function SiteDetailPageClient({
                       </div>
                     </div>
                     <Badge variant="outline" className="text-[10px] flex-shrink-0">
-                      {SITE_VISIT_STATUS_LABELS[visit.visit_status as keyof typeof SITE_VISIT_STATUS_LABELS] || visit.visit_status}
+                      {SITE_VISIT_STATUS_LABELS[visit.visit_status as keyof typeof SITE_VISIT_STATUS_LABELS] || formatFieldName(visit.visit_status)}
                     </Badge>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       {siteVisitToTripReport[visit.id] ? (
@@ -1048,7 +1049,7 @@ export function SiteDetailPageClient({
                         {oc.contact?.first_name} {oc.contact?.last_name}
                       </div>
                       <div className="text-muted-foreground">
-                        {CONTACT_ROLE_LABELS[oc.role] || oc.role}
+                        {CONTACT_ROLE_LABELS[oc.role] || formatFieldName(oc.role)}
                         {oc.end_date && (
                           <span className="ml-1">· Ended {formatDate(oc.end_date)}</span>
                         )}

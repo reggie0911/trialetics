@@ -8,7 +8,17 @@
 // ENUM Types
 // =============================================
 
-export type ProtocolPhase = 'phase_i' | 'phase_ii' | 'phase_iii' | 'phase_iv' | 'observational';
+export type ProtocolPhase =
+  | 'phase_i'
+  | 'phase_ii'
+  | 'phase_iii'
+  | 'phase_iv'
+  | 'observational'
+  | 'early_feasibility_study'
+  | 'first_in_human'
+  | 'pilot_stage'
+  | 'pivotal'
+  | 'post_market';
 
 export type ProtocolStatus = 'planned' | 'in_progress' | 'on_hold' | 'completed' | 'terminated';
 
@@ -394,6 +404,11 @@ export const PROTOCOL_PHASE_LABELS: Record<ProtocolPhase, string> = {
   phase_iii: 'Phase III',
   phase_iv: 'Phase IV',
   observational: 'Observational',
+  early_feasibility_study: 'Early Feasibility Study',
+  first_in_human: 'First In-Human',
+  pilot_stage: 'Pilot Stage',
+  pivotal: 'Pivotal',
+  post_market: 'Post Market',
 };
 
 export const PROTOCOL_STATUS_LABELS: Record<ProtocolStatus, string> = {

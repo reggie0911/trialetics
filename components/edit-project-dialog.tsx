@@ -122,7 +122,7 @@ export function EditProjectDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[600px] max-w-[600px] max-h-[90vh] overflow-y-auto text-xs">
+      <DialogContent className="w-[600px] max-w-[600px] max-h-[90vh] overflow-y-auto text-[12px]">
         <DialogHeader>
           <DialogTitle className="text-base">Edit Project</DialogTitle>
         </DialogHeader>
@@ -131,14 +131,14 @@ export function EditProjectDialog({
           <form onSubmit={handleSubmit}>
             <div className="space-y-4 py-4">
               {error && (
-                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                <div className="rounded-md bg-destructive/10 p-3 text-[12px] text-destructive">
                   {error}
                 </div>
               )}
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="edit-protocolName" className="text-xs">
+                  <Label htmlFor="edit-protocolName" className="!text-[12px]">
                     Protocol Name <span className="text-destructive">*</span>
                   </Label>
                   <Input
@@ -149,12 +149,12 @@ export function EditProjectDialog({
                       setFormData({ ...formData, protocolName: e.target.value })
                     }
                     placeholder="Enter protocol name"
-                    className="text-xs placeholder:text-xs min-w-[150px]"
+                    className="!text-[12px] placeholder:!text-[12px] min-w-[150px]"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="edit-protocolNumber" className="text-xs">
+                  <Label htmlFor="edit-protocolNumber" className="!text-[12px]">
                     Protocol Number <span className="text-destructive">*</span>
                   </Label>
                   <Input
@@ -165,12 +165,12 @@ export function EditProjectDialog({
                       setFormData({ ...formData, protocolNumber: e.target.value })
                     }
                     placeholder="Enter protocol number"
-                    className="text-xs placeholder:text-xs min-w-[150px]"
+                    className="!text-[12px] placeholder:!text-[12px] min-w-[150px]"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="edit-trialPhase" className="text-xs">
+                  <Label htmlFor="edit-trialPhase" className="!text-[12px]">
                     Trial Phase <span className="text-destructive">*</span>
                   </Label>
                   <Select
@@ -179,14 +179,14 @@ export function EditProjectDialog({
                       setFormData({ ...formData, trialPhase: value || '' })
                     }
                   >
-                    <SelectTrigger id="edit-trialPhase" className="w-full text-xs placeholder:text-xs min-w-[150px]">
+                    <SelectTrigger id="edit-trialPhase" className="w-full !text-[12px] placeholder:!text-[12px] min-w-[150px]">
                       <SelectValue>
                         {formData.trialPhase || 'Choose an option...'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {TRIAL_PHASES.map((phase) => (
-                        <SelectItem key={phase} value={phase}>
+                        <SelectItem key={phase} value={phase} className="!text-[12px]">
                           {phase}
                         </SelectItem>
                       ))}
@@ -195,14 +195,14 @@ export function EditProjectDialog({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="edit-protocolStatus" className="text-xs">Protocol Status</Label>
+                  <Label htmlFor="edit-protocolStatus" className="!text-[12px]">Protocol Status</Label>
                   <Select
                     value={formData.protocolStatus}
                     onValueChange={(value) =>
                       setFormData({ ...formData, protocolStatus: value || '' })
                     }
                   >
-                    <SelectTrigger id="edit-protocolStatus" className="w-full text-xs placeholder:text-xs min-w-[150px]">
+                    <SelectTrigger id="edit-protocolStatus" className="w-full !text-[12px] placeholder:!text-[12px] min-w-[150px]">
                       <SelectValue>
                         {formData.protocolStatus
                           ? formData.protocolStatus.charAt(0).toUpperCase() +
@@ -212,7 +212,7 @@ export function EditProjectDialog({
                     </SelectTrigger>
                     <SelectContent>
                       {PROJECT_STATUSES.map((status) => (
-                        <SelectItem key={status} value={status}>
+                        <SelectItem key={status} value={status} className="!text-[12px]">
                           {status.charAt(0).toUpperCase() + status.slice(1)}
                         </SelectItem>
                       ))}
@@ -221,7 +221,7 @@ export function EditProjectDialog({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="edit-countryName" className="text-xs">Country Name</Label>
+                  <Label htmlFor="edit-countryName" className="!text-[12px]">Country Name</Label>
                   <Input
                     id="edit-countryName"
                     value={formData.countryName}
@@ -229,12 +229,12 @@ export function EditProjectDialog({
                       setFormData({ ...formData, countryName: e.target.value })
                     }
                     placeholder="Enter country name"
-                    className="text-xs placeholder:text-xs min-w-[150px]"
+                    className="!text-[12px] placeholder:!text-[12px] min-w-[150px]"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="edit-countryRegion" className="text-xs">Country Region</Label>
+                  <Label htmlFor="edit-countryRegion" className="!text-[12px]">Country Region</Label>
                   <Input
                     id="edit-countryRegion"
                     value={formData.countryRegion}
@@ -242,12 +242,12 @@ export function EditProjectDialog({
                       setFormData({ ...formData, countryRegion: e.target.value })
                     }
                     placeholder="Enter country region"
-                    className="text-xs placeholder:text-xs min-w-[150px]"
+                    className="!text-[12px] placeholder:!text-[12px] min-w-[150px]"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="edit-plannedSites" className="text-xs">Planned Sites</Label>
+                  <Label htmlFor="edit-plannedSites" className="!text-[12px]">Planned Sites</Label>
                   <Input
                     id="edit-plannedSites"
                     type="number"
@@ -262,12 +262,12 @@ export function EditProjectDialog({
                       })
                     }
                     placeholder="0"
-                    className="text-xs placeholder:text-xs min-w-[150px]"
+                    className="!text-[12px] placeholder:!text-[12px] min-w-[150px]"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="edit-plannedSubjects" className="text-xs">Planned Subjects</Label>
+                  <Label htmlFor="edit-plannedSubjects" className="!text-[12px]">Planned Subjects</Label>
                   <Input
                     id="edit-plannedSubjects"
                     type="number"
@@ -282,12 +282,12 @@ export function EditProjectDialog({
                       })
                     }
                     placeholder="0"
-                    className="text-xs placeholder:text-xs min-w-[150px]"
+                    className="!text-[12px] placeholder:!text-[12px] min-w-[150px]"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="edit-plannedStartDate" className="text-xs">Planned Start Date</Label>
+                  <Label htmlFor="edit-plannedStartDate" className="!text-[12px]">Planned Start Date</Label>
                   <span className="block text-right text-[8px] text-gray-400">mm/dd/yyyy</span>
                   <Input
                     id="edit-plannedStartDate"
@@ -296,12 +296,12 @@ export function EditProjectDialog({
                     onChange={(e) =>
                       setFormData({ ...formData, plannedStartDate: e.target.value })
                     }
-                    className="text-xs placeholder:text-xs min-w-[150px]"
+                    className="!text-[12px] placeholder:!text-[12px] min-w-[150px]"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="edit-plannedEndDate" className="text-xs">Planned End Date</Label>
+                  <Label htmlFor="edit-plannedEndDate" className="!text-[12px]">Planned End Date</Label>
                   <span className="block text-right text-[8px] text-gray-400">mm/dd/yyyy</span>
                   <Input
                     id="edit-plannedEndDate"
@@ -310,12 +310,12 @@ export function EditProjectDialog({
                     onChange={(e) =>
                       setFormData({ ...formData, plannedEndDate: e.target.value })
                     }
-                    className="text-xs placeholder:text-xs min-w-[150px]"
+                    className="!text-[12px] placeholder:!text-[12px] min-w-[150px]"
                   />
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="edit-protocolDescription" className="text-xs">Protocol Description</Label>
+                  <Label htmlFor="edit-protocolDescription" className="!text-[12px]">Protocol Description</Label>
                   <Textarea
                     id="edit-protocolDescription"
                     value={formData.protocolDescription}
@@ -323,7 +323,7 @@ export function EditProjectDialog({
                       setFormData({ ...formData, protocolDescription: e.target.value })
                     }
                     placeholder="Enter description"
-                    className="min-h-[60px] text-xs placeholder:text-xs min-w-[150px]"
+                    className="min-h-[60px] !text-[12px] placeholder:!text-[12px] min-w-[150px]"
                   />
                 </div>
               </div>
@@ -333,7 +333,7 @@ export function EditProjectDialog({
               <Button
                 type="submit"
                 disabled={isPending || !formData.protocolName || !formData.protocolNumber || !formData.trialPhase}
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto !text-[12px]"
               >
                 {isPending ? (
                   <>

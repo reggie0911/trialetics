@@ -142,9 +142,6 @@ export function OnboardingStepInvite({
                 {...register('email')}
               />
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              Plus-addressed emails (e.g. user+tag@domain.com) are not supported.
-            </p>
             {errors.email && (
               <p className="text-[11px] text-destructive">{errors.email.message}</p>
             )}
@@ -222,7 +219,7 @@ export function OnboardingStepInvite({
           )}
 
           <div className="flex gap-2">
-            <Button type="submit" disabled className="text-[12px]">
+            <Button type="submit" disabled={isSubmitting} className="text-[12px]">
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

@@ -15,6 +15,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { archiveOrganizationContact } from '@/lib/actions/contacts';
+import { formatFieldName } from '@/lib/utils';
 import { CONTACT_ROLE_LABELS } from '@/lib/types/contacts-organizations';
 import type { OrganizationContactWithContact } from '@/lib/types/contacts-organizations';
 
@@ -41,7 +42,7 @@ export function ArchiveContactDialog({
     ? `${organizationContact.contact.first_name} ${organizationContact.contact.last_name}`
     : 'Unknown';
   const roleLabel = organizationContact
-    ? CONTACT_ROLE_LABELS[organizationContact.role] || organizationContact.role
+    ? CONTACT_ROLE_LABELS[organizationContact.role] || formatFieldName(organizationContact.role)
     : '';
 
   const handleSubmit = async (e: React.FormEvent) => {

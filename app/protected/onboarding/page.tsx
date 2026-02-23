@@ -3,6 +3,32 @@ import { ProtectedNavbar } from '@/components/layout/protected-navbar';
 import { AdminOnboardingWizard } from '@/components/onboarding/admin-onboarding-wizard';
 import { createClient } from '@/lib/server';
 
+export const dynamic = 'force-dynamic';
+
+function mapPhaseToDisplay(phase: string | null): string {
+  if (!phase) return 'Phase I';
+  const map: Record<string, string> = {
+    phase_i: 'Phase I',
+    phase_ii: 'Phase II',
+    phase_iii: 'Phase III',
+    phase_iv: 'Phase IV',
+    observational: 'Observational',
+  };
+  return map[phase] ?? phase;
+}
+
+function mapStatusToDisplay(status: string | null): string {
+  if (!status) return 'planning';
+  const map: Record<string, string> = {
+    planned: 'planning',
+    in_progress: 'approved',
+    on_hold: 'planning',
+    completed: 'closed',
+    terminated: 'closed',
+  };
+  return map[status] ?? status;
+}
+
 export default async function OnboardingPage() {
   const supabase = await createClient();
 
@@ -39,6 +65,24 @@ export default async function OnboardingPage() {
     redirect('/protected');
   }
 
+  // Fetch first project for the company (most recent) to pre-populate step 2
+  const { data: firstProject } = await supabase
+    .from('clinical_protocols')
+    .select('title, protocol_number, phase, status')
+    .eq('company_id', profile.company_id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const initialProject = firstProject
+    ? {
+        protocolName: firstProject.title ?? '',
+        protocolNumber: firstProject.protocol_number ?? '',
+        trialPhase: mapPhaseToDisplay(firstProject.phase),
+        protocolStatus: mapStatusToDisplay(firstProject.status),
+      }
+    : null;
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#E9E9E9' }}>
       <ProtectedNavbar />
@@ -52,8 +96,10 @@ export default async function OnboardingPage() {
         <AdminOnboardingWizard
           companyId={company.id}
           profileId={profile.id}
+          companyName={company.name ?? ''}
           companyLogoUrl={company.logo_url}
           userEmail={profile.email || ''}
+          initialProject={initialProject}
         />
       </main>
     </div>
