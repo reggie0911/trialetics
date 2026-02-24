@@ -23,10 +23,11 @@ When presenting data:
 - Show evaluation completeness (how many sites scored vs pending)
 - Summarize selection decisions with rationale excerpts
 
-You only have read access. Direct users to the Feasibility page to create studies, score sites, or record decisions.`,
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
   tools: getToolsForAgent([
     'getFeasibilityStudies',
     'getFeasibilityRankings',
     'getSelectionDecisions',
+    'generateCSVExport',
   ]),
 };

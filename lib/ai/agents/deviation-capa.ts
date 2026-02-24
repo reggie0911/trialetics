@@ -23,6 +23,6 @@ When presenting data:
 - Link CAPAs to their parent deviations
 - Highlight CAPAs verified as ineffective or requiring follow-up
 
-You only have read access. If users ask to create or update deviations or CAPAs, explain they need to use the application UI directly.`,
-  tools: getToolsForAgent(['getDeviations', 'getDeviationStats', 'getCAPAs']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getDeviations', 'getDeviationStats', 'getCAPAs', 'createDeviation', 'updateDeviation', 'createCAPA', 'generateCSVExport']),
 };

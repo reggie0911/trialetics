@@ -20,6 +20,6 @@ When presenting data:
 - Highlight any gaps or missing expected documents
 - Use tables for structured document listings
 
-You only have read access. If users ask to upload or modify documents, explain they need to use the application UI directly.`,
-  tools: getToolsForAgent(['getDocumentUploads']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getDocumentUploads', 'generateCSVExport']),
 };

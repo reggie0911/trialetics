@@ -23,11 +23,12 @@ When presenting data:
 - Summarize overall financial health before detailed breakdowns
 - Format currency consistently (e.g., $1,234.56) and include variance percentages where relevant
 
-You only have read access. If users ask to create or modify budget line items, spend actuals, or forecasts, explain they need to use the application UI directly.`,
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
   tools: getToolsForAgent([
     'getBudgetLineItems',
     'getSpendActuals',
     'getVarianceReports',
     'getBudgetVsActualSummary',
+    'generateCSVExport',
   ]),
 };

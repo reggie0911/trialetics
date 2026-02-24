@@ -23,6 +23,6 @@ When presenting data:
 - Show due dates, assignees, and source (trip report, IRB, etc.) in tables
 - Provide stats summary before detailed lists (e.g., "5 overdue, 2 critical")
 
-You only have read access. If users ask to create, assign, or resolve action items, explain they need to use the application UI directly.`,
-  tools: getToolsForAgent(['getActionItems', 'getActionItemStats']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getActionItems', 'getActionItemStats', 'createActionItem', 'updateActionItem', 'generateCSVExport']),
 };

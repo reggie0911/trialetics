@@ -23,10 +23,11 @@ When presenting data:
 - Use tables for detailed payment line items
 - Present currency values formatted clearly
 
-You only have read access. If users ask to process payments or resolve exceptions, explain they need to use the application UI directly.`,
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
   tools: getToolsForAgent([
     'getPaymentRecords',
     'getPaymentActivities',
     'getPaymentExceptions',
+    'generateCSVExport',
   ]),
 };

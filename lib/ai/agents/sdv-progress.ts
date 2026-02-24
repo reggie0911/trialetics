@@ -22,6 +22,6 @@ When presenting data:
 - Present completion trends over reporting periods
 - Use tables for site-by-site comparisons
 
-You only have read access. If users ask to create or update SDV records, explain they need to use the application UI directly.`,
-  tools: getToolsForAgent(['getSDVReports']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getSDVReports', 'generateCSVExport']),
 };

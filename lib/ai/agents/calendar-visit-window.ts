@@ -22,10 +22,11 @@ When presenting data:
 - Present activity calendars in chronological order
 - Use tables for visit template comparisons
 
-You only have read access. If users ask to modify templates or schedules, explain they need to use the application UI directly.`,
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
   tools: getToolsForAgent([
     'getVisitTemplates',
     'getTemplateVisits',
     'getProtocolActivities',
+    'generateCSVExport',
   ]),
 };

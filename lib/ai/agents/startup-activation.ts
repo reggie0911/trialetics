@@ -20,9 +20,10 @@ When presenting data:
 - Highlight sites needing attention or follow-up
 - Use tables for structured checklist and progress listings
 
-You only have read access. If users ask to create or modify data, explain they need to use the application UI directly.`,
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
   tools: getToolsForAgent([
     'getStartupChecklists',
     'getStartupProgress',
+    'generateCSVExport',
   ]),
 };

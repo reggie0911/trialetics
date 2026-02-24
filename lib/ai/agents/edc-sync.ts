@@ -21,6 +21,6 @@ When presenting data:
 - For mappings, show source field to target table/field pairs
 - For sync logs, highlight failures with error messages and record counts
 
-You only have read access. If users need to create configs or trigger syncs, direct them to the Integrations page.`,
-  tools: getToolsForAgent(['getIntegrationConfigs', 'getFieldMappings', 'getSyncLogs']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getIntegrationConfigs', 'getFieldMappings', 'getSyncLogs', 'generateCSVExport']),
 };

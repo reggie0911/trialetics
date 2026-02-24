@@ -8,9 +8,10 @@ import type {
   ChatCompletionTool,
 } from './types';
 import { identifyModule } from './context-builder';
-import { getToolHandler } from './tool-registry';
-import { agentRegistry, findAgentForPage } from './agents';
+import { getToolDefinition } from './tool-registry';
+import { getAgent, findAgentForPage, getAllAgents } from './agents';
 import { createSSEStream } from './stream';
+import type { ConfirmActionPayload } from './types';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -22,15 +23,19 @@ function getOpenAI(): OpenAI {
 
 const FALLBACK_AGENT_ID = 'dashboard-narrator';
 
-function selectAgent(request: ChatRequest, ctx: UserContext): AgentConfig {
-  if (request.agentId && agentRegistry[request.agentId]) {
-    return agentRegistry[request.agentId];
+async function selectAgent(request: ChatRequest, ctx: UserContext): Promise<AgentConfig> {
+  if (request.agentId) {
+    const agent = await getAgent(request.agentId);
+    if (agent) return agent;
   }
 
-  const pageAgent = findAgentForPage(ctx.currentPage);
+  const pageAgent = await findAgentForPage(ctx.currentPage);
   if (pageAgent) return pageAgent;
 
-  return agentRegistry[FALLBACK_AGENT_ID] ?? Object.values(agentRegistry)[0];
+  const fallback = await getAgent(FALLBACK_AGENT_ID);
+  if (fallback) return fallback;
+
+  throw new Error('No agent available');
 }
 
 function buildOpenAITools(agent: AgentConfig): ChatCompletionTool[] {
@@ -66,7 +71,33 @@ function buildMessages(
   ];
 
   for (const msg of request.messages) {
-    messages.push({ role: msg.role, content: msg.content });
+    if (msg.attachments && msg.attachments.length > 0) {
+      const contentParts: Array<{ type: string; text?: string; image_url?: { url: string; detail: string } }> = [];
+
+      const docTexts = msg.attachments
+        .filter(a => a.type === 'document' && a.textContent)
+        .map(a => `[Attached file: ${a.filename}]\n${a.textContent}`)
+        .join('\n\n');
+
+      const textPart = docTexts
+        ? `${docTexts}\n\n${msg.content}`
+        : msg.content;
+
+      contentParts.push({ type: 'text', text: textPart });
+
+      for (const att of msg.attachments) {
+        if (att.type === 'image' && att.imageUrl) {
+          contentParts.push({
+            type: 'image_url',
+            image_url: { url: att.imageUrl, detail: 'auto' },
+          });
+        }
+      }
+
+      messages.push({ role: msg.role, content: contentParts } as any);
+    } else {
+      messages.push({ role: msg.role, content: msg.content });
+    }
   }
 
   return messages;
@@ -146,13 +177,26 @@ async function* runAgent(
     for (const tc of Object.values(currentToolCalls)) {
       yield { type: 'tool_call_start', data: tc.name };
 
-      const handler = getToolHandler(tc.name);
+      const toolDef = await getToolDefinition(tc.name);
+      const handler = toolDef?.handler;
       let result: unknown;
 
       if (handler) {
         try {
           const args = JSON.parse(tc.arguments || '{}');
-          result = await handler(args, ctx);
+
+          if (toolDef?.requiresConfirmation) {
+            const payload: ConfirmActionPayload = {
+              toolCallId: tc.id,
+              toolName: tc.name,
+              description: toolDef.description,
+              args,
+            };
+            yield { type: 'confirm_action', data: JSON.stringify(payload) };
+            result = { pending: true, message: `Action "${tc.name}" requires user confirmation.`, confirmPayload: payload };
+          } else {
+            result = await handler(args, ctx);
+          }
         } catch (err) {
           result = {
             error: err instanceof Error ? err.message : 'Tool execution failed',
@@ -164,6 +208,11 @@ async function* runAgent(
 
       const resultStr =
         typeof result === 'string' ? result : JSON.stringify(result);
+
+      // Emit file_download event when result contains a downloadUrl
+      if (typeof result === 'object' && result !== null && 'downloadUrl' in (result as Record<string, unknown>)) {
+        yield { type: 'file_download', data: JSON.stringify(result) };
+      }
 
       yield { type: 'tool_result', data: resultStr.slice(0, 500) };
 
@@ -185,13 +234,15 @@ export function orchestrate(
   request: ChatRequest,
   ctx: UserContext
 ): ReadableStream<Uint8Array> {
-  const agent = selectAgent(request, ctx);
-
-  return createSSEStream(() => runAgent(agent, request, ctx));
+  return createSSEStream(async function* () {
+    const agent = await selectAgent(request, ctx);
+    yield* runAgent(agent, request, ctx);
+  });
 }
 
-export function listAgents(): Array<{ id: string; name: string; description: string }> {
-  return Object.values(agentRegistry).map(a => ({
+export async function listAgents(): Promise<Array<{ id: string; name: string; description: string }>> {
+  const agents = await getAllAgents();
+  return agents.map(a => ({
     id: a.id,
     name: a.name,
     description: a.description,

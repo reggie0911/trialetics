@@ -21,6 +21,6 @@ When presenting data:
 - Highlight recent changes in the access audit log
 - Group audit entries by action type or target user
 
-You only have read access. If users ask to grant or revoke permissions, explain they need to use the Admin Panel permissions tab directly.`,
-  tools: getToolsForAgent(['getUserPermissions', 'getAccessAuditLog']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getUserPermissions', 'getAccessAuditLog', 'generateCSVExport']),
 };

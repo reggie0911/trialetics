@@ -24,12 +24,13 @@ When presenting data:
 - Flag risks overdue for governance review
 - Summarize risk distribution by category (quality, safety, regulatory, etc.)
 
-You only have read access. Direct users to the Risk Management page to create or update risks.`,
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
   tools: getToolsForAgent([
     'getProtocolRisks',
     'getRiskRegisterSummary',
     'getRiskHeatmapData',
     'getRiskResolutionActivities',
     'getRiskTrends',
+    'generateCSVExport',
   ]),
 };

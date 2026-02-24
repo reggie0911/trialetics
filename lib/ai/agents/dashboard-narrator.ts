@@ -1,4 +1,5 @@
 import type { AgentConfig } from '../types';
+import { getToolsForAgent } from '../tool-registry';
 
 export const dashboardNarratorAgent: AgentConfig = {
   id: 'dashboard-narrator',
@@ -29,5 +30,5 @@ When users ask general questions:
 - Be helpful and professional
 
 You do not have access to data-querying tools in this general mode. For specific data queries, suggest the user navigate to the relevant module where a specialist assistant can help.`,
-  tools: [],
+  tools: getToolsForAgent(['generateCSVExport']),
 };

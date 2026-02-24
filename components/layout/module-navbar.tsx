@@ -81,6 +81,8 @@ const menuItems = [
   },
 ];
 
+const PROTOCOL_ID_STORAGE_KEY = "trialetics_active_protocol_id";
+
 export function ModuleNavbar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -101,21 +103,38 @@ export function ModuleNavbar() {
     loadCompanyId();
   }, []);
 
+  const urlProtocolId =
+    searchParams.get("protocolId") ??
+    searchParams.get("projectId") ??
+    searchParams.get("protocol");
+
+  // Track the resolved protocolId in state so the initial render matches SSR (null)
+  // and localStorage is only read after hydration.
+  const [resolvedProtocolId, setResolvedProtocolId] = useState<string | null>(urlProtocolId);
+
+  useEffect(() => {
+    if (urlProtocolId) {
+      try { localStorage.setItem(PROTOCOL_ID_STORAGE_KEY, urlProtocolId); } catch {}
+      setResolvedProtocolId(urlProtocolId);
+    } else {
+      try {
+        const stored = localStorage.getItem(PROTOCOL_ID_STORAGE_KEY);
+        if (stored) setResolvedProtocolId(stored);
+      } catch {}
+    }
+  }, [urlProtocolId]);
+
   const hideCtms = companyId === CTMS_DISABLED_COMPANY_ID;
   const visibleMenuItems = hideCtms
     ? menuItems.filter((item) => !(item.type === "dropdown" && item.trigger === "CTMS"))
     : menuItems;
 
   const getHrefWithParams = (href: string) => {
-    const protocolId =
-      searchParams.get("protocolId") ??
-      searchParams.get("projectId") ??
-      searchParams.get("protocol");
+    const protocolId = resolvedProtocolId;
     if (!protocolId) return href;
     if (href === "/protected/dashboard") {
       return `${href}?protocolId=${protocolId}`;
     }
-    // Tracker pages use ?protocol= in the URL
     const trackerHrefs = [
       "/protected/patients",
       "/protected/ae",

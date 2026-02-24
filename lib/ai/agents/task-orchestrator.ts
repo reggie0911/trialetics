@@ -23,6 +23,6 @@ When presenting data:
 - Show due dates, assignees, priorities, and protocols
 - Provide stats summary before detailed lists
 
-You only have read access. If users ask to create or update tasks, explain they need to use the application UI directly.`,
-  tools: getToolsForAgent(['getTasks', 'getMyTasks', 'getTaskStats']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getTasks', 'getMyTasks', 'getTaskStats', 'createTask', 'updateTask', 'generateCSVExport']),
 };

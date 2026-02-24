@@ -24,11 +24,12 @@ When presenting data:
 - Compare site retention rates to identify underperformers
 - Flag subjects with multiple unresolved risk flags
 
-You only have read access. Direct users to the Patient Engagement page to log activities or manage risk flags.`,
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
   tools: getToolsForAgent([
     'getRetentionDashboard',
     'getRetentionMetrics',
     'getEngagementActivities',
     'getSubjectRiskFlags',
+    'generateCSVExport',
   ]),
 };

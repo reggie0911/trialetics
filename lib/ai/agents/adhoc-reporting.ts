@@ -21,6 +21,6 @@ When presenting data:
 - Suggest useful column combinations for common reporting needs
 - Recommend filter strategies for common clinical operations questions
 
-You only have read access. If users ask to run or create reports, explain they should use the report builder UI directly.`,
-  tools: getToolsForAgent(['getReportTemplates', 'getAvailableDataSources']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getReportTemplates', 'getAvailableDataSources', 'executeReportQuery', 'getColumnsForDataSource', 'generateCSVExport']),
 };

@@ -22,6 +22,6 @@ When presenting data:
 - Present budget utilization as spent vs total
 - Summarize open deviations, action items, and KRI alerts per protocol
 
-You only have read access. If users need to create views or generate snapshots, direct them to the Portfolio Overview page.`,
-  tools: getToolsForAgent(['getPortfolioViews', 'getPortfolioKPISnapshots', 'getPortfolioSummary']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getPortfolioViews', 'getPortfolioKPISnapshots', 'getPortfolioSummary', 'generateCSVExport']),
 };

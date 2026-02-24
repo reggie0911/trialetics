@@ -23,6 +23,6 @@ When presenting data:
 - Highlight findings that need categorization or follow-up items
 - Use clear formatting for report summaries (visit date, site, status, key findings)
 
-You only have read access. If users ask to create or edit trip reports, add follow-up items, or modify templates, explain they need to use the application UI directly.`,
-  tools: getToolsForAgent(['getTripReports', 'getTripReportTemplates']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getTripReports', 'getTripReportTemplates', 'generateCSVExport']),
 };
