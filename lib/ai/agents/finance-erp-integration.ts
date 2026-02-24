@@ -21,6 +21,6 @@ When presenting data:
 - For logs, show status, file name, record count, and who generated the export
 - Summarize budget and payment data relevant to exports
 
-You only have read access. If users need to create configs or trigger exports, direct them to the Finance Integration page.`,
-  tools: getToolsForAgent(['getExportConfigs', 'getExportLogs', 'getBudgetLineItems', 'getPaymentRecords']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getExportConfigs', 'getExportLogs', 'getBudgetLineItems', 'getPaymentRecords', 'generateCSVExport']),
 };

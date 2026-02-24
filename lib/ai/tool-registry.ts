@@ -1,67 +1,4 @@
 import type { ToolDefinition, UserContext } from './types';
-import { getContacts } from '@/lib/actions/contacts';
-import { getOrganizations } from '@/lib/actions/organizations';
-import { getContactsForOrgChart } from '@/lib/actions/org-chart';
-import { getDocumentUploads } from '@/lib/actions/document-management-data';
-import { getSubjects } from '@/lib/actions/subjects';
-import { getSubjectVisits } from '@/lib/actions/subject-visit-management';
-import { getStatusHistory } from '@/lib/actions/subject-status-tracking';
-import { getTripReports } from '@/lib/actions/trip-reports';
-import { getTripReportTemplates } from '@/lib/actions/trip-report-templates';
-import { getSDVReports } from '@/lib/actions/sdv-tracker';
-import { getPaymentRecords, getPaymentActivities, getPaymentExceptions } from '@/lib/actions/clinical-payments';
-import { getVisitTemplates } from '@/lib/actions/visit-templates';
-import { getTemplateVisits } from '@/lib/actions/template-visits';
-import { getProtocolActivities } from '@/lib/actions/protocol-activities';
-import { getTrainingPlans } from '@/lib/actions/training-plans';
-import { getTrainingTopics } from '@/lib/actions/training-topics';
-import { getProtocolTrainingSummary } from '@/lib/actions/training-stats';
-import {
-  getIRBSubmissions,
-  getIRBApprovals,
-  getExpiringApprovals,
-  getIRBDashboardStats,
-} from '@/lib/actions/irb-tracking';
-import {
-  getEnrollmentTargets,
-  getEnrollmentProjections,
-  getEnrollmentScenarios,
-  getEnrollmentActuals,
-} from '@/lib/actions/enrollment-forecasting';
-import { getActionItems, getActionItemStats } from '@/lib/actions/action-items';
-import {
-  getBudgetLineItems,
-  getSpendActuals,
-  getVarianceReports,
-  getBudgetVsActualSummary,
-} from '@/lib/actions/financial-forecasting';
-import { getProtocolGovernance } from '@/lib/actions/protocol-governance';
-import { getProtocolMilestones } from '@/lib/actions/protocol-milestones';
-import { getStartupChecklists, getStartupProgress } from '@/lib/actions/site-startup';
-import { getDependencies } from '@/lib/actions/activity-dependencies';
-import { getSiteScorecards, getSiteRanking } from '@/lib/actions/site-scorecards';
-import { getVendorProfiles, getVendorContracts, getVendorKPIs, getVendorPerformanceSummary } from '@/lib/actions/vendor-management';
-import { getTMFStructure, getTMFCompleteness, getArtifactsByZone } from '@/lib/actions/etmf';
-import { getReconciliationRecords, getExpiringDocuments, getReconciliationSummary } from '@/lib/actions/reconciliation';
-import { getKRIDefinitions, getKRITrend, getActiveAlerts, getKRIDashboard } from '@/lib/actions/kri';
-import { getAuditLog, getAuditExports } from '@/lib/actions/audit-trail';
-import { getUserPermissions, getAccessAuditLog } from '@/lib/actions/rbac';
-import { getDeviations, getDeviationStats, getCAPAs } from '@/lib/actions/deviations';
-import { getTasks, getMyTasks, getTaskStats } from '@/lib/actions/tasks';
-import { getWorkflowRules, getWorkflowExecutionLog } from '@/lib/actions/workflows';
-import { getReportTemplates, getAvailableDataSources } from '@/lib/actions/reports';
-import { getIntegrationConfigs, getFieldMappings, getSyncLogs } from '@/lib/actions/integrations';
-import { getSafetyRecords, getSafetyStats } from '@/lib/actions/safety-integration';
-import { getExportConfigs, getExportLogs } from '@/lib/actions/financial-integration';
-import { getPortfolioViews, getPortfolioKPISnapshots, getPortfolioSummary } from '@/lib/actions/portfolio';
-import { getResourceAssignments, getResourceCapacity, getResourceForecasts, getResourceUtilizationSummary } from '@/lib/actions/resources';
-import { getTrackerDefinitions, getCustomFields, getTrackerData } from '@/lib/actions/custom-trackers';
-import { getProtocolRisks } from '@/lib/actions/protocol-risks';
-import { getProtocolRiskResolutionActivities } from '@/lib/actions/protocol-risk-resolution-activities';
-import { getRisksForCompany, getRiskRegisterSummary, getRiskHeatmapData, getRiskTrends } from '@/lib/actions/risk-dashboard';
-import { getRandomizationLists, getRandomizationAssignments, getSupplyInventory, getSupplyShipments, getSupplyDashboard } from '@/lib/actions/randomization-supply';
-import { getFeasibilityStudies, getFeasibilityRankings, getSelectionDecisions } from '@/lib/actions/feasibility';
-import { getRetentionDashboard, getRetentionMetrics, getEngagementActivities, getSubjectRiskFlags } from '@/lib/actions/patient-engagement';
 
 function requireCompany(ctx: UserContext): string {
   if (!ctx.companyId) throw new Error('No company context available');
@@ -84,6 +21,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getContacts } = await import('@/lib/actions/contacts');
       return getContacts(companyId, args);
     },
   },
@@ -103,6 +41,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getOrganizations } = await import('@/lib/actions/organizations');
       return getOrganizations(companyId, args);
     },
   },
@@ -118,6 +57,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getContactsForOrgChart } = await import('@/lib/actions/org-chart');
       return getContactsForOrgChart(companyId, args.organizationId as any);
     },
   },
@@ -128,6 +68,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getDocumentUploads } = await import('@/lib/actions/document-management-data');
       return getDocumentUploads(companyId);
     },
   },
@@ -148,6 +89,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getSubjects } = await import('@/lib/actions/subjects');
       return getSubjects(companyId, args);
     },
   },
@@ -165,6 +107,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getSubjectVisits } = await import('@/lib/actions/subject-visit-management');
       return getSubjectVisits(companyId, args);
     },
   },
@@ -181,6 +124,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getStatusHistory } = await import('@/lib/actions/subject-status-tracking');
       return getStatusHistory(companyId, args.subjectId as string);
     },
   },
@@ -197,6 +141,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getTripReports } = await import('@/lib/actions/trip-reports');
       return getTripReports(companyId, args as any);
     },
   },
@@ -214,6 +159,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getTripReportTemplates } = await import('@/lib/actions/trip-report-templates');
       return getTripReportTemplates(companyId, args as Record<string, unknown>);
     },
   },
@@ -229,6 +175,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getSDVReports } = await import('@/lib/actions/sdv-tracker');
       return getSDVReports(companyId, args.protocolId as any);
     },
   },
@@ -247,6 +194,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getPaymentRecords } = await import('@/lib/actions/clinical-payments');
       return getPaymentRecords(companyId, args);
     },
   },
@@ -264,6 +212,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getPaymentActivities } = await import('@/lib/actions/clinical-payments');
       return getPaymentActivities(companyId, args.siteId as string, {
         is_completed: args.is_completed as boolean | undefined,
       });
@@ -282,6 +231,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getPaymentExceptions } = await import('@/lib/actions/clinical-payments');
       return getPaymentExceptions(companyId, args.siteId as string);
     },
   },
@@ -297,6 +247,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getVisitTemplates } = await import('@/lib/actions/visit-templates');
       return getVisitTemplates(companyId, args);
     },
   },
@@ -313,6 +264,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getTemplateVisits } = await import('@/lib/actions/template-visits');
       return getTemplateVisits(companyId, args.templateId as string);
     },
   },
@@ -330,6 +282,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     handler: async (args, ctx) => {
       const protocolId = (args.protocolId as string) || ctx.protocolId;
       if (!protocolId) throw new Error('Protocol ID is required');
+      const { getProtocolActivities } = await import('@/lib/actions/protocol-activities');
       return getProtocolActivities(protocolId);
     },
   },
@@ -340,6 +293,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getTrainingPlans } = await import('@/lib/actions/training-plans');
       return getTrainingPlans(companyId);
     },
   },
@@ -350,6 +304,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getTrainingTopics } = await import('@/lib/actions/training-topics');
       return getTrainingTopics(companyId);
     },
   },
@@ -360,6 +315,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getProtocolTrainingSummary } = await import('@/lib/actions/training-stats');
       return getProtocolTrainingSummary(companyId);
     },
   },
@@ -377,6 +333,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getIRBSubmissions } = await import('@/lib/actions/irb-tracking');
       return getIRBSubmissions(companyId, args as any);
     },
   },
@@ -387,6 +344,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getIRBApprovals } = await import('@/lib/actions/irb-tracking');
       return getIRBApprovals(companyId);
     },
   },
@@ -402,6 +360,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getExpiringApprovals } = await import('@/lib/actions/irb-tracking');
       return getExpiringApprovals(companyId, (args.daysAhead as number) ?? 30);
     },
   },
@@ -412,6 +371,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getIRBDashboardStats } = await import('@/lib/actions/irb-tracking');
       return getIRBDashboardStats(companyId);
     },
   },
@@ -427,6 +387,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getEnrollmentTargets } = await import('@/lib/actions/enrollment-forecasting');
       return getEnrollmentTargets(companyId, args.protocolId as any);
     },
   },
@@ -442,6 +403,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getEnrollmentProjections } = await import('@/lib/actions/enrollment-forecasting');
       return getEnrollmentProjections(companyId, args.protocolId as any);
     },
   },
@@ -457,6 +419,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getEnrollmentScenarios } = await import('@/lib/actions/enrollment-forecasting');
       return getEnrollmentScenarios(companyId, args.protocolId as any);
     },
   },
@@ -472,6 +435,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getEnrollmentActuals } = await import('@/lib/actions/enrollment-forecasting');
       return getEnrollmentActuals(companyId, args.protocolId as any);
     },
   },
@@ -493,6 +457,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getActionItems } = await import('@/lib/actions/action-items');
       return getActionItems(companyId, args as Record<string, unknown>);
     },
   },
@@ -508,6 +473,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getActionItemStats } = await import('@/lib/actions/action-items');
       return getActionItemStats(companyId, args.protocolId as any);
     },
   },
@@ -523,6 +489,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getBudgetLineItems } = await import('@/lib/actions/financial-forecasting');
       return getBudgetLineItems(companyId, args.protocolId as any);
     },
   },
@@ -538,6 +505,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getSpendActuals } = await import('@/lib/actions/financial-forecasting');
       return getSpendActuals(companyId, args.protocolId as any);
     },
   },
@@ -553,6 +521,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getVarianceReports } = await import('@/lib/actions/financial-forecasting');
       return getVarianceReports(companyId, args.protocolId as any);
     },
   },
@@ -568,6 +537,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getBudgetVsActualSummary } = await import('@/lib/actions/financial-forecasting');
       return getBudgetVsActualSummary(companyId, args.protocolId as any);
     },
   },
@@ -583,6 +553,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
       required: ['protocolId'],
     },
     handler: async (args, _ctx) => {
+      const { getProtocolGovernance } = await import('@/lib/actions/protocol-governance');
       return getProtocolGovernance(args.protocolId as string);
     },
   },
@@ -598,6 +569,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
       required: ['protocolId'],
     },
     handler: async (args, _ctx) => {
+      const { getProtocolMilestones } = await import('@/lib/actions/protocol-milestones');
       return getProtocolMilestones(args.protocolId as string);
     },
   },
@@ -613,6 +585,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getStartupChecklists } = await import('@/lib/actions/site-startup');
       return getStartupChecklists(companyId, args.protocolId as any);
     },
   },
@@ -628,6 +601,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getStartupProgress } = await import('@/lib/actions/site-startup');
       return getStartupProgress(companyId, args.protocolId as any);
     },
   },
@@ -643,6 +617,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
       required: ['protocolId'],
     },
     handler: async (args, _ctx) => {
+      const { getDependencies } = await import('@/lib/actions/activity-dependencies');
       return getDependencies(args.protocolId as string);
     },
   },
@@ -659,6 +634,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getSiteScorecards } = await import('@/lib/actions/site-scorecards');
       return getSiteScorecards(companyId, args.protocolId as any, args.siteId as any);
     },
   },
@@ -675,6 +651,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getSiteRanking } = await import('@/lib/actions/site-scorecards');
       return getSiteRanking(companyId, args.protocolId as string);
     },
   },
@@ -685,6 +662,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getVendorProfiles } = await import('@/lib/actions/vendor-management');
       return getVendorProfiles(companyId);
     },
   },
@@ -700,6 +678,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getVendorContracts } = await import('@/lib/actions/vendor-management');
       return getVendorContracts(companyId, args.vendorProfileId as any);
     },
   },
@@ -715,6 +694,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getVendorKPIs } = await import('@/lib/actions/vendor-management');
       return getVendorKPIs(companyId, args.vendorProfileId as any);
     },
   },
@@ -725,6 +705,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getVendorPerformanceSummary } = await import('@/lib/actions/vendor-management');
       return getVendorPerformanceSummary(companyId);
     },
   },
@@ -735,6 +716,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getTMFStructure } = await import('@/lib/actions/etmf');
       return getTMFStructure(companyId);
     },
   },
@@ -751,6 +733,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getTMFCompleteness } = await import('@/lib/actions/etmf');
       return getTMFCompleteness(companyId, args.protocolId as string);
     },
   },
@@ -768,6 +751,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getArtifactsByZone } = await import('@/lib/actions/etmf');
       return getArtifactsByZone(companyId, args.protocolId as string, args.zoneId as any);
     },
   },
@@ -784,6 +768,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getReconciliationRecords } = await import('@/lib/actions/reconciliation');
       return getReconciliationRecords(companyId, args as Record<string, unknown>);
     },
   },
@@ -799,6 +784,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getExpiringDocuments } = await import('@/lib/actions/reconciliation');
       return getExpiringDocuments(companyId, (args.daysAhead as number) ?? 30);
     },
   },
@@ -814,6 +800,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getReconciliationSummary } = await import('@/lib/actions/reconciliation');
       return getReconciliationSummary(companyId, args.protocolId as any);
     },
   },
@@ -824,6 +811,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getKRIDefinitions } = await import('@/lib/actions/kri');
       return getKRIDefinitions(companyId);
     },
   },
@@ -841,6 +829,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getKRITrend } = await import('@/lib/actions/kri');
       return getKRITrend(companyId, args.kriDefinitionId as string, args.protocolId as string);
     },
   },
@@ -856,6 +845,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getActiveAlerts } = await import('@/lib/actions/kri');
       return getActiveAlerts(companyId, args.protocolId as any);
     },
   },
@@ -871,10 +861,11 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getKRIDashboard } = await import('@/lib/actions/kri');
       return getKRIDashboard(companyId);
     },
   },
-  // Phase 3: Audit Trail
+
   getAuditLog: {
     name: 'getAuditLog',
     description: 'Search the system audit trail. Filter by table, action type, date range, or performer.',
@@ -890,6 +881,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getAuditLog } = await import('@/lib/actions/audit-trail');
       return getAuditLog(companyId, {
         table_name: args.table_name as string,
         action: args.action as 'INSERT' | 'UPDATE' | 'DELETE',
@@ -906,11 +898,11 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getAuditExports } = await import('@/lib/actions/audit-trail');
       return getAuditExports(companyId);
     },
   },
 
-  // Phase 3: RBAC
   getUserPermissions: {
     name: 'getUserPermissions',
     description: 'Get permission overrides for a specific user across all modules.',
@@ -922,6 +914,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
       required: ['userId'],
     },
     handler: async (args) => {
+      const { getUserPermissions } = await import('@/lib/actions/rbac');
       return getUserPermissions(args.userId as string);
     },
   },
@@ -936,11 +929,11 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getAccessAuditLog } = await import('@/lib/actions/rbac');
       return getAccessAuditLog(companyId, (args.page as number) || 1);
     },
   },
 
-  // Phase 3: Deviations & CAPA
   getDeviations: {
     name: 'getDeviations',
     description: 'List deviations filtered by status, severity, protocol, or site.',
@@ -955,6 +948,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getDeviations } = await import('@/lib/actions/deviations');
       return getDeviations(companyId, {
         status: args.status as any,
         severity: args.severity as any,
@@ -975,6 +969,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getDeviationStats } = await import('@/lib/actions/deviations');
       return getDeviationStats(companyId, args.protocolId as any);
     },
   },
@@ -989,11 +984,11 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getCAPAs } = await import('@/lib/actions/deviations');
       return getCAPAs(companyId, args.deviationId as any);
     },
   },
 
-  // Phase 3: Tasks
   getTasks: {
     name: 'getTasks',
     description: 'List tasks filtered by status, priority, assignee, or protocol.',
@@ -1009,6 +1004,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getTasks } = await import('@/lib/actions/tasks');
       return getTasks(companyId, {
         status: args.status as any,
         priority: args.priority as any,
@@ -1024,6 +1020,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     description: 'Get tasks assigned to the current user that are not completed.',
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
+      const { getMyTasks } = await import('@/lib/actions/tasks');
       return getMyTasks(ctx.userId);
     },
   },
@@ -1033,17 +1030,18 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getTaskStats } = await import('@/lib/actions/tasks');
       return getTaskStats(companyId, ctx.userId);
     },
   },
 
-  // Phase 3: Workflows
   getWorkflowRules: {
     name: 'getWorkflowRules',
     description: 'List configured workflow automation rules with triggers and actions.',
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getWorkflowRules } = await import('@/lib/actions/workflows');
       return getWorkflowRules(companyId);
     },
   },
@@ -1059,17 +1057,18 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getWorkflowExecutionLog } = await import('@/lib/actions/workflows');
       return getWorkflowExecutionLog(companyId, args.ruleId as any, (args.page as number) || 1);
     },
   },
 
-  // Phase 3: Reports
   getReportTemplates: {
     name: 'getReportTemplates',
     description: 'List saved report templates with their data sources and column configurations.',
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getReportTemplates } = await import('@/lib/actions/reports');
       return getReportTemplates(companyId);
     },
   },
@@ -1078,6 +1077,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     description: 'List available data sources for ad-hoc reports (subjects, action items, deviations, etc.).',
     parameters: { type: 'object', properties: {} },
     handler: async () => {
+      const { getAvailableDataSources } = await import('@/lib/actions/reports');
       return getAvailableDataSources();
     },
   },
@@ -1094,6 +1094,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getIntegrationConfigs } = await import('@/lib/actions/integrations');
       return getIntegrationConfigs(companyId, {
         integration_type: args.integration_type as any,
         status: args.status as any,
@@ -1112,6 +1113,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getFieldMappings } = await import('@/lib/actions/integrations');
       return getFieldMappings(companyId, args.configId as any);
     },
   },
@@ -1127,6 +1129,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getSyncLogs } = await import('@/lib/actions/integrations');
       return getSyncLogs(companyId, args.configId as any);
     },
   },
@@ -1145,6 +1148,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getSafetyRecords } = await import('@/lib/actions/safety-integration');
       return getSafetyRecords(companyId, {
         event_type: args.event_type as any,
         reporting_status: args.reporting_status as any,
@@ -1165,6 +1169,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getSafetyStats } = await import('@/lib/actions/safety-integration');
       return getSafetyStats(companyId, args.protocolId as any);
     },
   },
@@ -1180,6 +1185,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getExportConfigs } = await import('@/lib/actions/financial-integration');
       return getExportConfigs(companyId, { active: args.active as boolean | undefined });
     },
   },
@@ -1195,6 +1201,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getExportLogs } = await import('@/lib/actions/financial-integration');
       return getExportLogs(companyId, args.configId as any);
     },
   },
@@ -1205,6 +1212,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getPortfolioViews } = await import('@/lib/actions/portfolio');
       return getPortfolioViews(companyId);
     },
   },
@@ -1220,6 +1228,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getPortfolioKPISnapshots } = await import('@/lib/actions/portfolio');
       return getPortfolioKPISnapshots(companyId, args.protocolId as any);
     },
   },
@@ -1230,6 +1239,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getPortfolioSummary } = await import('@/lib/actions/portfolio');
       return getPortfolioSummary(companyId);
     },
   },
@@ -1247,6 +1257,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getResourceAssignments } = await import('@/lib/actions/resources');
       return getResourceAssignments(companyId, {
         status: args.status as any,
         protocol_id: args.protocol_id as string,
@@ -1266,6 +1277,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getResourceCapacity } = await import('@/lib/actions/resources');
       return getResourceCapacity(companyId, args.profileId as any);
     },
   },
@@ -1281,6 +1293,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getResourceForecasts } = await import('@/lib/actions/resources');
       return getResourceForecasts(companyId, args.protocolId as any);
     },
   },
@@ -1291,6 +1304,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     parameters: { type: 'object', properties: {} },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getResourceUtilizationSummary } = await import('@/lib/actions/resources');
       return getResourceUtilizationSummary(companyId);
     },
   },
@@ -1307,6 +1321,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getTrackerDefinitions } = await import('@/lib/actions/custom-trackers');
       return getTrackerDefinitions(companyId, {
         active: args.active as boolean | undefined,
         search: args.search as any,
@@ -1325,6 +1340,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getCustomFields } = await import('@/lib/actions/custom-trackers');
       return getCustomFields(companyId, args.trackerDefinitionId as any);
     },
   },
@@ -1342,11 +1358,10 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getTrackerData } = await import('@/lib/actions/custom-trackers');
       return getTrackerData(companyId, args.trackerDefinitionId as string, (args.page as number) || 1);
     },
   },
-
-  // ---- Phase 5: Risk Management ----
 
   getProtocolRisks: {
     name: 'getProtocolRisks',
@@ -1359,6 +1374,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
       required: ['protocolId'],
     },
     handler: async (args) => {
+      const { getProtocolRisks } = await import('@/lib/actions/protocol-risks');
       return getProtocolRisks(args.protocolId as string);
     },
   },
@@ -1374,6 +1390,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getRiskRegisterSummary } = await import('@/lib/actions/risk-dashboard');
       return getRiskRegisterSummary(companyId, args.protocolId as any);
     },
   },
@@ -1389,6 +1406,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getRiskHeatmapData } = await import('@/lib/actions/risk-dashboard');
       return getRiskHeatmapData(companyId, args.protocolId as any);
     },
   },
@@ -1404,6 +1422,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
       required: ['protocolRiskId'],
     },
     handler: async (args) => {
+      const { getProtocolRiskResolutionActivities } = await import('@/lib/actions/protocol-risk-resolution-activities');
       return getProtocolRiskResolutionActivities(args.protocolRiskId as string);
     },
   },
@@ -1419,11 +1438,10 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getRiskTrends } = await import('@/lib/actions/risk-dashboard');
       return getRiskTrends(companyId, args.protocolId as any);
     },
   },
-
-  // ---- Phase 5: Randomization & Supply ----
 
   getRandomizationLists: {
     name: 'getRandomizationLists',
@@ -1436,6 +1454,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getRandomizationLists } = await import('@/lib/actions/randomization-supply');
       return getRandomizationLists(companyId, args.protocolId as any);
     },
   },
@@ -1451,6 +1470,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
       required: ['listId'],
     },
     handler: async (args) => {
+      const { getRandomizationAssignments } = await import('@/lib/actions/randomization-supply');
       return getRandomizationAssignments(args.listId as string);
     },
   },
@@ -1464,6 +1484,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getSupplyInventory } = await import('@/lib/actions/randomization-supply');
       return getSupplyInventory(companyId);
     },
   },
@@ -1479,6 +1500,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getSupplyShipments } = await import('@/lib/actions/randomization-supply');
       return getSupplyShipments(companyId, args.protocolId as any);
     },
   },
@@ -1492,11 +1514,10 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (_args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getSupplyDashboard } = await import('@/lib/actions/randomization-supply');
       return getSupplyDashboard(companyId);
     },
   },
-
-  // ---- Phase 5: Feasibility & Site Selection ----
 
   getFeasibilityStudies: {
     name: 'getFeasibilityStudies',
@@ -1510,6 +1531,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getFeasibilityStudies } = await import('@/lib/actions/feasibility');
       return getFeasibilityStudies(companyId, {
         protocolId: args.protocolId as any,
         status: args.status as 'draft' | 'in_progress' | 'completed' | 'archived' | undefined,
@@ -1528,6 +1550,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
       required: ['studyId'],
     },
     handler: async (args) => {
+      const { getFeasibilityRankings } = await import('@/lib/actions/feasibility');
       return getFeasibilityRankings(args.studyId as string);
     },
   },
@@ -1543,11 +1566,10 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
       required: ['studyId'],
     },
     handler: async (args) => {
+      const { getSelectionDecisions } = await import('@/lib/actions/feasibility');
       return getSelectionDecisions(args.studyId as string);
     },
   },
-
-  // ---- Phase 5: Patient Engagement & Retention ----
 
   getRetentionDashboard: {
     name: 'getRetentionDashboard',
@@ -1560,6 +1582,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getRetentionDashboard } = await import('@/lib/actions/patient-engagement');
       return getRetentionDashboard(companyId, args.protocolId as any);
     },
   },
@@ -1575,6 +1598,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getRetentionMetrics } = await import('@/lib/actions/patient-engagement');
       return getRetentionMetrics(companyId, args.protocolId as any);
     },
   },
@@ -1593,6 +1617,7 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getEngagementActivities } = await import('@/lib/actions/patient-engagement');
       return getEngagementActivities(companyId, {
         protocolId: args.protocolId as any,
         activityType: args.activityType as any,
@@ -1613,12 +1638,150 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
     handler: async (args, ctx) => {
       const companyId = requireCompany(ctx);
+      const { getSubjectRiskFlags } = await import('@/lib/actions/patient-engagement');
       return getSubjectRiskFlags(companyId, {
         unresolvedOnly: args.unresolvedOnly !== false,
       });
     },
   },
+
+  generateCSVExport: {
+    name: 'generateCSVExport',
+    description: 'Generate a CSV file from CTMS data and return a download link. Supports subjects, action_items, deviations, payment_records, document_records, and audit_log data sources.',
+    parameters: {
+      type: 'object',
+      properties: {
+        dataSource: {
+          type: 'string',
+          enum: ['subjects', 'action_items', 'deviations', 'payment_records', 'document_records', 'audit_log'],
+          description: 'Data source to export',
+        },
+        filters: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              field: { type: 'string' },
+              operator: { type: 'string', enum: ['eq', 'neq', 'gt', 'lt', 'gte', 'lte', 'ilike'] },
+              value: { type: 'string' },
+            },
+          },
+          description: 'Optional filters to apply',
+        },
+        columns: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Column keys to include (omit for all default columns)',
+        },
+      },
+      required: ['dataSource'],
+    },
+    handler: async (args, ctx) => {
+      const companyId = requireCompany(ctx);
+      const { DATA_SOURCES } = await import('@/lib/types/reports');
+      const dsConfig = DATA_SOURCES.find(ds => ds.id === args.dataSource);
+      if (!dsConfig) throw new Error(`Unknown data source: ${args.dataSource}`);
+
+      const requestedCols = args.columns as string[] | undefined;
+      const columns = requestedCols
+        ? dsConfig.columns.filter(c => requestedCols.includes(c.key)).map(c => ({ ...c, visible: true }))
+        : dsConfig.columns.map(c => ({ ...c, visible: true }));
+
+      const { executeReportQuery } = await import('@/lib/utils/report-query-builder');
+      const result = await executeReportQuery({
+        dataSource: args.dataSource as string,
+        tableName: dsConfig.table,
+        companyId,
+        columns,
+        filters: args.filters as any,
+        pageSize: 5000,
+      });
+
+      const { generateCSVString } = await import('@/lib/utils/csv-generator');
+      const csvColumns = columns.map(c => ({ key: c.key, label: c.label }));
+      const csv = generateCSVString(result.rows, csvColumns);
+      const filename = `${args.dataSource}_export_${new Date().toISOString().split('T')[0]}.csv`;
+      const { storeTemporaryCSV } = await import('@/lib/utils/temp-csv-store');
+      const id = storeTemporaryCSV(csv, filename);
+
+      return { downloadUrl: `/api/ai/downloads/${id}`, filename, rowCount: result.rows.length, totalAvailable: result.total };
+    },
+  },
+
+  executeReportQuery: {
+    name: 'executeReportQuery',
+    description: 'Run a report query against a CTMS data source with filters, column selection, and sorting. Returns tabular data that can be presented or exported.',
+    parameters: {
+      type: 'object',
+      properties: {
+        dataSource: {
+          type: 'string',
+          enum: ['subjects', 'action_items', 'deviations', 'payment_records', 'document_records', 'audit_log'],
+          description: 'Data source to query',
+        },
+        filters: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              field: { type: 'string' },
+              operator: { type: 'string', enum: ['eq', 'neq', 'gt', 'lt', 'gte', 'lte', 'ilike', 'in'] },
+              value: { type: 'string' },
+            },
+          },
+        },
+        sort: {
+          type: 'object',
+          properties: {
+            column: { type: 'string' },
+            ascending: { type: 'boolean' },
+          },
+        },
+        page: { type: 'number', description: 'Page number (default 1)' },
+        pageSize: { type: 'number', description: 'Results per page (default 100)' },
+      },
+      required: ['dataSource'],
+    },
+    handler: async (args, ctx) => {
+      const companyId = requireCompany(ctx);
+      const { DATA_SOURCES } = await import('@/lib/types/reports');
+      const dsConfig = DATA_SOURCES.find(ds => ds.id === args.dataSource);
+      if (!dsConfig) throw new Error(`Unknown data source: ${args.dataSource}`);
+      const columns = dsConfig.columns.map(c => ({ ...c, visible: true }));
+      const { executeReport } = await import('@/lib/actions/reports');
+      return executeReport(companyId, args.dataSource as string, columns, args.filters as any, args.sort as any, args.page as number, args.pageSize as number);
+    },
+  },
+
+  getColumnsForDataSource: {
+    name: 'getColumnsForDataSource',
+    description: 'Get available columns for a report data source. Use this to discover what fields can be queried or exported.',
+    parameters: {
+      type: 'object',
+      properties: {
+        dataSourceId: { type: 'string', description: 'Data source ID', enum: ['subjects', 'action_items', 'deviations', 'payment_records', 'document_records', 'audit_log'] },
+      },
+      required: ['dataSourceId'],
+    },
+    handler: async (args) => {
+      const { getColumnsForDataSource } = await import('@/lib/actions/reports');
+      return getColumnsForDataSource(args.dataSourceId as string);
+    },
+  },
 };
+
+async function getWriteToolDefinitions(): Promise<Record<string, ToolDefinition>> {
+  const { writeToolDefinitions } = await import('./write-tools');
+  return writeToolDefinitions;
+}
+
+let _writeToolsLoaded = false;
+async function ensureWriteTools() {
+  if (_writeToolsLoaded) return;
+  const writeDefs = await getWriteToolDefinitions();
+  Object.assign(toolDefinitions, writeDefs);
+  _writeToolsLoaded = true;
+}
 
 export function getToolsForAgent(toolNames: string[]): ToolDefinition[] {
   return toolNames
@@ -1628,4 +1791,17 @@ export function getToolsForAgent(toolNames: string[]): ToolDefinition[] {
 
 export function getToolHandler(name: string): ToolDefinition['handler'] | undefined {
   return toolDefinitions[name]?.handler;
+}
+
+export async function getToolDefinition(name: string): Promise<ToolDefinition | undefined> {
+  if (toolDefinitions[name]) return toolDefinitions[name];
+  await ensureWriteTools();
+  return toolDefinitions[name];
+}
+
+export async function getToolsForAgentAsync(toolNames: string[]): Promise<ToolDefinition[]> {
+  await ensureWriteTools();
+  return toolNames
+    .map(name => toolDefinitions[name])
+    .filter((t): t is ToolDefinition => t !== undefined);
 }

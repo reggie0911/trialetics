@@ -14,6 +14,7 @@ export interface ToolDefinition {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+  requiresConfirmation?: boolean;
   handler: (args: Record<string, unknown>, ctx: UserContext) => Promise<unknown>;
 }
 
@@ -34,16 +35,33 @@ export interface ChatRequest {
   };
 }
 
+export interface ChatMessageAttachment {
+  id: string;
+  type: 'image' | 'document';
+  filename: string;
+  mimeType: string;
+  imageUrl?: string;
+  textContent?: string;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  attachments?: ChatMessageAttachment[];
 }
 
-export type StreamEventType = 'text_delta' | 'tool_call_start' | 'tool_result' | 'done' | 'error';
+export type StreamEventType = 'text_delta' | 'tool_call_start' | 'tool_result' | 'done' | 'error' | 'confirm_action' | 'file_download';
 
 export interface StreamEvent {
   type: StreamEventType;
   data: string;
+}
+
+export interface ConfirmActionPayload {
+  toolCallId: string;
+  toolName: string;
+  description: string;
+  args: Record<string, unknown>;
 }
 
 export type { ChatCompletionMessageParam, ChatCompletionTool };

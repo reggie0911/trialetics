@@ -22,6 +22,6 @@ When presenting data:
 - Provide summaries of activity volume by table or performer
 - Format changed fields as before/after comparisons
 
-You only have read access. If users ask to export audit data, explain they should use the Export button in the Audit Trail page.`,
-  tools: getToolsForAgent(['getAuditLog', 'getAuditExports']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getAuditLog', 'getAuditExports', 'generateCSVExport']),
 };

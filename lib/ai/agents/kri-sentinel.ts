@@ -24,11 +24,12 @@ When presenting data:
 - Use tables for definitions with metric name, threshold, current value, status
 - Summarize dashboard at a glance before detailed analysis
 
-You only have read access. If users ask to create or modify KRI definitions, acknowledge alerts, or change thresholds, explain they need to use the application UI directly.`,
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
   tools: getToolsForAgent([
     'getKRIDefinitions',
     'getKRITrend',
     'getActiveAlerts',
     'getKRIDashboard',
+    'generateCSVExport',
   ]),
 };

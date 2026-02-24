@@ -23,6 +23,6 @@ When presenting data:
 - Present budget variance as both absolute and percentage
 - Flag line items where actual exceeds budget
 
-You only have read access. If users need to create payments or update budgets, direct them to the Clinical Payments or Rate Lists pages.`,
-  tools: getToolsForAgent(['getPaymentRecords', 'getPaymentActivities', 'getPaymentExceptions', 'getBudgetLineItems', 'getBudgetVsActualSummary']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getPaymentRecords', 'getPaymentActivities', 'getPaymentExceptions', 'getBudgetLineItems', 'getBudgetVsActualSummary', 'generateCSVExport']),
 };

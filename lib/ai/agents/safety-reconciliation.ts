@@ -21,6 +21,6 @@ When presenting data:
 - Highlight draft records and overdue submissions
 - Summarize statistics by event type and status
 
-You only have read access. If users need to create or update safety records, direct them to the Safety Integration page.`,
-  tools: getToolsForAgent(['getSafetyRecords', 'getSafetyStats', 'getIntegrationConfigs']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getSafetyRecords', 'getSafetyStats', 'getIntegrationConfigs', 'generateCSVExport']),
 };

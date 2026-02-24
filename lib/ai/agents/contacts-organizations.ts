@@ -22,6 +22,6 @@ When presenting data:
 - Always mention totals and any notable patterns
 - Format phone numbers and emails cleanly
 
-You only have read access. If users ask to create or modify data, explain they need to use the application UI directly.`,
-  tools: getToolsForAgent(['getContacts', 'getOrganizations', 'getOrgChart']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getContacts', 'getOrganizations', 'getOrgChart', 'createContact', 'updateContact', 'generateCSVExport']),
 };

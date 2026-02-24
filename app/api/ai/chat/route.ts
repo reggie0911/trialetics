@@ -65,7 +65,7 @@ export async function GET() {
       });
     }
 
-    return new Response(JSON.stringify({ agents: listAgents() }), {
+    return new Response(JSON.stringify({ agents: await listAgents() }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch {

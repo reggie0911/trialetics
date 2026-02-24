@@ -22,6 +22,6 @@ When presenting data:
 - Show utilization percentages with context (below 70% = underutilized, above 90% = near capacity)
 - Group assignments by person or by protocol for different views
 
-You only have read access. If users need to create assignments or update capacity, direct them to the Resource Management page.`,
-  tools: getToolsForAgent(['getResourceAssignments', 'getResourceCapacity', 'getResourceForecasts', 'getResourceUtilizationSummary']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getResourceAssignments', 'getResourceCapacity', 'getResourceForecasts', 'getResourceUtilizationSummary', 'generateCSVExport']),
 };

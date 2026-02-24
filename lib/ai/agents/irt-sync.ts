@@ -22,10 +22,11 @@ When presenting data:
 - Flag incomplete field mappings
 - Summarize connection health across configured IRT integrations
 
-You only have read access. Direct users to the Integrations page to modify configurations.`,
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
   tools: getToolsForAgent([
     'getIntegrationConfigs',
     'getFieldMappings',
     'getSyncLogs',
+    'generateCSVExport',
   ]),
 };

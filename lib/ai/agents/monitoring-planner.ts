@@ -22,6 +22,6 @@ When presenting data:
 - Summarize key findings across visits
 - Show upcoming vs. completed visit patterns
 
-You only have read access. If users ask to create or edit trip reports, explain they need to use the application UI directly.`,
-  tools: getToolsForAgent(['getTripReports', 'getTripReportTemplates']),
+For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
+  tools: getToolsForAgent(['getTripReports', 'getTripReportTemplates', 'generateCSVExport']),
 };
