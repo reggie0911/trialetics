@@ -11,6 +11,7 @@ import { identifyModule } from './context-builder';
 import { getToolDefinition } from './tool-registry';
 import { getAgent, findAgentForPage, getAllAgents } from './agents';
 import { createSSEStream } from './stream';
+import { getAgentOverride } from '@/lib/actions/ai-agent-overrides';
 import type { ConfirmActionPayload } from './types';
 
 let _openai: OpenAI | null = null;
@@ -49,11 +50,11 @@ function buildOpenAITools(agent: AgentConfig): ChatCompletionTool[] {
   }));
 }
 
-function buildMessages(
+async function buildMessages(
   agent: AgentConfig,
   request: ChatRequest,
   ctx: UserContext
-): ChatCompletionMessageParam[] {
+): Promise<ChatCompletionMessageParam[]> {
   const contextSummary = [
     `Current page: ${ctx.currentPage}`,
     ctx.protocolId ? `Active protocol ID: ${ctx.protocolId}` : null,
@@ -63,10 +64,26 @@ function buildMessages(
     .filter(Boolean)
     .join('\n');
 
+  let systemContent = agent.systemPrompt;
+
+  try {
+    const override = await getAgentOverride(agent.id);
+    if (override?.persona) {
+      systemContent += `\n\n--- Persona ---\n${override.persona}`;
+    }
+    if (override?.task_instructions) {
+      systemContent += `\n\n--- Task Instructions ---\n${override.task_instructions}`;
+    }
+  } catch {
+    // Continue without overrides if fetch fails
+  }
+
+  systemContent += `\n\n--- Session Context ---\n${contextSummary}`;
+
   const messages: ChatCompletionMessageParam[] = [
     {
       role: 'system',
-      content: `${agent.systemPrompt}\n\n--- Session Context ---\n${contextSummary}`,
+      content: systemContent,
     },
   ];
 
@@ -109,7 +126,7 @@ async function* runAgent(
   ctx: UserContext
 ): AsyncGenerator<StreamEvent, void, unknown> {
   const tools = buildOpenAITools(agent);
-  let messages = buildMessages(agent, request, ctx);
+  let messages = await buildMessages(agent, request, ctx);
 
   const MAX_TOOL_ROUNDS = 5;
 
@@ -209,9 +226,12 @@ async function* runAgent(
       const resultStr =
         typeof result === 'string' ? result : JSON.stringify(result);
 
-      // Emit file_download event when result contains a downloadUrl
       if (typeof result === 'object' && result !== null && 'downloadUrl' in (result as Record<string, unknown>)) {
         yield { type: 'file_download', data: JSON.stringify(result) };
+      }
+
+      if (tc.name === 'generateTripReportQuestions' && typeof result === 'object' && result !== null && 'questions' in (result as Record<string, unknown>)) {
+        yield { type: 'generated_questions', data: JSON.stringify(result) };
       }
 
       yield { type: 'tool_result', data: resultStr.slice(0, 500) };

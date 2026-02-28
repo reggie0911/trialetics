@@ -9,6 +9,7 @@ import type { TranscriptEntry } from '@/lib/hooks/use-realtime-voice';
 
 const AIAssistantHistory = dynamic(() => import('./ai-assistant-history').then(m => ({ default: m.AIAssistantHistory })));
 const AIAssistantVoice = dynamic(() => import('./ai-assistant-voice').then(m => ({ default: m.AIAssistantVoice })));
+const AIAssistantSettings = dynamic(() => import('./ai-assistant-settings').then(m => ({ default: m.AIAssistantSettings })));
 
 interface AIAssistantPanelProps {
   open: boolean;
@@ -56,6 +57,7 @@ export function AIAssistantPanel({ open, onOpenChange }: AIAssistantPanelProps) 
             <TabsTrigger value="chat">Chat</TabsTrigger>
             <TabsTrigger value="voice">Voice</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
           <TabsContent value="chat" className="flex-1 overflow-hidden mt-0">
             <AIAssistantChat
@@ -73,6 +75,9 @@ export function AIAssistantPanel({ open, onOpenChange }: AIAssistantPanelProps) 
               onSelectSession={handleSelectSession}
               onNewChat={handleNewChat}
             />
+          </TabsContent>
+          <TabsContent value="settings" className="flex-1 overflow-hidden mt-0">
+            <AIAssistantSettings />
           </TabsContent>
         </Tabs>
       </SheetContent>

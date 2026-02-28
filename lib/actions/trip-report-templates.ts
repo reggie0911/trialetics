@@ -219,6 +219,75 @@ export async function deleteTripReportTemplate(
   }
 }
 
+export async function getSubSectionOrder(
+  templateId: string
+): Promise<ActionResponse<string[]>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { data, error } = await supabase
+      .from('trip_report_template_sub_section_order')
+      .select('sub_section_name, sort_order')
+      .eq('template_id', templateId)
+      .order('sort_order', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching sub-section order:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: (data || []).map(d => d.sub_section_name) };
+  } catch (error) {
+    console.error('Error in getSubSectionOrder:', error);
+    return { success: false, error: 'Failed to fetch sub-section order' };
+  }
+}
+
+export async function upsertSubSectionOrder(
+  templateId: string,
+  sections: string[]
+): Promise<ActionResponse<null>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    await supabase
+      .from('trip_report_template_sub_section_order')
+      .delete()
+      .eq('template_id', templateId);
+
+    if (sections.length > 0) {
+      const rows = sections.map((name, i) => ({
+        template_id: templateId,
+        sub_section_name: name,
+        sort_order: i,
+      }));
+
+      const { error } = await supabase
+        .from('trip_report_template_sub_section_order')
+        .insert(rows);
+
+      if (error) {
+        console.error('Error upserting sub-section order:', error);
+        return { success: false, error: error.message };
+      }
+    }
+
+    revalidatePath(`/protected/trip-reports/templates/${templateId}`);
+    return { success: true, data: null };
+  } catch (error) {
+    console.error('Error in upsertSubSectionOrder:', error);
+    return { success: false, error: 'Failed to save sub-section order' };
+  }
+}
+
 export async function upsertTripReportTemplateDetails(
   templateId: string,
   details: Array<{

@@ -122,7 +122,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Apply audit triggers to high-value tables
 -- ============================================================================
 
-DO $$ 
+DO $$
 DECLARE
   t TEXT;
 BEGIN
@@ -132,11 +132,13 @@ BEGIN
     'tmf_artifacts'
   ]
   LOOP
-    EXECUTE format('DROP TRIGGER IF EXISTS audit_trigger_%I ON public.%I', t, t);
-    EXECUTE format('
-      CREATE TRIGGER audit_trigger_%I
-        AFTER INSERT OR UPDATE OR DELETE ON public.%I
-        FOR EACH ROW EXECUTE FUNCTION public.audit_log_trigger()
-    ', t, t);
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = t) THEN
+      EXECUTE format('DROP TRIGGER IF EXISTS audit_trigger_%I ON public.%I', t, t);
+      EXECUTE format('
+        CREATE TRIGGER audit_trigger_%I
+          AFTER INSERT OR UPDATE OR DELETE ON public.%I
+          FOR EACH ROW EXECUTE FUNCTION public.audit_log_trigger()
+      ', t, t);
+    END IF;
   END LOOP;
 END $$;

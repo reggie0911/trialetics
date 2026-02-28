@@ -319,14 +319,36 @@ export async function createTripReport(
 
     if (template?.data?.trip_report_template_details) {
       const details = template.data.trip_report_template_details as Array<{ activity_type: string; activity: string; priority: string | null; sort_order: number; report_order?: number; report_sub_section?: string | null }>;
-      for (const d of details) {
-        const order = d.report_order ?? d.sort_order ?? 0;
+
+      let sectionOrder: string[] = [];
+      if (data.template_id) {
+        const { data: orderRows } = await supabase
+          .from('trip_report_template_sub_section_order')
+          .select('sub_section_name, sort_order')
+          .eq('template_id', data.template_id)
+          .order('sort_order', { ascending: true });
+        sectionOrder = (orderRows || []).map(r => r.sub_section_name);
+      }
+
+      const sectionIndex = (name: string | null | undefined) => {
+        if (!name) return sectionOrder.length;
+        const idx = sectionOrder.indexOf(name);
+        return idx === -1 ? sectionOrder.length : idx;
+      };
+
+      const sorted = [...details].sort((a, b) =>
+        sectionIndex(a.report_sub_section) - sectionIndex(b.report_sub_section)
+        || (a.sort_order ?? 0) - (b.sort_order ?? 0)
+      );
+
+      for (let i = 0; i < sorted.length; i++) {
+        const d = sorted[i];
         if (d.activity_type === 'checklist') {
           await supabase.from('trip_report_checklist_items').insert({
             trip_report_id: report.id,
             activity: d.activity,
             status: 'pending',
-            sort_order: order,
+            sort_order: i,
             report_sub_section: d.report_sub_section ?? null,
           });
         } else {
@@ -334,7 +356,7 @@ export async function createTripReport(
             trip_report_id: report.id,
             activity: d.activity,
             status: 'open',
-            sort_order: order,
+            sort_order: i,
           });
         }
       }

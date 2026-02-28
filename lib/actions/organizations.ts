@@ -27,7 +27,7 @@ export type ActionResponse<T> = {
 export async function getOrganizations(
   companyId: string,
   filters: OrganizationFilters = {}
-): Promise<ActionResponse<{ organizations: OrganizationWithRelations[]; total: number }>> {
+): Promise<ActionResponse<{ organizations: OrganizationWithRelations[]; total: number; distinctSiteIds: string[] }>> {
   try {
     const supabase = await createClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -36,7 +36,7 @@ export async function getOrganizations(
       return { success: false, error: 'User not authenticated' };
     }
 
-    const { search, name, organization_type, status, state, country, page = 1, pageSize = 25 } = filters;
+    const { search, name, organization_type, status, site_id, state, country, page = 1, pageSize = 25 } = filters;
     const offset = (page - 1) * pageSize;
 
     // If filtering by state or country, we need to get organization IDs from addresses first
@@ -92,6 +92,10 @@ export async function getOrganizations(
       query = query.eq('status', status);
     }
 
+    if (site_id && site_id !== 'all') {
+      query = query.eq('site_id', site_id);
+    }
+
     // Apply address-based filters
     if (organizationIds !== null) {
       if (organizationIds.length === 0) {
@@ -101,6 +105,7 @@ export async function getOrganizations(
           data: {
             organizations: [],
             total: 0,
+            distinctSiteIds: [],
           },
         };
       }
@@ -116,6 +121,15 @@ export async function getOrganizations(
       console.error('Error fetching organizations:', error);
       return { success: false, error: error.message };
     }
+
+    // Fetch distinct site_ids for filter dropdown (site-type orgs only)
+    const { data: siteIdsData } = await supabase
+      .from('organizations')
+      .select('site_id')
+      .eq('company_id', companyId)
+      .eq('organization_type', 'site')
+      .not('site_id', 'is', null);
+    const distinctSiteIds = [...new Set((siteIdsData || []).map((r: { site_id: string }) => r.site_id).filter(Boolean))].sort();
 
     // Fetch addresses for all organizations
     const orgIds = (data || []).map((org: any) => org.id);
@@ -147,6 +161,7 @@ export async function getOrganizations(
       data: {
         organizations,
         total: count || 0,
+        distinctSiteIds,
       },
     };
   } catch (error) {
@@ -378,6 +393,7 @@ export async function createOrganization(
         name: data.name,
         organization_type: data.organization_type,
         status: data.status || 'active',
+        site_id: data.site_id || null,
         phone: data.phone || null,
         email: data.email || null,
         website: data.website || null,
@@ -672,41 +688,78 @@ export async function getContactsOrganizationsStats(
       return { success: false, error: 'User not authenticated' };
     }
 
-    // Get organization counts
-    const { data: orgs, error: orgsError } = await supabase
+    // Get organization counts (use count to avoid 1000-row limit)
+    const { count: totalOrgs, error: orgsError } = await supabase
       .from('organizations')
-      .select('id, organization_type, status')
+      .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId);
 
     if (orgsError) {
       return { success: false, error: orgsError.message };
     }
 
-    // Get contact counts
-    const { data: contacts, error: contactsError } = await supabase
+    const { data: orgs, error: orgsDetailError } = await supabase
+      .from('organizations')
+      .select('organization_type, status')
+      .eq('company_id', companyId)
+      .limit(10000);
+
+    if (orgsDetailError) {
+      return { success: false, error: orgsDetailError.message };
+    }
+
+    // Get contact counts (use count to avoid 1000-row limit)
+    const { count: totalContacts, error: contactsCountError } = await supabase
       .from('contacts')
-      .select('id, status')
+      .select('*', { count: 'exact', head: true })
       .eq('company_id', companyId);
 
-    if (contactsError) {
-      return { success: false, error: contactsError.message };
+    if (contactsCountError) {
+      return { success: false, error: contactsCountError.message };
+    }
+
+    const { count: activeContactsCount, error: activeContactsError } = await supabase
+      .from('contacts')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('status', 'active');
+
+    if (activeContactsError) {
+      return { success: false, error: activeContactsError.message };
     }
 
     // Get investigator counts (contacts assigned as PI or Sub-I)
-    const { data: investigators, error: invError } = await supabase
+    const { count: investigatorsCount, error: invError } = await supabase
       .from('organization_contacts')
-      .select('contact_id, role, status')
+      .select('*', { count: 'exact', head: true })
       .in('role', ['principal_investigator', 'sub_investigator'])
       .eq('status', 'active');
 
+    if (invError) {
+      return { success: false, error: invError.message };
+    }
+
+    // Get contact counts by status
+    const { count: inactiveContactsCount } = await supabase
+      .from('contacts')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('status', 'inactive');
+
+    const { count: pendingContactsCount } = await supabase
+      .from('contacts')
+      .select('*', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('status', 'pending');
+
     // Calculate stats
     const stats: ContactsOrganizationsStats = {
-      total_organizations: orgs?.length || 0,
+      total_organizations: totalOrgs ?? 0,
       active_organizations: orgs?.filter(o => o.status === 'active').length || 0,
       active_sites: orgs?.filter(o => o.organization_type === 'site' && o.status === 'active').length || 0,
-      total_contacts: contacts?.length || 0,
-      active_contacts: contacts?.filter(c => c.status === 'active').length || 0,
-      active_investigators: investigators?.length || 0,
+      total_contacts: totalContacts ?? 0,
+      active_contacts: activeContactsCount ?? 0,
+      active_investigators: investigatorsCount ?? 0,
       organizations_by_type: {
         site: orgs?.filter(o => o.organization_type === 'site').length || 0,
         sponsor: orgs?.filter(o => o.organization_type === 'sponsor').length || 0,
@@ -717,9 +770,9 @@ export async function getContactsOrganizationsStats(
         regulatory: orgs?.filter(o => o.organization_type === 'regulatory').length || 0,
       },
       contacts_by_status: {
-        active: contacts?.filter(c => c.status === 'active').length || 0,
-        inactive: contacts?.filter(c => c.status === 'inactive').length || 0,
-        pending: contacts?.filter(c => c.status === 'pending').length || 0,
+        active: activeContactsCount ?? 0,
+        inactive: inactiveContactsCount ?? 0,
+        pending: pendingContactsCount ?? 0,
       },
     };
 

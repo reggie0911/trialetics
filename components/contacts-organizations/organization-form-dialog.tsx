@@ -41,6 +41,7 @@ const organizationSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   organization_type: z.enum(['site', 'sponsor', 'cro', 'vendor', 'lab', 'irb', 'regulatory']),
   status: z.enum(['active', 'inactive', 'pending']),
+  site_id: z.string().optional(),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   phone: z.string().optional(),
   website: z.string().url('Invalid URL').optional().or(z.literal('')),
@@ -87,6 +88,7 @@ export function OrganizationFormDialog({
       name: '',
       organization_type: 'site',
       status: 'active',
+      site_id: '',
       email: '',
       phone: '',
       website: '',
@@ -105,6 +107,7 @@ export function OrganizationFormDialog({
           name: organization.name,
           organization_type: organization.organization_type,
           status: organization.status,
+          site_id: organization.site_id || '',
           email: organization.email || '',
           phone: organization.phone || '',
           website: organization.website || '',
@@ -117,6 +120,7 @@ export function OrganizationFormDialog({
           name: '',
           organization_type: 'site',
           status: 'active',
+          site_id: '',
           email: '',
           phone: '',
           website: '',
@@ -161,6 +165,7 @@ export function OrganizationFormDialog({
           name: values.name,
           organization_type: values.organization_type as OrganizationType,
           status: values.status as EntityStatus,
+          site_id: values.organization_type === 'site' ? (values.site_id || null) : null,
           email: values.email || null,
           phone: values.phone || null,
           website: values.website || null,
@@ -172,6 +177,7 @@ export function OrganizationFormDialog({
           name: values.name,
           organization_type: values.organization_type as OrganizationType,
           status: values.status as EntityStatus,
+          site_id: values.organization_type === 'site' ? (values.site_id || null) : null,
           email: values.email || null,
           phone: values.phone || null,
           website: values.website || null,
@@ -277,6 +283,18 @@ export function OrganizationFormDialog({
               )}
             </div>
           </div>
+
+          {selectedType === 'site' && (
+            <div className="space-y-1">
+              <Label htmlFor="site_id" className="text-xs">Site ID</Label>
+              <Input
+                id="site_id"
+                placeholder="e.g. SITE-001"
+                className="text-xs placeholder:text-xs md:text-xs h-8"
+                {...register('site_id')}
+              />
+            </div>
+          )}
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1">

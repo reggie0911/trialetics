@@ -5,7 +5,6 @@
 import {
   OrganizationType,
   ContactRole,
-  EntityStatus,
 } from './contacts-organizations';
 
 // Raw CSV row data (as parsed from CSV file)
@@ -17,11 +16,11 @@ export interface CSVRow {
 export interface OrganizationCSVRow {
   name: string;
   organization_type: OrganizationType;
-  status?: EntityStatus;
   phone?: string;
   email?: string;
   website?: string;
   notes?: string;
+  site_id?: string;
   // Address fields
   street_1?: string;
   street_2?: string;
@@ -35,15 +34,15 @@ export interface OrganizationCSVRow {
 export interface ContactCSVRow {
   first_name: string;
   last_name: string;
-  email?: string;
+  email: string; // required
   phone?: string;
   title?: string;
   credentials?: string;
   license_number?: string;
-  status?: EntityStatus;
   notes?: string;
   // Organization relationship
   organization_name?: string; // For linking to existing organization
+  organization_site_id?: string; // Disambiguates duplicate org names
   contact_role?: ContactRole; // Role within organization
   // Address fields
   street_1?: string;
@@ -79,12 +78,37 @@ export interface BulkImportResult {
   contactsCreated: number;
   addressesCreated: number;
   relationshipsCreated: number;
+  organizationDuplicatesSkipped: number;
+  contactDuplicatesSkipped: number;
   errors: Array<{
     rowIndex: number;
     type: 'organization' | 'contact' | 'address' | 'relationship';
     error: string;
   }>;
   warnings: string[];
+}
+
+// Deduplicated contact with multiple org links (derived from CSV rows sharing the same email)
+export interface DedupedContact {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  title?: string;
+  credentials?: string;
+  license_number?: string;
+  notes?: string;
+  street_1?: string;
+  street_2?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country?: string;
+  orgLinks: Array<{
+    organization_name: string;
+    organization_site_id?: string;
+    contact_role?: ContactRole;
+  }>;
 }
 
 // Row type detection

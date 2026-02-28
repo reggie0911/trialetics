@@ -319,6 +319,13 @@ export function AIAssistantChat({ sessionId, onSessionChange, onVoiceMode }: AIA
                 const dl: FileDownload = JSON.parse(event.data);
                 setFileDownloads(prev => [...prev, dl]);
               } catch { /* skip */ }
+            } else if (event.type === 'generated_questions') {
+              try {
+                const parsed = JSON.parse(event.data);
+                if (parsed?.questions?.length) {
+                  window.dispatchEvent(new CustomEvent('ai-generated-questions', { detail: parsed }));
+                }
+              } catch { /* skip */ }
             } else if (event.type === 'error') {
               setError(event.data);
             }

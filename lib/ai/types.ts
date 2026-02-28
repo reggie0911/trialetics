@@ -50,7 +50,7 @@ export interface ChatMessage {
   attachments?: ChatMessageAttachment[];
 }
 
-export type StreamEventType = 'text_delta' | 'tool_call_start' | 'tool_result' | 'done' | 'error' | 'confirm_action' | 'file_download';
+export type StreamEventType = 'text_delta' | 'tool_call_start' | 'tool_result' | 'done' | 'error' | 'confirm_action' | 'file_download' | 'generated_questions';
 
 export interface StreamEvent {
   type: StreamEventType;

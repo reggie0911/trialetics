@@ -13,24 +13,31 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import {
   CSVRow,
   OrganizationCSVRow,
   ContactCSVRow,
+  DedupedContact,
   ValidationResult,
+  BulkImportResult,
 } from '@/lib/types/contacts-organizations-csv';
 import {
   validateCSVData,
-  detectRowType,
 } from '@/lib/utils/contacts-organizations-csv-validator';
 import {
-  bulkImportWithRelationships,
+  importOrganizationChunk,
+  importContactChunk,
+  buildOrgResolutionMaps,
+  revalidateContactsOrganizations,
 } from '@/lib/actions/bulk-import';
 import {
   generateOrganizationCSVTemplate,
   generateContactCSVTemplate,
 } from '@/lib/utils/csv-template-generator';
+
+const CHUNK_SIZE = 25;
 
 interface BulkUploadDialogProps {
   companyId: string;
@@ -58,13 +65,26 @@ export function BulkUploadDialog({
   }>({ organizations: [], contacts: [] });
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState('');
 
-  const handleDrag = (e: React.DragEvent) => {
+  const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
+    setDragActive(true);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+    setDragActive(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       setDragActive(false);
     }
   };
@@ -103,7 +123,6 @@ export function BulkUploadDialog({
       complete: (results) => {
         setParsing(false);
 
-        // Filter out delimiter detection warnings
         const criticalErrors = results.errors.filter(
           (error) => error.type !== 'Delimiter' && error.type !== 'Quotes'
         );
@@ -126,7 +145,6 @@ export function BulkUploadDialog({
 
           setValidationResult(validation);
 
-          // Extract valid data for preview
           const validOrgs = validation.organizations
             .filter((r) => r.data !== null)
             .slice(0, 5)
@@ -141,7 +159,6 @@ export function BulkUploadDialog({
             contacts: validContacts,
           });
 
-          // Show warnings if there are validation errors
           if (validation.invalidRows > 0) {
             const errorCount = validation.organizations.filter((r) => r.errors.length > 0).length +
               validation.contacts.filter((r) => r.errors.length > 0).length;
@@ -167,9 +184,10 @@ export function BulkUploadDialog({
 
     setUploading(true);
     setError(null);
+    setUploadProgress(0);
+    setUploadStatus('Preparing import...');
 
     try {
-      // Extract valid data
       const validOrgs = validationResult.organizations
         .filter((r) => r.data !== null)
         .map((r) => r.data!);
@@ -183,31 +201,149 @@ export function BulkUploadDialog({
         return;
       }
 
-      const result = await bulkImportWithRelationships(
-        companyId,
-        profileId,
-        userEmail,
-        validOrgs,
-        validContacts
-      );
+      const result: BulkImportResult = {
+        success: true,
+        organizationsCreated: 0,
+        contactsCreated: 0,
+        addressesCreated: 0,
+        relationshipsCreated: 0,
+        organizationDuplicatesSkipped: 0,
+        contactDuplicatesSkipped: 0,
 
-      if (!result.success || !result.data) {
-        setError(result.error || 'Failed to upload data');
-        setUploading(false);
-        return;
+        errors: [],
+        warnings: [],
+      };
+
+      // Calculate total work units for progress
+      let totalSteps = 0;
+      let completedSteps = 0;
+
+      const orgChunkCount = validOrgs.length > 0 ? Math.ceil(validOrgs.length / CHUNK_SIZE) : 0;
+      const contactChunkCount = validContacts.length > 0 ? Math.ceil(validContacts.length / CHUNK_SIZE) : 0;
+      totalSteps = orgChunkCount + (validContacts.length > 0 ? 1 + contactChunkCount : 0);
+      if (totalSteps === 0) totalSteps = 1;
+
+      const updateProgress = () => {
+        completedSteps++;
+        setUploadProgress(Math.round((completedSteps / totalSteps) * 100));
+      };
+
+      // --- Phase 1: Organizations ---
+      if (validOrgs.length > 0) {
+        for (let i = 0; i < validOrgs.length; i += CHUNK_SIZE) {
+          const chunk = validOrgs.slice(i, i + CHUNK_SIZE);
+          const chunkNum = Math.floor(i / CHUNK_SIZE) + 1;
+          setUploadStatus(`Importing organizations (${chunkNum}/${orgChunkCount})...`);
+
+          const chunkResult = await importOrganizationChunk(companyId, profileId, userEmail, chunk);
+          if (!chunkResult.success || !chunkResult.data) {
+            result.errors.push({
+              rowIndex: i + 1,
+              type: 'organization',
+              error: chunkResult.error || `Failed to import organization chunk ${chunkNum}`,
+            });
+          } else {
+            result.organizationsCreated += chunkResult.data.organizationsCreated;
+            result.addressesCreated += chunkResult.data.addressesCreated;
+            result.errors.push(...chunkResult.data.errors);
+            result.warnings.push(...chunkResult.data.warnings);
+          }
+          updateProgress();
+        }
       }
 
-      const { data } = result;
-      const successMessage = `Successfully imported: ${data.organizationsCreated} organization(s), ${data.contactsCreated} contact(s), ${data.addressesCreated} address(es), ${data.relationshipsCreated} relationship(s)`;
+      // --- Phase 2: Contacts ---
+      if (validContacts.length > 0) {
+        // Map each row directly to a DedupedContact with one org link
+        const dedupedContacts: DedupedContact[] = validContacts.map((c) => ({
+          first_name: c.first_name,
+          last_name: c.last_name,
+          email: c.email,
+          phone: c.phone,
+          title: c.title,
+          credentials: c.credentials,
+          license_number: c.license_number,
+          notes: c.notes,
+          street_1: c.street_1,
+          street_2: c.street_2,
+          city: c.city,
+          state: c.state,
+          postal_code: c.postal_code,
+          country: c.country,
+          orgLinks: c.organization_name ? [{
+            organization_name: c.organization_name,
+            organization_site_id: c.organization_site_id,
+            contact_role: c.contact_role,
+          }] : [],
+        }));
+
+        // Build org resolution maps
+        const contactOrgNames = [
+          ...new Set(
+            dedupedContacts.flatMap((c) => c.orgLinks.map((l) => l.organization_name))
+          ),
+        ];
+        const mapsResult = await buildOrgResolutionMaps(companyId, contactOrgNames);
+        if (!mapsResult.success) {
+          throw new Error(mapsResult.error || 'Failed to build organization resolution maps');
+        }
+        const nameMap = mapsResult.data?.nameMap || {};
+        const siteIdMap = mapsResult.data?.siteIdMap || {};
+        const ambiguous = mapsResult.data?.ambiguousNames || [];
+        updateProgress();
+
+        // Import deduped contact chunks
+        const dedupedChunkCount = Math.ceil(dedupedContacts.length / CHUNK_SIZE);
+        for (let i = 0; i < dedupedContacts.length; i += CHUNK_SIZE) {
+          const chunk = dedupedContacts.slice(i, i + CHUNK_SIZE);
+          const chunkNum = Math.floor(i / CHUNK_SIZE) + 1;
+          setUploadStatus(`Importing contacts (${chunkNum}/${dedupedChunkCount})...`);
+
+          const chunkResult = await importContactChunk(
+            companyId, profileId, userEmail, chunk,
+            nameMap, siteIdMap, ambiguous
+          );
+          if (!chunkResult.success || !chunkResult.data) {
+            result.errors.push({
+              rowIndex: i + 1,
+              type: 'contact',
+              error: chunkResult.error || `Failed to import contact chunk ${chunkNum}`,
+            });
+          } else {
+            result.contactsCreated += chunkResult.data.contactsCreated;
+            result.addressesCreated += chunkResult.data.addressesCreated;
+            result.relationshipsCreated += chunkResult.data.relationshipsCreated;
+            result.errors.push(...chunkResult.data.errors);
+            result.warnings.push(...chunkResult.data.warnings);
+          }
+          updateProgress();
+        }
+      }
+
+      setUploadProgress(100);
+      setUploadStatus('Finalizing...');
+
+      await revalidateContactsOrganizations();
+
+      // Build success message
+      const parts: string[] = [];
+      if (result.organizationsCreated > 0) parts.push(`${result.organizationsCreated} organization(s)`);
+      if (result.contactsCreated > 0) parts.push(`${result.contactsCreated} contact(s)`);
+      if (result.addressesCreated > 0) parts.push(`${result.addressesCreated} address(es)`);
+      if (result.relationshipsCreated > 0) parts.push(`${result.relationshipsCreated} relationship(s)`);
+
+      const successMessage = parts.length > 0
+        ? `Imported: ${parts.join(', ')}`
+        : 'No new records to import';
 
       toast({
-        title: 'Upload Successful',
+        title: 'Upload Complete',
         description: successMessage,
       });
 
-      if (data.errors.length > 0 || data.warnings.length > 0) {
-        const errorMessages = data.errors.map((e) => `Row ${e.rowIndex}: ${e.error}`).join('; ');
-        const warningMessages = data.warnings.join('; ');
+      if (result.errors.length > 0 || result.warnings.length > 0) {
+        const errorMessages = result.errors.map((e) => `Row ${e.rowIndex}: ${e.error}`).join('; ');
+        const warningMessages = result.warnings.join('; ');
         toast({
           title: 'Upload completed with issues',
           description: `${errorMessages}${warningMessages ? `; ${warningMessages}` : ''}`,
@@ -223,6 +359,8 @@ export function BulkUploadDialog({
       setError(err instanceof Error ? err.message : 'Failed to upload data');
     } finally {
       setUploading(false);
+      setUploadProgress(0);
+      setUploadStatus('');
     }
   };
 
@@ -248,7 +386,6 @@ export function BulkUploadDialog({
       link.click();
       document.body.removeChild(link);
       
-      // Clean up the URL object
       URL.revokeObjectURL(url);
       
       toast({
@@ -271,6 +408,8 @@ export function BulkUploadDialog({
     setValidationResult(null);
     setError(null);
     setDragActive(false);
+    setUploadProgress(0);
+    setUploadStatus('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -332,9 +471,9 @@ export function BulkUploadDialog({
                   ? 'border-primary bg-primary/5'
                   : 'border-muted-foreground/25 hover:border-primary/50'
               }`}
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
+              onDragEnter={handleDragEnter}
+              onDragLeave={handleDragLeave}
+              onDragOver={handleDragOver}
               onDrop={handleDrop}
               onClick={() => fileInputRef.current?.click()}
             >
@@ -387,13 +526,16 @@ export function BulkUploadDialog({
               )}
 
               {uploading && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Uploading data...
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">{uploadStatus}</span>
+                    <span className="font-medium tabular-nums">{uploadProgress}%</span>
+                  </div>
+                  <Progress value={uploadProgress} />
                 </div>
               )}
 
-              {validationResult && (
+              {validationResult && !uploading && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-xs">
                     <CheckCircle2 className="h-4 w-4 text-green-600" />
@@ -405,11 +547,6 @@ export function BulkUploadDialog({
                   <div className="text-xs text-muted-foreground">
                     Valid: {validationResult.validRows} | Invalid: {validationResult.invalidRows}
                   </div>
-                  {validationResult.duplicateRows.length > 0 && (
-                    <div className="text-xs text-yellow-600">
-                      Warning: {validationResult.duplicateRows.length} duplicate row(s) detected
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -447,7 +584,7 @@ export function BulkUploadDialog({
                 </div>
               )}
 
-              {!parsing && !error && (previewData.organizations.length > 0 || previewData.contacts.length > 0) && (
+              {!parsing && !error && !uploading && (previewData.organizations.length > 0 || previewData.contacts.length > 0) && (
                 <div className="space-y-4">
                   {previewData.organizations.length > 0 && (
                     <div className="border rounded-lg p-3 bg-muted/20">
@@ -460,7 +597,7 @@ export function BulkUploadDialog({
                             <tr className="border-b">
                               <th className="text-left p-1">Name</th>
                               <th className="text-left p-1">Type</th>
-                              <th className="text-left p-1">Email</th>
+                              <th className="text-left p-1">Site ID</th>
                               <th className="text-left p-1">City</th>
                             </tr>
                           </thead>
@@ -469,7 +606,7 @@ export function BulkUploadDialog({
                               <tr key={i} className="border-b last:border-b-0">
                                 <td className="p-1">{org.name}</td>
                                 <td className="p-1">{org.organization_type}</td>
-                                <td className="p-1">{org.email || '-'}</td>
+                                <td className="p-1">{org.site_id || '-'}</td>
                                 <td className="p-1">{org.city || '-'}</td>
                               </tr>
                             ))}
@@ -492,6 +629,7 @@ export function BulkUploadDialog({
                               <th className="text-left p-1">Last Name</th>
                               <th className="text-left p-1">Email</th>
                               <th className="text-left p-1">Organization</th>
+                              <th className="text-left p-1">Site ID</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -499,8 +637,9 @@ export function BulkUploadDialog({
                               <tr key={i} className="border-b last:border-b-0">
                                 <td className="p-1">{contact.first_name}</td>
                                 <td className="p-1">{contact.last_name}</td>
-                                <td className="p-1">{contact.email || '-'}</td>
+                                <td className="p-1">{contact.email}</td>
                                 <td className="p-1">{contact.organization_name || '-'}</td>
+                                <td className="p-1">{contact.organization_site_id || '-'}</td>
                               </tr>
                             ))}
                           </tbody>

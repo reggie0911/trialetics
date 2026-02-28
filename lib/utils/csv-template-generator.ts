@@ -18,11 +18,11 @@ export function generateOrganizationCSVTemplate(): string {
   const headers = [
     'name',
     'organization_type',
-    'status',
     'phone',
     'email',
     'website',
     'notes',
+    'site_id',
     'street_1',
     'street_2',
     'city',
@@ -35,11 +35,11 @@ export function generateOrganizationCSVTemplate(): string {
   const orgExample = [
     'Acme Clinical Research Site',  // name
     'site',                          // organization_type
-    'active',                        // status
     '+1 (555) 123-4567',            // phone
     'contact@acme-research.com',    // email
     'https://www.acme-research.com', // website
     'Primary research site',         // notes
+    'SITE-001',                      // site_id
     '123 Main Street',               // street_1
     'Suite 100',                     // street_2
     'Boston',                        // city
@@ -65,9 +65,9 @@ export function generateContactCSVTemplate(): string {
     'title',
     'credentials',
     'license_number',
-    'status',
     'notes',
     'organization_name',
+    'organization_site_id',
     'contact_role',
     'street_1',
     'street_2',
@@ -81,14 +81,14 @@ export function generateContactCSVTemplate(): string {
   const contactExample = [
     'John',                          // first_name
     'Doe',                           // last_name
-    'john.doe@example.com',         // email
+    'john.doe@example.com',         // email (required)
     '+1 (555) 987-6543',            // phone
     'Principal Investigator',        // title
     'MD, PhD',                       // credentials
     'MA123456',                      // license_number
-    'active',                        // status
     'Principal Investigator',       // notes
     'Acme Clinical Research Site',  // organization_name
+    'SITE-001',                      // organization_site_id
     'principal_investigator',       // contact_role
     '456 Oak Avenue',                // street_1
     '',                              // street_2

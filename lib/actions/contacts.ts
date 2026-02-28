@@ -79,7 +79,7 @@ export async function getContacts(
     let contacts = (data || []).map((contact: any) => {
       const orgRelations = contact.organization_contacts || [];
       const projectRelations = contact.contact_protocols || [];
-      const primaryOrgRelation = orgRelations.find((oc: any) => oc.is_primary);
+      const primaryOrgRelation = orgRelations.find((oc: any) => oc.is_primary) || orgRelations[0];
 
       return {
         ...contact,
@@ -183,17 +183,34 @@ export async function getContact(contactId: string): Promise<ActionResponse<Cont
       .eq('entity_type', 'contact')
       .eq('entity_id', contactId);
 
-    // Get primary organization
+    // Get primary organization (fall back to first if none marked primary)
     const primaryOrgRelation = data.organization_contacts?.find(
       (oc: any) => oc.is_primary
-    );
+    ) || data.organization_contacts?.[0];
+
+    // Fetch primary organization's address
+    let primaryOrgAddress = null;
+    if (primaryOrgRelation?.organization?.id) {
+      const { data: orgAddresses } = await supabase
+        .from('addresses')
+        .select('*')
+        .eq('entity_type', 'organization')
+        .eq('entity_id', primaryOrgRelation.organization.id)
+        .order('is_primary', { ascending: false })
+        .limit(1);
+      primaryOrgAddress = orgAddresses?.[0] || null;
+    }
+
+    const primaryOrg = primaryOrgRelation?.organization
+      ? { ...primaryOrgRelation.organization, primary_address: primaryOrgAddress }
+      : null;
 
     const contact: ContactWithRelations = {
       ...data,
       organizations: data.organization_contacts,
       projects: data.contact_protocols,
       addresses: addresses || [],
-      primary_organization: primaryOrgRelation?.organization || null,
+      primary_organization: primaryOrg,
       organizations_count: data.organization_contacts?.length || 0,
       projects_count: data.contact_protocols?.length || 0,
     };
@@ -298,6 +315,13 @@ export async function updateContact(
       .select('*')
       .eq('id', id)
       .single();
+
+    // Auto-set inactive_date based on status transition
+    if (updateData.status === 'inactive' && oldContact?.status !== 'inactive') {
+      updateData.inactive_date = new Date().toISOString();
+    } else if (updateData.status === 'active' && oldContact?.status === 'inactive') {
+      updateData.inactive_date = null;
+    }
 
     const { data: contact, error } = await supabase
       .from('contacts')
@@ -517,6 +541,104 @@ export async function removeContactFromOrganization(
   } catch (error) {
     console.error('Error in removeContactFromOrganization:', error);
     return { success: false, error: 'Failed to remove contact' };
+  }
+}
+
+// =============================================
+// SET PRIMARY ROLE CONTACT (for site primary roles: PI, Research Director, Clinical Monitor)
+// =============================================
+
+export type PrimaryRoleType = 'principal_investigator' | 'coordinator' | 'site_staff';
+
+export async function setPrimaryRoleContact(
+  organizationId: string,
+  role: PrimaryRoleType,
+  contactId: string | null
+): Promise<ActionResponse<null>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    // Find existing row with this org + role
+    const { data: existingRows } = await supabase
+      .from('organization_contacts')
+      .select('id, contact_id')
+      .eq('organization_id', organizationId)
+      .eq('role', role)
+      .limit(1);
+
+    const existing = existingRows?.[0];
+
+    if (!contactId) {
+      // Clear: delete existing if any
+      if (existing) {
+        const { error: delError } = await supabase
+          .from('organization_contacts')
+          .delete()
+          .eq('id', existing.id);
+        if (delError) {
+          console.error('Error clearing primary role:', delError);
+          return { success: false, error: delError.message };
+        }
+      }
+      revalidatePath('/protected/contacts-organizations');
+      return { success: true, data: null };
+    }
+
+    // Check if contact is already at this org (any role)
+    const { data: contactAtOrg } = await supabase
+      .from('organization_contacts')
+      .select('id, role')
+      .eq('organization_id', organizationId)
+      .eq('contact_id', contactId)
+      .single();
+
+    if (contactAtOrg) {
+      // Contact already at org: update their role in place
+      if (contactAtOrg.role === role) {
+        // Same role, no-op
+        revalidatePath('/protected/contacts-organizations');
+        return { success: true, data: null };
+      }
+      const { error: updateError } = await supabase
+        .from('organization_contacts')
+        .update({ role, updated_at: new Date().toISOString() })
+        .eq('id', contactAtOrg.id);
+      if (updateError) {
+        console.error('Error updating primary role:', updateError);
+        return { success: false, error: updateError.message };
+      }
+      // Remove old role holder if different contact
+      if (existing && existing.contact_id !== contactId) {
+        await supabase.from('organization_contacts').delete().eq('id', existing.id);
+      }
+    } else {
+      // Contact not at org: delete old holder (if any), insert new
+      if (existing) {
+        await supabase.from('organization_contacts').delete().eq('id', existing.id);
+      }
+      const { error: insertError } = await supabase.from('organization_contacts').insert({
+        organization_id: organizationId,
+        contact_id: contactId,
+        role,
+        is_primary: false,
+        status: 'active',
+      });
+      if (insertError) {
+        console.error('Error assigning primary role:', insertError);
+        return { success: false, error: insertError.message };
+      }
+    }
+
+    revalidatePath('/protected/contacts-organizations');
+    return { success: true, data: null };
+  } catch (error) {
+    console.error('Error in setPrimaryRoleContact:', error);
+    return { success: false, error: 'Failed to set primary role contact' };
   }
 }
 

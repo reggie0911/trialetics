@@ -36,6 +36,7 @@ interface OrganizationsTabProps {
   filters: OrganizationFilters;
   onFiltersChange: (filters: OrganizationFilters) => void;
   onRefresh: () => void;
+  distinctSiteIds?: string[];
   companyId: string;
   profileId: string;
   userEmail: string;
@@ -47,6 +48,7 @@ export function OrganizationsTab({
   filters,
   onFiltersChange,
   onRefresh,
+  distinctSiteIds = [],
   companyId,
   profileId,
   userEmail,
@@ -76,6 +78,15 @@ export function OrganizationsTab({
       .map((a) => a.country)
       .filter((c): c is string => !!c)
   )).sort();
+
+  // Site IDs for filter dropdown (from server; fallback to deriving from current orgs)
+  const siteIdOptions = distinctSiteIds.length > 0
+    ? distinctSiteIds
+    : Array.from(new Set(
+        organizations
+          .filter((o) => o.organization_type === 'site' && o.site_id)
+          .map((o) => o.site_id!)
+      )).sort();
 
   const handleSearch = () => {
     onFiltersChange({ ...filters, search: searchValue, page: 1 });
@@ -122,6 +133,15 @@ export function OrganizationsTab({
     });
   };
 
+  const handleSiteIdChange = (value: string | null) => {
+    if (!value) return;
+    onFiltersChange({
+      ...filters,
+      site_id: value === 'all' ? undefined : value,
+      page: 1,
+    });
+  };
+
   const handleStateChange = (value: string | null) => {
     if (!value) return;
     onFiltersChange({
@@ -159,7 +179,7 @@ export function OrganizationsTab({
     onRefresh();
   };
 
-  const hasActiveFilters = filters.search || filters.name || filters.organization_type || filters.status || filters.state || filters.country;
+  const hasActiveFilters = filters.search || filters.name || filters.organization_type || filters.status || filters.site_id || filters.state || filters.country;
 
   return (
     <div className="space-y-4">
@@ -270,6 +290,27 @@ export function OrganizationsTab({
                 </Select>
               </div>
 
+              {/* Site ID */}
+              <div>
+                <Label htmlFor="site_id" className="text-[10px] mb-1.5 block">Site ID</Label>
+                <Select
+                  value={filters.site_id || 'all'}
+                  onValueChange={handleSiteIdChange}
+                >
+                  <SelectTrigger id="site_id" className="text-xs h-8 w-full capitalize">
+                    <SelectValue placeholder="Site ID" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all" className="text-xs">All Site IDs</SelectItem>
+                    {siteIdOptions.map((siteId) => (
+                      <SelectItem key={siteId} value={siteId} className="text-xs">
+                        {siteId}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* State */}
               <div>
                 <Label htmlFor="state" className="text-[10px] mb-1.5 block">State</Label>
@@ -330,6 +371,7 @@ export function OrganizationsTab({
         onView={handleView}
         onEdit={handleEdit}
         onRefresh={onRefresh}
+        emptyStateType={filters.organization_type && filters.organization_type !== 'all' ? filters.organization_type : undefined}
       />
 
       {/* Edit Dialog */}

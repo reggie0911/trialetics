@@ -6,9 +6,14 @@
 export type OrganizationType = 'site' | 'sponsor' | 'cro' | 'vendor' | 'lab' | 'irb' | 'regulatory';
 
 export type ContactRole = 
-  | 'principal_investigator' 
-  | 'sub_investigator' 
+  | 'principal_investigator'
+  | 'co_principal_investigator'
+  | 'sub_investigator'
+  | 'lead_research_coordinator'
+  | 'research_coordinator'
+  | 'research_director'
   | 'coordinator' 
+  | 'pharmacist'
   | 'site_staff' 
   | 'sponsor_rep' 
   | 'cro_rep' 
@@ -49,6 +54,7 @@ export interface Organization {
   organization_type: OrganizationType;
   status: EntityStatus;
   parent_organization_id?: string | null;
+  site_id?: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;
@@ -80,6 +86,7 @@ export interface Contact {
   creator_email: string | null;
   created_at: string;
   updated_at: string;
+  inactive_date?: string | null;
 }
 
 export interface Address {
@@ -352,7 +359,7 @@ export interface ContactWithRelations extends Contact {
   organizations?: OrganizationContactWithOrganization[];
   projects?: ContactProjectWithProject[];
   addresses?: Address[];
-  primary_organization?: Organization | null;
+  primary_organization?: (Organization & { primary_address?: Address | null }) | null;
   organizations_count?: number;
   projects_count?: number;
 }
@@ -365,6 +372,7 @@ export interface CreateOrganizationData {
   name: string;
   organization_type: OrganizationType;
   status?: EntityStatus;
+  site_id?: string | null;
   phone?: string | null;
   email?: string | null;
   website?: string | null;
@@ -391,6 +399,7 @@ export interface CreateContactData {
   notes?: string | null;
   manager_id?: string | null;
   metadata?: Record<string, unknown>;
+  inactive_date?: string | null;
 }
 
 export interface UpdateContactData extends Partial<CreateContactData> {
@@ -469,6 +478,7 @@ export interface OrganizationFilters {
   name?: string;
   organization_type?: OrganizationType | 'all';
   status?: EntityStatus | 'all';
+  site_id?: string | 'all';
   state?: string | 'all';
   country?: string | 'all';
   page?: number;
@@ -515,8 +525,13 @@ export const ORGANIZATION_TYPE_LABELS: Record<OrganizationType, string> = {
 
 export const CONTACT_ROLE_LABELS: Record<ContactRole, string> = {
   principal_investigator: 'Principal Investigator',
+  co_principal_investigator: 'Co-Principal Investigator',
   sub_investigator: 'Sub-Investigator',
+  lead_research_coordinator: 'Lead Research Coordinator',
+  research_coordinator: 'Research Coordinator',
+  research_director: 'Research Director',
   coordinator: 'Coordinator',
+  pharmacist: 'Pharmacist',
   site_staff: 'Site Staff',
   sponsor_rep: 'Sponsor Representative',
   cro_rep: 'CRO Representative',

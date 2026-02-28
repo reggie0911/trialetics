@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, Calendar, FileText, Archive, Plus, CalendarCheck, Trash2, FileSignature, FileCheck, Network, UserPlus } from 'lucide-react';
+import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, Calendar, FileText, Plus, CalendarCheck, Trash2, FileSignature, FileCheck, Network, UserPlus, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,9 +19,19 @@ import {
   ORGANIZATION_TYPE_LABELS,
   ENTITY_STATUS_LABELS,
   CONTACT_ROLE_LABELS,
+  type Contact,
 } from '@/lib/types/contacts-organizations';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { setPrimaryRoleContact, type PrimaryRoleType } from '@/lib/actions/contacts';
 import { OrganizationFormDialog } from './organization-form-dialog';
 import { SiteMilestoneDialog } from './site-milestone-dialog';
+import { ProjectAssignmentDialog } from './project-assignment-dialog';
 import { OrganizationMap } from './organization-map';
 import { ActivityTimeline } from './activity-timeline';
 import { OrganizationNotesSheet } from './organization-notes-sheet';
@@ -59,6 +69,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from '@/components/ui/tooltip';
 import { formatFieldName } from '@/lib/utils';
 import type { OrganizationContactWithContact } from '@/lib/types/contacts-organizations';
 import type { OrganizationClinicalTrials } from '@/lib/actions/organization-clinical-trials';
@@ -109,6 +124,7 @@ interface SiteDetailPageClientProps {
   parentSite: ParentSiteItem | null;
   siteTeamMembers: SiteTeamMemberItem[];
   profiles: Array<{ id: string; first_name: string | null; email: string | null }>;
+  contacts?: Contact[];
   companyId: string;
   profileId: string;
   userEmail: string;
@@ -128,6 +144,7 @@ export function SiteDetailPageClient({
   parentSite = null,
   siteTeamMembers = [],
   profiles = [],
+  contacts = [],
   companyId,
   profileId,
   userEmail,
@@ -156,6 +173,8 @@ export function SiteDetailPageClient({
   const [showTeamMemberDialog, setShowTeamMemberDialog] = useState(false);
   const [teamMemberToRemove, setTeamMemberToRemove] = useState<SiteTeamMemberItem | null>(null);
   const [isRemovingMember, setIsRemovingMember] = useState(false);
+  const [showAssignProject, setShowAssignProject] = useState(false);
+  const [updatingRole, setUpdatingRole] = useState<PrimaryRoleType | null>(null);
 
   const handleBack = () => {
     router.push('/protected/contacts-organizations');
@@ -174,6 +193,39 @@ export function SiteDetailPageClient({
       description: 'Site milestones have been updated successfully.',
     });
   };
+
+  const handleAssignProtocolSuccess = () => {
+    setShowAssignProject(false);
+    router.refresh();
+    toast({
+      title: 'Protocol assigned',
+      description: 'This site can now track milestone data. Click Edit to enter details.',
+    });
+  };
+
+  const handlePrimaryRoleChange = async (role: PrimaryRoleType, contactId: string | null) => {
+    setUpdatingRole(role);
+    const result = await setPrimaryRoleContact(initialOrg.id, role, contactId);
+    setUpdatingRole(null);
+    if (result.success) {
+      router.refresh();
+      toast({
+        title: 'Primary role updated',
+        description: 'The role assignment has been updated.',
+      });
+    } else {
+      toast({
+        title: 'Error',
+        description: result.error || 'Failed to update primary role',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const getContactDisplayName = (contact: Contact) =>
+    [contact.first_name, contact.last_name].filter(Boolean).join(' ') ||
+    contact.email ||
+    contact.id;
 
   const primaryAddress = initialOrg.addresses?.find((addr) => addr.address_type === 'primary');
   
@@ -412,7 +464,7 @@ export function SiteDetailPageClient({
                 <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
                 <div className="flex-1">
                   <span className="text-muted-foreground">Site ID: </span>
-                  <span className="font-medium">{initialOrg.id.slice(0, 8)}</span>
+                  <span className="font-medium">{initialOrg.site_id ?? initialOrg.id.slice(0, 8)}</span>
                 </div>
               </div>
               <div className="flex items-start gap-2">
@@ -469,38 +521,98 @@ export function SiteDetailPageClient({
                 <h3 className="text-xs md:text-xs font-medium mb-3">Primary Roles</h3>
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
-                    <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-                    <div className="flex-1">
-                      <span className="text-muted-foreground">Principal Investigator: </span>
-                      <span className="font-medium">
-                        {principalInvestigator 
-                          ? `${principalInvestigator.contact.first_name} ${principalInvestigator.contact.last_name}`
-                          : 'N/A'}
-                      </span>
+                    <Users className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <span className="text-muted-foreground block">Principal Investigator</span>
+                      <Select
+                        value={principalInvestigator?.contact?.id ?? ''}
+                        onValueChange={(v) => handlePrimaryRoleChange('principal_investigator', v || null)}
+                        disabled={updatingRole === 'principal_investigator' || contacts.length === 0}
+                      >
+                        <SelectTrigger className="text-xs h-8 w-full">
+                          <SelectValue
+                            placeholder="Select..."
+                            getDisplayLabel={(v) => {
+                              if (!v) return 'None';
+                              const c = contacts.find((x) => x.id === v);
+                              return c ? getContactDisplayName(c) : v;
+                            }}
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="" className="text-xs">None</SelectItem>
+                          {contacts.map((c) => (
+                            <SelectItem key={c.id} value={c.id} className="text-xs">
+                              {getContactDisplayName(c)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
-                    <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-                    <div className="flex-1">
-                      <span className="text-muted-foreground">Research Director: </span>
-                      <span className="font-medium">
-                        {coordinator 
-                          ? `${coordinator.contact.first_name} ${coordinator.contact.last_name}`
-                          : 'N/A'}
-                      </span>
+                    <Users className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <span className="text-muted-foreground block">Research Director</span>
+                      <Select
+                        value={coordinator?.contact?.id ?? ''}
+                        onValueChange={(v) => handlePrimaryRoleChange('coordinator', v || null)}
+                        disabled={updatingRole === 'coordinator' || contacts.length === 0}
+                      >
+                        <SelectTrigger className="text-xs h-8 w-full">
+                          <SelectValue
+                            placeholder="Select..."
+                            getDisplayLabel={(v) => {
+                              if (!v) return 'None';
+                              const c = contacts.find((x) => x.id === v);
+                              return c ? getContactDisplayName(c) : v;
+                            }}
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="" className="text-xs">None</SelectItem>
+                          {contacts.map((c) => (
+                            <SelectItem key={c.id} value={c.id} className="text-xs">
+                              {getContactDisplayName(c)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
-                    <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-                    <div className="flex-1">
-                      <span className="text-muted-foreground">Clinical Monitor: </span>
-                      <span className="font-medium">
-                        {clinicalMonitor 
-                          ? `${clinicalMonitor.contact.first_name} ${clinicalMonitor.contact.last_name}`
-                          : 'N/A'}
-                      </span>
+                    <Users className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <span className="text-muted-foreground block">Clinical Monitor</span>
+                      <Select
+                        value={clinicalMonitor?.contact?.id ?? ''}
+                        onValueChange={(v) => handlePrimaryRoleChange('site_staff', v || null)}
+                        disabled={updatingRole === 'site_staff' || contacts.length === 0}
+                      >
+                        <SelectTrigger className="text-xs h-8 w-full">
+                          <SelectValue
+                            placeholder="Select..."
+                            getDisplayLabel={(v) => {
+                              if (!v) return 'None';
+                              const c = contacts.find((x) => x.id === v);
+                              return c ? getContactDisplayName(c) : v;
+                            }}
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="" className="text-xs">None</SelectItem>
+                          {contacts.map((c) => (
+                            <SelectItem key={c.id} value={c.id} className="text-xs">
+                              {getContactDisplayName(c)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
+                  {contacts.length === 0 && (
+                    <p className="text-xs text-muted-foreground italic">No contacts available. Create contacts first.</p>
+                  )}
                 </div>
               </div>
 
@@ -536,84 +648,113 @@ export function SiteDetailPageClient({
 
           {/* Site Milestones Card - spans 2 columns */}
           <Card className="col-span-2 row-span-1">
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between gap-4">
               <CardTitle className="text-xs md:text-xs font-medium">Site Milestones</CardTitle>
               {siteProject && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowMilestoneDialog(true)}
-                  className="text-xs md:text-xs"
-                >
-                  <Pencil className="h-3 w-3 mr-1" />
-                  Edit
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setShowMilestoneDialog(true)}
+                      className="text-xs md:text-xs"
+                    >
+                      <Pencil className="h-3 w-3 mr-1" />
+                      Edit milestones
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Edit site qualification dates, subject counts, and visit dates</TooltipContent>
+                </Tooltip>
               )}
             </CardHeader>
-            <CardContent className="space-y-2 text-xs md:text-xs">
-              <div className="flex items-start gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <span className="text-muted-foreground">Site Qualification Date: </span>
-                  <span className="font-medium">{formatDate(siteProject?.site_qualification_date)}</span>
+            <CardContent className="text-xs md:text-xs">
+              {!siteProject ? (
+                <div className="flex flex-col items-center justify-center py-8 px-4 text-center rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30">
+                  <Link2 className="h-10 w-10 text-muted-foreground/70 mb-4" />
+                  <h3 className="font-medium text-foreground mb-1">No protocol linked</h3>
+                  <p className="text-muted-foreground max-w-[280px] mb-5">
+                    Link this site to a clinical trial to track qualification dates, enrollment counts, and visit milestones.
+                  </p>
+                  <Button
+                    onClick={() => setShowAssignProject(true)}
+                    className="shrink-0"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Assign Protocol
+                  </Button>
                 </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <span className="text-muted-foreground">First Subject Enrolled Date: </span>
-                  <span className="font-medium">{formatDate(siteProject?.first_subject_enrolled_date)}</span>
+              ) : (
+                <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                  <div className="flex items-start gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-muted-foreground">Site Qualification Date: </span>
+                      <span className="font-medium">{formatDate(siteProject?.site_qualification_date)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-muted-foreground">First Subject Enrolled Date: </span>
+                      <span className="font-medium">{formatDate(siteProject?.first_subject_enrolled_date)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-muted-foreground">Subject Screen Failure Count: </span>
+                      <span className="font-medium">{siteProject?.screen_failure_count ?? 0}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-muted-foreground">Subject Enrolled Count: </span>
+                      <span className="font-medium">{siteProject?.enrolled_subject_count ?? 0}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-muted-foreground">First Completed Visit Date: </span>
+                      <span className="font-medium">{formatDate(siteProject?.first_subject_enrolled_date)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-muted-foreground">Last Completed Visit Date: </span>
+                      <span className="font-medium">{formatDate(siteProject?.last_completed_visit_date)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-muted-foreground">Last Subject Off Study: </span>
+                      <span className="font-medium">{formatDate(siteProject?.last_subject_enrolled_date)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <span className="text-muted-foreground">Close-Out Date: </span>
+                      <span className="font-medium">{formatDate(siteProject?.close_out_date)}</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <span className="text-muted-foreground">Subject Screen Failure Count: </span>
-                  <span className="font-medium">{siteProject?.screen_failure_count ?? 0}</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <span className="text-muted-foreground">Subject Enrolled Count: </span>
-                  <span className="font-medium">{siteProject?.enrolled_subject_count ?? 0}</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <span className="text-muted-foreground">First Completed Visit Date: </span>
-                  <span className="font-medium">{formatDate(siteProject?.first_subject_enrolled_date)}</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <span className="text-muted-foreground">Last Completed Visit Date: </span>
-                  <span className="font-medium">{formatDate(siteProject?.last_completed_visit_date)}</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <span className="text-muted-foreground">Last Subject Off Study: </span>
-                  <span className="font-medium">{formatDate(siteProject?.last_subject_enrolled_date)}</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <span className="text-muted-foreground">Close-Out Date: </span>
-                  <span className="font-medium">{formatDate(siteProject?.close_out_date)}</span>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Active Staff Members Card - spans 2 columns */}
           <Card className="col-span-2 row-span-1">
             <CardHeader className="pb-3">
-              <CardTitle className="text-xs md:text-xs font-medium">Active Staff Members</CardTitle>
+              <CardTitle className="text-xs md:text-xs font-medium">
+                Active Staff Members
+                {` (${(initialOrg.contacts ?? []).filter(
+                  (oc) => oc.status === 'active' && (!oc.end_date || new Date(oc.end_date) >= new Date())
+                ).length})`}
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-xs md:text-xs">
               {(() => {
@@ -634,7 +775,9 @@ export function SiteDetailPageClient({
                         {oc.contact?.first_name} {oc.contact?.last_name}
                       </div>
                       <div className="text-muted-foreground">
-                        {CONTACT_ROLE_LABELS[oc.role] || formatFieldName(oc.role)}
+                        {oc.role && oc.role !== 'other'
+                          ? (CONTACT_ROLE_LABELS[oc.role as keyof typeof CONTACT_ROLE_LABELS] || formatFieldName(oc.role))
+                          : (oc.contact?.title || CONTACT_ROLE_LABELS.other)}
                       </div>
                     </div>
                     <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100 flex-shrink-0">
@@ -644,10 +787,14 @@ export function SiteDetailPageClient({
                       variant="ghost"
                       size="sm"
                       className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-                      onClick={() => setContactToArchive(oc)}
-                      title="Archive contact"
+                      asChild
                     >
-                      <Archive className="h-3.5 w-3.5" />
+                      <Link
+                        href={`/protected/contacts-organizations/contact/${oc.contact?.id}`}
+                        title="Edit contact"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Link>
                     </Button>
                   </div>
                 ));
@@ -1084,6 +1231,18 @@ export function SiteDetailPageClient({
           onSuccess={handleMilestoneSuccess}
         />
       )}
+
+      {/* Assign Protocol Dialog */}
+      <ProjectAssignmentDialog
+        open={showAssignProject}
+        onOpenChange={setShowAssignProject}
+        entityType="organization"
+        entityId={initialOrg.id}
+        entityName={initialOrg.name}
+        companyId={companyId}
+        existingProjectIds={(initialOrg.projects ?? []).map((op) => (op as { protocol?: { id: string }; protocol_id?: string }).protocol?.id ?? (op as { protocol_id?: string }).protocol_id).filter(Boolean) as string[]}
+        onSuccess={handleAssignProtocolSuccess}
+      />
 
       {/* Notes Sheet */}
       <OrganizationNotesSheet

@@ -253,11 +253,46 @@ export function ContactDetailPageClient({
                       <CardTitle className="text-xs md:text-xs font-medium">Primary Organization</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="text-xs md:text-xs">
-                        <p className="font-medium">{initialContact.primary_organization.name}</p>
-                        <p className="text-muted-foreground capitalize">
-                          {initialContact.primary_organization.organization_type}
-                        </p>
+                      <div className="text-xs md:text-xs space-y-2">
+                        <div>
+                          <span className="text-muted-foreground">Name: </span>
+                          <span className="font-medium">{initialContact.primary_organization.name}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Organization Type: </span>
+                          <span className="capitalize">{initialContact.primary_organization.organization_type?.replace(/_/g, ' ')}</span>
+                        </div>
+                        {initialContact.primary_organization.primary_address && (() => {
+                          const addr = initialContact.primary_organization.primary_address;
+                          return (
+                            <>
+                              {addr.street_1 && (
+                                <div>
+                                  <span className="text-muted-foreground">Address: </span>
+                                  <span>{addr.street_1}</span>
+                                </div>
+                              )}
+                              {addr.street_2 && (
+                                <div>
+                                  <span className="text-muted-foreground">Address Line 2: </span>
+                                  <span>{addr.street_2}</span>
+                                </div>
+                              )}
+                              {(addr.city || addr.state || addr.postal_code) && (
+                                <div>
+                                  <span className="text-muted-foreground">City, State, Postal Code: </span>
+                                  <span>{[addr.city, addr.state, addr.postal_code].filter(Boolean).join(', ')}</span>
+                                </div>
+                              )}
+                              {addr.country && (
+                                <div>
+                                  <span className="text-muted-foreground">Country: </span>
+                                  <span>{addr.country}</span>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </CardContent>
                   </Card>

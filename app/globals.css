@@ -173,6 +173,12 @@
   }
 }
 
+/* Toast max height to prevent overflow with long messages */
+.cn-toast {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
 @utility font-weight-display {
   font-weight: var(--display-weight);
 }

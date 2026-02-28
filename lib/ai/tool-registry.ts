@@ -1645,6 +1645,35 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
     },
   },
 
+  generateTripReportQuestions: {
+    name: 'generateTripReportQuestions',
+    description: 'Generate checklist questions for a trip report template using AI. Returns structured questions with report_order, report_sub_section, and question text based on the visit type and clinical best practices.',
+    parameters: {
+      type: 'object',
+      properties: {
+        template_id: { type: 'string', description: 'Trip report template ID to generate questions for' },
+        num_questions: { type: 'number', description: 'Number of questions to generate (default 10)' },
+        focus_sections: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Specific sub-sections to focus on (e.g. ["FINANCE", "REGULATORY", "SAFETY"])',
+        },
+        additional_context: { type: 'string', description: 'Additional instructions or topics to cover' },
+      },
+      required: ['template_id'],
+    },
+    handler: async (args, ctx) => {
+      const companyId = requireCompany(ctx);
+      const { generateQuestionsForTemplate } = await import('@/lib/ai/generate-trip-report-questions');
+      return generateQuestionsForTemplate(companyId, {
+        templateId: args.template_id as string,
+        numQuestions: args.num_questions as number | undefined,
+        focusSections: args.focus_sections as string[] | undefined,
+        additionalContext: args.additional_context as string | undefined,
+      });
+    },
+  },
+
   generateCSVExport: {
     name: 'generateCSVExport',
     description: 'Generate a CSV file from CTMS data and return a download link. Supports subjects, action_items, deviations, payment_records, document_records, and audit_log data sources.',

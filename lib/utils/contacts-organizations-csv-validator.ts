@@ -5,10 +5,8 @@
 import {
   OrganizationType,
   ContactRole,
-  EntityStatus,
   ORGANIZATION_TYPE_LABELS,
   CONTACT_ROLE_LABELS,
-  ENTITY_STATUS_LABELS,
 } from '@/lib/types/contacts-organizations';
 import {
   CSVRow,
@@ -19,9 +17,9 @@ import {
   RowType,
 } from '@/lib/types/contacts-organizations-csv';
 
-// Normalize header names for matching (case-insensitive, trim spaces)
+// Normalize header names for matching (case-insensitive, trim spaces, hyphens→underscores)
 export function normalizeHeader(header: string): string {
-  return header.trim().replace(/\s+/g, '_').toLowerCase();
+  return header.trim().replace(/\s+/g, '_').replace(/-/g, '_').toLowerCase();
 }
 
 // Find column index in CSV headers
@@ -30,13 +28,23 @@ export function findColumnIndex(csvHeaders: string[], targetColumn: string): num
   return csvHeaders.findIndex((h) => normalizeHeader(h) === normalizedTarget);
 }
 
-// Get column value from row
-export function getColumnValue(row: CSVRow, header: string, csvHeaders: string[]): string | undefined {
-  const index = findColumnIndex(csvHeaders, header);
-  if (index === -1) return undefined;
-  const actualHeader = csvHeaders[index];
-  const value = row[actualHeader];
-  return value ? String(value).trim() : undefined;
+// Get column value from row (supports alternate header names via aliases)
+export function getColumnValue(
+  row: CSVRow,
+  header: string,
+  csvHeaders: string[],
+  aliases?: string[]
+): string | undefined {
+  const targets = aliases ? [header, ...aliases] : [header];
+  for (const target of targets) {
+    const index = findColumnIndex(csvHeaders, target);
+    if (index !== -1) {
+      const actualHeader = csvHeaders[index];
+      const value = row[actualHeader];
+      return value ? String(value).trim() : undefined;
+    }
+  }
+  return undefined;
 }
 
 // Detect row type based on headers
@@ -69,16 +77,9 @@ function isValidContactRole(value: string | undefined): value is ContactRole {
   return Object.keys(CONTACT_ROLE_LABELS).includes(normalized);
 }
 
-// Validate entity status enum
-function isValidEntityStatus(value: string | undefined): value is EntityStatus {
-  if (!value) return true; // Optional, defaults to 'active'
-  const normalized = value.toLowerCase().trim();
-  return Object.keys(ENTITY_STATUS_LABELS).includes(normalized);
-}
-
 // Validate email format
 function isValidEmail(email: string | undefined): boolean {
-  if (!email) return true; // Optional
+  if (!email) return false;
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
 }
@@ -105,11 +106,11 @@ export function validateOrganizationRow(
 
   const name = getColumnValue(row, 'name', csvHeaders);
   const organizationType = getColumnValue(row, 'organization_type', csvHeaders);
-  const status = getColumnValue(row, 'status', csvHeaders);
   const phone = getColumnValue(row, 'phone', csvHeaders);
   const email = getColumnValue(row, 'email', csvHeaders);
   const website = getColumnValue(row, 'website', csvHeaders);
   const notes = getColumnValue(row, 'notes', csvHeaders);
+  const siteId = getColumnValue(row, 'site_id', csvHeaders, ['siteid']);
   const street1 = getColumnValue(row, 'street_1', csvHeaders);
   const street2 = getColumnValue(row, 'street_2', csvHeaders);
   const city = getColumnValue(row, 'city', csvHeaders);
@@ -131,10 +132,6 @@ export function validateOrganizationRow(
   }
 
   // Optional field validation
-  if (status && !isValidEntityStatus(status)) {
-    errors.push(`Invalid status: ${status}. Must be one of: ${Object.keys(ENTITY_STATUS_LABELS).join(', ')}`);
-  }
-
   if (email && !isValidEmail(email)) {
     errors.push(`Invalid email format: ${email}`);
   }
@@ -160,12 +157,12 @@ export function validateOrganizationRow(
 
   const data: OrganizationCSVRow = {
     name: name!,
-    organization_type: organizationType as OrganizationType,
-    status: (status as EntityStatus) || 'active',
+    organization_type: organizationType!.toLowerCase().trim() as OrganizationType,
     phone: phone || undefined,
     email: email || undefined,
     website: website || undefined,
     notes: notes || undefined,
+    site_id: siteId || undefined,
     street_1: street1 || undefined,
     street_2: street2 || undefined,
     city: city || undefined,
@@ -198,9 +195,9 @@ export function validateContactRow(
   const title = getColumnValue(row, 'title', csvHeaders);
   const credentials = getColumnValue(row, 'credentials', csvHeaders);
   const licenseNumber = getColumnValue(row, 'license_number', csvHeaders);
-  const status = getColumnValue(row, 'status', csvHeaders);
   const notes = getColumnValue(row, 'notes', csvHeaders);
   const organizationName = getColumnValue(row, 'organization_name', csvHeaders);
+  const organizationSiteId = getColumnValue(row, 'organization_site_id', csvHeaders);
   const contactRole = getColumnValue(row, 'contact_role', csvHeaders);
   const street1 = getColumnValue(row, 'street_1', csvHeaders);
   const street2 = getColumnValue(row, 'street_2', csvHeaders);
@@ -218,29 +215,29 @@ export function validateContactRow(
     errors.push('Last name is required');
   }
 
-  // Optional field validation
-  if (status && !isValidEntityStatus(status)) {
-    errors.push(`Invalid status: ${status}. Must be one of: ${Object.keys(ENTITY_STATUS_LABELS).join(', ')}`);
-  }
-
-  if (email && !isValidEmail(email)) {
+  if (!email || email.length === 0) {
+    errors.push('Email is required');
+  } else if (!isValidEmail(email)) {
     errors.push(`Invalid email format: ${email}`);
   }
 
-  if (contactRole && !isValidContactRole(contactRole)) {
-    errors.push(
-      `Invalid contact role: ${contactRole}. Must be one of: ${Object.keys(CONTACT_ROLE_LABELS).join(', ')}`
-    );
+  // Resolve contact role — normalize to lowercase enum key, fall back to 'other' if unrecognized
+  let resolvedContactRole: ContactRole | undefined = undefined;
+  if (contactRole) {
+    const normalizedRole = contactRole.toLowerCase().trim();
+    if (isValidContactRole(normalizedRole)) {
+      resolvedContactRole = normalizedRole as ContactRole;
+    } else {
+      resolvedContactRole = 'other';
+      warnings.push(`Unrecognized contact role "${contactRole}" — defaulted to "Other"`);
+    }
   }
 
   // Relationship validation
-  if (contactRole && !organizationName) {
+  if (resolvedContactRole && !organizationName) {
     warnings.push('Contact role specified but no organization name provided');
   }
 
-  if (organizationName && !contactRole) {
-    warnings.push('Organization name specified but no contact role provided');
-  }
 
   // Address validation
   const hasAddressFields = street1 || street2 || city || state || postalCode || country;
@@ -260,15 +257,15 @@ export function validateContactRow(
   const data: ContactCSVRow = {
     first_name: firstName!,
     last_name: lastName!,
-    email: email || undefined,
+    email: email!,
     phone: phone || undefined,
     title: title || undefined,
     credentials: credentials || undefined,
     license_number: licenseNumber || undefined,
-    status: (status as EntityStatus) || 'active',
     notes: notes || undefined,
     organization_name: organizationName || undefined,
-    contact_role: contactRole ? (contactRole as ContactRole) : undefined,
+    organization_site_id: organizationSiteId || undefined,
+    contact_role: resolvedContactRole,
     street_1: street1 || undefined,
     street_2: street2 || undefined,
     city: city || undefined,
@@ -283,75 +280,6 @@ export function validateContactRow(
     errors: [],
     warnings,
   };
-}
-
-// Check for duplicates in organizations (by name)
-export function checkDuplicateOrganizations(
-  validatedRows: ValidatedRow<OrganizationCSVRow>[]
-): number[] {
-  const nameMap = new Map<string, number[]>();
-  const duplicateRows: number[] = [];
-
-  validatedRows.forEach((row) => {
-    if (row.data) {
-      const name = row.data.name.toLowerCase().trim();
-      if (!nameMap.has(name)) {
-        nameMap.set(name, []);
-      }
-      nameMap.get(name)!.push(row.rowIndex);
-    }
-  });
-
-  nameMap.forEach((indices) => {
-    if (indices.length > 1) {
-      duplicateRows.push(...indices);
-    }
-  });
-
-  return duplicateRows;
-}
-
-// Check for duplicates in contacts (by email if present, otherwise by first_name + last_name)
-export function checkDuplicateContacts(
-  validatedRows: ValidatedRow<ContactCSVRow>[]
-): number[] {
-  const emailMap = new Map<string, number[]>();
-  const nameMap = new Map<string, number[]>();
-  const duplicateRows: number[] = [];
-
-  validatedRows.forEach((row) => {
-    if (row.data) {
-      // Check by email first
-      if (row.data.email) {
-        const email = row.data.email.toLowerCase().trim();
-        if (!emailMap.has(email)) {
-          emailMap.set(email, []);
-        }
-        emailMap.get(email)!.push(row.rowIndex);
-      } else {
-        // Check by name if no email
-        const nameKey = `${row.data.first_name.toLowerCase().trim()}_${row.data.last_name.toLowerCase().trim()}`;
-        if (!nameMap.has(nameKey)) {
-          nameMap.set(nameKey, []);
-        }
-        nameMap.get(nameKey)!.push(row.rowIndex);
-      }
-    }
-  });
-
-  emailMap.forEach((indices) => {
-    if (indices.length > 1) {
-      duplicateRows.push(...indices);
-    }
-  });
-
-  nameMap.forEach((indices) => {
-    if (indices.length > 1) {
-      duplicateRows.push(...indices);
-    }
-  });
-
-  return duplicateRows;
 }
 
 // Validate all rows in CSV
@@ -375,25 +303,6 @@ export function validateCSVData(
     // Skip unknown rows (they'll be ignored)
   });
 
-  // Check for duplicates
-  const orgDuplicates = checkDuplicateOrganizations(organizations);
-  const contactDuplicates = checkDuplicateContacts(contacts);
-
-  // Add duplicate warnings
-  orgDuplicates.forEach((rowIndex) => {
-    const row = organizations.find((r) => r.rowIndex === rowIndex);
-    if (row) {
-      row.warnings.push('Duplicate organization name found');
-    }
-  });
-
-  contactDuplicates.forEach((rowIndex) => {
-    const row = contacts.find((r) => r.rowIndex === rowIndex);
-    if (row) {
-      row.warnings.push('Duplicate contact found');
-    }
-  });
-
   const validRows = organizations.filter((r) => r.data !== null).length + contacts.filter((r) => r.data !== null).length;
   const invalidRows = organizations.filter((r) => r.data === null).length + contacts.filter((r) => r.data === null).length;
 
@@ -403,6 +312,6 @@ export function validateCSVData(
     totalRows: csvData.length,
     validRows,
     invalidRows,
-    duplicateRows: [...orgDuplicates, ...contactDuplicates],
+    duplicateRows: [],
   };
 }

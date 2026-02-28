@@ -47,6 +47,7 @@ export function ContactsOrganizationsPageClient({
   // Data state
   const [organizations, setOrganizations] = useState<OrganizationWithRelations[]>([]);
   const [organizationsTotal, setOrganizationsTotal] = useState(0);
+  const [distinctSiteIds, setDistinctSiteIds] = useState<string[]>([]);
   const [contacts, setContacts] = useState<ContactWithRelations[]>([]);
   const [contactsTotal, setContactsTotal] = useState(0);
   const [stats, setStats] = useState<ContactsOrganizationsStats | null>(null);
@@ -81,6 +82,7 @@ export function ContactsOrganizationsPageClient({
       if (orgsResult.success && orgsResult.data) {
         setOrganizations(orgsResult.data.organizations);
         setOrganizationsTotal(orgsResult.data.total);
+        setDistinctSiteIds(orgsResult.data.distinctSiteIds || []);
       } else if (!orgsResult.success) {
         toast({
           title: 'Error loading organizations',
@@ -121,6 +123,7 @@ export function ContactsOrganizationsPageClient({
     if (result.success && result.data) {
       setOrganizations(result.data.organizations);
       setOrganizationsTotal(result.data.total);
+      setDistinctSiteIds(result.data.distinctSiteIds || []);
     }
   }, [companyId, orgFilters]);
 
@@ -287,6 +290,7 @@ export function ContactsOrganizationsPageClient({
             filters={orgFilters}
             onFiltersChange={setOrgFilters}
             onRefresh={() => fetchData(true)}
+            distinctSiteIds={distinctSiteIds}
             companyId={companyId}
             profileId={profileId}
             userEmail={userEmail}

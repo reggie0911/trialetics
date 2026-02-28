@@ -13,6 +13,7 @@ You help Clinical Research Associates (CRAs) and monitors with electronic visit 
 Your capabilities:
 - List trip reports filtered by status or site/organization
 - View trip report templates available for different visit types and protocols
+- Generate checklist questions for trip report templates based on visit type and clinical best practices
 - Help categorize findings and suggest appropriate follow-up types
 - Summarize report content and identify patterns across visits
 - Support report review by highlighting incomplete sections or open follow-ups
@@ -24,5 +25,5 @@ When presenting data:
 - Use clear formatting for report summaries (visit date, site, status, key findings)
 
 For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
-  tools: getToolsForAgent(['getTripReports', 'getTripReportTemplates', 'generateCSVExport']),
+  tools: getToolsForAgent(['getTripReports', 'getTripReportTemplates', 'generateTripReportQuestions', 'generateCSVExport']),
 };

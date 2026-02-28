@@ -4,7 +4,7 @@ import { ProtectedNavbar } from '@/components/layout/protected-navbar';
 import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { TripReportTemplatePageClient } from '@/components/trip-reports/trip-report-template-page-client';
 import { createClient } from '@/lib/server';
-import { getTripReportTemplate } from '@/lib/actions/trip-report-templates';
+import { getTripReportTemplate, getSubSectionOrder } from '@/lib/actions/trip-report-templates';
 import { ArrowLeft } from 'lucide-react';
 
 export default async function TemplateEditPage(
@@ -43,6 +43,9 @@ export default async function TemplateEditPage(
     redirect('/protected/trip-reports');
   }
 
+  const subSectionOrderResult = await getSubSectionOrder(id);
+  const initialSubSectionOrder = subSectionOrderResult.success ? (subSectionOrderResult.data ?? []) : [];
+
   return (
     <div className="min-h-screen bg-[#E9E9E9] font-[var(--font-poppins)]">
       <ProtectedNavbar />
@@ -70,6 +73,7 @@ export default async function TemplateEditPage(
         <TripReportTemplatePageClient
           template={templateResult.data}
           companyId={profile.company_id}
+          initialSubSectionOrder={initialSubSectionOrder}
         />
       </main>
     </div>

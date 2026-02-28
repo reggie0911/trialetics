@@ -4,11 +4,10 @@ import { createClient } from '@/lib/server';
 import { revalidatePath } from 'next/cache';
 import {
   OrganizationCSVRow,
-  ContactCSVRow,
+  DedupedContact,
   BulkImportResult,
 } from '@/lib/types/contacts-organizations-csv';
 import { CreateAddressData } from '@/lib/types/contacts-organizations';
-import { assignContactToOrganization } from './contacts';
 
 export type ActionResponse<T> = {
   success: boolean;
@@ -16,11 +15,28 @@ export type ActionResponse<T> = {
   error?: string;
 };
 
+const CHUNK_SIZE = 25;
+
+function emptyResult(): BulkImportResult {
+  return {
+    success: true,
+    organizationsCreated: 0,
+    contactsCreated: 0,
+    addressesCreated: 0,
+    relationshipsCreated: 0,
+    organizationDuplicatesSkipped: 0,
+    contactDuplicatesSkipped: 0,
+    errors: [],
+    warnings: [],
+  };
+}
+
+
 // =============================================
-// BULK IMPORT ORGANIZATIONS
+// IMPORT ORGANIZATION CHUNK
 // =============================================
 
-export async function bulkImportOrganizations(
+export async function importOrganizationChunk(
   companyId: string,
   profileId: string,
   creatorEmail: string,
@@ -29,64 +45,44 @@ export async function bulkImportOrganizations(
   try {
     const supabase = await createClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) return { success: false, error: 'User not authenticated' };
 
-    if (userError || !user) {
-      return { success: false, error: 'User not authenticated' };
-    }
+    const result = emptyResult();
 
-    const result: BulkImportResult = {
-      success: true,
-      organizationsCreated: 0,
-      contactsCreated: 0,
-      addressesCreated: 0,
-      relationshipsCreated: 0,
-      errors: [],
-      warnings: [],
-    };
-
-    // Prepare organizations for batch insert
     const orgsToInsert = organizations.map((org) => ({
       company_id: companyId,
       name: org.name,
       organization_type: org.organization_type,
-      status: org.status || 'active',
+      status: 'active',
       phone: org.phone || null,
       email: org.email || null,
       website: org.website || null,
       notes: org.notes || null,
+      site_id: org.site_id || null,
       metadata: {},
       created_by_id: profileId,
       creator_email: creatorEmail,
     }));
 
-    // Batch insert organizations
     const { data: insertedOrgs, error: orgError } = await supabase
       .from('organizations')
       .insert(orgsToInsert)
       .select();
 
     if (orgError) {
-      return {
-        success: false,
-        error: `Failed to import organizations: ${orgError.message}`,
-      };
+      return { success: false, error: `Failed to import organizations: ${orgError.message}` };
     }
 
     result.organizationsCreated = insertedOrgs?.length || 0;
 
-    // Create addresses for organizations
     if (insertedOrgs) {
       const addressesToInsert: CreateAddressData[] = [];
 
       insertedOrgs.forEach((org, index) => {
         const orgData = organizations[index];
         const hasAddress =
-          orgData.street_1 ||
-          orgData.street_2 ||
-          orgData.city ||
-          orgData.state ||
-          orgData.postal_code ||
-          orgData.country;
+          orgData.street_1 || orgData.street_2 || orgData.city ||
+          orgData.state || orgData.postal_code || orgData.country;
 
         if (hasAddress) {
           addressesToInsert.push({
@@ -104,7 +100,6 @@ export async function bulkImportOrganizations(
         }
       });
 
-      // Batch insert addresses
       if (addressesToInsert.length > 0) {
         const addressInserts = addressesToInsert.map((addr) => ({
           entity_type: addr.entity_type,
@@ -120,7 +115,6 @@ export async function bulkImportOrganizations(
         }));
 
         const { error: addressError } = await supabase.from('addresses').insert(addressInserts);
-
         if (addressError) {
           result.warnings.push(`Some addresses failed to create: ${addressError.message}`);
         } else {
@@ -129,10 +123,8 @@ export async function bulkImportOrganizations(
       }
     }
 
-    revalidatePath('/protected/contacts-organizations');
     return { success: true, data: result };
   } catch (error) {
-    console.error('Error in bulkImportOrganizations:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to import organizations',
@@ -141,113 +133,96 @@ export async function bulkImportOrganizations(
 }
 
 // =============================================
-// BULK IMPORT CONTACTS
+// IMPORT CONTACT CHUNK
 // =============================================
 
-export async function bulkImportContacts(
+export async function importContactChunk(
   companyId: string,
   profileId: string,
   creatorEmail: string,
-  contacts: ContactCSVRow[],
-  organizationNameMap?: Map<string, string> // Map organization names to IDs
+  contacts: DedupedContact[],
+  organizationNameMap: Record<string, string>,
+  organizationSiteIdMap: Record<string, string>,
+  ambiguousNames: string[]
 ): Promise<ActionResponse<BulkImportResult>> {
   try {
     const supabase = await createClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) return { success: false, error: 'User not authenticated' };
 
-    if (userError || !user) {
-      return { success: false, error: 'User not authenticated' };
-    }
+    const result = emptyResult();
+    const nameMap = new Map(Object.entries(organizationNameMap));
+    const siteIdMap = new Map(Object.entries(organizationSiteIdMap));
+    const ambiguousSet = new Set(ambiguousNames);
 
-    const result: BulkImportResult = {
-      success: true,
-      organizationsCreated: 0,
-      contactsCreated: 0,
-      addressesCreated: 0,
-      relationshipsCreated: 0,
-      errors: [],
-      warnings: [],
-    };
-
-    // Prepare contacts for batch insert
-    const contactsToInsert = contacts.map((contact) => ({
+    const contactsToInsert = contacts.map((c) => ({
       company_id: companyId,
-      first_name: contact.first_name,
-      last_name: contact.last_name,
-      email: contact.email || null,
-      phone: contact.phone || null,
-      title: contact.title || null,
-      credentials: contact.credentials || null,
-      license_number: contact.license_number || null,
-      status: contact.status || 'active',
-      notes: contact.notes || null,
+      first_name: c.first_name,
+      last_name: c.last_name,
+      email: c.email,
+      phone: c.phone || null,
+      title: c.title || null,
+      credentials: c.credentials || null,
+      license_number: c.license_number || null,
+      status: 'active',
+      notes: c.notes || null,
       metadata: {},
       created_by_id: profileId,
       creator_email: creatorEmail,
     }));
 
-    // Batch insert contacts
-    const { data: insertedContacts, error: contactError } = await supabase
+    const { data: insertedContactsRaw, error: contactError } = await supabase
       .from('contacts')
       .insert(contactsToInsert)
       .select();
 
     if (contactError) {
-      return {
-        success: false,
-        error: `Failed to import contacts: ${contactError.message}`,
-      };
+      return { success: false, error: `Failed to import contacts: ${contactError.message}` };
     }
 
-    result.contactsCreated = insertedContacts?.length || 0;
+    const insertedContacts = (insertedContactsRaw || []).map((contact, index) => ({
+      contact,
+      source: contacts[index],
+    }));
+    result.contactsCreated = insertedContacts.length;
 
-    // Create addresses for contacts
-    if (insertedContacts) {
-      const addressesToInsert: CreateAddressData[] = [];
+    if (insertedContacts.length > 0) {
+      // Create addresses (one per unique contact)
+      const addressesToInsert: Array<{
+        entity_type: string;
+        entity_id: string;
+        address_type: string;
+        street_1: string | null;
+        street_2: string | null;
+        city: string | null;
+        state: string | null;
+        postal_code: string | null;
+        country: string | null;
+        is_primary: boolean;
+      }> = [];
 
-      insertedContacts.forEach((contact, index) => {
-        const contactData = contacts[index];
+      insertedContacts.forEach(({ contact, source }) => {
         const hasAddress =
-          contactData.street_1 ||
-          contactData.street_2 ||
-          contactData.city ||
-          contactData.state ||
-          contactData.postal_code ||
-          contactData.country;
-
+          source.street_1 || source.street_2 || source.city ||
+          source.state || source.postal_code || source.country;
         if (hasAddress) {
           addressesToInsert.push({
             entity_type: 'contact',
             entity_id: contact.id,
             address_type: 'primary',
-            street_1: contactData.street_1 || null,
-            street_2: contactData.street_2 || null,
-            city: contactData.city || null,
-            state: contactData.state || null,
-            postal_code: contactData.postal_code || null,
-            country: contactData.country || 'United States',
+            street_1: source.street_1 || null,
+            street_2: source.street_2 || null,
+            city: source.city || null,
+            state: source.state || null,
+            postal_code: source.postal_code || null,
+            country: source.country || 'United States',
             is_primary: true,
           });
         }
       });
 
-      // Batch insert addresses
       if (addressesToInsert.length > 0) {
-        const addressInserts = addressesToInsert.map((addr) => ({
-          entity_type: addr.entity_type,
-          entity_id: addr.entity_id,
-          address_type: addr.address_type,
-          street_1: addr.street_1,
-          street_2: addr.street_2,
-          city: addr.city,
-          state: addr.state,
-          postal_code: addr.postal_code,
-          country: addr.country,
-          is_primary: addr.is_primary,
-        }));
-
-        const { error: addressError } = await supabase.from('addresses').insert(addressInserts);
-
+        const { error: addressError } = await supabase.from('addresses').insert(addressesToInsert);
         if (addressError) {
           result.warnings.push(`Some addresses failed to create: ${addressError.message}`);
         } else {
@@ -255,52 +230,81 @@ export async function bulkImportContacts(
         }
       }
 
-      // Create organization-contact relationships
-      if (organizationNameMap && insertedContacts) {
-        const relationshipPromises: Promise<void>[] = [];
+      // Create organization-contact relationships (multiple per contact)
+      const relationshipsToInsert: Array<{
+        organization_id: string;
+        contact_id: string;
+        role: string;
+        is_primary: boolean;
+        status: 'active';
+      }> = [];
 
-        insertedContacts.forEach((contact, index) => {
-          const contactData = contacts[index];
-          if (contactData.organization_name && contactData.contact_role) {
-            const orgId = organizationNameMap.get(contactData.organization_name);
-            if (orgId) {
-              relationshipPromises.push(
-                assignContactToOrganization({
-                  contact_id: contact.id,
-                  organization_id: orgId,
-                  role: contactData.contact_role,
-                  is_primary: false, // Don't auto-set as primary in bulk import
-                  status: 'active',
-                }).then((relResult) => {
-                  if (relResult.success) {
-                    result.relationshipsCreated++;
-                  } else {
-                    result.errors.push({
-                      rowIndex: index + 1,
-                      type: 'relationship',
-                      error: `Failed to link contact to organization ${contactData.organization_name}: ${relResult.error}`,
-                    });
-                  }
-                })
-              );
-            } else {
+      insertedContacts.forEach(({ contact, source }, idx) => {
+        const isPrimarySet = new Set<string>();
+        source.orgLinks.forEach((link) => {
+          const normName = link.organization_name.toLowerCase().trim();
+          let orgId: string | undefined;
+
+          if (link.organization_site_id && siteIdMap.size > 0) {
+            const siteKey = `${normName}|${link.organization_site_id.toLowerCase().trim()}`;
+            orgId = siteIdMap.get(siteKey);
+            if (!orgId) {
               result.errors.push({
-                rowIndex: index + 1,
+                rowIndex: idx + 1,
                 type: 'relationship',
-                error: `Organization not found: ${contactData.organization_name}`,
+                error: `Organization not found with name "${link.organization_name}" and site_id "${link.organization_site_id}"`,
               });
+              return;
+            }
+          } else if (ambiguousSet.has(normName)) {
+            result.errors.push({
+              rowIndex: idx + 1,
+              type: 'relationship',
+              error: `Multiple organizations match name "${link.organization_name}". Provide organization_site_id to disambiguate.`,
+            });
+            return;
+          } else {
+            orgId = nameMap.get(normName);
+            if (!orgId) {
+              result.errors.push({
+                rowIndex: idx + 1,
+                type: 'relationship',
+                error: `Organization not found: ${link.organization_name}`,
+              });
+              return;
             }
           }
-        });
 
-        await Promise.all(relationshipPromises);
+          relationshipsToInsert.push({
+            organization_id: orgId,
+            contact_id: contact.id,
+            role: link.contact_role ?? 'other',
+            is_primary: !isPrimarySet.has(contact.id),
+            status: 'active',
+          });
+          isPrimarySet.add(contact.id);
+        });
+      });
+
+      if (relationshipsToInsert.length > 0) {
+        const { error: relationshipError } = await supabase
+          .from('organization_contacts')
+          .insert(relationshipsToInsert);
+
+        if (relationshipError) {
+          result.errors.push({
+            rowIndex: 1,
+            type: 'relationship',
+            error: `Failed to link contacts to organizations: ${relationshipError.message}`,
+          });
+        } else {
+          result.relationshipsCreated = relationshipsToInsert.length;
+        }
       }
     }
 
-    revalidatePath('/protected/contacts-organizations');
     return { success: true, data: result };
   } catch (error) {
-    console.error('Error in bulkImportContacts:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Failed to import contacts',
@@ -309,89 +313,68 @@ export async function bulkImportContacts(
 }
 
 // =============================================
-// BULK IMPORT WITH RELATIONSHIPS
+// BUILD ORG RESOLUTION MAPS
 // =============================================
 
-export async function bulkImportWithRelationships(
+export async function buildOrgResolutionMaps(
   companyId: string,
-  profileId: string,
-  creatorEmail: string,
-  organizations: OrganizationCSVRow[],
-  contacts: ContactCSVRow[]
-): Promise<ActionResponse<BulkImportResult>> {
+  orgNames: string[]
+): Promise<ActionResponse<{
+  nameMap: Record<string, string>;
+  siteIdMap: Record<string, string>;
+  ambiguousNames: string[];
+}>> {
   try {
     const supabase = await createClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) return { success: false, error: 'User not authenticated' };
 
-    if (userError || !user) {
-      return { success: false, error: 'User not authenticated' };
-    }
-
-    const result: BulkImportResult = {
-      success: true,
-      organizationsCreated: 0,
-      contactsCreated: 0,
-      addressesCreated: 0,
-      relationshipsCreated: 0,
-      errors: [],
-      warnings: [],
-    };
-
-    // Step 1: Import organizations first
-    if (organizations.length > 0) {
-      const orgResult = await bulkImportOrganizations(companyId, profileId, creatorEmail, organizations);
-      if (!orgResult.success || !orgResult.data) {
-        return orgResult;
-      }
-      result.organizationsCreated = orgResult.data.organizationsCreated;
-      result.addressesCreated += orgResult.data.addressesCreated;
-      result.errors.push(...orgResult.data.errors);
-      result.warnings.push(...orgResult.data.warnings);
-    }
-
-    // Step 2: Build organization name to ID map
     const organizationNameMap = new Map<string, string>();
-    if (organizations.length > 0) {
+    const organizationSiteIdMap = new Map<string, string>();
+    const ambiguousNames = new Set<string>();
+
+    if (orgNames.length > 0) {
       const { data: orgs } = await supabase
         .from('organizations')
-        .select('id, name')
+        .select('id, name, site_id')
         .eq('company_id', companyId)
-        .in(
-          'name',
-          organizations.map((o) => o.name)
-        );
+        .in('name', orgNames);
 
-      orgs?.forEach((org) => {
-        organizationNameMap.set(org.name.toLowerCase().trim(), org.id);
+      orgs?.forEach((org: { id: string; name: string; site_id: string | null }) => {
+        const normName = org.name.toLowerCase().trim();
+
+        if (organizationNameMap.has(normName)) {
+          ambiguousNames.add(normName);
+          organizationNameMap.delete(normName);
+        } else if (!ambiguousNames.has(normName)) {
+          organizationNameMap.set(normName, org.id);
+        }
+
+        if (org.site_id) {
+          const siteKey = `${normName}|${org.site_id.toLowerCase().trim()}`;
+          organizationSiteIdMap.set(siteKey, org.id);
+        }
       });
     }
 
-    // Step 3: Import contacts with relationships
-    if (contacts.length > 0) {
-      const contactResult = await bulkImportContacts(
-        companyId,
-        profileId,
-        creatorEmail,
-        contacts,
-        organizationNameMap
-      );
-      if (!contactResult.success || !contactResult.data) {
-        return contactResult;
-      }
-      result.contactsCreated = contactResult.data.contactsCreated;
-      result.addressesCreated += contactResult.data.addressesCreated;
-      result.relationshipsCreated = contactResult.data.relationshipsCreated;
-      result.errors.push(...contactResult.data.errors);
-      result.warnings.push(...contactResult.data.warnings);
-    }
-
-    revalidatePath('/protected/contacts-organizations');
-    return { success: true, data: result };
-  } catch (error) {
-    console.error('Error in bulkImportWithRelationships:', error);
     return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to import data',
+      success: true,
+      data: {
+        nameMap: Object.fromEntries(organizationNameMap),
+        siteIdMap: Object.fromEntries(organizationSiteIdMap),
+        ambiguousNames: [...ambiguousNames],
+      },
     };
+  } catch (error) {
+    return { success: false, error: 'Failed to build resolution maps' };
   }
 }
+
+// =============================================
+// REVALIDATE PATH (called at end of upload)
+// =============================================
+
+export async function revalidateContactsOrganizations() {
+  revalidatePath('/protected/contacts-organizations');
+}
+

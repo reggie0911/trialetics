@@ -4,6 +4,7 @@ import { OrganizationDetailPageClient } from '@/components/contacts-organization
 import { SiteDetailPageClient } from '@/components/contacts-organizations/site-detail-page-client';
 import { createClient } from '@/lib/server';
 import { getOrganization, getOrganizationStatusHistory } from '@/lib/actions/organizations';
+import { getAllContacts } from '@/lib/actions/contacts';
 import { getOrganizationClinicalTrials } from '@/lib/actions/organization-clinical-trials';
 import { getSiteVisits, getProfilesForCompany } from '@/lib/actions/site-visits';
 import { getSiteContracts } from '@/lib/actions/site-contracts';
@@ -94,6 +95,9 @@ export default async function OrganizationDetailPage(
   const tripReports = tripReportsResult.success && tripReportsResult.data
     ? tripReportsResult.data
     : [];
+  const contactsForSite = organizationResult.data.organization_type === 'site'
+    ? (await getAllContacts(profile.company_id)).data ?? []
+    : [];
   const siteVisitToTripReport: Record<string, string> = {};
   const sortedByVersion = [...tripReports].sort(
     (a, b) => ((b as { version?: number }).version ?? 0) - ((a as { version?: number }).version ?? 0)
@@ -123,6 +127,7 @@ export default async function OrganizationDetailPage(
           parentSite={parentSite}
           siteTeamMembers={siteTeamMembers}
           profiles={profiles}
+          contacts={contactsForSite}
           companyId={profile.company_id}
           profileId={profile.id}
           userEmail={profile.email || data.user.email || ''}

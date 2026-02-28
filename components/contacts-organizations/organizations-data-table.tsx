@@ -42,6 +42,7 @@ import { formatFieldName } from '@/lib/utils';
 import { deleteOrganization } from '@/lib/actions/organizations';
 import {
   OrganizationWithRelations,
+  OrganizationType,
   ORGANIZATION_TYPE_LABELS,
   ENTITY_STATUS_LABELS,
 } from '@/lib/types/contacts-organizations';
@@ -55,6 +56,7 @@ interface OrganizationsDataTableProps {
   onView: (org: OrganizationWithRelations) => void;
   onEdit: (org: OrganizationWithRelations) => void;
   onRefresh: () => void;
+  emptyStateType?: OrganizationType | 'all';
 }
 
 export function OrganizationsDataTable({
@@ -66,6 +68,7 @@ export function OrganizationsDataTable({
   onView,
   onEdit,
   onRefresh,
+  emptyStateType,
 }: OrganizationsDataTableProps) {
   const { toast } = useToast();
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -103,6 +106,16 @@ export function OrganizationsDataTable({
           <span className="font-medium">{row.getValue('name')}</span>
         </div>
       ),
+    },
+    {
+      accessorKey: 'site_id',
+      header: 'Site ID',
+      cell: ({ row }) => {
+        const type = row.original.organization_type;
+        const siteId = row.original.site_id;
+        if (type !== 'site') return <span className="text-xs text-muted-foreground">--</span>;
+        return <span className="text-xs">{siteId || '—'}</span>;
+      },
     },
     {
       accessorKey: 'organization_type',
@@ -365,8 +378,25 @@ export function OrganizationsDataTable({
                 >
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <Building2 className="h-8 w-8" />
-                    <p className="text-xs">No organizations found.</p>
-                    <p className="text-xs">Add your first organization to get started.</p>
+                    {(() => {
+                      const label = emptyStateType && emptyStateType !== 'all' && ORGANIZATION_TYPE_LABELS[emptyStateType as OrganizationType]
+                        ? (() => {
+                            const l = ORGANIZATION_TYPE_LABELS[emptyStateType as OrganizationType];
+                            return l.length <= 3 && l === l.toUpperCase() ? l : l.charAt(0).toLowerCase() + l.slice(1);
+                          })()
+                        : null;
+                      return label ? (
+                        <>
+                          <p className="text-xs">No {label} organizations found.</p>
+                          <p className="text-xs">Add your first {label} organization to get started.</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs">No organizations found.</p>
+                          <p className="text-xs">Add your first organization to get started.</p>
+                        </>
+                      );
+                    })()}
                   </div>
                 </TableCell>
               </TableRow>
