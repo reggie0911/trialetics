@@ -35,6 +35,8 @@ const menuItems = [
       { label: "Activity Calendar", href: "/protected/clinical-trials/calendar" },
       { label: "Rate Lists", href: "/protected/clinical-trials/rate-lists" },
       { label: "Clinical Payments", href: "/protected/clinical-payments" },
+      { label: "Budget Templates", href: "/protected/budget-templates" },
+      { label: "Site Portal", href: "/protected/site-portal" },
       { label: "Clinical Training", href: "/protected/clinical-training" },
       { label: "Visit Templates", href: "/protected/visit-templates" },
       { label: "Source Data Verification", href: "/protected/source-data-verification" },

@@ -260,24 +260,30 @@ export function OrganizationFormDialog({
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="organization_type" className="text-xs">Type *</Label>
-              <Select
-                value={selectedType}
-                onValueChange={(value) => value && setValue('organization_type', value as OrganizationType)}
-              >
-                <SelectTrigger className="text-xs h-8 w-full">
-                  <span className="text-xs">
-                    {selectedType ? ORGANIZATION_TYPE_LABELS[selectedType as OrganizationType] || formatFieldName(selectedType) : 'Select type'}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(ORGANIZATION_TYPE_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value} className="text-xs">
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-xs">Type *</Label>
+              {isEditing ? (
+                <div className="border-input bg-muted/40 text-xs h-8 w-full rounded-md border px-2.5 flex items-center">
+                  {selectedType ? ORGANIZATION_TYPE_LABELS[selectedType as OrganizationType] || formatFieldName(selectedType) : '—'}
+                </div>
+              ) : (
+                <Select
+                  value={selectedType}
+                  onValueChange={(value) => value && setValue('organization_type', value as OrganizationType)}
+                >
+                  <SelectTrigger className="text-xs h-8 w-full">
+                    <span className="text-xs">
+                      {selectedType ? ORGANIZATION_TYPE_LABELS[selectedType as OrganizationType] || formatFieldName(selectedType) : 'Select type'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(ORGANIZATION_TYPE_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value} className="text-xs">
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               {errors.organization_type && (
                 <p className="text-xs text-destructive">{errors.organization_type.message}</p>
               )}

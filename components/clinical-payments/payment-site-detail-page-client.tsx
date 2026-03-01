@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Loader2, RefreshCw, Plus } from 'lucide-react';
+import { ArrowLeft, Loader2, RefreshCw, Plus, DollarSign, TrendingUp, FileWarning, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -10,14 +10,16 @@ import { useToast } from '@/hooks/use-toast';
 import { PaymentActivityTable } from './payment-activity-table';
 import { PaymentExceptionDialog } from './payment-exception-dialog';
 import { UnplannedPaymentDialog } from './unplanned-payment-dialog';
+import SiteBudgetTab from '@/components/budget-templates/site-budget-tab';
 import {
   getPaymentActivities,
   getPaymentExceptions,
   getPaymentRecords,
   syncPaymentActivitiesForSite,
   createFinalPaymentRecord,
+  getSiteFinancialSummary,
 } from '@/lib/actions/clinical-payments';
-import type { PaymentActivityWithRelations, PaymentExceptionWithRelations } from '@/lib/types/clinical-payments';
+import type { PaymentActivityWithRelations, PaymentExceptionWithRelations, SiteFinancialSummary } from '@/lib/types/clinical-payments';
 
 interface PaymentSiteDetailPageClientProps {
   siteId: string;
@@ -42,7 +44,7 @@ export function PaymentSiteDetailPageClient({
 }: PaymentSiteDetailPageClientProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'activities' | 'exceptions' | 'records'>('activities');
+  const [activeTab, setActiveTab] = useState<'activities' | 'exceptions' | 'records' | 'budget'>('activities');
   const [activities, setActivities] = useState<PaymentActivityWithRelations[]>([]);
   const [activitiesTotal, setActivitiesTotal] = useState(0);
   const [exceptions, setExceptions] = useState<PaymentExceptionWithRelations[]>([]);
@@ -53,6 +55,14 @@ export function PaymentSiteDetailPageClient({
   const [isExceptionDialogOpen, setIsExceptionDialogOpen] = useState(false);
   const [isUnplannedDialogOpen, setIsUnplannedDialogOpen] = useState(false);
   const [isCreatingFinal, setIsCreatingFinal] = useState(false);
+  const [financialSummary, setFinancialSummary] = useState<SiteFinancialSummary | null>(null);
+
+  const fetchFinancialSummary = useCallback(async () => {
+    const result = await getSiteFinancialSummary(companyId, siteId);
+    if (result.success && result.data) {
+      setFinancialSummary(result.data);
+    }
+  }, [companyId, siteId]);
 
   const fetchActivities = useCallback(async () => {
     const result = await getPaymentActivities(companyId, siteId);
@@ -88,12 +98,12 @@ export function PaymentSiteDetailPageClient({
           description: `Created ${syncResult.data.created} payment activities from subject activities.`,
         });
       }
-      await Promise.all([fetchActivities(), fetchExceptions(), fetchRecords()]);
+      await Promise.all([fetchActivities(), fetchExceptions(), fetchRecords(), fetchFinancialSummary()]);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [companyId, siteId, fetchActivities, fetchExceptions, fetchRecords]);
+  }, [companyId, siteId, fetchActivities, fetchExceptions, fetchRecords, fetchFinancialSummary]);
 
   useEffect(() => {
     fetchAll();
@@ -140,8 +150,79 @@ export function PaymentSiteDetailPageClient({
         </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'activities' | 'exceptions' | 'records')}>
-        <TabsList className="grid w-full max-w-[500px] grid-cols-3">
+      {financialSummary && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <Card>
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="flex items-center gap-2 mb-1">
+                <DollarSign className="h-3.5 w-3.5 text-green-600" />
+                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Earned to Date</p>
+              </div>
+              <p className="text-lg font-semibold">
+                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(financialSummary.earned_to_date)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="flex items-center gap-2 mb-1">
+                <CheckCircle2 className="h-3.5 w-3.5 text-blue-600" />
+                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Paid to Date</p>
+              </div>
+              <p className="text-lg font-semibold">
+                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(financialSummary.paid_to_date)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingUp className="h-3.5 w-3.5 text-orange-600" />
+                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Remaining</p>
+              </div>
+              <p className="text-lg font-semibold">
+                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(financialSummary.remaining_balance)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="flex items-center gap-2 mb-1">
+                <FileWarning className="h-3.5 w-3.5 text-purple-600" />
+                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Withholding</p>
+              </div>
+              <p className="text-lg font-semibold">
+                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(financialSummary.withholding_to_date)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="flex items-center gap-2 mb-1">
+                <DollarSign className="h-3.5 w-3.5 text-red-600" />
+                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">VAT to Date</p>
+              </div>
+              <p className="text-lg font-semibold">
+                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(financialSummary.vat_to_date)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3 px-4">
+              <div className="flex items-center gap-2 mb-1">
+                <FileWarning className="h-3.5 w-3.5 text-gray-600" />
+                <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide">Records</p>
+              </div>
+              <p className="text-lg font-semibold">
+                {financialSummary.processed_records}/{financialSummary.total_records}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'activities' | 'exceptions' | 'records' | 'budget')}>
+        <TabsList className="grid w-full max-w-[650px] grid-cols-4">
           <TabsTrigger value="activities" className="text-xs">
             Payment Activities
           </TabsTrigger>
@@ -150,6 +231,9 @@ export function PaymentSiteDetailPageClient({
           </TabsTrigger>
           <TabsTrigger value="records" className="text-xs">
             Payment Records
+          </TabsTrigger>
+          <TabsTrigger value="budget" className="text-xs">
+            Site Budget
           </TabsTrigger>
         </TabsList>
 
@@ -270,6 +354,14 @@ export function PaymentSiteDetailPageClient({
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="budget" className="mt-6">
+          <SiteBudgetTab
+            siteId={siteId}
+            companyId={companyId}
+            profileId={profileId}
+          />
         </TabsContent>
       </Tabs>
 

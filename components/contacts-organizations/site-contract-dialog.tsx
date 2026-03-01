@@ -183,7 +183,7 @@ export function SiteContractDialog({
                 onValueChange={(v) => v && setValue('contract_type', v as SiteContractType)}
               >
                 <SelectTrigger className="text-xs h-8">
-                  <SelectValue />
+                  <SelectValue getDisplayLabel={(v) => (v ? SITE_CONTRACT_TYPE_LABELS[v as SiteContractType] : null)} />
                 </SelectTrigger>
                 <SelectContent>
                   {Object.entries(SITE_CONTRACT_TYPE_LABELS).map(([value, label]) => (
@@ -202,7 +202,7 @@ export function SiteContractDialog({
                 onValueChange={(v) => v && setValue('status', v as SiteContractStatus)}
               >
                 <SelectTrigger className="text-xs h-8">
-                  <SelectValue />
+                  <SelectValue getDisplayLabel={(v) => (v ? SITE_CONTRACT_STATUS_LABELS[v as SiteContractStatus] : null)} />
                 </SelectTrigger>
                 <SelectContent>
                   {Object.entries(SITE_CONTRACT_STATUS_LABELS).map(([value, label]) => (

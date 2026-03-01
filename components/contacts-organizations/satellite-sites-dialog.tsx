@@ -112,7 +112,7 @@ export function SatelliteSitesDialog({
               <SelectTrigger className="text-xs h-8">
                 <SelectValue placeholder={mode === 'set_parent' ? 'None (no parent)' : 'Select site'} />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="min-w-[280px] w-max overflow-x-visible">
                 {mode === 'set_parent' && (
                   <SelectItem value="" className="text-xs">None (no parent)</SelectItem>
                 )}

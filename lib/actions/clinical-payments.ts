@@ -19,6 +19,9 @@ import type {
   PaymentSplitWithRelations,
   CreatePaymentSplitData,
   UpdatePaymentSplitData,
+  SiteFinancialSummary,
+  PaymentAgingReport,
+  PaymentTrendDataPoint,
 } from '@/lib/types/clinical-payments';
 import type { ActionResponse } from '@/lib/types';
 
@@ -1596,5 +1599,374 @@ export async function getSitesWithPaymentData(
   } catch (error) {
     console.error('Error in getSitesWithPaymentData:', error);
     return { success: false, error: 'Failed to fetch sites' };
+  }
+}
+
+// =============================================
+// SITE FINANCIAL SUMMARY (GAP S2, P7)
+// =============================================
+
+export async function getSiteFinancialSummary(
+  companyId: string,
+  siteId: string
+): Promise<ActionResponse<SiteFinancialSummary>> {
+  try {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from('site_financial_summary')
+      .select('*')
+      .eq('company_id', companyId)
+      .eq('site_id', siteId)
+      .limit(1);
+
+    if (error) {
+      console.error('Error fetching site financial summary:', error);
+      return { success: false, error: error.message };
+    }
+
+    if (!data || data.length === 0) {
+      return {
+        success: true,
+        data: {
+          site_id: siteId,
+          company_id: companyId,
+          site_number: null,
+          protocol_id: null,
+          protocol_number: null,
+          earned_to_date: 0,
+          paid_to_date: 0,
+          remaining_balance: 0,
+          requested_to_date: 0,
+          vat_to_date: 0,
+          withholding_to_date: 0,
+          pending_records: 0,
+          processed_records: 0,
+          total_records: 0,
+        },
+      };
+    }
+
+    return { success: true, data: data[0] as SiteFinancialSummary };
+  } catch (error) {
+    console.error('Error in getSiteFinancialSummary:', error);
+    return { success: false, error: 'Failed to fetch site financial summary' };
+  }
+}
+
+// =============================================
+// PAYMENT AGING REPORT (GAP P5)
+// =============================================
+
+export async function getPaymentAgingReport(
+  companyId: string,
+  protocolId?: string
+): Promise<ActionResponse<PaymentAgingReport>> {
+  try {
+    const supabase = await createClient();
+
+    let query = supabase
+      .from('payment_records')
+      .select('id, earned_amount, check_amount, created_at, status')
+      .eq('company_id', companyId)
+      .in('status', ['to_be_processed', 'pending_approval', 'in_progress']);
+
+    if (protocolId) query = query.eq('protocol_id', protocolId);
+
+    const { data, error } = await query;
+    if (error) return { success: false, error: error.message };
+
+    const records = data || [];
+    const now = new Date();
+    const buckets: Record<string, { count: number; total_amount: number }> = {
+      '0-30 days': { count: 0, total_amount: 0 },
+      '31-60 days': { count: 0, total_amount: 0 },
+      '61-90 days': { count: 0, total_amount: 0 },
+      '90+ days': { count: 0, total_amount: 0 },
+    };
+
+    for (const record of records) {
+      const createdAt = new Date(record.created_at);
+      const daysOld = Math.floor((now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
+      const amount = Number(record.earned_amount) - Number(record.check_amount || 0);
+
+      let bucket: string;
+      if (daysOld <= 30) bucket = '0-30 days';
+      else if (daysOld <= 60) bucket = '31-60 days';
+      else if (daysOld <= 90) bucket = '61-90 days';
+      else bucket = '90+ days';
+
+      buckets[bucket].count++;
+      buckets[bucket].total_amount += amount;
+    }
+
+    const result: PaymentAgingReport = {
+      buckets: Object.entries(buckets).map(([bucket, vals]) => ({
+        bucket,
+        ...vals,
+      })),
+      total_outstanding: records.reduce(
+        (sum, r) => sum + (Number(r.earned_amount) - Number(r.check_amount || 0)),
+        0
+      ),
+      total_count: records.length,
+    };
+
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('Error in getPaymentAgingReport:', error);
+    return { success: false, error: 'Failed to generate aging report' };
+  }
+}
+
+// =============================================
+// PAYMENT TREND ANALYSIS (GAP P5)
+// =============================================
+
+export async function getPaymentTrends(
+  companyId: string,
+  protocolId?: string,
+  months?: number
+): Promise<ActionResponse<PaymentTrendDataPoint[]>> {
+  try {
+    const supabase = await createClient();
+    const periodMonths = months || 12;
+
+    let query = supabase
+      .from('payment_records')
+      .select('earned_amount, check_amount, created_at, status')
+      .eq('company_id', companyId)
+      .order('created_at');
+
+    if (protocolId) query = query.eq('protocol_id', protocolId);
+
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - periodMonths);
+    query = query.gte('created_at', cutoff.toISOString());
+
+    const { data, error } = await query;
+    if (error) return { success: false, error: error.message };
+
+    const records = data || [];
+    const monthMap = new Map<string, { earned: number; paid: number; count: number }>();
+
+    for (const record of records) {
+      const date = new Date(record.created_at);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const existing = monthMap.get(key) || { earned: 0, paid: 0, count: 0 };
+      existing.earned += Number(record.earned_amount);
+      existing.paid += Number(record.check_amount || 0);
+      existing.count++;
+      monthMap.set(key, existing);
+    }
+
+    const trends: PaymentTrendDataPoint[] = Array.from(monthMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([period, vals]) => ({
+        period,
+        earned: vals.earned,
+        paid: vals.paid,
+        record_count: vals.count,
+      }));
+
+    return { success: true, data: trends };
+  } catch (error) {
+    console.error('Error in getPaymentTrends:', error);
+    return { success: false, error: 'Failed to get payment trends' };
+  }
+}
+
+// =============================================
+// EXPORT PAYMENT RECORDS (GAP P5)
+// =============================================
+
+export async function exportPaymentRecords(
+  companyId: string,
+  filters?: PaymentRecordFilters
+): Promise<ActionResponse<Record<string, unknown>[]>> {
+  try {
+    const supabase = await createClient();
+
+    let query = supabase
+      .from('payment_records')
+      .select(`
+        payment_number, payment_type, status,
+        earned_amount, requested_amount, check_amount,
+        check_date, check_number, vat_amount, currency_code,
+        created_at,
+        site:clinical_sites(site_number),
+        protocol:clinical_protocols(protocol_number),
+        contract:site_contracts(contract_number),
+        payee:contacts(first_name, last_name)
+      `)
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
+
+    if (filters?.site_id) query = query.eq('site_id', filters.site_id);
+    if (filters?.protocol_id) query = query.eq('protocol_id', filters.protocol_id);
+    if (filters?.status && filters.status !== 'all') query = query.eq('status', filters.status);
+    if (filters?.payment_type && filters.payment_type !== 'all')
+      query = query.eq('payment_type', filters.payment_type);
+
+    const { data, error } = await query;
+    if (error) return { success: false, error: error.message };
+
+    const exportData = (data || []).map((record) => {
+      const site = Array.isArray(record.site) ? record.site[0] : record.site;
+      const protocol = Array.isArray(record.protocol) ? record.protocol[0] : record.protocol;
+      const contract = Array.isArray(record.contract) ? record.contract[0] : record.contract;
+      const payee = Array.isArray(record.payee) ? record.payee[0] : record.payee;
+
+      return {
+        payment_number: record.payment_number,
+        site_number: site?.site_number || '',
+        protocol_number: protocol?.protocol_number || '',
+        contract_number: contract?.contract_number || '',
+        payee_name: payee ? `${payee.first_name || ''} ${payee.last_name || ''}`.trim() : '',
+        payment_type: record.payment_type,
+        status: record.status,
+        earned_amount: record.earned_amount,
+        requested_amount: record.requested_amount,
+        check_amount: record.check_amount,
+        check_date: record.check_date,
+        check_number: record.check_number,
+        vat_amount: record.vat_amount,
+        currency: record.currency_code,
+        created_at: record.created_at,
+      };
+    });
+
+    return { success: true, data: exportData };
+  } catch (error) {
+    console.error('Error in exportPaymentRecords:', error);
+    return { success: false, error: 'Failed to export payment records' };
+  }
+}
+
+// =============================================
+// DUPLICATE PAYMENT CHECK (GAP S6)
+// =============================================
+
+export async function checkDuplicatePayments(
+  companyId: string,
+  activityIds: string[]
+): Promise<ActionResponse<{ duplicates: string[]; message: string }>> {
+  try {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from('payment_activities')
+      .select('id, subject_activity_id, payment_record_id')
+      .eq('company_id', companyId)
+      .in('id', activityIds)
+      .not('payment_record_id', 'is', null);
+
+    if (error) return { success: false, error: error.message };
+
+    const duplicates = (data || []).map((d) => d.id);
+    return {
+      success: true,
+      data: {
+        duplicates,
+        message: duplicates.length > 0
+          ? `${duplicates.length} activities already have associated payment records.`
+          : 'No duplicates found.',
+      },
+    };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to check duplicates' };
+  }
+}
+
+// =============================================
+// CLOSE-OUT FINAL PAYMENT (GAP S7)
+// =============================================
+
+export async function generateCloseOutPayment(
+  companyId: string,
+  siteId: string,
+  protocolId: string
+): Promise<ActionResponse<PaymentRecord>> {
+  try {
+    const supabase = await createClient();
+
+    // Verify all prior payments are complete
+    const { data: pendingRecords, error: pendingError } = await supabase
+      .from('payment_records')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('site_id', siteId)
+      .in('status', ['to_be_processed', 'pending_approval', 'in_progress']);
+
+    if (pendingError) return { success: false, error: pendingError.message };
+
+    if (pendingRecords && pendingRecords.length > 0) {
+      return {
+        success: false,
+        error: `Cannot generate close-out payment: ${pendingRecords.length} payment records are still pending. All prior payments must be processed first.`,
+      };
+    }
+
+    // Check for pending activities
+    const { data: pendingActivities } = await supabase
+      .from('payment_activities')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('site_id', siteId)
+      .eq('is_completed', true)
+      .is('payment_record_id', null);
+
+    if (pendingActivities && pendingActivities.length > 0) {
+      return {
+        success: false,
+        error: `Cannot generate close-out payment: ${pendingActivities.length} completed activities have not been included in payment records yet.`,
+      };
+    }
+
+    // Calculate final payment amount (earned - paid)
+    const { data: existingRecords } = await supabase
+      .from('payment_records')
+      .select('earned_amount, check_amount')
+      .eq('company_id', companyId)
+      .eq('site_id', siteId);
+
+    const earnedToDate = (existingRecords || []).reduce(
+      (sum, r) => sum + Number(r.earned_amount), 0
+    );
+    const paidToDate = (existingRecords || []).reduce(
+      (sum, r) => sum + Number(r.check_amount || 0), 0
+    );
+    const remaining = earnedToDate - paidToDate;
+
+    if (remaining <= 0) {
+      return { success: false, error: 'No remaining balance for close-out payment.' };
+    }
+
+    // Create final payment record (releases withholdings)
+    const paymentNumber = `PAY-${Date.now()}`;
+
+    const { data, error } = await supabase
+      .from('payment_records')
+      .insert({
+        company_id: companyId,
+        site_id: siteId,
+        protocol_id: protocolId,
+        payment_number: paymentNumber,
+        payment_type: 'final',
+        status: 'to_be_processed',
+        earned_amount: remaining,
+        requested_amount: remaining,
+        currency_code: 'USD',
+      })
+      .select()
+      .single();
+
+    if (error) return { success: false, error: error.message };
+
+    revalidatePath('/protected/clinical-payments');
+    return { success: true, data: data as PaymentRecord };
+  } catch (error) {
+    console.error('Error in generateCloseOutPayment:', error);
+    return { success: false, error: 'Failed to generate close-out payment' };
   }
 }

@@ -149,11 +149,40 @@ export async function triggerExport(
 
     const { data: config } = await supabase
       .from('financial_export_configs')
-      .select('name, export_format')
+      .select('name, export_format, filters, column_mapping')
       .eq('id', configId)
       .single();
 
-    const fileName = `export_${config?.name?.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().slice(0, 10)}.${config?.export_format || 'csv'}`;
+    if (!config) return { success: false, error: 'Export config not found' };
+
+    // Fetch actual payment data for export
+    const configFilters = (config.filters || {}) as Record<string, string>;
+    let paymentQuery = supabase
+      .from('payment_records')
+      .select(`
+        payment_number, payment_type, status,
+        earned_amount, requested_amount, check_amount,
+        check_date, check_number, vat_amount, currency_code, created_at,
+        site:clinical_sites(site_number),
+        protocol:clinical_protocols(protocol_number),
+        contract:site_contracts(contract_number),
+        payee:contacts(first_name, last_name)
+      `)
+      .eq('company_id', profile.company_id)
+      .order('created_at', { ascending: false });
+
+    if (configFilters.protocol_id) {
+      paymentQuery = paymentQuery.eq('protocol_id', configFilters.protocol_id);
+    }
+    if (configFilters.status) {
+      paymentQuery = paymentQuery.eq('status', configFilters.status);
+    }
+
+    const { data: records, error: recordsError } = await paymentQuery;
+    if (recordsError) return { success: false, error: recordsError.message };
+
+    const recordCount = records?.length || 0;
+    const fileName = `export_${config.name?.replace(/\s+/g, '_').toLowerCase()}_${new Date().toISOString().slice(0, 10)}.${config.export_format || 'csv'}`;
 
     const { data, error } = await supabase
       .from('financial_export_logs')
@@ -162,7 +191,7 @@ export async function triggerExport(
         config_id: configId,
         status: 'completed' as const,
         file_name: fileName,
-        record_count: 0,
+        record_count: recordCount,
         generated_by_id: profile.id,
       })
       .select()
