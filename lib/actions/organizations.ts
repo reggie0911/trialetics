@@ -11,6 +11,7 @@ import {
   AssignOrganizationToProjectData,
   ContactsOrganizationsStats,
   OrganizationType,
+  Address,
 } from '@/lib/types/contacts-organizations';
 import { logOrganizationActivity, generateOrganizationUpdateDescription } from '@/lib/utils/activity-logger';
 
@@ -849,6 +850,7 @@ export async function updateSiteMilestones(
         irb_expiration_date: data.irb_expiration_date,
         irb_approval_number: data.irb_approval_number,
         irb_institution_name: data.irb_institution_name,
+        central_irb_name: data.central_irb_name,
         close_out_date: data.close_out_date,
         first_subject_enrolled_date: data.first_subject_enrolled_date,
         last_subject_enrolled_date: data.last_subject_enrolled_date,
@@ -872,6 +874,103 @@ export async function updateSiteMilestones(
   } catch (error) {
     console.error('Error in updateSiteMilestones:', error);
     return { success: false, error: 'Failed to update site milestones' };
+  }
+}
+
+type AddressInput = Omit<Address, 'id' | 'entity_type' | 'entity_id' | 'created_at' | 'updated_at'>;
+
+export async function addOrganizationAddress(
+  organizationId: string,
+  data: AddressInput
+): Promise<ActionResponse<Address>> {
+  try {
+    const supabase = await createClient();
+    const { data: inserted, error } = await supabase
+      .from('addresses')
+      .insert({
+        entity_type: 'organization',
+        entity_id: organizationId,
+        address_type: data.address_type,
+        street_1: data.street_1,
+        street_2: data.street_2,
+        city: data.city,
+        state: data.state,
+        postal_code: data.postal_code,
+        country: data.country,
+        is_primary: data.is_primary ?? false,
+        notes: data.notes ?? null,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error adding address:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/protected/contacts-organizations');
+    return { success: true, data: inserted };
+  } catch (error) {
+    console.error('Error in addOrganizationAddress:', error);
+    return { success: false, error: 'Failed to add address' };
+  }
+}
+
+export async function updateOrganizationAddress(
+  addressId: string,
+  data: Partial<AddressInput>
+): Promise<ActionResponse<Address>> {
+  try {
+    const supabase = await createClient();
+    const { data: updated, error } = await supabase
+      .from('addresses')
+      .update({
+        address_type: data.address_type,
+        street_1: data.street_1,
+        street_2: data.street_2,
+        city: data.city,
+        state: data.state,
+        postal_code: data.postal_code,
+        country: data.country,
+        notes: data.notes ?? null,
+      })
+      .eq('id', addressId)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating address:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/protected/contacts-organizations');
+    return { success: true, data: updated };
+  } catch (error) {
+    console.error('Error in updateOrganizationAddress:', error);
+    return { success: false, error: 'Failed to update address' };
+  }
+}
+
+export async function deleteOrganizationAddress(
+  addressId: string
+): Promise<ActionResponse<null>> {
+  try {
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from('addresses')
+      .delete()
+      .eq('id', addressId);
+
+    if (error) {
+      console.error('Error deleting address:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/protected/contacts-organizations');
+    return { success: true, data: null };
+  } catch (error) {
+    console.error('Error in deleteOrganizationAddress:', error);
+    return { success: false, error: 'Failed to delete address' };
   }
 }
 

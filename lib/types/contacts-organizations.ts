@@ -101,6 +101,7 @@ export interface Address {
   postal_code: string | null;
   country: string | null;
   is_primary: boolean;
+  notes?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -291,6 +292,7 @@ export interface OrganizationProject {
   irb_expiration_date: string | null;
   irb_approval_number: string | null;
   irb_institution_name: string | null;
+  central_irb_name: string | null;
   close_out_date: string | null;
   first_subject_enrolled_date: string | null;
   last_subject_enrolled_date: string | null;
@@ -459,6 +461,7 @@ export interface UpdateSiteMilestonesData {
   irb_expiration_date?: string | null;
   irb_approval_number?: string | null;
   irb_institution_name?: string | null;
+  central_irb_name?: string | null;
   close_out_date?: string | null;
   first_subject_enrolled_date?: string | null;
   last_subject_enrolled_date?: string | null;

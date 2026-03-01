@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -32,7 +31,6 @@ import {
   ContactProjectRole,
   ORGANIZATION_PROJECT_ROLE_LABELS,
   CONTACT_PROJECT_ROLE_LABELS,
-  ORGANIZATION_TYPE_LABELS,
 } from '@/lib/types/contacts-organizations';
 
 interface Project {
@@ -72,8 +70,6 @@ export function ProjectAssignmentDialog({
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [selectedRole, setSelectedRole] = useState<string>('');
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
     if (open) {
@@ -110,8 +106,6 @@ export function ProjectAssignmentDialog({
     setSelectedProjectId('');
     setSelectedRole(entityType === 'organization' ? 'site' : 'coordinator');
     setSelectedOrgId('');
-    setStartDate('');
-    setEndDate('');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -137,16 +131,17 @@ export function ProjectAssignmentDialog({
 
     setIsSubmitting(true);
     try {
-      let result;
+      const startDate = new Date().toISOString().split('T')[0];
 
+      let result;
       if (entityType === 'organization') {
         result = await assignOrganizationToProject({
           organization_id: entityId,
           protocol_id: selectedProjectId,
           role: selectedRole as OrganizationProjectRole,
           status: 'active',
-          start_date: startDate || null,
-          end_date: endDate || null,
+          start_date: startDate,
+          end_date: null,
         });
       } else {
         result = await assignContactToProject({
@@ -155,8 +150,8 @@ export function ProjectAssignmentDialog({
           organization_id: selectedOrgId || null,
           role: selectedRole as ContactProjectRole,
           status: 'active',
-          start_date: startDate || null,
-          end_date: endDate || null,
+          start_date: startDate,
+          end_date: null,
         });
       }
 
@@ -254,54 +249,6 @@ export function ProjectAssignmentDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-
-            {entityType === 'contact' && organizations.length > 0 && (
-              <div className="space-y-1">
-                <Label htmlFor="organization" className="text-xs">Organization (Optional)</Label>
-                <Select
-                  value={selectedOrgId}
-                  onValueChange={(v) => setSelectedOrgId(v || '')}
-                >
-                  <SelectTrigger className="text-xs w-full">
-                    <SelectValue placeholder="Select an organization" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="" className="text-xs">None</SelectItem>
-                    {organizations.map((org) => (
-                      <SelectItem key={org.id} value={org.id} className="text-xs">
-                        {org.name} ({ORGANIZATION_TYPE_LABELS[org.organization_type]})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Associate this contact with an organization for this project
-                </p>
-              </div>
-            )}
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="start_date" className="text-xs">Start Date</Label>
-                <Input
-                  id="start_date"
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="text-xs md:text-xs h-8"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="end_date" className="text-xs">End Date</Label>
-                <Input
-                  id="end_date"
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="text-xs md:text-xs h-8"
-                />
-              </div>
             </div>
 
             <DialogFooter>

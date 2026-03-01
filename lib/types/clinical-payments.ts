@@ -7,7 +7,7 @@
 // ENUM Types
 // =============================================
 
-export type PaymentStatus = 'to_be_processed' | 'in_progress' | 'processed';
+export type PaymentStatus = 'to_be_processed' | 'pending_approval' | 'approved' | 'rejected' | 'in_progress' | 'processed';
 
 export type PaymentType = 'interim' | 'final' | 'unplanned';
 
@@ -17,6 +17,9 @@ export type PaymentType = 'interim' | 'final' | 'unplanned';
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   to_be_processed: 'To Be Processed',
+  pending_approval: 'Pending Approval',
+  approved: 'Approved',
+  rejected: 'Rejected',
   in_progress: 'In Progress',
   processed: 'Processed',
 };
@@ -229,4 +232,60 @@ export interface ClinicalPaymentsStats {
   pending_activities_count: number;
   pending_records_count: number;
   processed_this_month_count: number;
+}
+
+// =============================================
+// Site Financial Summary (GAP S2, P7)
+// =============================================
+
+export interface SiteFinancialSummary {
+  site_id: string;
+  company_id: string;
+  site_number: string | null;
+  protocol_id: string | null;
+  protocol_number: string | null;
+  earned_to_date: number;
+  paid_to_date: number;
+  remaining_balance: number;
+  requested_to_date: number;
+  vat_to_date: number;
+  withholding_to_date: number;
+  pending_records: number;
+  processed_records: number;
+  total_records: number;
+}
+
+// =============================================
+// Payment Report Types (GAP P5)
+// =============================================
+
+export interface PaymentAgingBucket {
+  bucket: string;
+  count: number;
+  total_amount: number;
+}
+
+export interface PaymentAgingReport {
+  buckets: PaymentAgingBucket[];
+  total_outstanding: number;
+  total_count: number;
+}
+
+export interface PaymentTrendDataPoint {
+  period: string;
+  earned: number;
+  paid: number;
+  record_count: number;
+}
+
+export interface ProtocolPaymentSummary {
+  protocol_id: string;
+  protocol_number: string;
+  title: string;
+  total_earned: number;
+  total_paid: number;
+  total_vat: number;
+  pending_count: number;
+  record_count: number;
+  site_count: number;
 }

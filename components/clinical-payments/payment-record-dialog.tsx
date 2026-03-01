@@ -85,7 +85,7 @@ export function PaymentRecordDialog({
   useEffect(() => {
     if (record) {
       form.reset({
-        status: record.status as PaymentStatus,
+        status: record.status as FormData['status'],
         check_amount: record.check_amount ?? null,
         check_date: record.check_date ? record.check_date.slice(0, 10) : null,
         check_number: record.check_number ?? null,

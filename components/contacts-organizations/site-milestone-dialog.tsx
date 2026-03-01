@@ -45,10 +45,6 @@ export function SiteMilestoneDialog({
     defaultValues: {
       site_initiation_date: milestones?.site_initiation_date || null,
       site_qualification_date: milestones?.site_qualification_date || null,
-      irb_approval_date: milestones?.irb_approval_date || null,
-      irb_expiration_date: milestones?.irb_expiration_date || null,
-      irb_approval_number: milestones?.irb_approval_number || null,
-      irb_institution_name: milestones?.irb_institution_name || null,
       close_out_date: milestones?.close_out_date || null,
       first_subject_enrolled_date: milestones?.first_subject_enrolled_date || null,
       last_subject_enrolled_date: milestones?.last_subject_enrolled_date || null,
@@ -65,10 +61,6 @@ export function SiteMilestoneDialog({
       reset({
         site_initiation_date: milestones.site_initiation_date || null,
         site_qualification_date: milestones.site_qualification_date || null,
-        irb_approval_date: milestones.irb_approval_date || null,
-        irb_expiration_date: milestones.irb_expiration_date || null,
-        irb_approval_number: milestones.irb_approval_number || null,
-        irb_institution_name: milestones.irb_institution_name || null,
         close_out_date: milestones.close_out_date || null,
         first_subject_enrolled_date: milestones.first_subject_enrolled_date || null,
         last_subject_enrolled_date: milestones.last_subject_enrolled_date || null,
@@ -105,7 +97,7 @@ export function SiteMilestoneDialog({
         <DialogHeader>
           <DialogTitle className="text-xs md:text-xs">Edit Site Milestones</DialogTitle>
           <DialogDescription className="text-xs md:text-xs">
-            Update site-specific milestone dates, IRB information, and subject enrollment data.
+            Update site-specific milestone dates and subject enrollment data.
           </DialogDescription>
         </DialogHeader>
 
@@ -139,49 +131,6 @@ export function SiteMilestoneDialog({
                   type="date"
                   className="text-xs md:text-xs h-8"
                   {...register('close_out_date')}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* IRB Information */}
-          <div className="space-y-3">
-            <h3 className="text-xs md:text-xs font-medium">IRB Information</h3>
-            <div className="space-y-1">
-              <Label htmlFor="irb_institution_name" className="text-xs">IRB Institution Name</Label>
-              <Input
-                id="irb_institution_name"
-                className="text-xs md:text-xs h-8"
-                placeholder="Enter IRB institution name"
-                {...register('irb_institution_name')}
-              />
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-1">
-                <Label htmlFor="irb_approval_number" className="text-xs">IRB Approval Number</Label>
-                <Input
-                  id="irb_approval_number"
-                  className="text-xs md:text-xs h-8"
-                  placeholder="Enter approval number"
-                  {...register('irb_approval_number')}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="irb_approval_date" className="text-xs">IRB Approval Date</Label>
-                <Input
-                  id="irb_approval_date"
-                  type="date"
-                  className="text-xs md:text-xs h-8"
-                  {...register('irb_approval_date')}
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="irb_expiration_date" className="text-xs">IRB Expiration Date</Label>
-                <Input
-                  id="irb_expiration_date"
-                  type="date"
-                  className="text-xs md:text-xs h-8"
-                  {...register('irb_expiration_date')}
                 />
               </div>
             </div>

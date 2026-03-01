@@ -8,10 +8,16 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, Calendar, FileText, Plus, CalendarCheck, Trash2, FileSignature, FileCheck, Network, UserPlus, Link2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, Calendar, FileText, Plus, CalendarCheck, Trash2, FileSignature, FileCheck, Network, UserPlus, Link2, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import {
   OrganizationWithRelations,
@@ -20,17 +26,11 @@ import {
   ENTITY_STATUS_LABELS,
   CONTACT_ROLE_LABELS,
   type Contact,
+  type Address,
 } from '@/lib/types/contacts-organizations';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { setPrimaryRoleContact, type PrimaryRoleType } from '@/lib/actions/contacts';
 import { OrganizationFormDialog } from './organization-form-dialog';
 import { SiteMilestoneDialog } from './site-milestone-dialog';
+import { SiteIrbDialog } from './site-irb-dialog';
 import { ProjectAssignmentDialog } from './project-assignment-dialog';
 import { OrganizationMap } from './organization-map';
 import { ActivityTimeline } from './activity-timeline';
@@ -40,7 +40,10 @@ import { SiteVisitDialog } from './site-visit-dialog';
 import { SiteContractDialog } from './site-contract-dialog';
 import { SiteDocumentDialog } from './site-document-dialog';
 import { SatelliteSitesDialog } from './satellite-sites-dialog';
+import { CreateSatelliteDialog } from './create-satellite-dialog';
 import { SiteTeamMemberDialog } from './site-team-member-dialog';
+import { SiteAddressDialog } from './site-address-dialog';
+import { deleteOrganizationAddress } from '@/lib/actions/organizations';
 import { deleteSiteVisit } from '@/lib/actions/site-visits';
 import { deleteSiteContract } from '@/lib/actions/site-contracts';
 import { deleteSiteDocument } from '@/lib/actions/site-documents';
@@ -154,6 +157,7 @@ export function SiteDetailPageClient({
   const { toast } = useToast();
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showMilestoneDialog, setShowMilestoneDialog] = useState(false);
+  const [showIrbDialog, setShowIrbDialog] = useState(false);
   const [showNotesSheet, setShowNotesSheet] = useState(false);
   const [contactToArchive, setContactToArchive] = useState<OrganizationContactWithContact | null>(null);
   const [showSiteVisitDialog, setShowSiteVisitDialog] = useState(false);
@@ -170,11 +174,14 @@ export function SiteDetailPageClient({
   const [isDeletingDocument, setIsDeletingDocument] = useState(false);
   const [showSetParentDialog, setShowSetParentDialog] = useState(false);
   const [showAddSatelliteDialog, setShowAddSatelliteDialog] = useState(false);
+  const [showCreateSatelliteDialog, setShowCreateSatelliteDialog] = useState(false);
   const [showTeamMemberDialog, setShowTeamMemberDialog] = useState(false);
   const [teamMemberToRemove, setTeamMemberToRemove] = useState<SiteTeamMemberItem | null>(null);
   const [isRemovingMember, setIsRemovingMember] = useState(false);
   const [showAssignProject, setShowAssignProject] = useState(false);
-  const [updatingRole, setUpdatingRole] = useState<PrimaryRoleType | null>(null);
+  const [showAddressDialog, setShowAddressDialog] = useState(false);
+  const [editingAddress, setEditingAddress] = useState<Address | null>(null);
+  const [isDeletingAddress, setIsDeletingAddress] = useState(false);
 
   const handleBack = () => {
     router.push('/protected/contacts-organizations');
@@ -203,23 +210,21 @@ export function SiteDetailPageClient({
     });
   };
 
-  const handlePrimaryRoleChange = async (role: PrimaryRoleType, contactId: string | null) => {
-    setUpdatingRole(role);
-    const result = await setPrimaryRoleContact(initialOrg.id, role, contactId);
-    setUpdatingRole(null);
+  const handleAddressSuccess = () => {
+    setShowAddressDialog(false);
+    setEditingAddress(null);
+    router.refresh();
+  };
+
+  const handleDeleteAddress = async (addressId: string) => {
+    setIsDeletingAddress(true);
+    const result = await deleteOrganizationAddress(addressId);
     if (result.success) {
       router.refresh();
-      toast({
-        title: 'Primary role updated',
-        description: 'The role assignment has been updated.',
-      });
     } else {
-      toast({
-        title: 'Error',
-        description: result.error || 'Failed to update primary role',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: result.error || 'Failed to delete address', variant: 'destructive' });
     }
+    setIsDeletingAddress(false);
   };
 
   const getContactDisplayName = (contact: Contact) =>
@@ -232,10 +237,41 @@ export function SiteDetailPageClient({
   // Get the first project (assuming site-project relationship)
   const siteProject = initialOrg.projects?.[0];
   
-  // Get role-specific contacts
-  const principalInvestigator = initialOrg.contacts?.find((oc) => oc.role === 'principal_investigator');
-  const coordinator = initialOrg.contacts?.find((oc) => oc.role === 'coordinator');
-  const clinicalMonitor = initialOrg.contacts?.find((oc) => oc.role === 'site_staff');
+  const isActiveSiteContact = (oc: OrganizationContactWithContact) =>
+    oc.status === 'active' && (!oc.end_date || new Date(oc.end_date) >= new Date());
+
+  const activeContacts = (initialOrg.contacts ?? []).filter(isActiveSiteContact);
+
+  const getContactForRole = (oc: OrganizationContactWithContact | undefined): Contact | null => {
+    if (!oc) return null;
+    const c = oc.contact ?? contacts.find((x) => x.id === oc.contact_id);
+    return c ?? null;
+  };
+
+  const titleMatches = (oc: OrganizationContactWithContact, keywords: string[]): boolean => {
+    const title = oc.contact?.title?.toLowerCase() ?? '';
+    return keywords.some((kw) => title.includes(kw));
+  };
+
+  const principalInvestigator = activeContacts.find(
+    (oc) => oc.role === 'principal_investigator' || titleMatches(oc, ['principal investigator'])
+  );
+
+  const leadResearchCoordinator = activeContacts.find(
+    (oc) =>
+      ['lead_research_coordinator', 'research_coordinator', 'coordinator'].includes(oc.role) ||
+      titleMatches(oc, ['lead research coordinator', 'lead coordinator'])
+  );
+
+  const researchDirector = activeContacts.find(
+    (oc) =>
+      ['research_director', 'site_staff'].includes(oc.role) ||
+      titleMatches(oc, ['research director'])
+  );
+
+  const piContact = getContactForRole(principalInvestigator);
+  const lrcContact = getContactForRole(leadResearchCoordinator);
+  const rdContact = getContactForRole(researchDirector);
 
   const formatDate = (dateStr: string | null | undefined) => {
     if (!dateStr) return '—';
@@ -481,20 +517,6 @@ export function SiteDetailPageClient({
                   <span className="font-medium capitalize">{ENTITY_STATUS_LABELS[initialOrg.status]}</span>
                 </div>
               </div>
-              <div className="flex items-start gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <span className="text-muted-foreground">Database Active Status: </span>
-                  <span className="font-medium">{siteProject?.status === 'active' ? 'Active' : 'Inactive'}</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <Calendar className="h-4 w-4 text-muted-foreground mt-0.5" />
-                <div className="flex-1">
-                  <span className="text-muted-foreground">Database Active Date: </span>
-                  <span className="font-medium">{formatDate(siteProject?.start_date)}</span>
-                </div>
-              </div>
               {siteProject?.end_date && (
                 <>
                   <div className="flex items-start gap-2">
@@ -522,109 +544,55 @@ export function SiteDetailPageClient({
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
                     <Users className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <span className="text-muted-foreground block">Principal Investigator</span>
-                      <Select
-                        value={principalInvestigator?.contact?.id ?? ''}
-                        onValueChange={(v) => handlePrimaryRoleChange('principal_investigator', v || null)}
-                        disabled={updatingRole === 'principal_investigator' || contacts.length === 0}
-                      >
-                        <SelectTrigger className="text-xs h-8 w-full">
-                          <SelectValue
-                            placeholder="Select..."
-                            getDisplayLabel={(v) => {
-                              if (!v) return 'None';
-                              const c = contacts.find((x) => x.id === v);
-                              return c ? getContactDisplayName(c) : v;
-                            }}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="" className="text-xs">None</SelectItem>
-                          {contacts.map((c) => (
-                            <SelectItem key={c.id} value={c.id} className="text-xs">
-                              {getContactDisplayName(c)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="flex-1">
+                      <span className="text-muted-foreground block text-xs">Principal Investigator</span>
+                      <span className="font-medium text-xs">{piContact ? getContactDisplayName(piContact) : '—'}</span>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <Users className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <span className="text-muted-foreground block">Research Director</span>
-                      <Select
-                        value={coordinator?.contact?.id ?? ''}
-                        onValueChange={(v) => handlePrimaryRoleChange('coordinator', v || null)}
-                        disabled={updatingRole === 'coordinator' || contacts.length === 0}
-                      >
-                        <SelectTrigger className="text-xs h-8 w-full">
-                          <SelectValue
-                            placeholder="Select..."
-                            getDisplayLabel={(v) => {
-                              if (!v) return 'None';
-                              const c = contacts.find((x) => x.id === v);
-                              return c ? getContactDisplayName(c) : v;
-                            }}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="" className="text-xs">None</SelectItem>
-                          {contacts.map((c) => (
-                            <SelectItem key={c.id} value={c.id} className="text-xs">
-                              {getContactDisplayName(c)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="flex-1">
+                      <span className="text-muted-foreground block text-xs">Lead Research Coordinator</span>
+                      <span className="font-medium text-xs">{lrcContact ? getContactDisplayName(lrcContact) : '—'}</span>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <Users className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <span className="text-muted-foreground block">Clinical Monitor</span>
-                      <Select
-                        value={clinicalMonitor?.contact?.id ?? ''}
-                        onValueChange={(v) => handlePrimaryRoleChange('site_staff', v || null)}
-                        disabled={updatingRole === 'site_staff' || contacts.length === 0}
-                      >
-                        <SelectTrigger className="text-xs h-8 w-full">
-                          <SelectValue
-                            placeholder="Select..."
-                            getDisplayLabel={(v) => {
-                              if (!v) return 'None';
-                              const c = contacts.find((x) => x.id === v);
-                              return c ? getContactDisplayName(c) : v;
-                            }}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="" className="text-xs">None</SelectItem>
-                          {contacts.map((c) => (
-                            <SelectItem key={c.id} value={c.id} className="text-xs">
-                              {getContactDisplayName(c)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <div className="flex-1">
+                      <span className="text-muted-foreground block text-xs">Research Director</span>
+                      <span className="font-medium text-xs">{rdContact ? getContactDisplayName(rdContact) : '—'}</span>
                     </div>
                   </div>
-                  {contacts.length === 0 && (
-                    <p className="text-xs text-muted-foreground italic">No contacts available. Create contacts first.</p>
-                  )}
                 </div>
               </div>
 
               {/* IRB/EC Institutions Section */}
               <div className="mt-4 pt-4 border-t">
-                <h3 className="text-xs md:text-xs font-medium mb-3">IRB/EC Institutions</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs md:text-xs font-medium">IRB/EC Institutions</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowIrbDialog(true)}
+                    title="Edit IRB information"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                </div>
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
                     <div className="flex-1">
-                      <span className="text-muted-foreground">Local Institutional Review Board: </span>
+                      <span className="text-muted-foreground">Local IRB: </span>
                       <span className="font-medium">{siteProject?.irb_institution_name || 'N/A'}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <div className="flex-1">
+                      <span className="text-muted-foreground">Central IRB: </span>
+                      <span className="font-medium">{siteProject?.central_irb_name || 'N/A'}</span>
                     </div>
                   </div>
                   {siteProject?.irb_approval_number && (
@@ -747,8 +715,8 @@ export function SiteDetailPageClient({
           </Card>
 
           {/* Active Staff Members Card - spans 2 columns */}
-          <Card className="col-span-2 row-span-1">
-            <CardHeader className="pb-3">
+          <Card className="col-span-2 row-span-1 flex max-h-[400px] flex-col overflow-hidden">
+            <CardHeader className="pb-3 shrink-0">
               <CardTitle className="text-xs md:text-xs font-medium">
                 Active Staff Members
                 {` (${(initialOrg.contacts ?? []).filter(
@@ -756,7 +724,7 @@ export function SiteDetailPageClient({
                 ).length})`}
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-xs md:text-xs">
+            <CardContent className="min-h-0 flex-1 space-y-3 overflow-y-auto text-xs md:text-xs">
               {(() => {
                 const activeContacts = (initialOrg.contacts ?? []).filter(
                   (oc) => oc.status === 'active' && (!oc.end_date || new Date(oc.end_date) >= new Date())
@@ -801,6 +769,80 @@ export function SiteDetailPageClient({
               })()}
             </CardContent>
           </Card>
+
+          {/* Site Addresses Card - spans 2 columns */}
+          {(() => {
+            const additionalAddresses = (initialOrg.addresses ?? []).filter((a) => !a.is_primary);
+            const ADDRESS_TYPE_LABELS: Record<string, string> = {
+              mailing: 'Mailing',
+              shipping: 'Shipping',
+              billing: 'Billing',
+              other: 'Other',
+            };
+            return (
+              <Card className="col-span-2 row-span-1">
+                <CardHeader className="pb-3 flex flex-row items-center justify-between gap-4">
+                  <CardTitle className="text-xs md:text-xs font-medium">
+                    Site Addresses{additionalAddresses.length > 0 && ` (${additionalAddresses.length})`}
+                  </CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground shrink-0"
+                    onClick={() => { setEditingAddress(null); setShowAddressDialog(true); }}
+                    title="Add address"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-3 text-xs md:text-xs">
+                  {additionalAddresses.length === 0 ? (
+                    <p className="text-muted-foreground italic">No additional addresses</p>
+                  ) : (
+                    additionalAddresses.map((addr) => (
+                      <div key={addr.id} className="flex items-start gap-2 border-b pb-3 last:border-0 last:pb-0">
+                        <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium capitalize">
+                            {ADDRESS_TYPE_LABELS[addr.address_type] ?? addr.address_type}
+                          </span>
+                          <p className="text-muted-foreground leading-snug">
+                            {[addr.street_1, addr.street_2].filter(Boolean).join(', ')}
+                            {(addr.street_1 || addr.street_2) && (addr.city || addr.state || addr.postal_code || addr.country) && <br />}
+                            {[addr.city, addr.state, addr.postal_code, addr.country].filter(Boolean).join(', ')}
+                          </p>
+                          {addr.notes && (
+                            <p className="text-muted-foreground italic mt-0.5">{addr.notes}</p>
+                          )}
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                            onClick={() => { setEditingAddress(addr); setShowAddressDialog(true); }}
+                            title="Edit address"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleDeleteAddress(addr.id)}
+                            disabled={isDeletingAddress}
+                            title="Delete address"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
 
           {/* Status History Card - spans 2 columns */}
           <Card className="col-span-2 row-span-1">
@@ -1100,15 +1142,22 @@ export function SiteDetailPageClient({
           <Card className="col-span-2 row-span-1">
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
               <CardTitle className="text-xs md:text-xs font-medium">Satellite Sites</CardTitle>
-              <div className="flex gap-1">
-                <Button size="sm" onClick={() => setShowSetParentDialog(true)} className="text-xs">
-                  Set Parent
-                </Button>
-                <Button size="sm" onClick={() => setShowAddSatelliteDialog(true)} className="text-xs">
-                  <Plus className="h-3 w-3 mr-1" />
-                  Add Satellite
-                </Button>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 py-1 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  Manage <ChevronDown className="h-3 w-3" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setShowSetParentDialog(true)}>
+                    Set Parent
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowAddSatelliteDialog(true)}>
+                    Add Satellite
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setShowCreateSatelliteDialog(true)}>
+                    New Site
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </CardHeader>
             <CardContent className="space-y-3 text-xs md:text-xs">
               {parentSite && (
@@ -1221,16 +1270,32 @@ export function SiteDetailPageClient({
         onSuccess={handleEditSuccess}
       />
 
+      {/* Address Add/Edit Dialog */}
+      <SiteAddressDialog
+        open={showAddressDialog}
+        onOpenChange={(open) => { setShowAddressDialog(open); if (!open) setEditingAddress(null); }}
+        organizationId={initialOrg.id}
+        address={editingAddress ?? undefined}
+        onSuccess={handleAddressSuccess}
+      />
+
       {/* Milestone Edit Dialog */}
-      {siteProject && (
-        <SiteMilestoneDialog
-          open={showMilestoneDialog}
-          onOpenChange={setShowMilestoneDialog}
-          organizationProjectId={siteProject.id}
-          milestones={siteProject}
-          onSuccess={handleMilestoneSuccess}
-        />
-      )}
+      <SiteMilestoneDialog
+        open={showMilestoneDialog}
+        onOpenChange={setShowMilestoneDialog}
+        organizationProjectId={siteProject?.id ?? ''}
+        milestones={siteProject ?? undefined}
+        onSuccess={handleMilestoneSuccess}
+      />
+
+      {/* IRB Edit Dialog */}
+      <SiteIrbDialog
+        open={showIrbDialog}
+        onOpenChange={setShowIrbDialog}
+        organizationProjectId={siteProject?.id ?? ''}
+        milestones={siteProject ?? undefined}
+        onSuccess={handleMilestoneSuccess}
+      />
 
       {/* Assign Protocol Dialog */}
       <ProjectAssignmentDialog
@@ -1387,6 +1452,18 @@ export function SiteDetailPageClient({
         organizationName={initialOrg.name}
         companyId={companyId}
         satelliteIds={satelliteSites.map((s) => s.id)}
+      />
+
+      {/* Create Satellite Site Dialog */}
+      <CreateSatelliteDialog
+        open={showCreateSatelliteDialog}
+        onOpenChange={setShowCreateSatelliteDialog}
+        parentOrganizationId={initialOrg.id}
+        parentOrganizationName={initialOrg.name}
+        companyId={companyId}
+        profileId={profileId}
+        userEmail={userEmail}
+        onSuccess={() => router.refresh()}
       />
 
       {/* Site Team Member Dialog */}

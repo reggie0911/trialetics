@@ -43,7 +43,7 @@ import {
   ContactWithRelations,
   ENTITY_STATUS_LABELS,
 } from '@/lib/types/contacts-organizations';
-import { formatFieldName } from '@/lib/utils';
+import { formatFieldName, formatPhoneNumber } from '@/lib/utils';
 import { exportToCSV, printTable } from '@/lib/utils/table-export';
 
 interface ContactsDataTableProps {
@@ -126,7 +126,14 @@ export function ContactsDataTable({
     {
       accessorKey: 'phone',
       header: 'Phone',
-      cell: ({ row }) => <span className="text-xs">{row.getValue('phone') || '—'}</span>,
+      cell: ({ row }) => {
+        const phone = row.getValue('phone') as string | null | undefined;
+        return (
+          <span className="text-xs">
+            {phone ? formatPhoneNumber(phone) : '—'}
+          </span>
+        );
+      },
     },
     {
       id: 'organization',
