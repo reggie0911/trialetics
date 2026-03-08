@@ -70,7 +70,7 @@ export async function getClinicalRegions(
     const regions = (data || []).map((region: any) => ({
       ...region,
       protocol: region.clinical_protocols,
-      sites_count: region.clinical_sites?.[0]?.count || 0,
+      sites_count: region.clinical_sites?.[0]?.count ?? 0,
       clinical_protocols: undefined,
       clinical_sites: undefined,
     }));
@@ -195,23 +195,16 @@ export async function createClinicalRegion(
   try {
     const supabase = await createClient();
 
-    // Verify the protocol exists and requires regions
+    // Verify the protocol exists
     const { data: protocol, error: protocolError } = await supabase
       .from('clinical_protocols')
-      .select('id, regions_required')
+      .select('id')
       .eq('id', data.protocol_id)
       .eq('company_id', companyId)
       .single();
 
     if (protocolError || !protocol) {
       return { success: false, error: 'Protocol not found' };
-    }
-
-    if (!protocol.regions_required) {
-      return {
-        success: false,
-        error: 'This protocol does not require regions. Sites can be created directly under the protocol.',
-      };
     }
 
     // Check if region name already exists for this protocol

@@ -3,6 +3,7 @@
 import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -21,9 +22,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { updateProject, type UpdateProjectInput } from '@/lib/actions/projects';
+import { updateProject, type UpdateProjectInput, type CountryEntry } from '@/lib/actions/projects';
 import type { AssignedProtocol } from '@/lib/actions/projects';
 import { Spinner } from '@/components/ui/spinner';
+import { getCountryNames, getRegionForCountry, GEOGRAPHIC_REGIONS } from '@/lib/data/countries';
 
 const TRIAL_PHASES = [
   'Phase I',
@@ -46,6 +48,10 @@ interface EditProjectDialogProps {
   onSuccess?: () => void;
 }
 
+function emptyCountry(): CountryEntry {
+  return { countryName: '', countryRegion: '', plannedSites: undefined, plannedSubjects: undefined, plannedStartDate: '', plannedEndDate: '' };
+}
+
 export function EditProjectDialog({
   project,
   open,
@@ -56,45 +62,51 @@ export function EditProjectDialog({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState<Partial<UpdateProjectInput> & {
-    protocolName: string;
-    protocolNumber: string;
-    trialPhase: string;
-    protocolStatus: string;
-  }>({
-    programName: '',
+  const [formData, setFormData] = useState({
     protocolName: '',
     protocolNumber: '',
     trialPhase: '',
     protocolDescription: '',
-    countryName: '',
-    countryRegion: '',
     protocolStatus: 'planning',
-    plannedSites: undefined,
-    plannedSubjects: undefined,
-    plannedStartDate: '',
-    plannedEndDate: '',
   });
+
+  const [countries, setCountries] = useState<CountryEntry[]>([]);
 
   useEffect(() => {
     if (project && open) {
       setFormData({
-        programName: '',
         protocolName: project.protocol_name,
         protocolNumber: project.protocol_number,
         trialPhase: project.trial_phase || '',
         protocolDescription: project.protocol_description || '',
-        countryName: project.country_name || '',
-        countryRegion: project.country_region || '',
         protocolStatus: project.protocol_status || 'planning',
-        plannedSites: project.planned_sites ?? undefined,
-        plannedSubjects: project.planned_subjects ?? undefined,
-        plannedStartDate: project.planned_start_date?.slice(0, 10) || '',
-        plannedEndDate: project.planned_end_date?.slice(0, 10) || '',
       });
+
+      if (project.countries && project.countries.length > 0) {
+        setCountries(project.countries.map((c) => ({
+          id: c.id,
+          countryName: c.countryName,
+          countryRegion: c.countryRegion || '',
+          plannedSites: c.plannedSites ?? undefined,
+          plannedSubjects: c.plannedSubjects ?? undefined,
+          plannedStartDate: c.plannedStartDate?.slice(0, 10) || '',
+          plannedEndDate: c.plannedEndDate?.slice(0, 10) || '',
+        })));
+      } else {
+        setCountries([]);
+      }
+
       setError(null);
     }
   }, [project, open]);
+
+  const updateCountry = (index: number, updates: Partial<CountryEntry>) => {
+    setCountries((prev) => prev.map((c, i) => i === index ? { ...c, ...updates } : c));
+  };
+
+  const removeCountry = (index: number) => {
+    setCountries((prev) => prev.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,7 +114,16 @@ export function EditProjectDialog({
     setError(null);
 
     startTransition(async () => {
-      const result = await updateProject(project.id, formData as import('@/lib/actions/projects').UpdateProjectInput);
+      const input: UpdateProjectInput = {
+        protocolName: formData.protocolName,
+        protocolNumber: formData.protocolNumber,
+        trialPhase: formData.trialPhase,
+        protocolDescription: formData.protocolDescription,
+        protocolStatus: formData.protocolStatus,
+        countries: countries.filter((c) => c.countryName),
+      };
+
+      const result = await updateProject(project.id, input);
 
       if (result.success) {
         onOpenChange(false);
@@ -122,7 +143,7 @@ export function EditProjectDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[600px] max-w-[600px] max-h-[90vh] overflow-y-auto text-[12px]">
+      <DialogContent className="w-[700px] max-w-[700px] max-h-[90vh] overflow-y-auto text-[12px]">
         <DialogHeader>
           <DialogTitle className="text-base">Edit Project</DialogTitle>
         </DialogHeader>
@@ -155,11 +176,10 @@ export function EditProjectDialog({
 
                 <div className="space-y-2">
                   <Label htmlFor="edit-protocolNumber" className="!text-[12px]">
-                    Protocol Number <span className="text-destructive">*</span>
+                    Protocol Number
                   </Label>
                   <Input
                     id="edit-protocolNumber"
-                    required
                     value={formData.protocolNumber}
                     onChange={(e) =>
                       setFormData({ ...formData, protocolNumber: e.target.value })
@@ -171,7 +191,7 @@ export function EditProjectDialog({
 
                 <div className="space-y-2">
                   <Label htmlFor="edit-trialPhase" className="!text-[12px]">
-                    Trial Phase <span className="text-destructive">*</span>
+                    Trial Phase
                   </Label>
                   <Select
                     value={formData.trialPhase}
@@ -181,7 +201,7 @@ export function EditProjectDialog({
                   >
                     <SelectTrigger id="edit-trialPhase" className="w-full !text-[12px] placeholder:!text-[12px] min-w-[150px]">
                       <SelectValue>
-                        {formData.trialPhase || 'Choose an option...'}
+                        {TRIAL_PHASES.find((p) => p.toLowerCase() === formData.trialPhase.toLowerCase()) || formData.trialPhase || 'Choose an option...'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -220,100 +240,6 @@ export function EditProjectDialog({
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="edit-countryName" className="!text-[12px]">Country Name</Label>
-                  <Input
-                    id="edit-countryName"
-                    value={formData.countryName}
-                    onChange={(e) =>
-                      setFormData({ ...formData, countryName: e.target.value })
-                    }
-                    placeholder="Enter country name"
-                    className="!text-[12px] placeholder:!text-[12px] min-w-[150px]"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit-countryRegion" className="!text-[12px]">Country Region</Label>
-                  <Input
-                    id="edit-countryRegion"
-                    value={formData.countryRegion}
-                    onChange={(e) =>
-                      setFormData({ ...formData, countryRegion: e.target.value })
-                    }
-                    placeholder="Enter country region"
-                    className="!text-[12px] placeholder:!text-[12px] min-w-[150px]"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit-plannedSites" className="!text-[12px]">Planned Sites</Label>
-                  <Input
-                    id="edit-plannedSites"
-                    type="number"
-                    min="0"
-                    value={formData.plannedSites || ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        plannedSites: e.target.value
-                          ? parseInt(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    placeholder="0"
-                    className="!text-[12px] placeholder:!text-[12px] min-w-[150px]"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit-plannedSubjects" className="!text-[12px]">Planned Subjects</Label>
-                  <Input
-                    id="edit-plannedSubjects"
-                    type="number"
-                    min="0"
-                    value={formData.plannedSubjects || ''}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        plannedSubjects: e.target.value
-                          ? parseInt(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    placeholder="0"
-                    className="!text-[12px] placeholder:!text-[12px] min-w-[150px]"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit-plannedStartDate" className="!text-[12px]">Planned Start Date</Label>
-                  <span className="block text-right text-[8px] text-gray-400">mm/dd/yyyy</span>
-                  <Input
-                    id="edit-plannedStartDate"
-                    type="date"
-                    value={formData.plannedStartDate}
-                    onChange={(e) =>
-                      setFormData({ ...formData, plannedStartDate: e.target.value })
-                    }
-                    className="!text-[12px] placeholder:!text-[12px] min-w-[150px]"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="edit-plannedEndDate" className="!text-[12px]">Planned End Date</Label>
-                  <span className="block text-right text-[8px] text-gray-400">mm/dd/yyyy</span>
-                  <Input
-                    id="edit-plannedEndDate"
-                    type="date"
-                    value={formData.plannedEndDate}
-                    onChange={(e) =>
-                      setFormData({ ...formData, plannedEndDate: e.target.value })
-                    }
-                    className="!text-[12px] placeholder:!text-[12px] min-w-[150px]"
-                  />
-                </div>
-
                 <div className="space-y-2 md:col-span-2">
                   <Label htmlFor="edit-protocolDescription" className="!text-[12px]">Protocol Description</Label>
                   <Textarea
@@ -327,12 +253,143 @@ export function EditProjectDialog({
                   />
                 </div>
               </div>
+
+              {/* Countries Section */}
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <Label className="!text-[12px] font-semibold">Participating Countries</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 !text-[11px]"
+                    onClick={() => setCountries((prev) => [...prev, emptyCountry()])}
+                  >
+                    <Plus className="mr-1 h-3 w-3" />
+                    Add Country
+                  </Button>
+                </div>
+
+                {countries.length === 0 && (
+                  <p className="text-[11px] text-muted-foreground py-2 text-center border border-dashed rounded-md">
+                    No countries added. Click &quot;Add Country&quot; to add participating countries.
+                  </p>
+                )}
+
+                {countries.map((country, idx) => (
+                  <div key={idx} className="rounded-md border p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-medium text-muted-foreground">Country {idx + 1}</span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeCountry(idx)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label className="!text-[11px]">Country Name</Label>
+                        <Select
+                          value={country.countryName}
+                          onValueChange={(value) =>
+                            updateCountry(idx, {
+                              countryName: value,
+                              countryRegion: getRegionForCountry(value) || country.countryRegion || '',
+                            })
+                          }
+                        >
+                          <SelectTrigger className="w-full !text-[11px] h-8">
+                            <SelectValue>
+                              {country.countryName || 'Select country'}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getCountryNames().map((name) => (
+                              <SelectItem key={name} value={name} className="!text-[11px]">
+                                {name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="!text-[11px]">Region</Label>
+                        <Select
+                          value={country.countryRegion || ''}
+                          onValueChange={(value) => updateCountry(idx, { countryRegion: value })}
+                        >
+                          <SelectTrigger className="w-full !text-[11px] h-8">
+                            <SelectValue>
+                              {country.countryRegion || 'Select region'}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {GEOGRAPHIC_REGIONS.map((region) => (
+                              <SelectItem key={region} value={region} className="!text-[11px]">
+                                {region}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="!text-[11px]">Planned Sites</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={country.plannedSites ?? ''}
+                          onChange={(e) =>
+                            updateCountry(idx, { plannedSites: e.target.value ? parseInt(e.target.value) : undefined })
+                          }
+                          placeholder="0"
+                          className="!text-[11px] h-8"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="!text-[11px]">Planned Subjects</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={country.plannedSubjects ?? ''}
+                          onChange={(e) =>
+                            updateCountry(idx, { plannedSubjects: e.target.value ? parseInt(e.target.value) : undefined })
+                          }
+                          placeholder="0"
+                          className="!text-[11px] h-8"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="!text-[11px]">Start Date</Label>
+                        <Input
+                          type="date"
+                          value={country.plannedStartDate || ''}
+                          onChange={(e) => updateCountry(idx, { plannedStartDate: e.target.value })}
+                          className="!text-[11px] h-8"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="!text-[11px]">End Date</Label>
+                        <Input
+                          type="date"
+                          value={country.plannedEndDate || ''}
+                          onChange={(e) => updateCountry(idx, { plannedEndDate: e.target.value })}
+                          className="!text-[11px] h-8"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <DialogFooter>
               <Button
                 type="submit"
-                disabled={isPending || !formData.protocolName || !formData.protocolNumber || !formData.trialPhase}
+                disabled={isPending || !formData.protocolName}
                 className="w-full sm:w-auto !text-[12px]"
               >
                 {isPending ? (

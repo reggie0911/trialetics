@@ -12,6 +12,8 @@ import {
   AssignContactToProjectData,
 } from '@/lib/types/contacts-organizations';
 import { logContactActivity, generateContactUpdateDescription } from '@/lib/utils/activity-logger';
+import { CONTACT_ROLE_LABELS } from '@/lib/types/contacts-organizations';
+import { getContactDisplayTitle } from '@/lib/utils/contact-title-mapping';
 
 export type ActionResponse<T> = {
   success: boolean;
@@ -47,7 +49,8 @@ export async function getContacts(
           id,
           organization:organizations(id, name, organization_type)
         ),
-        contact_protocols(id)
+        protocol_contacts(id),
+        contact_role_assignments(id, role_id, is_primary, role:ctms_roles(id, slug, name, category))
       `, { count: 'exact' })
       .eq('company_id', companyId)
       .order('last_name', { ascending: true });
@@ -78,8 +81,9 @@ export async function getContacts(
     // Transform the data to include counts and primary organization
     let contacts = (data || []).map((contact: any) => {
       const orgRelations = contact.organization_contacts || [];
-      const projectRelations = contact.contact_protocols || [];
+      const projectRelations = contact.protocol_contacts || [];
       const primaryOrgRelation = orgRelations.find((oc: any) => oc.is_primary) || orgRelations[0];
+      const roleAssignments = contact.contact_role_assignments || [];
 
       return {
         ...contact,
@@ -89,6 +93,8 @@ export async function getContacts(
         primary_organization: primaryOrgRelation?.organization || null,
         organizations_count: orgRelations.length,
         projects_count: projectRelations.length,
+        roleAssignments,
+        displayTitle: getContactDisplayTitle(roleAssignments, contact.title, CONTACT_ROLE_LABELS),
       };
     });
 
@@ -162,11 +168,12 @@ export async function getContact(contactId: string): Promise<ActionResponse<Cont
           *,
           organization:organizations(*)
         ),
-        contact_protocols(
+        protocol_contacts(
           *,
           protocol:clinical_protocols(id, protocol_number, title, status),
           organization:organizations(id, name)
-        )
+        ),
+        contact_role_assignments(id, role_id, is_primary, role:ctms_roles(id, slug, name, category))
       `)
       .eq('id', contactId)
       .single();
@@ -188,31 +195,56 @@ export async function getContact(contactId: string): Promise<ActionResponse<Cont
       (oc: any) => oc.is_primary
     ) || data.organization_contacts?.[0];
 
-    // Fetch primary organization's address
-    let primaryOrgAddress = null;
-    if (primaryOrgRelation?.organization?.id) {
+    // Fetch addresses for all organizations in the contact's org list
+    const orgIds = (data.organization_contacts || [])
+      .map((oc: any) => oc.organization?.id)
+      .filter(Boolean);
+    let orgAddressMap: Record<string, any> = {};
+    if (orgIds.length > 0) {
       const { data: orgAddresses } = await supabase
         .from('addresses')
         .select('*')
         .eq('entity_type', 'organization')
-        .eq('entity_id', primaryOrgRelation.organization.id)
-        .order('is_primary', { ascending: false })
-        .limit(1);
-      primaryOrgAddress = orgAddresses?.[0] || null;
+        .in('entity_id', orgIds)
+        .order('is_primary', { ascending: false });
+      // Group by entity_id, keep primary (or first) per org
+      for (const addr of orgAddresses || []) {
+        const eid = addr.entity_id;
+        if (!orgAddressMap[eid]) orgAddressMap[eid] = addr;
+      }
     }
+
+    const primaryOrgAddress = primaryOrgRelation?.organization?.id
+      ? orgAddressMap[primaryOrgRelation.organization.id] || null
+      : null;
 
     const primaryOrg = primaryOrgRelation?.organization
       ? { ...primaryOrgRelation.organization, primary_address: primaryOrgAddress }
       : null;
 
+    // Attach primary_address to each organization in the list
+    const organizationsWithAddress = (data.organization_contacts || []).map((oc: any) => {
+      const addr = oc.organization?.id ? orgAddressMap[oc.organization.id] : null;
+      return {
+        ...oc,
+        organization: oc.organization
+          ? { ...oc.organization, primary_address: addr }
+          : oc.organization,
+      };
+    });
+
+    const roleAssignments = data.contact_role_assignments || [];
+
     const contact: ContactWithRelations = {
       ...data,
-      organizations: data.organization_contacts,
-      projects: data.contact_protocols,
+      organizations: organizationsWithAddress,
+      projects: data.protocol_contacts,
       addresses: addresses || [],
       primary_organization: primaryOrg,
       organizations_count: data.organization_contacts?.length || 0,
-      projects_count: data.contact_protocols?.length || 0,
+      projects_count: data.protocol_contacts?.length || 0,
+      roleAssignments,
+      displayTitle: getContactDisplayTitle(roleAssignments, data.title, CONTACT_ROLE_LABELS),
     };
 
     return { success: true, data: contact };
@@ -248,14 +280,30 @@ export async function createContact(
         last_name: data.last_name,
         email: data.email || null,
         phone: data.phone || null,
-        title: data.title || null,
+        title: null,
+        contact_type: data.contact_type || null,
+        salutation: data.salutation || null,
+        middle_initial: data.middle_initial || null,
+        mobile_phone: data.mobile_phone || null,
+        home_phone: data.home_phone || null,
         credentials: data.credentials || null,
         license_number: data.license_number || null,
         primary_specialty: data.primary_specialty || null,
         profile_image_url: data.profile_image_url || null,
+        is_disqualified: data.is_disqualified || false,
+        disqualification_reason: data.disqualification_reason || null,
+        therapeutic_qualifications: data.therapeutic_qualifications || [],
+        specialties: data.specialties || [],
+        sub_specialties: data.sub_specialties || [],
+        professional_associations: data.professional_associations ?? [],
         status: data.status || 'active',
         notes: data.notes || null,
         manager_id: data.manager_id ?? null,
+        youtube_url: data.youtube_url || null,
+        linkedin_url: data.linkedin_url || null,
+        x_url: data.x_url || null,
+        facebook_url: data.facebook_url || null,
+        substack_url: data.substack_url || null,
         metadata: data.metadata || {},
         created_by_id: profileId,
         creator_email: creatorEmail,
@@ -657,9 +705,21 @@ export async function assignContactToProject(
       return { success: false, error: 'User not authenticated' };
     }
 
+    // Get company_id from the contact
+    const { data: contact } = await supabase
+      .from('contacts')
+      .select('company_id')
+      .eq('id', data.contact_id)
+      .single();
+
+    if (!contact) {
+      return { success: false, error: 'Contact not found' };
+    }
+
     const { error } = await supabase
-      .from('contact_protocols')
+      .from('protocol_contacts')
       .insert({
+        company_id: contact.company_id,
         contact_id: data.contact_id,
         protocol_id: data.protocol_id,
         organization_id: data.organization_id || null,
@@ -667,6 +727,7 @@ export async function assignContactToProject(
         status: data.status,
         start_date: data.start_date || null,
         end_date: data.end_date || null,
+        country: data.country || null,
       });
 
     if (error) {
@@ -698,7 +759,7 @@ export async function removeContactFromProject(
     }
 
     const { error } = await supabase
-      .from('contact_protocols')
+      .from('protocol_contacts')
       .delete()
       .eq('id', relationshipId);
 
@@ -712,5 +773,55 @@ export async function removeContactFromProject(
   } catch (error) {
     console.error('Error in removeContactFromProject:', error);
     return { success: false, error: 'Failed to remove contact from project' };
+  }
+}
+
+// =============================================
+// CHECK FOR DUPLICATE CONTACTS
+// =============================================
+
+export async function checkDuplicateContacts(
+  companyId: string,
+  firstName: string,
+  lastName: string,
+  email?: string | null
+): Promise<ActionResponse<{ duplicates: Array<{ id: string; first_name: string; last_name: string; email: string | null }> }>> {
+  try {
+    const supabase = await createClient();
+
+    let query = supabase
+      .from('contacts')
+      .select('id, first_name, last_name, email')
+      .eq('company_id', companyId)
+      .ilike('first_name', firstName.trim())
+      .ilike('last_name', lastName.trim())
+      .limit(5);
+
+    const { data: nameMatches } = await query;
+
+    let emailMatches: typeof nameMatches = [];
+    if (email && email.trim()) {
+      const { data: em } = await supabase
+        .from('contacts')
+        .select('id, first_name, last_name, email')
+        .eq('company_id', companyId)
+        .ilike('email', email.trim())
+        .limit(5);
+      emailMatches = em || [];
+    }
+
+    const seen = new Set<string>();
+    const duplicates: Array<{ id: string; first_name: string; last_name: string; email: string | null }> = [];
+    for (const d of [...(nameMatches || []), ...(emailMatches || [])]) {
+      if (!seen.has(d.id)) {
+        seen.add(d.id);
+        duplicates.push(d);
+      }
+    }
+
+    return { success: true, data: { duplicates } };
+  } catch (error) {
+    console.error('Error checking duplicate contacts:', error);
+    return { success: false, error: 'Failed to check duplicates' };
   }
 }

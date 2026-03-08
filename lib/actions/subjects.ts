@@ -18,9 +18,26 @@ export async function getSubjects(
   filters: SubjectFilters = {}
 ) {
   const supabase = await createClient();
-  const { search, site_id, status, enrollment_date_from, enrollment_date_to, page = 1, pageSize = 50 } = filters;
+  const { search, site_id, protocol_id, status, enrollment_date_from, enrollment_date_to, page = 1, pageSize = 50 } = filters;
 
   try {
+    // If protocol_id is provided, get site IDs for that protocol first
+    let siteIds: string[] | undefined;
+    if (protocol_id && !site_id) {
+      const { data: sites } = await supabase
+        .from('clinical_sites')
+        .select('id')
+        .eq('protocol_id', protocol_id);
+      siteIds = (sites || []).map((s: { id: string }) => s.id);
+      if (siteIds.length === 0) {
+        return {
+          success: true,
+          data: { subjects: [], total: 0, page, pageSize },
+          error: null,
+        };
+      }
+    }
+
     let query = supabase
       .from('subjects')
       .select(
@@ -45,6 +62,8 @@ export async function getSubjects(
 
     if (site_id) {
       query = query.eq('site_id', site_id);
+    } else if (siteIds && siteIds.length > 0) {
+      query = query.in('site_id', siteIds);
     }
 
     if (status && status !== 'all') {

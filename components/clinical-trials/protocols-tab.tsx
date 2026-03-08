@@ -9,6 +9,7 @@ import { getClinicalProtocols } from '@/lib/actions/clinical-protocols';
 import type { ClinicalProtocolWithRelations } from '@/lib/types/clinical-trials';
 import { ProtocolsDataTable } from './protocols-data-table';
 import { ProtocolFormDialog } from './protocol-form-dialog';
+import { CreateProjectForm } from '@/components/create-project-form';
 
 interface ProtocolsTabProps {
   companyId: string;
@@ -41,7 +42,7 @@ export function ProtocolsTab({ companyId, profileId, email, onDataChange }: Prot
     } else {
       toast({
         title: 'Error',
-        description: result.error || 'Failed to load protocols',
+        description: result.error || 'Failed to load projects',
         variant: 'destructive',
       });
     }
@@ -70,7 +71,7 @@ export function ProtocolsTab({ companyId, profileId, email, onDataChange }: Prot
         <div className="relative flex-1">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search protocols..."
+            placeholder="Search projects..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-8 pl-8 text-xs"
@@ -82,7 +83,7 @@ export function ProtocolsTab({ companyId, profileId, email, onDataChange }: Prot
           className="h-8 text-xs"
         >
           <Plus className="mr-1 h-3 w-3" />
-          Add Protocol
+          Add Project
         </Button>
       </div>
 
@@ -95,15 +96,21 @@ export function ProtocolsTab({ companyId, profileId, email, onDataChange }: Prot
         companyId={companyId}
       />
 
-      {/* Create/Edit Dialog */}
-      {(showCreateDialog || editingProtocol) && (
+      {/* Create Project Dialog (Add Protocol) */}
+      {showCreateDialog && (
+        <CreateProjectForm
+          open={showCreateDialog}
+          onOpenChange={setShowCreateDialog}
+          onSuccess={handleSuccess}
+        />
+      )}
+
+      {/* Edit Protocol Dialog */}
+      {editingProtocol && (
         <ProtocolFormDialog
-          open={showCreateDialog || !!editingProtocol}
+          open={!!editingProtocol}
           onOpenChange={(open) => {
-            if (!open) {
-              setShowCreateDialog(false);
-              setEditingProtocol(null);
-            }
+            if (!open) setEditingProtocol(null);
           }}
           companyId={companyId}
           profileId={profileId}

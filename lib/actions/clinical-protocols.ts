@@ -81,6 +81,7 @@ export async function getClinicalProtocols(
     const {
       search,
       program_id,
+      protocol_id,
       phase = 'all',
       status = 'all',
       regions_required = 'all',
@@ -94,9 +95,14 @@ export async function getClinicalProtocols(
         *,
         clinical_programs (id, name),
         clinical_regions (count),
-        clinical_sites (count)
+        clinical_sites (count),
+        sponsor_organization:organizations!clinical_protocols_sponsor_organization_id_fkey(id, name)
       `, { count: 'exact' })
       .eq('company_id', companyId);
+
+    if (protocol_id) {
+      query = query.eq('id', protocol_id);
+    }
 
     // Apply filters
     if (search) {
@@ -140,6 +146,7 @@ export async function getClinicalProtocols(
       program: protocol.clinical_programs,
       regions_count: protocol.clinical_regions?.[0]?.count || 0,
       sites_count: protocol.clinical_sites?.[0]?.count || 0,
+      sponsor_organization: protocol.sponsor_organization || null,
       clinical_programs: undefined,
       clinical_regions: undefined,
       clinical_sites: undefined,
@@ -164,7 +171,8 @@ export async function getClinicalProtocols(
 
 export async function getAllClinicalProtocols(
   companyId: string,
-  programId?: string
+  programId?: string,
+  options?: { regionsRequiredOnly?: boolean }
 ): Promise<ActionResponse<ClinicalProtocol[]>> {
   try {
     const supabase = await createClient();
@@ -176,6 +184,10 @@ export async function getAllClinicalProtocols(
 
     if (programId) {
       query = query.eq('program_id', programId);
+    }
+
+    if (options?.regionsRequiredOnly) {
+      query = query.eq('regions_required', true);
     }
 
     const { data, error } = await query.order('protocol_number', { ascending: true });
@@ -213,7 +225,7 @@ export async function getClinicalProtocol(
         clinical_regions (*),
         clinical_sites (
           *,
-          organizations (id, name, organization_type),
+          organizations!clinical_sites_organization_id_fkey (id, name, organization_type),
           contacts (id, first_name, last_name, email)
         )
       `)
@@ -320,12 +332,36 @@ export async function createClinicalProtocol(
 // Update Clinical Protocol
 // =============================================
 
+// Whitelist of updateable clinical_protocols columns (excludes id, company_id, created_*, etc.)
+const PROTOCOL_UPDATE_COLUMNS = [
+  'protocol_number', 'title', 'program_id', 'phase', 'status', 'design', 'type',
+  'sponsor', 'sponsor_organization_id', 'regions_required', 'objective',
+  'planned_start_date', 'planned_end_date', 'planned_sites_count', 'planned_subjects_count',
+  'test_article', 'therapeutic_group',
+] as const;
+
 export async function updateClinicalProtocol(
   data: UpdateClinicalProtocolData
 ): Promise<ActionResponse<ClinicalProtocol>> {
   try {
     const supabase = await createClient();
-    const { id, ...updateData } = data;
+    const { id, ...rest } = data;
+
+    // Build sanitized payload: only known columns, empty strings -> null for optional fields
+    const updateData: Record<string, unknown> = {};
+    for (const key of PROTOCOL_UPDATE_COLUMNS) {
+      const val = rest[key as keyof typeof rest];
+      if (val === undefined) continue;
+      if (typeof val === 'string' && val.trim() === '' && key !== 'protocol_number' && key !== 'title') {
+        updateData[key] = null;
+      } else if (key === 'program_id' || key === 'sponsor_organization_id') {
+        updateData[key] = typeof val === 'string' && val.trim() ? val : null;
+      } else if (key === 'planned_start_date' || key === 'planned_end_date') {
+        updateData[key] = typeof val === 'string' && val.trim() ? val : null;
+      } else {
+        updateData[key] = val;
+      }
+    }
 
     const { data: updatedProtocol, error } = await supabase
       .from('clinical_protocols')

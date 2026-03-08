@@ -26,6 +26,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { inviteUser, ModuleWithUserCount } from '@/lib/actions/admin';
 
+const ROLE_LABELS: Record<string, string> = {
+  user: 'User',
+  admin: 'Admin',
+};
+
 const inviteFormSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
   firstName: z.string().optional(),
@@ -126,19 +131,19 @@ export function InviteUserForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <UserPlus className="h-5 w-5" />
+        <CardTitle className="flex items-center gap-2 text-xs">
+          <UserPlus className="h-4 w-4" />
           Invite User
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-xs">
           Send an invitation email to add a new user to your company
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="text-xs">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {/* Email */}
           <div className="space-y-2">
-            <Label htmlFor="email">
+            <Label htmlFor="email" className="text-xs">
               Email <span className="text-destructive">*</span>
             </Label>
             <div className="relative">
@@ -147,30 +152,32 @@ export function InviteUserForm({
                 id="email"
                 type="email"
                 placeholder="user@example.com"
-                className="pl-9"
+                className="pl-9 text-xs"
                 {...register('email')}
               />
             </div>
             {errors.email && (
-              <p className="text-sm text-destructive">{errors.email.message}</p>
+              <p className="text-xs text-destructive">{errors.email.message}</p>
             )}
           </div>
 
           {/* Name fields - side by side */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="firstName">First Name</Label>
+              <Label htmlFor="firstName" className="text-xs">First Name</Label>
               <Input
                 id="firstName"
                 placeholder="John"
+                className="text-xs"
                 {...register('firstName')}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="lastName">Last Name</Label>
+              <Label htmlFor="lastName" className="text-xs">Last Name</Label>
               <Input
                 id="lastName"
                 placeholder="Doe"
+                className="text-xs"
                 {...register('lastName')}
               />
             </div>
@@ -178,7 +185,7 @@ export function InviteUserForm({
 
           {/* Role */}
           <div className="space-y-2">
-            <Label htmlFor="role">Role</Label>
+            <Label htmlFor="role" className="text-xs">Role</Label>
             <Select
               value={currentRole}
               onValueChange={(value) => {
@@ -187,12 +194,14 @@ export function InviteUserForm({
                 }
               }}
             >
-              <SelectTrigger>
-                <SelectValue />
+              <SelectTrigger className="capitalize text-xs">
+                <SelectValue placeholder="Select role">
+                  {currentRole ? ROLE_LABELS[currentRole] ?? currentRole : null}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="user">User</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="user" className="text-xs">User</SelectItem>
+                <SelectItem value="admin" className="text-xs">Admin</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
@@ -203,7 +212,7 @@ export function InviteUserForm({
           {/* Module Access */}
           {activeModules.length > 0 && (
             <div className="space-y-3">
-              <Label>Module Access</Label>
+              <Label className="text-xs">Module Access</Label>
               <div className="grid grid-cols-2 gap-2">
                 {activeModules.map(module => (
                   <div
@@ -217,7 +226,7 @@ export function InviteUserForm({
                     />
                     <label
                       htmlFor={`module-${module.id}`}
-                      className="flex-1 text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      className="flex-1 text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                     >
                       {module.name}
                     </label>
@@ -231,7 +240,7 @@ export function InviteUserForm({
           )}
 
           {/* Submit */}
-          <Button type="submit" disabled={isSubmitting} className="w-full">
+          <Button type="submit" disabled={isSubmitting} className="w-full text-xs">
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

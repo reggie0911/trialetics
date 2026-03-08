@@ -23,8 +23,9 @@ export async function getAccountAssociations(
   const { entity_type, entity_id, organization_id, account_type, is_central, is_regional, page = 1, pageSize = 50 } = filters;
 
   try {
+    // protocol_accounts merged into organization_protocols; region_accounts and site_accounts remain separate
     const tableName = entity_type === 'protocol' 
-      ? 'protocol_accounts'
+      ? 'organization_protocols'
       : entity_type === 'region'
       ? 'region_accounts'
       : 'site_accounts';
@@ -47,8 +48,12 @@ export async function getAccountAssociations(
         )
       `,
         { count: 'exact' }
-      )
-      .eq('company_id', companyId);
+      );
+
+    // organization_protocols does not have company_id; other tables do
+    if (entity_type !== 'protocol') {
+      query = query.eq('company_id', companyId);
+    }
 
     if (entity_id) {
       query = query.eq(foreignKey, entity_id);
@@ -62,8 +67,12 @@ export async function getAccountAssociations(
       query = query.eq('account_type', account_type);
     }
 
-    if (is_central !== undefined && entity_type === 'protocol') {
-      query = query.eq('is_central', is_central);
+    // For protocol entity_type, only return rows that have an account_type (partner accounts)
+    if (entity_type === 'protocol') {
+      query = query.not('account_type', 'is', null);
+      if (is_central !== undefined) {
+        query = query.eq('is_central', is_central);
+      }
     }
 
     if (is_regional !== undefined && entity_type === 'region') {
@@ -118,8 +127,9 @@ export async function createAccountAssociation(
   try {
     const { entity_type, entity_id, organization_id, account_type, is_central, is_regional, start_date, end_date, metadata } = data;
 
+    // protocol_accounts merged into organization_protocols
     const tableName = entity_type === 'protocol' 
-      ? 'protocol_accounts'
+      ? 'organization_protocols'
       : entity_type === 'region'
       ? 'region_accounts'
       : 'site_accounts';
@@ -130,22 +140,38 @@ export async function createAccountAssociation(
       ? 'region_id'
       : 'site_id';
 
-    const insertData: Record<string, any> = {
-      company_id: companyId,
-      [foreignKey]: entity_id,
-      organization_id,
-      account_type,
-      start_date: start_date || null,
-      end_date: end_date || null,
-      metadata: metadata || {},
-    };
+    let insertData: Record<string, any>;
 
-    if (entity_type === 'protocol' && is_central !== undefined) {
-      insertData.is_central = is_central;
-    }
-
-    if (entity_type === 'region' && is_regional !== undefined) {
-      insertData.is_regional = is_regional;
+    if (entity_type === 'protocol') {
+      // Map account_type to organization_project_role
+      const roleMap: Record<string, string> = {
+        irb: 'irb', central_irb: 'irb', cro: 'cro', regional_cro: 'cro',
+        laboratory: 'lab', central_laboratory: 'lab', vendor: 'vendor',
+        pharmacy: 'vendor', imaging_center: 'vendor',
+      };
+      insertData = {
+        organization_id,
+        protocol_id: entity_id,
+        role: roleMap[account_type] || 'vendor',
+        account_type,
+        is_central: is_central || false,
+        status: 'active',
+        start_date: start_date || null,
+        end_date: end_date || null,
+      };
+    } else {
+      insertData = {
+        company_id: companyId,
+        [foreignKey]: entity_id,
+        organization_id,
+        account_type,
+        start_date: start_date || null,
+        end_date: end_date || null,
+        metadata: metadata || {},
+      };
+      if (entity_type === 'region' && is_regional !== undefined) {
+        insertData.is_regional = is_regional;
+      }
     }
 
     const { data: account, error } = await supabase
@@ -193,7 +219,7 @@ export async function updateAccountAssociation(
     const { id, entity_type, is_central, is_regional, start_date, end_date, metadata } = updateData;
 
     const tableName = entity_type === 'protocol' 
-      ? 'protocol_accounts'
+      ? 'organization_protocols'
       : entity_type === 'region'
       ? 'region_accounts'
       : 'site_accounts';
@@ -206,13 +232,17 @@ export async function updateAccountAssociation(
     if (end_date !== undefined) updates.end_date = end_date;
     if (metadata !== undefined) updates.metadata = metadata;
 
-    const { data, error } = await supabase
+    let query = supabase
       .from(tableName)
       .update(updates)
-      .eq('id', id)
-      .eq('company_id', companyId)
-      .select()
-      .single();
+      .eq('id', id);
+
+    // organization_protocols doesn't have company_id column
+    if (entity_type !== 'protocol') {
+      query = query.eq('company_id', companyId);
+    }
+
+    const { data, error } = await query.select().single();
 
     if (error) {
       console.error('Error updating account association:', error);
@@ -252,16 +282,22 @@ export async function deleteAccountAssociation(
 
   try {
     const tableName = entityType === 'protocol' 
-      ? 'protocol_accounts'
+      ? 'organization_protocols'
       : entityType === 'region'
       ? 'region_accounts'
       : 'site_accounts';
 
-    const { error } = await supabase
+    let query = supabase
       .from(tableName)
       .delete()
-      .eq('id', id)
-      .eq('company_id', companyId);
+      .eq('id', id);
+
+    // organization_protocols doesn't have company_id column
+    if (entityType !== 'protocol') {
+      query = query.eq('company_id', companyId);
+    }
+
+    const { error } = await query;
 
     if (error) {
       console.error('Error deleting account association:', error);

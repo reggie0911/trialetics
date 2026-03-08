@@ -213,7 +213,7 @@ export function OrganizationsTab({
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                   <Input
                     id="search"
-                    placeholder="Search organizations..."
+                    placeholder="Search institutions..."
                     value={searchValue}
                     onChange={(e) => setSearchValue(e.target.value)}
                     onKeyDown={handleKeyDown}

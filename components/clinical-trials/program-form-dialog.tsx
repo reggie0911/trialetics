@@ -14,6 +14,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -31,8 +32,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { createClinicalProgram, updateClinicalProgram } from '@/lib/actions/clinical-programs';
+import { getAllContacts } from '@/lib/actions/contacts';
 import { PROTOCOL_STATUS_LABELS } from '@/lib/types/clinical-trials';
 import type { ClinicalProgramWithRelations, ProtocolStatus } from '@/lib/types/clinical-trials';
+import type { Contact } from '@/lib/types/contacts-organizations';
 
 const programSchema = z.object({
   name: z.string().min(1, 'Program name is required'),
@@ -40,6 +43,7 @@ const programSchema = z.object({
   application_id: z.string().optional(),
   status: z.enum(['planned', 'in_progress', 'on_hold', 'completed', 'terminated']),
   description: z.string().optional(),
+  program_manager_contact_id: z.string().optional(),
 });
 
 type ProgramFormData = z.infer<typeof programSchema>;
@@ -65,6 +69,7 @@ export function ProgramFormDialog({
 }: ProgramFormDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [contacts, setContacts] = useState<Contact[]>([]);
 
   const form = useForm<ProgramFormData>({
     resolver: zodResolver(programSchema),
@@ -74,8 +79,17 @@ export function ProgramFormDialog({
       application_id: '',
       status: 'planned',
       description: '',
+      program_manager_contact_id: '',
     },
   });
+
+  useEffect(() => {
+    if (open && companyId) {
+      getAllContacts(companyId).then((res) => {
+        if (res.success && res.data) setContacts(res.data);
+      });
+    }
+  }, [open, companyId]);
 
   useEffect(() => {
     if (program) {
@@ -85,6 +99,7 @@ export function ProgramFormDialog({
         application_id: program.application_id || '',
         status: program.status,
         description: program.description || '',
+        program_manager_contact_id: program.program_manager_contact_id || '',
       });
     } else {
       form.reset({
@@ -93,6 +108,7 @@ export function ProgramFormDialog({
         application_id: '',
         status: 'planned',
         description: '',
+        program_manager_contact_id: '',
       });
     }
   }, [program]); // Removed form from dependencies - form.reset is stable
@@ -101,20 +117,24 @@ export function ProgramFormDialog({
     setIsSubmitting(true);
 
     try {
+      const submitData = {
+        ...data,
+        program_manager_contact_id: data.program_manager_contact_id || null,
+      };
       const result = program
-        ? await updateClinicalProgram({ id: program.id, ...data })
-        : await createClinicalProgram(companyId, profileId, email, data);
+        ? await updateClinicalProgram({ id: program.id, ...submitData })
+        : await createClinicalProgram(companyId, profileId, email, submitData);
 
       if (result.success) {
         toast({
           title: 'Success',
-          description: `Program ${program ? 'updated' : 'created'} successfully`,
+          description: `Project Group ${program ? 'updated' : 'created'} successfully`,
         });
         onSuccess();
       } else {
         toast({
           title: 'Error',
-          description: result.error || `Failed to ${program ? 'update' : 'create'} program`,
+          description: result.error || `Failed to ${program ? 'update' : 'create'} project group`,
           variant: 'destructive',
         });
       }
@@ -133,11 +153,11 @@ export function ProgramFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{program ? 'Edit Program' : 'Create Program'}</DialogTitle>
+          <DialogTitle>{program ? 'Edit Project Group' : 'Create Project Group'}</DialogTitle>
           <DialogDescription>
             {program
-              ? 'Update the clinical program information'
-              : 'Create a new clinical program'}
+              ? 'Update the clinical project group information'
+              : 'Create a new clinical project group'}
           </DialogDescription>
         </DialogHeader>
 
@@ -149,17 +169,20 @@ export function ProgramFormDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="text-xs">
-                    Program Name <span className="text-destructive">*</span>
+                    Project Group Name <span className="text-destructive">*</span>
                   </FormLabel>
                   <FormControl>
-                    <Input {...field} className="h-8 text-xs" placeholder="Enter program name" />
+                    <Input {...field} className="h-8 text-xs" placeholder="Enter project group name" />
                   </FormControl>
+                  <FormDescription className="text-[10px]">
+                    Required. The display name for this clinical project group.
+                  </FormDescription>
                   <FormMessage className="text-xs" />
                 </FormItem>
               )}
             />
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4">
               <FormField
                 control={form.control}
                 name="mechanism"
@@ -169,6 +192,9 @@ export function ProgramFormDialog({
                     <FormControl>
                       <Input {...field} className="h-8 text-xs" placeholder="Enter mechanism" />
                     </FormControl>
+                    <FormDescription className="text-[10px]">
+                      Optional. The therapeutic mechanism of action (e.g., PD-1 inhibitor, mRNA vaccine).
+                    </FormDescription>
                     <FormMessage className="text-xs" />
                   </FormItem>
                 )}
@@ -183,6 +209,9 @@ export function ProgramFormDialog({
                     <FormControl>
                       <Input {...field} className="h-8 text-xs" placeholder="Enter application ID" />
                     </FormControl>
+                    <FormDescription className="text-[10px]">
+                      Optional. An external regulatory or internal tracking identifier (e.g. IND number).
+                    </FormDescription>
                     <FormMessage className="text-xs" />
                   </FormItem>
                 )}
@@ -214,10 +243,42 @@ export function ProgramFormDialog({
                         ))}
                       </SelectContent>
                     </Select>
+                    <FormDescription className="text-[10px]">
+                      Required. The current lifecycle stage of the program.
+                    </FormDescription>
                     <FormMessage className="text-xs" />
                   </FormItem>
                 )}
               />
+
+            <FormField
+              control={form.control}
+              name="program_manager_contact_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">Project Group Manager</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                    <FormControl>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="Select project group manager" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="" className="text-xs">None</SelectItem>
+                      {contacts.map((c) => (
+                        <SelectItem key={c.id} value={c.id} className="text-xs">
+                          {c.first_name} {c.last_name}{c.email ? ` (${c.email})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription className="text-[10px]">
+                    Optional. The contact responsible for managing this project group.
+                  </FormDescription>
+                  <FormMessage className="text-xs" />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
@@ -229,9 +290,12 @@ export function ProgramFormDialog({
                     <Textarea
                       {...field}
                       className="min-h-[100px] text-xs"
-                      placeholder="Enter program description"
+                      placeholder="Enter project group description"
                     />
                   </FormControl>
+                  <FormDescription className="text-[10px]">
+                    Optional. Additional details about the project group's purpose or scope.
+                  </FormDescription>
                   <FormMessage className="text-xs" />
                 </FormItem>
               )}

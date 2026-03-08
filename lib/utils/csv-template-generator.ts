@@ -75,6 +75,11 @@ export function generateContactCSVTemplate(): string {
     'state',
     'postal_code',
     'country',
+    'youtube_url',
+    'linkedin_url',
+    'x_url',
+    'facebook_url',
+    'substack_url',
   ];
 
   // Example contact row
@@ -96,6 +101,11 @@ export function generateContactCSVTemplate(): string {
     'MA',                            // state
     '02139',                         // postal_code
     'United States',                 // country
+    '',                              // youtube_url
+    '',                              // linkedin_url
+    '',                              // x_url
+    '',                              // facebook_url
+    '',                              // substack_url
   ];
 
   const csvRows = [

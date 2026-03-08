@@ -170,7 +170,7 @@ export function AssignContactDialog({
                     <span className="text-xs">
                       {selectedContact.first_name} {selectedContact.last_name}
                       {selectedContact.credentials && `, ${selectedContact.credentials}`}
-                      {selectedContact.title && ` - ${selectedContact.title}`}
+                      {((selectedContact as any).displayTitle || selectedContact.title) && ` - ${(selectedContact as any).displayTitle || selectedContact.title}`}
                     </span>
                   ) : (
                     <span className="text-xs text-muted-foreground">Select a contact</span>
@@ -181,7 +181,7 @@ export function AssignContactDialog({
                     <SelectItem key={contact.id} value={contact.id} className="text-xs">
                       {contact.first_name} {contact.last_name}
                       {contact.credentials && `, ${contact.credentials}`}
-                      {contact.title && ` - ${contact.title}`}
+                      {((contact as any).displayTitle || contact.title) && ` - ${(contact as any).displayTitle || contact.title}`}
                     </SelectItem>
                   ))}
                 </SelectContent>

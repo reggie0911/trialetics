@@ -26,15 +26,15 @@ import { UpdateSiteMilestonesData } from '@/lib/types/contacts-organizations';
 interface SiteMilestoneDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  organizationProjectId: string;
-  milestones: any; // OrganizationProject with milestone fields
+  clinicalSiteId: string;
+  milestones: any;
   onSuccess: () => void;
 }
 
 export function SiteMilestoneDialog({
   open,
   onOpenChange,
-  organizationProjectId,
+  clinicalSiteId,
   milestones,
   onSuccess,
 }: SiteMilestoneDialogProps) {
@@ -43,7 +43,7 @@ export function SiteMilestoneDialog({
 
   const { register, handleSubmit, reset, setValue } = useForm<UpdateSiteMilestonesData>({
     defaultValues: {
-      site_initiation_date: milestones?.site_initiation_date || null,
+      site_initiated_date: milestones?.site_initiated_date || null,
       site_qualification_date: milestones?.site_qualification_date || null,
       close_out_date: milestones?.close_out_date || null,
       first_subject_enrolled_date: milestones?.first_subject_enrolled_date || null,
@@ -59,7 +59,7 @@ export function SiteMilestoneDialog({
   useEffect(() => {
     if (open && milestones) {
       reset({
-        site_initiation_date: milestones.site_initiation_date || null,
+        site_initiated_date: milestones.site_initiated_date || null,
         site_qualification_date: milestones.site_qualification_date || null,
         close_out_date: milestones.close_out_date || null,
         first_subject_enrolled_date: milestones.first_subject_enrolled_date || null,
@@ -76,7 +76,7 @@ export function SiteMilestoneDialog({
   const onSubmit = async (data: UpdateSiteMilestonesData) => {
     setIsSubmitting(true);
 
-    const result = await updateSiteMilestones(organizationProjectId, data);
+    const result = await updateSiteMilestones(clinicalSiteId, data);
 
     if (result.success) {
       onSuccess();
@@ -107,12 +107,12 @@ export function SiteMilestoneDialog({
             <h3 className="text-xs md:text-xs font-medium">Site Dates</h3>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-1">
-                <Label htmlFor="site_initiation_date" className="text-xs">Site Initiation Date</Label>
+                <Label htmlFor="site_initiated_date" className="text-xs">Site Initiation Date</Label>
                 <Input
-                  id="site_initiation_date"
+                  id="site_initiated_date"
                   type="date"
                   className="text-xs md:text-xs h-8"
-                  {...register('site_initiation_date')}
+                  {...register('site_initiated_date')}
                 />
               </div>
               <div className="space-y-1">

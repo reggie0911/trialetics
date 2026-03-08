@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -23,8 +22,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { createProject, type CreateProjectInput } from '@/lib/actions/projects';
+import { createProject, type CreateProjectInput, type CountryEntry } from '@/lib/actions/projects';
 import { Spinner } from '@/components/ui/spinner';
+import { CountryRegionEntryFields } from '@/components/clinical-trials/country-region-entry-fields';
 
 const TRIAL_PHASES = [
   'Phase I',
@@ -42,50 +42,51 @@ const PROJECT_STATUSES = ['planning', 'approved', 'closed'] as const;
 
 interface CreateProjectFormProps {
   onSuccess?: () => void;
+  /** When provided with onOpenChange, dialog is controlled by parent (no trigger rendered) */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function CreateProjectForm({ onSuccess }: CreateProjectFormProps) {
-  const [open, setOpen] = useState(false);
+function emptyCountry(): CountryEntry {
+  return { countryName: '', countryRegion: '', plannedSites: undefined, plannedSubjects: undefined, plannedStartDate: '', plannedEndDate: '' };
+}
+
+export function CreateProjectForm({ onSuccess, open: controlledOpen, onOpenChange: controlledOnOpenChange }: CreateProjectFormProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined && controlledOnOpenChange !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? controlledOnOpenChange : setInternalOpen;
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Form state - use undefined for optional selects to avoid controlled/uncontrolled warnings
-  const [formData, setFormData] = useState<Partial<CreateProjectInput> & {
-    protocolName: string;
-    protocolNumber: string;
-    trialPhase: string;
-    protocolStatus: string;
-  }>({
-    programName: '',
+  const [formData, setFormData] = useState({
     protocolName: '',
     protocolNumber: '',
     trialPhase: '',
     protocolDescription: '',
-    countryName: '',
-    countryRegion: '',
     protocolStatus: 'planning',
-    plannedSites: undefined,
-    plannedSubjects: undefined,
-    plannedStartDate: '',
-    plannedEndDate: '',
   });
+
+  const [countries, setCountries] = useState<CountryEntry[]>([emptyCountry()]);
 
   const resetForm = () => {
     setFormData({
-      programName: '',
       protocolName: '',
       protocolNumber: '',
       trialPhase: '',
       protocolDescription: '',
-      countryName: '',
-      countryRegion: '',
       protocolStatus: 'planning',
-      plannedSites: undefined,
-      plannedSubjects: undefined,
-      plannedStartDate: '',
-      plannedEndDate: '',
     });
+    setCountries([emptyCountry()]);
     setError(null);
+  };
+
+  const updateCountry = (index: number, updates: Partial<CountryEntry>) => {
+    setCountries((prev) => prev.map((c, i) => i === index ? { ...c, ...updates } : c));
+  };
+
+  const removeCountry = (index: number) => {
+    setCountries((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -93,7 +94,16 @@ export function CreateProjectForm({ onSuccess }: CreateProjectFormProps) {
     setError(null);
 
     startTransition(async () => {
-      const result = await createProject(formData);
+      const input: CreateProjectInput = {
+        protocolName: formData.protocolName,
+        protocolNumber: formData.protocolNumber,
+        trialPhase: formData.trialPhase,
+        protocolDescription: formData.protocolDescription,
+        protocolStatus: formData.protocolStatus,
+        countries: countries.filter((c) => c.countryName),
+      };
+
+      const result = await createProject(input);
 
       if (result.success) {
         setOpen(false);
@@ -120,11 +130,13 @@ export function CreateProjectForm({ onSuccess }: CreateProjectFormProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger render={<Button className="gap-2" />}>
-        <Plus className="h-4 w-4" />
-        Create Project
-      </DialogTrigger>
-      <DialogContent className="w-[600px] max-w-[600px] max-h-[90vh] overflow-y-auto text-xs">
+      {!isControlled && (
+        <DialogTrigger render={<Button className="gap-2" />}>
+          <Plus className="h-4 w-4" />
+          Create Project
+        </DialogTrigger>
+      )}
+      <DialogContent className="w-[700px] max-w-[700px] max-h-[90vh] overflow-y-auto text-xs">
         <DialogHeader>
           <DialogTitle className="text-base">Create Project</DialogTitle>
         </DialogHeader>
@@ -137,7 +149,6 @@ export function CreateProjectForm({ onSuccess }: CreateProjectFormProps) {
               </div>
             )}
 
-            {/* Main form grid - 2 columns, all inputs min 150px */}
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="protocolName" className="text-xs">
@@ -157,17 +168,13 @@ export function CreateProjectForm({ onSuccess }: CreateProjectFormProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="protocolNumber" className="text-xs">
-                  Protocol Number <span className="text-destructive">*</span>
+                  Protocol Number
                 </Label>
                 <Input
                   id="protocolNumber"
-                  required
                   value={formData.protocolNumber}
                   onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      protocolNumber: e.target.value,
-                    })
+                    setFormData({ ...formData, protocolNumber: e.target.value })
                   }
                   placeholder="Enter protocol number"
                   className="text-xs placeholder:text-xs min-w-[150px]"
@@ -176,7 +183,7 @@ export function CreateProjectForm({ onSuccess }: CreateProjectFormProps) {
 
               <div className="space-y-2">
                 <Label htmlFor="trialPhase" className="text-xs">
-                  Trial Phase <span className="text-destructive">*</span>
+                  Trial Phase
                 </Label>
                 <Select
                   value={formData.trialPhase}
@@ -186,7 +193,7 @@ export function CreateProjectForm({ onSuccess }: CreateProjectFormProps) {
                 >
                   <SelectTrigger id="trialPhase" className="w-full text-xs placeholder:text-xs min-w-[150px]">
                     <SelectValue>
-                      {formData.trialPhase || 'Choose an option...'}
+                      {TRIAL_PHASES.find((p) => p.toLowerCase() === formData.trialPhase.toLowerCase()) || formData.trialPhase || 'Choose an option...'}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
@@ -225,128 +232,59 @@ export function CreateProjectForm({ onSuccess }: CreateProjectFormProps) {
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="countryName" className="text-xs">Country Name</Label>
-                <Input
-                  id="countryName"
-                  value={formData.countryName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, countryName: e.target.value })
-                  }
-                  placeholder="Enter country name"
-                  className="text-xs placeholder:text-xs min-w-[150px]"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="countryRegion" className="text-xs">Country Region</Label>
-                <Input
-                  id="countryRegion"
-                  value={formData.countryRegion}
-                  onChange={(e) =>
-                    setFormData({ ...formData, countryRegion: e.target.value })
-                  }
-                  placeholder="Enter country region"
-                  className="text-xs placeholder:text-xs min-w-[150px]"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="plannedSites" className="text-xs">Planned Sites</Label>
-                <Input
-                  id="plannedSites"
-                  type="number"
-                  min="0"
-                  value={formData.plannedSites || ''}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      plannedSites: e.target.value
-                        ? parseInt(e.target.value)
-                        : undefined,
-                    })
-                  }
-                  placeholder="0"
-                  className="text-xs placeholder:text-xs min-w-[150px]"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="plannedSubjects" className="text-xs">Planned Subjects</Label>
-                <Input
-                  id="plannedSubjects"
-                  type="number"
-                  min="0"
-                  value={formData.plannedSubjects || ''}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      plannedSubjects: e.target.value
-                        ? parseInt(e.target.value)
-                        : undefined,
-                    })
-                  }
-                  placeholder="0"
-                  className="text-xs placeholder:text-xs min-w-[150px]"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="plannedStartDate" className="text-xs">Planned Start Date</Label>
-                <span className="block text-right text-[8px] text-gray-400">mm/dd/yyyy</span>
-                <Input
-                  id="plannedStartDate"
-                  type="date"
-                  value={formData.plannedStartDate}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      plannedStartDate: e.target.value,
-                    })
-                  }
-                  className="text-xs placeholder:text-xs min-w-[150px]"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="plannedEndDate" className="text-xs">Planned End Date</Label>
-                <span className="block text-right text-[8px] text-gray-400">mm/dd/yyyy</span>
-                <Input
-                  id="plannedEndDate"
-                  type="date"
-                  value={formData.plannedEndDate}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      plannedEndDate: e.target.value,
-                    })
-                  }
-                  className="text-xs placeholder:text-xs min-w-[150px]"
-                />
-              </div>
-
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="protocolDescription" className="text-xs">Protocol Description</Label>
                 <Textarea
                   id="protocolDescription"
                   value={formData.protocolDescription}
                   onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      protocolDescription: e.target.value,
-                    })
+                    setFormData({ ...formData, protocolDescription: e.target.value })
                   }
                   placeholder="Enter description"
                   className="min-h-[60px] text-xs placeholder:text-xs min-w-[150px]"
                 />
               </div>
             </div>
+
+            {/* Countries Section */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">Participating Countries</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px]"
+                  onClick={() => setCountries((prev) => [...prev, emptyCountry()])}
+                >
+                  <Plus className="mr-1 h-3 w-3" />
+                  Add Country
+                </Button>
+              </div>
+
+              {countries.length === 0 && (
+                <p className="text-[11px] text-muted-foreground py-2 text-center border border-dashed rounded-md">
+                  No countries added. Click &quot;Add Country&quot; to add participating countries.
+                </p>
+              )}
+
+              {countries.map((country, idx) => (
+                <CountryRegionEntryFields
+                  key={idx}
+                  value={country}
+                  onChange={(v) => updateCountry(idx, v)}
+                  index={idx}
+                  showDelete={countries.length > 1}
+                  onDelete={() => removeCountry(idx)}
+                />
+              ))}
+            </div>
           </div>
 
           <DialogFooter>
             <Button
               type="submit"
-              disabled={isPending || !formData.protocolName || !formData.protocolNumber || !formData.trialPhase}
+              disabled={isPending || !formData.protocolName}
               className="w-full sm:w-auto"
             >
               {isPending ? (

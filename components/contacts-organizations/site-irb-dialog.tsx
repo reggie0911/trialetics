@@ -21,7 +21,7 @@ import { UpdateSiteMilestonesData } from '@/lib/types/contacts-organizations';
 interface SiteIrbDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  organizationProjectId: string;
+  clinicalSiteId: string;
   milestones: any;
   onSuccess: () => void;
 }
@@ -29,7 +29,7 @@ interface SiteIrbDialogProps {
 export function SiteIrbDialog({
   open,
   onOpenChange,
-  organizationProjectId,
+  clinicalSiteId,
   milestones,
   onSuccess,
 }: SiteIrbDialogProps) {
@@ -61,7 +61,7 @@ export function SiteIrbDialog({
   const onSubmit = async (data: UpdateSiteMilestonesData) => {
     setIsSubmitting(true);
 
-    const result = await updateSiteMilestones(organizationProjectId, data);
+    const result = await updateSiteMilestones(clinicalSiteId, data);
 
     if (result.success) {
       onSuccess();

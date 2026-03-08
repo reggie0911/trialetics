@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { getUserProjects } from '@/lib/actions/projects';
 import { assignOrganizationToProject } from '@/lib/actions/organizations';
@@ -38,6 +39,8 @@ interface Project {
   protocol_number: string;
   protocol_name: string;
   protocol_status: string;
+  regions_required?: boolean;
+  countries?: Array<{ id: string; countryName: string }>;
 }
 
 interface ProjectAssignmentDialogProps {
@@ -70,6 +73,10 @@ export function ProjectAssignmentDialog({
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [selectedRole, setSelectedRole] = useState<string>('');
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
+  const [selectedRegionId, setSelectedRegionId] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [country, setCountry] = useState<string>('');
 
   useEffect(() => {
     if (open) {
@@ -106,7 +113,18 @@ export function ProjectAssignmentDialog({
     setSelectedProjectId('');
     setSelectedRole(entityType === 'organization' ? 'site' : 'coordinator');
     setSelectedOrgId('');
+    setSelectedRegionId('');
+    setStartDate(new Date().toISOString().split('T')[0]);
+    setEndDate('');
+    setCountry('');
   };
+
+  const selectedProject = projects.find((p) => p.id === selectedProjectId);
+  const showRegionSelector =
+    entityType === 'organization' &&
+    selectedRole === 'site' &&
+    selectedProject?.regions_required &&
+    (selectedProject?.countries?.length ?? 0) > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,17 +149,16 @@ export function ProjectAssignmentDialog({
 
     setIsSubmitting(true);
     try {
-      const startDate = new Date().toISOString().split('T')[0];
-
       let result;
       if (entityType === 'organization') {
         result = await assignOrganizationToProject({
           organization_id: entityId,
           protocol_id: selectedProjectId,
           role: selectedRole as OrganizationProjectRole,
+          region_id: showRegionSelector ? selectedRegionId : null,
           status: 'active',
-          start_date: startDate,
-          end_date: null,
+          start_date: startDate || null,
+          end_date: endDate || null,
         });
       } else {
         result = await assignContactToProject({
@@ -150,8 +167,9 @@ export function ProjectAssignmentDialog({
           organization_id: selectedOrgId || null,
           role: selectedRole as ContactProjectRole,
           status: 'active',
-          start_date: startDate,
-          end_date: null,
+          start_date: startDate || null,
+          end_date: endDate || null,
+          country: country || null,
         });
       }
 
@@ -208,7 +226,12 @@ export function ProjectAssignmentDialog({
               <Label htmlFor="project" className="text-xs">Project *</Label>
               <Select
                 value={selectedProjectId}
-                onValueChange={(v) => v && setSelectedProjectId(v)}
+                onValueChange={(v) => {
+                  if (v) {
+                    setSelectedProjectId(v);
+                    setSelectedRegionId('');
+                  }
+                }}
               >
                 <SelectTrigger className="text-xs md:text-xs w-full">
                   <span className="text-xs">
@@ -231,10 +254,15 @@ export function ProjectAssignmentDialog({
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="role" className="text-xs">Role *</Label>
+              <Label htmlFor="role" className="text-xs">Institution Type *</Label>
               <Select
                 value={selectedRole}
-                onValueChange={(v) => v && setSelectedRole(v)}
+                onValueChange={(v) => {
+                  if (v) {
+                    setSelectedRole(v);
+                    if (v !== 'site') setSelectedRegionId('');
+                  }
+                }}
               >
                 <SelectTrigger className="text-xs md:text-xs w-full">
                   <span className="text-xs capitalize">
@@ -251,6 +279,70 @@ export function ProjectAssignmentDialog({
               </Select>
             </div>
 
+            {showRegionSelector && (
+              <div className="space-y-1">
+                <Label htmlFor="region" className="text-xs">Region *</Label>
+                <Select
+                  value={selectedRegionId}
+                  onValueChange={(v) => v && setSelectedRegionId(v)}
+                >
+                  <SelectTrigger className="text-xs md:text-xs w-full">
+                    <span className="text-xs">
+                      {selectedRegionId
+                        ? selectedProject?.countries?.find((c) => c.id === selectedRegionId)?.countryName ?? 'Select region'
+                        : 'Select region'}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {selectedProject?.countries?.map((region) => (
+                      <SelectItem key={region.id} value={region.id} className="text-xs">
+                        {region.countryName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Start/End Date fields */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="start_date" className="text-xs">Start Date</Label>
+                <Input
+                  id="start_date"
+                  type="date"
+                  className="text-xs h-8"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="end_date" className="text-xs">End Date</Label>
+                <Input
+                  id="end_date"
+                  type="date"
+                  className="text-xs h-8"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Country field for contact assignments */}
+            {entityType === 'contact' && (
+              <div className="space-y-1">
+                <Label htmlFor="country" className="text-xs">Country</Label>
+                <Input
+                  id="country"
+                  type="text"
+                  className="text-xs h-8"
+                  placeholder="e.g. United States"
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                />
+              </div>
+            )}
+
             <DialogFooter>
               <Button
                 type="button"
@@ -263,7 +355,7 @@ export function ProjectAssignmentDialog({
               </Button>
               <Button 
                 type="submit" 
-                disabled={isSubmitting || !selectedProjectId || !selectedRole} 
+                disabled={isSubmitting || !selectedProjectId || !selectedRole || (showRegionSelector && !selectedRegionId)} 
                 className="text-xs"
               >
                 {isSubmitting ? (

@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { getClinicalPrograms } from '@/lib/actions/clinical-programs';
 import {
   Dialog,
   DialogContent,
@@ -21,7 +22,6 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -32,19 +32,23 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { createClinicalProtocol, updateClinicalProtocol } from '@/lib/actions/clinical-protocols';
-import { getAllClinicalPrograms } from '@/lib/actions/clinical-programs';
 import {
   PROTOCOL_STATUS_LABELS,
   PROTOCOL_PHASE_LABELS,
   PROTOCOL_DESIGN_LABELS,
 } from '@/lib/types/clinical-trials';
 import type {
+  ClinicalProtocol,
   ClinicalProtocolWithRelations,
-  ClinicalProgram,
 } from '@/lib/types/clinical-trials';
 
+const PROTOCOL_TYPE_LABELS: Record<string, string> = {
+  production: 'Production',
+  test: 'Test',
+};
+
 const protocolSchema = z.object({
-  protocol_number: z.string().min(1, 'Protocol number is required'),
+  protocol_number: z.string().min(1, 'Project number is required'),
   title: z.string().min(1, 'Title is required'),
   program_id: z.string().optional(),
   phase: z.enum(['phase_i', 'phase_ii', 'phase_iii', 'phase_iv', 'observational', 'early_feasibility_study', 'first_in_human', 'pilot_stage', 'pivotal', 'post_market']).optional(),
@@ -53,8 +57,14 @@ const protocolSchema = z.object({
   regions_required: z.boolean(),
   objective: z.string().optional(),
   sponsor: z.string().optional(),
+  sponsor_organization_id: z.string().optional(),
+  planned_start_date: z.string().optional(),
+  planned_end_date: z.string().optional(),
   planned_sites_count: z.coerce.number().optional(),
   planned_subjects_count: z.coerce.number().optional(),
+  test_article: z.string().optional(),
+  therapeutic_group: z.string().optional(),
+  type: z.enum(['production', 'test']).optional(),
 });
 
 type ProtocolFormData = z.infer<typeof protocolSchema>;
@@ -66,7 +76,7 @@ interface ProtocolFormDialogProps {
   profileId: string;
   email: string;
   protocol?: ClinicalProtocolWithRelations | null;
-  onSuccess: () => void;
+  onSuccess: (updated?: ClinicalProtocol) => void;
 }
 
 export function ProtocolFormDialog({
@@ -80,7 +90,20 @@ export function ProtocolFormDialog({
 }: ProtocolFormDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [programs, setPrograms] = useState<ClinicalProgram[]>([]);
+  const [programs, setPrograms] = useState<{ id: string; name: string }[]>([]);
+
+  const loadPrograms = useCallback(async () => {
+    const result = await getClinicalPrograms(companyId, { pageSize: 100 });
+    if (result.success && result.data) {
+      setPrograms(result.data.programs.map((p) => ({ id: p.id, name: p.name })));
+    }
+  }, [companyId]);
+
+  useEffect(() => {
+    if (open) {
+      loadPrograms();
+    }
+  }, [open, loadPrograms]);
 
   const form = useForm<ProtocolFormData>({
     resolver: zodResolver(protocolSchema),
@@ -91,23 +114,26 @@ export function ProtocolFormDialog({
       phase: undefined,
       status: 'planned',
       design: undefined,
-      regions_required: false,
+      regions_required: true,
       objective: '',
       sponsor: '',
+      sponsor_organization_id: '',
+      planned_start_date: '',
+      planned_end_date: '',
       planned_sites_count: undefined,
       planned_subjects_count: undefined,
+      test_article: '',
+      therapeutic_group: '',
+      type: undefined,
     },
   });
 
-  useEffect(() => {
-    const loadPrograms = async () => {
-      const result = await getAllClinicalPrograms(companyId);
-      if (result.success && result.data) {
-        setPrograms(result.data);
-      }
-    };
-    loadPrograms();
-  }, [companyId]);
+  // Normalize date to YYYY-MM-DD for date inputs (handles ISO strings from DB)
+  const toDateInput = (v: string | null | undefined): string => {
+    if (!v) return '';
+    const d = v.split('T')[0];
+    return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+  };
 
   useEffect(() => {
     if (protocol) {
@@ -118,11 +144,17 @@ export function ProtocolFormDialog({
         phase: protocol.phase || undefined,
         status: protocol.status,
         design: protocol.design || undefined,
-        regions_required: protocol.regions_required,
+        regions_required: true,
         objective: protocol.objective || '',
         sponsor: protocol.sponsor || '',
+        sponsor_organization_id: protocol.sponsor_organization_id || '',
+        planned_start_date: toDateInput(protocol.planned_start_date),
+        planned_end_date: toDateInput(protocol.planned_end_date),
         planned_sites_count: protocol.planned_sites_count ?? undefined,
         planned_subjects_count: protocol.planned_subjects_count ?? undefined,
+        test_article: protocol.test_article || '',
+        therapeutic_group: protocol.therapeutic_group || '',
+        type: (protocol.type === 'test' ? 'test' : 'production') as 'production' | 'test' | undefined,
       });
     } else {
       form.reset({
@@ -132,11 +164,17 @@ export function ProtocolFormDialog({
         phase: undefined,
         status: 'planned',
         design: undefined,
-        regions_required: false,
+        regions_required: true,
         objective: '',
         sponsor: '',
+        sponsor_organization_id: '',
+        planned_start_date: '',
+        planned_end_date: '',
         planned_sites_count: undefined,
         planned_subjects_count: undefined,
+        test_article: '',
+        therapeutic_group: '',
+        type: undefined,
       });
     }
   }, [protocol, form]);
@@ -145,20 +183,30 @@ export function ProtocolFormDialog({
     setIsSubmitting(true);
 
     try {
+      const submitData = {
+        ...data,
+        program_id: data.program_id?.trim() || null,
+        sponsor_organization_id: data.sponsor_organization_id?.trim() || null,
+        planned_start_date: data.planned_start_date?.trim() || null,
+        planned_end_date: data.planned_end_date?.trim() || null,
+        test_article: data.test_article?.trim() || null,
+        therapeutic_group: data.therapeutic_group?.trim() || null,
+        type: data.type || null,
+      };
       const result = protocol
-        ? await updateClinicalProtocol({ id: protocol.id, ...data })
-        : await createClinicalProtocol(companyId, profileId, email, data);
+        ? await updateClinicalProtocol({ id: protocol.id, ...submitData })
+        : await createClinicalProtocol(companyId, profileId, email, submitData);
 
       if (result.success) {
         toast({
           title: 'Success',
-          description: `Protocol ${protocol ? 'updated' : 'created'} successfully`,
+          description: `Project ${protocol ? 'updated' : 'created'} successfully`,
         });
-        onSuccess();
+        onSuccess(result.data);
       } else {
         toast({
           title: 'Error',
-          description: result.error || `Failed to ${protocol ? 'update' : 'create'} protocol`,
+          description: result.error || `Failed to ${protocol ? 'update' : 'create'} project`,
           variant: 'destructive',
         });
       }
@@ -177,11 +225,11 @@ export function ProtocolFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{protocol ? 'Edit Protocol' : 'Create Protocol'}</DialogTitle>
+          <DialogTitle>{protocol ? 'Edit Project' : 'Create Project'}</DialogTitle>
           <DialogDescription>
             {protocol
-              ? 'Update the clinical protocol information'
-              : 'Create a new clinical protocol'}
+              ? 'Update the clinical project information'
+              : 'Create a new clinical project'}
           </DialogDescription>
         </DialogHeader>
 
@@ -194,7 +242,7 @@ export function ProtocolFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-xs">
-                      Protocol Number <span className="text-destructive">*</span>
+                      Project Number <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
                       <Input {...field} className="h-8 text-xs" placeholder="e.g., PROT-001" />
@@ -209,25 +257,21 @@ export function ProtocolFormDialog({
                 name="program_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs">Program</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <FormLabel className="text-xs">Project Group</FormLabel>
+                    <Select
+                      onValueChange={(v) => field.onChange(v === '__none__' ? '' : v)}
+                      value={field.value && field.value !== '' ? field.value : '__none__'}
+                    >
                       <FormControl>
                         <SelectTrigger className="h-8 text-xs">
-                          <SelectValue 
-                            placeholder="Select program (optional)"
-                            getDisplayLabel={(value) => {
-                              if (!value || value === '') return null;
-                              const program = programs.find(p => p.id === value);
-                              return program ? program.name : null;
-                            }}
-                          />
+                          <SelectValue placeholder="Select project group" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="" className="text-xs">None</SelectItem>
-                        {programs.map((program) => (
-                          <SelectItem key={program.id} value={program.id} className="text-xs">
-                            {program.name}
+                        <SelectItem value="__none__" className="text-xs">None</SelectItem>
+                        {programs.map((p) => (
+                          <SelectItem key={p.id} value={p.id} className="text-xs">
+                            {p.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -247,7 +291,7 @@ export function ProtocolFormDialog({
                     Title <span className="text-destructive">*</span>
                   </FormLabel>
                   <FormControl>
-                    <Input {...field} className="h-8 text-xs" placeholder="Enter protocol title" />
+                    <Input {...field} className="h-8 text-xs" placeholder="Enter project title" />
                   </FormControl>
                   <FormMessage className="text-xs" />
                 </FormItem>
@@ -261,7 +305,7 @@ export function ProtocolFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-xs">Phase</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
                       <FormControl>
                         <SelectTrigger className="h-8 text-xs">
                           <SelectValue 
@@ -319,7 +363,7 @@ export function ProtocolFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-xs">Design</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value ?? ''}>
                       <FormControl>
                         <SelectTrigger className="h-8 text-xs">
                           <SelectValue 
@@ -337,45 +381,6 @@ export function ProtocolFormDialog({
                       </SelectContent>
                     </Select>
                     <FormMessage className="text-xs" />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="sponsor"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-xs">Sponsor</FormLabel>
-                    <FormControl>
-                      <Input {...field} className="h-8 text-xs" placeholder="Enter sponsor" />
-                    </FormControl>
-                    <FormMessage className="text-xs" />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="regions_required"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-start space-x-2 space-y-0 rounded-md border p-3">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                      <FormLabel className="text-xs">
-                        Regions Required
-                      </FormLabel>
-                      <p className="text-[10px] text-muted-foreground">
-                        Sites must belong to a region
-                      </p>
-                    </div>
                   </FormItem>
                 )}
               />
@@ -425,6 +430,104 @@ export function ProtocolFormDialog({
               />
             </div>
 
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="planned_start_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Planned Start</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="date"
+                        className="h-8 text-xs"
+                        value={field.value ?? ''}
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="planned_end_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Planned End</FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="date"
+                        className="h-8 text-xs"
+                        value={field.value ?? ''}
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="test_article"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Test Article</FormLabel>
+                    <FormControl>
+                      <Input {...field} className="h-8 text-xs" placeholder="Test article" />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="therapeutic_group"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs">Therapeutic Group</FormLabel>
+                    <FormControl>
+                      <Input {...field} className="h-8 text-xs" placeholder="Therapeutic group" />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-xs">Type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                    <FormControl>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue
+                          placeholder="Select type"
+                          getDisplayLabel={(value) => value ? PROTOCOL_TYPE_LABELS[value] : null}
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {Object.entries(PROTOCOL_TYPE_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value} className="text-xs">
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage className="text-xs" />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="objective"
@@ -435,7 +538,7 @@ export function ProtocolFormDialog({
                     <Textarea
                       {...field}
                       className="min-h-[80px] text-xs"
-                      placeholder="Enter protocol objective"
+                      placeholder="Enter project objective"
                     />
                   </FormControl>
                   <FormMessage className="text-xs" />
