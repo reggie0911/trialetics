@@ -22,78 +22,15 @@ function TabsList({
   className,
   ...props
 }: React.ComponentProps<typeof TabsPrimitive.List>) {
-  const [activeRect, setActiveRect] = React.useState<{
-    width: number;
-    left: number;
-  } | null>(null);
-  const listRef = React.useRef<HTMLDivElement>(null);
-
-  React.useEffect(() => {
-    const updateActiveRect = () => {
-      if (!listRef.current) return;
-
-      const activeTab = listRef.current.querySelector('[data-state="active"]');
-      if (activeTab) {
-        const listRect = listRef.current.getBoundingClientRect();
-        const activeTabRect = activeTab.getBoundingClientRect();
-
-        setActiveRect({
-          width: activeTabRect.width,
-          left: activeTabRect.left - listRect.left,
-        });
-      }
-    };
-
-    // Defer initial measurement so Radix has time to set data-state="active"
-    let timeoutId: ReturnType<typeof setTimeout>;
-    const rafId = requestAnimationFrame(() => {
-      updateActiveRect();
-      // Retry once after a short delay in case Radix applies state asynchronously
-      timeoutId = setTimeout(updateActiveRect, 50);
-    });
-
-    // Create a MutationObserver to watch for state changes
-    const observer = new MutationObserver(updateActiveRect);
-    const list = listRef.current;
-    if (list) {
-      observer.observe(list, {
-        attributes: true,
-        subtree: true,
-        attributeFilter: ['data-state'],
-      });
-    }
-
-    return () => {
-      cancelAnimationFrame(rafId);
-      clearTimeout(timeoutId!);
-      observer.disconnect();
-    };
-  }, []);
-
   return (
     <TabsPrimitive.List
-      ref={listRef}
       data-slot="tabs-list"
       className={cn(
         'bg-muted/50 text-muted-foreground relative inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]',
         className,
       )}
       {...props}
-    >
-      {/* Sliding gradient background */}
-      {activeRect && (
-        <div
-          className="from-chart-1 via-chart-2 to-chart-3 absolute z-0 top-[3px] h-[calc(100%-6px)] rounded-sm bg-gradient-to-tr p-[1px] transition-all duration-200 ease-out"
-          style={{
-            width: activeRect.width,
-            left: activeRect.left,
-          }}
-        >
-          <div className="bg-background h-full w-full rounded-sm" />
-        </div>
-      )}
-      {props.children}
-    </TabsPrimitive.List>
+    />
   );
 }
 

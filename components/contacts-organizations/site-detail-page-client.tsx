@@ -138,7 +138,7 @@ export function SiteDetailPageClient({
   organization: initialOrg,
   activities: initialActivities,
   notes: initialNotes,
-  clinicalTrials = { clinical_sites: [], protocol_assignments: [], protocol_accounts: [] },
+  clinicalTrials = { clinical_sites: [], protocol_assignments: [] },
   statusHistory = [],
   siteVisits = [],
   siteContracts = [],
@@ -234,7 +234,9 @@ export function SiteDetailPageClient({
 
   const primaryAddress = initialOrg.addresses?.find((addr) => addr.address_type === 'primary');
   
-  // Get the first project (assuming site-project relationship)
+  // Get the first clinical site for milestone data (single source of truth)
+  const siteClinicalSite = clinicalTrials.clinical_sites[0] as any;
+  // Keep siteProject for protocol assignment info
   const siteProject = initialOrg.projects?.[0];
   
   const isActiveSiteContact = (oc: OrganizationContactWithContact) =>
@@ -585,22 +587,22 @@ export function SiteDetailPageClient({
                     <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
                     <div className="flex-1">
                       <span className="text-muted-foreground">Local IRB: </span>
-                      <span className="font-medium">{siteProject?.irb_institution_name || 'N/A'}</span>
+                      <span className="font-medium">{siteClinicalSite?.irb_institution_name || 'N/A'}</span>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
                     <div className="flex-1">
                       <span className="text-muted-foreground">Central IRB: </span>
-                      <span className="font-medium">{siteProject?.central_irb_name || 'N/A'}</span>
+                      <span className="font-medium">{siteClinicalSite?.central_irb_name || 'N/A'}</span>
                     </div>
                   </div>
-                  {siteProject?.irb_approval_number && (
+                  {siteClinicalSite?.irb_approval_number && (
                     <div className="flex items-start gap-2">
                       <FileText className="h-4 w-4 text-muted-foreground mt-0.5" />
                       <div className="flex-1">
                         <span className="text-muted-foreground">IRB Approval Number: </span>
-                        <span className="font-medium">{siteProject.irb_approval_number}</span>
+                        <span className="font-medium">{siteClinicalSite.irb_approval_number}</span>
                       </div>
                     </div>
                   )}
@@ -614,11 +616,45 @@ export function SiteDetailPageClient({
             <ActivityTimeline activities={initialActivities} />
           </div>
 
+          {/* Associated Protocols Card - spans 2 columns */}
+          <Card className="col-span-2 row-span-1">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-xs md:text-xs font-medium flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Associated Protocols
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-xs md:text-xs">
+              {initialOrg.projects && initialOrg.projects.length > 0 ? (
+                <div className="space-y-2">
+                  {initialOrg.projects.map((op) => (
+                    <div key={op.id} className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{op.protocol.title}</p>
+                        <p className="text-muted-foreground">
+                          {op.protocol.protocol_number}
+                          {op.protocol.status && (
+                            <span> &middot; <span className="capitalize">{op.protocol.status.replace(/_/g, ' ')}</span></span>
+                          )}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] ml-2 shrink-0 capitalize">
+                        {op.role?.replace(/_/g, ' ') || 'assigned'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-muted-foreground py-4 text-center">No protocols associated with this site.</p>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Site Milestones Card - spans 2 columns */}
           <Card className="col-span-2 row-span-1">
             <CardHeader className="pb-3 flex flex-row items-center justify-between gap-4">
               <CardTitle className="text-xs md:text-xs font-medium">Site Milestones</CardTitle>
-              {siteProject && (
+              {siteClinicalSite && (
                 <Tooltip>
                   <TooltipTrigger
                     render={
@@ -638,7 +674,7 @@ export function SiteDetailPageClient({
               )}
             </CardHeader>
             <CardContent className="text-xs md:text-xs">
-              {!siteProject ? (
+              {!siteClinicalSite ? (
                 <div className="flex flex-col items-center justify-center py-8 px-4 text-center rounded-lg border border-dashed border-muted-foreground/30 bg-muted/30">
                   <Link2 className="h-10 w-10 text-muted-foreground/70 mb-4" />
                   <h3 className="font-medium text-foreground mb-1">No protocol linked</h3>
@@ -659,56 +695,56 @@ export function SiteDetailPageClient({
                     <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div className="min-w-0">
                       <span className="text-muted-foreground">Site Qualification Date: </span>
-                      <span className="font-medium">{formatDate(siteProject?.site_qualification_date)}</span>
+                      <span className="font-medium">{formatDate(siteClinicalSite?.site_qualification_date)}</span>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div className="min-w-0">
                       <span className="text-muted-foreground">First Subject Enrolled Date: </span>
-                      <span className="font-medium">{formatDate(siteProject?.first_subject_enrolled_date)}</span>
+                      <span className="font-medium">{formatDate(siteClinicalSite?.first_subject_enrolled_date)}</span>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div className="min-w-0">
                       <span className="text-muted-foreground">Subject Screen Failure Count: </span>
-                      <span className="font-medium">{siteProject?.screen_failure_count ?? 0}</span>
+                      <span className="font-medium">{siteClinicalSite?.screen_failure_count ?? 0}</span>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div className="min-w-0">
                       <span className="text-muted-foreground">Subject Enrolled Count: </span>
-                      <span className="font-medium">{siteProject?.enrolled_subject_count ?? 0}</span>
+                      <span className="font-medium">{siteClinicalSite?.enrolled_subject_count ?? 0}</span>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div className="min-w-0">
                       <span className="text-muted-foreground">First Completed Visit Date: </span>
-                      <span className="font-medium">{formatDate(siteProject?.first_subject_enrolled_date)}</span>
+                      <span className="font-medium">{formatDate(siteClinicalSite?.first_subject_enrolled_date)}</span>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div className="min-w-0">
                       <span className="text-muted-foreground">Last Completed Visit Date: </span>
-                      <span className="font-medium">{formatDate(siteProject?.last_completed_visit_date)}</span>
+                      <span className="font-medium">{formatDate(siteClinicalSite?.last_completed_visit_date)}</span>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div className="min-w-0">
                       <span className="text-muted-foreground">Last Subject Off Study: </span>
-                      <span className="font-medium">{formatDate(siteProject?.last_subject_enrolled_date)}</span>
+                      <span className="font-medium">{formatDate(siteClinicalSite?.last_subject_enrolled_date)}</span>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                     <div className="min-w-0">
                       <span className="text-muted-foreground">Close-Out Date: </span>
-                      <span className="font-medium">{formatDate(siteProject?.close_out_date)}</span>
+                      <span className="font-medium">{formatDate(siteClinicalSite?.close_out_date)}</span>
                     </div>
                   </div>
                 </div>
@@ -747,7 +783,7 @@ export function SiteDetailPageClient({
                       <div className="text-muted-foreground">
                         {oc.role && oc.role !== 'other'
                           ? (CONTACT_ROLE_LABELS[oc.role as keyof typeof CONTACT_ROLE_LABELS] || formatFieldName(oc.role))
-                          : (oc.contact?.title || CONTACT_ROLE_LABELS.other)}
+                          : ((oc.contact as any)?.displayTitle || oc.contact?.title || CONTACT_ROLE_LABELS.other)}
                       </div>
                     </div>
                     <Badge variant="default" className="text-xs bg-green-100 text-green-800 hover:bg-green-100 flex-shrink-0">
@@ -1285,8 +1321,8 @@ export function SiteDetailPageClient({
       <SiteMilestoneDialog
         open={showMilestoneDialog}
         onOpenChange={setShowMilestoneDialog}
-        organizationProjectId={siteProject?.id ?? ''}
-        milestones={siteProject ?? undefined}
+        clinicalSiteId={siteClinicalSite?.id ?? ''}
+        milestones={siteClinicalSite ?? undefined}
         onSuccess={handleMilestoneSuccess}
       />
 
@@ -1294,8 +1330,8 @@ export function SiteDetailPageClient({
       <SiteIrbDialog
         open={showIrbDialog}
         onOpenChange={setShowIrbDialog}
-        organizationProjectId={siteProject?.id ?? ''}
-        milestones={siteProject ?? undefined}
+        clinicalSiteId={siteClinicalSite?.id ?? ''}
+        milestones={siteClinicalSite ?? undefined}
         onSuccess={handleMilestoneSuccess}
       />
 

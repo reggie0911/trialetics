@@ -51,6 +51,12 @@ export interface ContactCSVRow {
   state?: string;
   postal_code?: string;
   country?: string;
+  // Social media
+  youtube_url?: string;
+  linkedin_url?: string;
+  x_url?: string;
+  facebook_url?: string;
+  substack_url?: string;
 }
 
 // Validated row with row number and errors
@@ -104,6 +110,11 @@ export interface DedupedContact {
   state?: string;
   postal_code?: string;
   country?: string;
+  youtube_url?: string;
+  linkedin_url?: string;
+  x_url?: string;
+  facebook_url?: string;
+  substack_url?: string;
   orgLinks: Array<{
     organization_name: string;
     organization_site_id?: string;

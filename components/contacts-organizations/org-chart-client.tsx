@@ -38,9 +38,9 @@ function OrgChartNode({ node }: { node: ContactForOrgChart }) {
             <span className="font-medium truncate block">
               {node.first_name} {node.last_name}
             </span>
-            {node.title && (
+            {((node as any).displayTitle || node.title) && (
               <span className="text-xs text-muted-foreground truncate block">
-                {node.title}
+                {(node as any).displayTitle || node.title}
               </span>
             )}
           </div>

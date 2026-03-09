@@ -32,10 +32,10 @@ export default async function ContactsOrganizationsPage() {
         <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-[32px] font-semibold mb-1 tracking-[-1px]">
-              Contacts & Organizations
+              Contacts & Institutions
             </h1>
             <p className="text-xs text-muted-foreground">
-              Manage organizations, sites, sponsors, and contact information for your clinical trials
+              Manage institutions, sites, sponsors, and contact information for your clinical trials
             </p>
           </div>
           <ModuleNavbar />

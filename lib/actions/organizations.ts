@@ -172,6 +172,125 @@ export async function getOrganizations(
 }
 
 // =============================================
+// GET UNASSIGNED SITES (sites with no project assignments)
+// =============================================
+
+export interface UnassignedSitesFilters {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export async function getUnassignedSites(
+  companyId: string,
+  filters: UnassignedSitesFilters = {}
+): Promise<ActionResponse<{ organizations: OrganizationWithRelations[]; total: number }>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { search, page = 1, pageSize = 25 } = filters;
+
+    // Get all site org IDs for the company
+    let siteQuery = supabase
+      .from('organizations')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('organization_type', 'site')
+      .order('name', { ascending: true });
+
+    if (search) {
+      siteQuery = siteQuery.or(`name.ilike.%${search}%,email.ilike.%${search}%`);
+    }
+
+    const { data: siteOrgs, error: siteError } = await siteQuery;
+
+    if (siteError) {
+      console.error('Error fetching site orgs:', siteError);
+      return { success: false, error: siteError.message };
+    }
+
+    const siteIds = (siteOrgs || []).map((o: { id: string }) => o.id);
+    if (siteIds.length === 0) {
+      return {
+        success: true,
+        data: { organizations: [], total: 0 },
+      };
+    }
+
+    // Get org IDs that have at least one organization_protocols row
+    const { data: assignedRows } = await supabase
+      .from('organization_protocols')
+      .select('organization_id')
+      .in('organization_id', siteIds);
+
+    const assignedIds = new Set((assignedRows || []).map((a: { organization_id: string }) => a.organization_id));
+    const unassignedIds = siteIds.filter((id) => !assignedIds.has(id));
+    const total = unassignedIds.length;
+
+    if (unassignedIds.length === 0) {
+      return {
+        success: true,
+        data: { organizations: [], total: 0 },
+      };
+    }
+
+    // Paginate unassigned IDs
+    const offset = (page - 1) * pageSize;
+    const paginatedIds = unassignedIds.slice(offset, offset + pageSize);
+
+    // Fetch full org data for paginated unassigned IDs
+    const { data: orgData, error: orgError } = await supabase
+      .from('organizations')
+      .select(`
+        *,
+        organization_contacts(id),
+        organization_protocols(id)
+      `)
+      .in('id', paginatedIds)
+      .order('name', { ascending: true });
+
+    if (orgError) {
+      console.error('Error fetching unassigned orgs:', orgError);
+      return { success: false, error: orgError.message };
+    }
+
+    // Fetch addresses
+    const orgIds = (orgData || []).map((org: any) => org.id);
+    const { data: addressesData } = await supabase
+      .from('addresses')
+      .select('*')
+      .eq('entity_type', 'organization')
+      .in('entity_id', orgIds);
+
+    const addressesByOrgId = (addressesData || []).reduce((acc: Record<string, any[]>, addr: any) => {
+      if (!acc[addr.entity_id]) acc[addr.entity_id] = [];
+      acc[addr.entity_id].push(addr);
+      return acc;
+    }, {});
+
+    const organizations = (orgData || []).map((org: any) => ({
+      ...org,
+      contacts_count: org.organization_contacts?.length || 0,
+      projects_count: 0,
+      addresses: addressesByOrgId[org.id] || [],
+    }));
+
+    return {
+      success: true,
+      data: { organizations, total },
+    };
+  } catch (error) {
+    console.error('Error in getUnassignedSites:', error);
+    return { success: false, error: 'Failed to fetch unassigned sites' };
+  }
+}
+
+// =============================================
 // GET SINGLE ORGANIZATION (with relations)
 // =============================================
 
@@ -579,12 +698,51 @@ export async function assignOrganizationToProject(
       return { success: false, error: 'User not authenticated' };
     }
 
+    // Fetch protocol to validate region_id when regions_required
+    const { data: protocol, error: protocolError } = await supabase
+      .from('clinical_protocols')
+      .select('id, regions_required')
+      .eq('id', data.protocol_id)
+      .single();
+
+    if (protocolError || !protocol) {
+      return { success: false, error: 'Protocol not found' };
+    }
+
+    const isSiteRole = data.role === 'site';
+    if (isSiteRole && protocol.regions_required && !data.region_id) {
+      return {
+        success: false,
+        error: 'This protocol requires regions. Please select a region when assigning a site.',
+      };
+    }
+    if (isSiteRole && !protocol.regions_required && data.region_id) {
+      return {
+        success: false,
+        error: 'This protocol does not use regions. Do not select a region for site assignment.',
+      };
+    }
+
+    // Validate region belongs to protocol when provided
+    if (data.region_id) {
+      const { data: region, error: regionError } = await supabase
+        .from('clinical_regions')
+        .select('id, protocol_id')
+        .eq('id', data.region_id)
+        .eq('protocol_id', data.protocol_id)
+        .single();
+      if (regionError || !region) {
+        return { success: false, error: 'Invalid region for this protocol' };
+      }
+    }
+
     const { error } = await supabase
       .from('organization_protocols')
       .upsert({
         organization_id: data.organization_id,
         protocol_id: data.protocol_id,
         role: data.role,
+        region_id: data.region_id || null,
         start_date: data.start_date || null,
         end_date: data.end_date || null,
         status: 'active',
@@ -597,7 +755,38 @@ export async function assignOrganizationToProject(
       return { success: false, error: error.message };
     }
 
+    // Auto-link: if this is a site-type organization, create/update clinical_sites
+    // so it appears in the CTMS Sites tab and Regions tab.
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('organization_type, site_id, company_id')
+      .eq('id', data.organization_id)
+      .single();
+
+    if (org?.organization_type === 'site' && protocol) {
+      const siteData = {
+        company_id: org.company_id,
+        protocol_id: data.protocol_id,
+        organization_id: data.organization_id,
+        region_id: protocol.regions_required ? data.region_id : null,
+        site_number: org.site_id ?? null,
+        status: 'planned',
+        sdv_policy: 'complete',
+        no_subject_info: false,
+      };
+      const { error: siteError } = await supabase
+        .from('clinical_sites')
+        .upsert(siteData, {
+          onConflict: 'protocol_id,organization_id',
+        });
+      if (siteError) {
+        console.error('Error creating/updating clinical site:', siteError);
+        return { success: false, error: siteError.message };
+      }
+    }
+
     revalidatePath('/protected/contacts-organizations');
+    revalidatePath('/protected/clinical-trials');
     return { success: true, data: null };
   } catch (error) {
     console.error('Error in assignOrganizationToProject:', error);
@@ -620,6 +809,17 @@ export async function removeOrganizationFromProject(
       return { success: false, error: 'User not authenticated' };
     }
 
+    // Fetch relationship to get org/protocol before delete (for clinical_sites cleanup)
+    const { data: rel, error: fetchError } = await supabase
+      .from('organization_protocols')
+      .select('organization_id, protocol_id, role')
+      .eq('id', relationshipId)
+      .single();
+
+    if (fetchError || !rel) {
+      return { success: false, error: 'Assignment not found' };
+    }
+
     const { error } = await supabase
       .from('organization_protocols')
       .delete()
@@ -630,7 +830,24 @@ export async function removeOrganizationFromProject(
       return { success: false, error: error.message };
     }
 
+    // Sync: remove clinical_sites when site org is removed from protocol
+    if (rel.role === 'site') {
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('organization_type')
+        .eq('id', rel.organization_id)
+        .single();
+      if (org?.organization_type === 'site') {
+        await supabase
+          .from('clinical_sites')
+          .delete()
+          .eq('protocol_id', rel.protocol_id)
+          .eq('organization_id', rel.organization_id);
+      }
+    }
+
     revalidatePath('/protected/contacts-organizations');
+    revalidatePath('/protected/clinical-trials');
     return { success: true, data: null };
   } catch (error) {
     console.error('Error in removeOrganizationFromProject:', error);
@@ -826,13 +1043,49 @@ export async function getAllOrganizations(
 }
 
 // =============================================
-// UPDATE SITE MILESTONES
+// GET PROTOCOL INSTITUTIONS (Study Institutions view)
+// =============================================
+
+export async function getProtocolInstitutions(
+  protocolId: string
+): Promise<ActionResponse<any[]>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { data, error } = await supabase
+      .from('organization_protocols')
+      .select(`
+        *,
+        organization:organizations(id, name, organization_type, status)
+      `)
+      .eq('protocol_id', protocolId)
+      .order('role', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching protocol institutions:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data || [] };
+  } catch (error) {
+    console.error('Error in getProtocolInstitutions:', error);
+    return { success: false, error: 'Failed to fetch protocol institutions' };
+  }
+}
+
+// =============================================
+// UPDATE SITE MILESTONES (writes to clinical_sites)
 // =============================================
 
 export async function updateSiteMilestones(
-  organizationProjectId: string,
+  clinicalSiteId: string,
   data: import('@/lib/types/contacts-organizations').UpdateSiteMilestonesData
-): Promise<ActionResponse<import('@/lib/types/contacts-organizations').OrganizationProject>> {
+): Promise<ActionResponse<any>> {
   try {
     const supabase = await createClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -842,9 +1095,9 @@ export async function updateSiteMilestones(
     }
 
     const { data: updated, error } = await supabase
-      .from('organization_protocols')
+      .from('clinical_sites')
       .update({
-        site_initiation_date: data.site_initiation_date,
+        site_initiated_date: data.site_initiated_date,
         site_qualification_date: data.site_qualification_date,
         irb_approval_date: data.irb_approval_date,
         irb_expiration_date: data.irb_expiration_date,
@@ -860,7 +1113,7 @@ export async function updateSiteMilestones(
         screen_failure_count: data.screen_failure_count,
         completed_subject_count: data.completed_subject_count,
       })
-      .eq('id', organizationProjectId)
+      .eq('id', clinicalSiteId)
       .select()
       .single();
 
@@ -870,6 +1123,7 @@ export async function updateSiteMilestones(
     }
 
     revalidatePath('/protected/contacts-organizations');
+    revalidatePath('/protected/clinical-trials');
     return { success: true, data: updated };
   } catch (error) {
     console.error('Error in updateSiteMilestones:', error);
@@ -885,6 +1139,17 @@ export async function addOrganizationAddress(
 ): Promise<ActionResponse<Address>> {
   try {
     const supabase = await createClient();
+
+    // If setting as primary, unset other primaries first
+    if (data.is_primary) {
+      await supabase
+        .from('addresses')
+        .update({ is_primary: false })
+        .eq('entity_type', 'organization')
+        .eq('entity_id', organizationId)
+        .eq('is_primary', true);
+    }
+
     const { data: inserted, error } = await supabase
       .from('addresses')
       .insert({
@@ -922,18 +1187,43 @@ export async function updateOrganizationAddress(
 ): Promise<ActionResponse<Address>> {
   try {
     const supabase = await createClient();
+
+    // If setting as primary, fetch entity info and unset other primaries first
+    if (data.is_primary) {
+      const { data: existingAddress } = await supabase
+        .from('addresses')
+        .select('entity_type, entity_id')
+        .eq('id', addressId)
+        .single();
+
+      if (existingAddress) {
+        await supabase
+          .from('addresses')
+          .update({ is_primary: false })
+          .eq('entity_type', existingAddress.entity_type)
+          .eq('entity_id', existingAddress.entity_id)
+          .eq('is_primary', true)
+          .neq('id', addressId);
+      }
+    }
+
+    const updatePayload: Record<string, unknown> = {
+      address_type: data.address_type,
+      street_1: data.street_1,
+      street_2: data.street_2,
+      city: data.city,
+      state: data.state,
+      postal_code: data.postal_code,
+      country: data.country,
+      notes: data.notes ?? null,
+    };
+    if (data.is_primary !== undefined) {
+      updatePayload.is_primary = data.is_primary;
+    }
+
     const { data: updated, error } = await supabase
       .from('addresses')
-      .update({
-        address_type: data.address_type,
-        street_1: data.street_1,
-        street_2: data.street_2,
-        city: data.city,
-        state: data.state,
-        postal_code: data.postal_code,
-        country: data.country,
-        notes: data.notes ?? null,
-      })
+      .update(updatePayload)
       .eq('id', addressId)
       .select()
       .single();
@@ -974,3 +1264,27 @@ export async function deleteOrganizationAddress(
   }
 }
 
+// =============================================
+// CHECK FOR DUPLICATE ORGANIZATIONS
+// =============================================
+
+export async function checkDuplicateOrganizations(
+  companyId: string,
+  name: string
+): Promise<ActionResponse<{ duplicates: Array<{ id: string; name: string; type: string | null }> }>> {
+  try {
+    const supabase = await createClient();
+
+    const { data } = await supabase
+      .from('organizations')
+      .select('id, name, type')
+      .eq('company_id', companyId)
+      .ilike('name', `%${name.trim()}%`)
+      .limit(5);
+
+    return { success: true, data: { duplicates: data || [] } };
+  } catch (error) {
+    console.error('Error checking duplicate organizations:', error);
+    return { success: false, error: 'Failed to check duplicates' };
+  }
+}

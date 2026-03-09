@@ -39,7 +39,7 @@ export function RegionsTab({ companyId, onDataChange }: RegionsTabProps) {
     } else {
       toast({
         title: 'Error',
-        description: result.error || 'Failed to load regions',
+        description: result.error || 'Failed to load countries',
         variant: 'destructive',
       });
     }
@@ -68,7 +68,7 @@ export function RegionsTab({ companyId, onDataChange }: RegionsTabProps) {
         <div className="relative flex-1">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search regions..."
+            placeholder="Search countries..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-8 pl-8 text-xs"
@@ -80,7 +80,7 @@ export function RegionsTab({ companyId, onDataChange }: RegionsTabProps) {
           className="h-8 text-xs"
         >
           <Plus className="mr-1 h-3 w-3" />
-          Add Region
+          Add Country
         </Button>
       </div>
 

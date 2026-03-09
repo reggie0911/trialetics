@@ -155,8 +155,8 @@ export function ContactDetailSheet({
               )}
             </SheetTitle>
             <SheetDescription className="mt-2 flex items-center gap-2">
-              {initialContact.title && (
-                <span className="text-xs">{initialContact.title}</span>
+              {((initialContact as any).displayTitle || initialContact.title) && (
+                <span className="text-xs">{(initialContact as any).displayTitle || initialContact.title}</span>
               )}
               <Badge
                 variant={initialContact.status === 'active' ? 'default' : 'secondary'}

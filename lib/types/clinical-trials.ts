@@ -4,6 +4,8 @@
 // Phase 2: Teams, Accounts, Protocol Versions
 // =============================================
 
+import type { Organization } from './contacts-organizations';
+
 // =============================================
 // ENUM Types
 // =============================================
@@ -95,6 +97,7 @@ export interface ClinicalProgram {
   application_id: string | null;
   status: ProtocolStatus;
   description: string | null;
+  program_manager_contact_id: string | null;
   metadata: Record<string, unknown>;
   created_by_id: string | null;
   creator_email: string | null;
@@ -114,6 +117,7 @@ export interface ClinicalProtocol {
   design: ProtocolDesign | null;
   type: string | null;
   sponsor: string | null;
+  sponsor_organization_id: string | null;
   status: ProtocolStatus;
   regions_required: boolean;
   planned_start_date: string | null;
@@ -122,6 +126,8 @@ export interface ClinicalProtocol {
   actual_end_date: string | null;
   planned_sites_count: number | null;
   planned_subjects_count: number | null;
+  test_article: string | null;
+  therapeutic_group: string | null;
   currency_code: string;
   actual_cost: number | null;
   budgeted_cost: number | null;
@@ -146,6 +152,8 @@ export interface ClinicalRegion {
   region_name: string;
   planned_sites_count: number | null;
   planned_subjects_count: number | null;
+  planned_start_date: string | null;
+  planned_end_date: string | null;
   no_site_info: boolean;
   currency_code: string;
   exchange_date: string | null;
@@ -206,6 +214,12 @@ export interface ClinicalSite {
 export interface ClinicalProgramWithRelations extends ClinicalProgram {
   protocols?: ClinicalProtocol[];
   protocols_count?: number;
+  program_manager?: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string | null;
+  } | null;
 }
 
 export interface ClinicalProtocolWithRelations extends ClinicalProtocol {
@@ -214,6 +228,10 @@ export interface ClinicalProtocolWithRelations extends ClinicalProtocol {
   sites?: ClinicalSiteWithRelations[];
   regions_count?: number;
   sites_count?: number;
+  sponsor_organization?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 export interface ClinicalRegionWithRelations extends ClinicalRegion {
@@ -225,11 +243,8 @@ export interface ClinicalRegionWithRelations extends ClinicalRegion {
 export interface ClinicalSiteWithRelations extends ClinicalSite {
   protocol?: ClinicalProtocol;
   region?: ClinicalRegion | null;
-  organization?: {
-    id: string;
-    name: string;
-    organization_type: string;
-  } | null;
+  organization?: Organization | null;
+  country_region?: string | null;
   principal_investigator?: {
     id: string;
     first_name: string;
@@ -248,6 +263,7 @@ export interface CreateClinicalProgramData {
   application_id?: string | null;
   status?: ProtocolStatus;
   description?: string | null;
+  program_manager_contact_id?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -265,6 +281,7 @@ export interface CreateClinicalProtocolData {
   design?: ProtocolDesign | null;
   type?: string | null;
   sponsor?: string | null;
+  sponsor_organization_id?: string | null;
   status?: ProtocolStatus;
   regions_required?: boolean;
   planned_start_date?: string | null;
@@ -273,6 +290,8 @@ export interface CreateClinicalProtocolData {
   actual_end_date?: string | null;
   planned_sites_count?: number | null;
   planned_subjects_count?: number | null;
+  test_article?: string | null;
+  therapeutic_group?: string | null;
   currency_code?: string;
   actual_cost?: number | null;
   budgeted_cost?: number | null;
@@ -295,6 +314,8 @@ export interface CreateClinicalRegionData {
   region_name: string;
   planned_sites_count?: number | null;
   planned_subjects_count?: number | null;
+  planned_start_date?: string | null;
+  planned_end_date?: string | null;
   no_site_info?: boolean;
   currency_code?: string;
   exchange_date?: string | null;
@@ -354,6 +375,7 @@ export interface ClinicalProgramFilters {
 export interface ClinicalProtocolFilters {
   search?: string;
   program_id?: string;
+  protocol_id?: string;
   phase?: ProtocolPhase | 'all';
   status?: ProtocolStatus | 'all';
   regions_required?: boolean | 'all';
@@ -384,13 +406,13 @@ export interface ClinicalSiteFilters {
 
 export interface ClinicalTrialsStats {
   total_programs: number;
-  total_protocols: number;
+  total_protocols?: number;
+  active_protocols?: number;
   total_regions: number;
   total_sites: number;
-  active_protocols: number;
   enrolling_sites: number;
-  protocols_by_phase: Record<string, number>;
-  protocols_by_status: Record<string, number>;
+  total_subjects: number;
+  enrolled_subjects: number;
   sites_by_status: Record<string, number>;
 }
 
@@ -907,16 +929,17 @@ export interface TeamAssignmentHistory {
   created_at: string;
 }
 
+/** Now stored in organization_protocols with account_type column */
 export interface ProtocolAccount {
   id: string;
-  company_id: string;
   protocol_id: string;
   organization_id: string;
+  role: string;
   account_type: AccountType;
   is_central: boolean;
+  status: string;
   start_date: string | null;
   end_date: string | null;
-  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }

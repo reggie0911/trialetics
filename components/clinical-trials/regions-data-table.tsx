@@ -30,6 +30,12 @@ interface RegionsDataTableProps {
   companyId: string;
 }
 
+/** Returns the country or region name for display in the Country Name column */
+function getCountryNameDisplayLabel(region: ClinicalRegionWithRelations): string {
+  // region_name stores either a country name or a geographic region (e.g. Europe)
+  return region.region_name || '';
+}
+
 export function RegionsDataTable({
   regions,
   isLoading,
@@ -40,19 +46,19 @@ export function RegionsDataTable({
   const [trainingSheetRegion, setTrainingSheetRegion] = useState<ClinicalRegionWithRelations | null>(null);
 
   const handleDelete = async (regionId: string) => {
-    if (!confirm('Are you sure you want to delete this region? This will also delete all associated sites.')) return;
+    if (!confirm('Are you sure you want to delete this country? This will also delete all associated sites.')) return;
 
     const result = await deleteClinicalRegion(regionId);
     if (result.success) {
       toast({
         title: 'Success',
-        description: 'Region deleted successfully',
+        description: 'Country deleted successfully',
       });
       onRefresh();
     } else {
       toast({
         title: 'Error',
-        description: result.error || 'Failed to delete region',
+        description: result.error || 'Failed to delete country',
         variant: 'destructive',
       });
     }
@@ -65,7 +71,7 @@ export function RegionsDataTable({
   if (regions.length === 0) {
     return (
       <div className="text-center text-sm text-muted-foreground">
-        No regions found. Click "Add Region" to create one.
+        No countries found. Click "Add Country" to create one.
       </div>
     );
   }
@@ -76,8 +82,8 @@ export function RegionsDataTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-xs">Region Name</TableHead>
-            <TableHead className="text-xs">Protocol</TableHead>
+            <TableHead className="text-xs">Country Name</TableHead>
+            <TableHead className="text-xs">Project</TableHead>
             <TableHead className="text-xs">Sites</TableHead>
             <TableHead className="text-xs">Planned Sites</TableHead>
             <TableHead className="text-xs">Planned Subjects</TableHead>
@@ -87,7 +93,9 @@ export function RegionsDataTable({
         <TableBody>
           {regions.map((region) => (
             <TableRow key={region.id}>
-              <TableCell className="text-xs font-medium">{region.region_name}</TableCell>
+              <TableCell className="text-xs font-medium">
+                {getCountryNameDisplayLabel(region)}
+              </TableCell>
               <TableCell className="text-xs">
                 {region.protocol?.protocol_number || <span className="text-muted-foreground">—</span>}
               </TableCell>

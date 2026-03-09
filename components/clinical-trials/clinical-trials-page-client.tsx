@@ -3,11 +3,10 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Briefcase, FileText, Globe, Building2, Users } from 'lucide-react';
+import { FolderOpen, Globe, Building2, Users } from 'lucide-react';
 import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { getClinicalTrialsStats } from '@/lib/actions/clinical-trials-stats';
 import type { ClinicalTrialsStats } from '@/lib/types/clinical-trials';
-import { ProgramsTab } from './programs-tab';
 import { ProtocolsTab } from './protocols-tab';
 import { RegionsTab } from './regions-tab';
 import { SitesTab } from './sites-tab';
@@ -25,7 +24,7 @@ export function ClinicalTrialsPageClient({
   email,
 }: ClinicalTrialsPageClientProps) {
   const [stats, setStats] = useState<ClinicalTrialsStats | null>(null);
-  const [activeTab, setActiveTab] = useState('programs');
+  const [activeTab, setActiveTab] = useState('protocols');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -48,9 +47,9 @@ export function ClinicalTrialsPageClient({
       {/* Header with Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">Clinical Trials Management</h1>
+          <h1 className="text-2xl font-semibold">CTMS</h1>
           <p className="text-sm text-muted-foreground">
-            Manage programs, protocols, regions, sites, and subjects for clinical trials
+            Manage project groups, projects, countries, sites, and subjects
           </p>
         </div>
         <Suspense fallback={<div className="h-10" />}>
@@ -63,30 +62,7 @@ export function ClinicalTrialsPageClient({
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-medium">Total Programs</CardTitle>
-              <Briefcase className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.total_programs}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-medium">Total Protocols</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.total_protocols}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.active_protocols} active
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-medium">Total Regions</CardTitle>
+              <CardTitle className="text-xs font-medium">Total Countries</CardTitle>
               <Globe className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -106,6 +82,29 @@ export function ClinicalTrialsPageClient({
               </p>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-xs font-medium">Project Groups</CardTitle>
+              <FolderOpen className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.total_programs}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-xs font-medium">Total Subjects</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.total_subjects}</div>
+              <p className="text-xs text-muted-foreground">
+                {stats.enrolled_subjects} enrolled
+              </p>
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -114,15 +113,12 @@ export function ClinicalTrialsPageClient({
         {mounted ? (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
           <CardHeader>
-            <TabsList className="grid w-full max-w-2xl grid-cols-5">
-              <TabsTrigger value="programs" className="text-xs">
-                Programs
-              </TabsTrigger>
+            <TabsList className="grid w-full max-w-2xl grid-cols-4">
               <TabsTrigger value="protocols" className="text-xs">
-                Protocols
+                Projects
               </TabsTrigger>
               <TabsTrigger value="regions" className="text-xs">
-                Regions
+                Countries
               </TabsTrigger>
               <TabsTrigger value="sites" className="text-xs">
                 Sites
@@ -133,16 +129,6 @@ export function ClinicalTrialsPageClient({
             </TabsList>
           </CardHeader>
           <CardContent className="h-[calc(100%-5rem)] overflow-auto">
-            <TabsContent value="programs" className="mt-0 h-full">
-              {activeTab === 'programs' && (
-                <ProgramsTab
-                  companyId={companyId}
-                  profileId={profileId}
-                  email={email}
-                  onDataChange={loadStats}
-                />
-              )}
-            </TabsContent>
             <TabsContent value="protocols" className="mt-0 h-full">
               {activeTab === 'protocols' && (
                 <ProtocolsTab
@@ -165,6 +151,8 @@ export function ClinicalTrialsPageClient({
               {activeTab === 'sites' && (
                 <SitesTab
                   companyId={companyId}
+                  profileId={profileId}
+                  email={email}
                   onDataChange={loadStats}
                 />
               )}

@@ -15,20 +15,14 @@ export interface OrganizationProtocolAssignment {
   id: string;
   protocol_id: string;
   role: string;
-  protocol: { protocol_number: string; title: string };
-}
-
-export interface OrganizationProtocolAccount {
-  id: string;
-  protocol_id: string;
-  account_type: string;
+  account_type: string | null;
+  is_central: boolean;
   protocol: { protocol_number: string; title: string };
 }
 
 export interface OrganizationClinicalTrials {
   clinical_sites: OrganizationClinicalSite[];
   protocol_assignments: OrganizationProtocolAssignment[];
-  protocol_accounts: OrganizationProtocolAccount[];
 }
 
 export interface ActionResponse<T = unknown> {
@@ -40,8 +34,7 @@ export interface ActionResponse<T = unknown> {
 /**
  * Get all clinical trial associations for an organization:
  * - clinical_sites: sites where this org participates (as organization_id)
- * - protocol_assignments: from organization_protocols (explicit assignments)
- * - protocol_accounts: from protocol_accounts (partner roles: CRO, IRB, etc.)
+ * - protocol_assignments: from organization_protocols (all roles including former protocol_accounts)
  */
 export async function getOrganizationClinicalTrials(
   organizationId: string
@@ -49,7 +42,7 @@ export async function getOrganizationClinicalTrials(
   try {
     const supabase = await createClient();
 
-    const [sitesResult, assignmentsResult, accountsResult] = await Promise.all([
+    const [sitesResult, assignmentsResult] = await Promise.all([
       supabase
         .from('clinical_sites')
         .select(`
@@ -68,16 +61,8 @@ export async function getOrganizationClinicalTrials(
           id,
           protocol_id,
           role,
-          protocol:clinical_protocols(protocol_number, title)
-        `)
-        .eq('organization_id', organizationId)
-        .order('protocol_id'),
-      supabase
-        .from('protocol_accounts')
-        .select(`
-          id,
-          protocol_id,
           account_type,
+          is_central,
           protocol:clinical_protocols(protocol_number, title)
         `)
         .eq('organization_id', organizationId)
@@ -86,7 +71,6 @@ export async function getOrganizationClinicalTrials(
 
     if (sitesResult.error) return { success: false, error: sitesResult.error.message };
     if (assignmentsResult.error) return { success: false, error: assignmentsResult.error.message };
-    if (accountsResult.error) return { success: false, error: accountsResult.error.message };
 
     const normalizeProtocol = (p: unknown): { protocol_number: string; title: string } => {
       if (Array.isArray(p)) return (p[0] as { protocol_number: string; title: string }) ?? { protocol_number: '', title: '' };
@@ -111,13 +95,8 @@ export async function getOrganizationClinicalTrials(
       id: a.id,
       protocol_id: a.protocol_id,
       role: a.role,
-      protocol: normalizeProtocol(a.protocol),
-    }));
-
-    const protocol_accounts: OrganizationProtocolAccount[] = (accountsResult.data || []).map((a: any) => ({
-      id: a.id,
-      protocol_id: a.protocol_id,
-      account_type: a.account_type,
+      account_type: a.account_type ?? null,
+      is_central: a.is_central ?? false,
       protocol: normalizeProtocol(a.protocol),
     }));
 
@@ -126,7 +105,6 @@ export async function getOrganizationClinicalTrials(
       data: {
         clinical_sites,
         protocol_assignments,
-        protocol_accounts,
       },
     };
   } catch (e) {

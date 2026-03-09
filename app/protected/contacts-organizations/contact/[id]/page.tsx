@@ -4,6 +4,7 @@ import { ContactDetailPageClient } from '@/components/contacts-organizations/con
 import { createClient } from '@/lib/server';
 import { getContact } from '@/lib/actions/contacts';
 import { getContactActivity } from '@/lib/utils/activity-logger';
+import { getContactNotes } from '@/lib/actions/contact-notes';
 
 export default async function ContactDetailPage(
   props: {
@@ -41,8 +42,11 @@ export default async function ContactDetailPage(
     redirect('/protected/contacts-organizations');
   }
 
-  // Fetch activity history
-  const activityResult = await getContactActivity(id);
+  // Fetch activity history and notes
+  const [activityResult, contactNotes] = await Promise.all([
+    getContactActivity(id),
+    getContactNotes(id).catch(() => []),
+  ]);
   const activities = activityResult.success && activityResult.data ? activityResult.data : [];
 
   return (
@@ -51,6 +55,7 @@ export default async function ContactDetailPage(
       <ContactDetailPageClient 
         contact={contactResult.data}
         activities={activities}
+        contactNotes={contactNotes}
         companyId={profile.company_id}
         profileId={profile.id}
         userEmail={profile.email || data.user.email || ''}

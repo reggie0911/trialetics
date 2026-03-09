@@ -7,7 +7,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, FolderOpen, Plus, Trash2, FileText, Archive, Briefcase } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowLeft, Pencil, Mail, Phone, Globe, MapPin, Building2, Users, FolderOpen, Plus, Trash2, FileText, Archive, Briefcase, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -59,7 +60,7 @@ export function OrganizationDetailPageClient({
   organization: initialOrg,
   activities: initialActivities,
   notes: initialNotes,
-  clinicalTrials = { clinical_sites: [], protocol_assignments: [], protocol_accounts: [] },
+  clinicalTrials = { clinical_sites: [], protocol_assignments: [] },
   companyId,
   profileId,
   userEmail,
@@ -184,7 +185,7 @@ export function OrganizationDetailPageClient({
               Contacts ({initialOrg.contacts?.length || 0})
             </TabsTrigger>
             <TabsTrigger value="clinical-trials" className="text-xs md:text-xs">
-              Clinical Trials ({clinicalTrials.clinical_sites.length + (initialOrg.projects?.length || 0) + clinicalTrials.protocol_accounts.length})
+              Clinical Trials ({clinicalTrials.clinical_sites.length + (initialOrg.projects?.length || 0)})
             </TabsTrigger>
           </TabsList>
 
@@ -281,11 +282,15 @@ export function OrganizationDetailPageClient({
                       </CardHeader>
                       <CardContent>
                         <div className="text-xs md:text-xs">
-                          <p className="font-medium">
+                          <Link
+                            href={`/protected/contacts-organizations/contacts/${primaryContact.contact.id}`}
+                            className="font-medium text-primary hover:underline inline-flex items-center gap-1"
+                          >
                             {primaryContact.contact.first_name} {primaryContact.contact.last_name}
-                          </p>
-                          {primaryContact.contact.title && (
-                            <p className="text-muted-foreground">{primaryContact.contact.title}</p>
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
+                          {((primaryContact.contact as any).displayTitle || primaryContact.contact.title) && (
+                            <p className="text-muted-foreground">{(primaryContact.contact as any).displayTitle || primaryContact.contact.title}</p>
                           )}
                           {primaryContact.contact.email && (
                             <a href={`mailto:${primaryContact.contact.email}`} className="text-blue-600 hover:underline">
@@ -366,9 +371,13 @@ export function OrganizationDetailPageClient({
                                 <div key={oc.id} className="flex items-center justify-between border-b pb-3 last:border-0">
                                   <div className="flex-1 text-xs md:text-xs">
                                     <div className="flex items-center gap-2 mb-1">
-                                      <p className="font-medium">
+                                      <Link
+                                        href={`/protected/contacts-organizations/contacts/${oc.contact.id}`}
+                                        className="font-medium text-primary hover:underline inline-flex items-center gap-1"
+                                      >
                                         {oc.contact.first_name} {oc.contact.last_name}
-                                      </p>
+                                        <ExternalLink className="h-3 w-3" />
+                                      </Link>
                                       {oc.is_primary && (
                                         <Badge variant="default" className="text-[10px]">Primary</Badge>
                                       )}
@@ -480,7 +489,7 @@ export function OrganizationDetailPageClient({
                             asChild
                             className="text-xs"
                           >
-                            <a href={`/protected/clinical-trials?tab=sites&protocol=${cs.protocol_id}`}>
+                            <a href={`/protected/dashboard?protocolId=${cs.protocol_id}`}>
                               View
                             </a>
                           </Button>
@@ -513,9 +522,13 @@ export function OrganizationDetailPageClient({
                       {(initialOrg.projects || []).map((op) => (
                         <div key={op.id} className="flex items-center justify-between border-b pb-3 last:border-0">
                           <div className="flex-1 text-xs md:text-xs">
-                            <p className="font-medium">
+                            <Link
+                              href="/protected"
+                              className="font-medium text-primary hover:underline inline-flex items-center gap-1"
+                            >
                               {op.protocol.protocol_number} - {op.protocol.title}
-                            </p>
+                              <ExternalLink className="h-3 w-3" />
+                            </Link>
                             <p className="text-muted-foreground capitalize">
                               {ORGANIZATION_PROJECT_ROLE_LABELS[op.role]}
                             </p>
@@ -550,8 +563,8 @@ export function OrganizationDetailPageClient({
                 </CardContent>
               </Card>
 
-              {/* Protocol Accounts (partners: CRO, IRB, etc.) */}
-              {clinicalTrials.protocol_accounts.length > 0 && (
+              {/* Partner Accounts (CRO, IRB, labs, etc.) - now from protocol_assignments with account_type */}
+              {clinicalTrials.protocol_assignments.filter((pa) => pa.account_type).length > 0 && (
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-xs md:text-xs font-medium flex items-center gap-2">
@@ -564,7 +577,7 @@ export function OrganizationDetailPageClient({
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {clinicalTrials.protocol_accounts.map((pa) => (
+                      {clinicalTrials.protocol_assignments.filter((pa) => pa.account_type).map((pa) => (
                         <div key={pa.id} className="border-b pb-3 last:border-0">
                           <p className="font-medium text-xs md:text-xs">
                             {pa.protocol?.protocol_number} - {pa.protocol?.title}

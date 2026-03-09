@@ -5,22 +5,37 @@ import { createClient } from '@/lib/server';
 import { createClinicalProtocol, updateClinicalProtocol } from '@/lib/actions/clinical-protocols';
 import type { CreateClinicalProtocolData, UpdateClinicalProtocolData } from '@/lib/types/clinical-trials';
 
-export interface CreateProjectInput {
-  programName?: string;
-  protocolName: string;
-  protocolNumber: string;
-  trialPhase: string;
-  protocolDescription?: string;
-  countryName?: string;
+export interface CountryEntry {
+  id?: string;
+  countryName: string;
   countryRegion?: string;
-  protocolStatus: string;
   plannedSites?: number;
   plannedSubjects?: number;
   plannedStartDate?: string;
   plannedEndDate?: string;
 }
 
+export interface CreateProjectInput {
+  programName?: string;
+  protocolName: string;
+  protocolNumber?: string;
+  trialPhase?: string;
+  protocolDescription?: string;
+  protocolStatus: string;
+  countries?: CountryEntry[];
+}
+
 export type UpdateProjectInput = CreateProjectInput;
+
+export interface AssignedProtocolCountry {
+  id: string;
+  countryName: string;
+  countryRegion: string;
+  plannedSites: number | null;
+  plannedSubjects: number | null;
+  plannedStartDate: string | null;
+  plannedEndDate: string | null;
+}
 
 export interface AssignedProtocol {
   id: string;
@@ -35,10 +50,12 @@ export interface AssignedProtocol {
   planned_start_date: string | null;
   planned_end_date: string | null;
   trial_phase: string | null;
+  regions_required: boolean;
   created_by_id: string | null;
   creator_email: string | null;
   created_at: string;
   updated_at: string;
+  countries: AssignedProtocolCountry[];
 }
 
 export interface ActionResponse {
@@ -47,7 +64,6 @@ export interface ActionResponse {
   data?: AssignedProtocol[] | AssignedProtocol | unknown;
 }
 
-/** Map protocol_status from clinical_protocols to legacy display format */
 function statusToLegacy(status: string): string {
   const map: Record<string, string> = {
     planned: 'planning',
@@ -59,7 +75,6 @@ function statusToLegacy(status: string): string {
   return map[status] ?? status;
 }
 
-/** Map phase from clinical_protocols to legacy display format */
 function phaseToLegacy(phase: string | null): string | null {
   if (!phase) return null;
   const map: Record<string, string> = {
@@ -77,7 +92,6 @@ function phaseToLegacy(phase: string | null): string | null {
   return map[phase] ?? phase;
 }
 
-/** Map legacy status to protocol_status */
 function legacyToStatus(legacy: string): string {
   const map: Record<string, string> = {
     planning: 'planned',
@@ -87,8 +101,8 @@ function legacyToStatus(legacy: string): string {
   return map[legacy] ?? 'planned';
 }
 
-/** Map legacy phase to protocol_phase */
-function legacyToPhase(legacy: string): string | null {
+function legacyToPhase(legacy: string | undefined): string | null {
+  if (!legacy) return null;
   const map: Record<string, string> = {
     'Phase I': 'phase_i',
     'Phase II': 'phase_ii',
@@ -104,13 +118,14 @@ function legacyToPhase(legacy: string): string | null {
   return map[legacy] ?? 'observational';
 }
 
-function toAssignedProtocol(row: {
+interface ProtocolRow {
   id: string;
   protocol_number: string;
   title: string;
   objective: string | null;
   status: string;
   phase: string | null;
+  regions_required: boolean;
   planned_sites_count: number | null;
   planned_subjects_count: number | null;
   planned_start_date: string | null;
@@ -119,31 +134,80 @@ function toAssignedProtocol(row: {
   creator_email: string | null;
   created_at: string;
   updated_at: string;
-}): AssignedProtocol {
+  clinical_regions?: Array<{
+    id: string;
+    region_name: string;
+    planned_sites_count: number | null;
+    planned_subjects_count: number | null;
+    planned_start_date: string | null;
+    planned_end_date: string | null;
+    metadata: Record<string, unknown>;
+  }>;
+}
+
+function toAssignedProtocol(row: ProtocolRow): AssignedProtocol {
+  const regions = row.clinical_regions || [];
+  const countries: AssignedProtocolCountry[] = regions.map((r) => ({
+    id: r.id,
+    countryName: r.region_name,
+    countryRegion: (r.metadata?.country_region as string) || '',
+    plannedSites: r.planned_sites_count,
+    plannedSubjects: r.planned_subjects_count,
+    plannedStartDate: r.planned_start_date,
+    plannedEndDate: r.planned_end_date,
+  }));
+
   return {
     id: row.id,
     protocol_number: row.protocol_number,
     protocol_name: row.title,
     protocol_description: row.objective,
-    country_name: null,
-    country_region: null,
+    country_name: countries[0]?.countryName || null,
+    country_region: countries[0]?.countryRegion || null,
     protocol_status: statusToLegacy(row.status),
     planned_sites: row.planned_sites_count,
     planned_subjects: row.planned_subjects_count,
     planned_start_date: row.planned_start_date,
     planned_end_date: row.planned_end_date,
     trial_phase: phaseToLegacy(row.phase),
+    regions_required: row.regions_required ?? false,
     created_by_id: row.created_by_id,
     creator_email: row.creator_email,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    countries,
   };
 }
 
+const PROTOCOL_SELECT = `
+  id,
+  protocol_number,
+  title,
+  objective,
+  status,
+  phase,
+  regions_required,
+  planned_sites_count,
+  planned_subjects_count,
+  planned_start_date,
+  planned_end_date,
+  created_by_id,
+  creator_email,
+  created_at,
+  updated_at,
+  clinical_regions (
+    id,
+    region_name,
+    planned_sites_count,
+    planned_subjects_count,
+    planned_start_date,
+    planned_end_date,
+    metadata
+  )
+`;
+
 /**
  * Fetches protocols visible to the current user
- * - Admin users: See ALL protocols in their company
- * - Regular users: See only protocols explicitly assigned to them
  */
 export async function getUserProjects(): Promise<ActionResponse> {
   try {
@@ -168,28 +232,10 @@ export async function getUserProjects(): Promise<ActionResponse> {
       return { success: false, error: 'Profile not found' };
     }
 
-    // Admin users see ALL company protocols
     if (profile.role === 'admin' && profile.company_id) {
       const { data: protocols, error } = await supabase
         .from('clinical_protocols')
-        .select(
-          `
-          id,
-          protocol_number,
-          title,
-          objective,
-          status,
-          phase,
-          planned_sites_count,
-          planned_subjects_count,
-          planned_start_date,
-          planned_end_date,
-          created_by_id,
-          creator_email,
-          created_at,
-          updated_at
-        `
-        )
+        .select(PROTOCOL_SELECT)
         .eq('company_id', profile.company_id)
         .order('created_at', { ascending: false });
 
@@ -197,34 +243,13 @@ export async function getUserProjects(): Promise<ActionResponse> {
         return { success: false, error: error.message };
       }
 
-      const mapped = (protocols || []).map(toAssignedProtocol);
+      const mapped = (protocols || []).map((p: unknown) => toAssignedProtocol(p as ProtocolRow));
       return { success: true, data: mapped };
     }
 
-    // Regular users see only assigned protocols
     const { data: assignments, error } = await supabase
       .from('user_protocol_assignments')
-      .select(
-        `
-        protocol_id,
-        clinical_protocols (
-          id,
-          protocol_number,
-          title,
-          objective,
-          status,
-          phase,
-          planned_sites_count,
-          planned_subjects_count,
-          planned_start_date,
-          planned_end_date,
-          created_by_id,
-          creator_email,
-          created_at,
-          updated_at
-        )
-      `
-      )
+      .select(`protocol_id, clinical_protocols (${PROTOCOL_SELECT})`)
       .eq('user_id', profile.id);
 
     if (error) {
@@ -233,7 +258,7 @@ export async function getUserProjects(): Promise<ActionResponse> {
 
     const protocols = (assignments || [])
       .map((a: { clinical_protocols: unknown }) => a.clinical_protocols)
-      .filter((p): p is Parameters<typeof toAssignedProtocol>[0] => p != null)
+      .filter((p): p is ProtocolRow => p != null)
       .map(toAssignedProtocol);
 
     return { success: true, data: protocols };
@@ -243,6 +268,57 @@ export async function getUserProjects(): Promise<ActionResponse> {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
     };
+  }
+}
+
+async function syncCountries(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  protocolId: string,
+  companyId: string,
+  countries: CountryEntry[]
+) {
+  const { data: existingRegions } = await supabase
+    .from('clinical_regions')
+    .select('id, region_name')
+    .eq('protocol_id', protocolId);
+
+  const existing = existingRegions || [];
+  const incomingNames = new Set(countries.map((c) => c.countryName));
+  const existingMap = new Map(existing.map((r) => [r.region_name, r.id]));
+
+  const toDelete = existing.filter((r) => !incomingNames.has(r.region_name));
+  if (toDelete.length > 0) {
+    await supabase
+      .from('clinical_regions')
+      .delete()
+      .in('id', toDelete.map((r) => r.id));
+  }
+
+  for (const country of countries) {
+    const regionId = country.id || existingMap.get(country.countryName);
+    const regionData = {
+      region_name: country.countryName,
+      planned_sites_count: country.plannedSites ?? null,
+      planned_subjects_count: country.plannedSubjects ?? null,
+      planned_start_date: country.plannedStartDate || null,
+      planned_end_date: country.plannedEndDate || null,
+      metadata: { country_region: country.countryRegion || '' },
+    };
+
+    if (regionId) {
+      await supabase
+        .from('clinical_regions')
+        .update(regionData)
+        .eq('id', regionId);
+    } else {
+      await supabase
+        .from('clinical_regions')
+        .insert({
+          ...regionData,
+          protocol_id: protocolId,
+          company_id: companyId,
+        });
+    }
   }
 }
 
@@ -323,44 +399,29 @@ export async function createProject(input: CreateProjectInput): Promise<ActionRe
       profile.company_id = newCompany.id;
     }
 
-    if (!input.protocolName || !input.protocolNumber || !input.trialPhase) {
+    if (!input.protocolName) {
       return {
         success: false,
-        error: 'Project Name, Project Number, and Trial Phase are required',
+        error: 'Project Name is required',
       };
     }
 
-    if (input.plannedStartDate && input.plannedEndDate) {
-      const startDate = new Date(input.plannedStartDate);
-      const endDate = new Date(input.plannedEndDate);
-      if (endDate < startDate) {
-        return {
-          success: false,
-          error: 'Planned End Date must be after Planned Start Date',
-        };
-      }
-    }
+    const protocolNumber = input.protocolNumber?.trim() || `PROJ-${Date.now()}`;
 
-    if (input.plannedSites !== undefined && input.plannedSites < 0) {
-      return { success: false, error: 'Planned Sites must be a positive number' };
-    }
-    if (input.plannedSubjects !== undefined && input.plannedSubjects < 0) {
-      return {
-        success: false,
-        error: 'Planned Subjects must be a positive number',
-      };
-    }
+    const countries = input.countries || [];
+    const totalSites = countries.reduce((sum, c) => sum + (c.plannedSites || 0), 0) || null;
+    const totalSubjects = countries.reduce((sum, c) => sum + (c.plannedSubjects || 0), 0) || null;
 
     const protocolData: CreateClinicalProtocolData = {
-      protocol_number: input.protocolNumber,
+      protocol_number: protocolNumber,
       title: input.protocolName,
       objective: input.protocolDescription || null,
       phase: (legacyToPhase(input.trialPhase) ?? undefined) as import('@/lib/types/clinical-trials').ProtocolPhase | undefined,
       status: legacyToStatus(input.protocolStatus) as 'planned' | 'in_progress' | 'completed',
-      planned_sites_count: input.plannedSites ?? null,
-      planned_subjects_count: input.plannedSubjects ?? null,
-      planned_start_date: input.plannedStartDate || null,
-      planned_end_date: input.plannedEndDate || null,
+      planned_sites_count: totalSites,
+      planned_subjects_count: totalSubjects,
+      planned_start_date: null,
+      planned_end_date: null,
     };
 
     const result = await createClinicalProtocol(
@@ -379,7 +440,10 @@ export async function createProject(input: CreateProjectInput): Promise<ActionRe
 
     const newProtocol = result.data;
 
-    // Assign the protocol to the current user
+    if (countries.length > 0) {
+      await syncCountries(supabase, newProtocol.id, profile.company_id, countries);
+    }
+
     const { error: assignmentError } = await supabase
       .from('user_protocol_assignments')
       .insert({
@@ -399,7 +463,7 @@ export async function createProject(input: CreateProjectInput): Promise<ActionRe
 
     revalidatePath('/protected');
 
-    return { success: true, data: toAssignedProtocol(newProtocol as Parameters<typeof toAssignedProtocol>[0]) };
+    return { success: true };
   } catch (error) {
     console.error('Error creating project:', error);
     return {
@@ -428,48 +492,51 @@ export async function updateProject(
       return { success: false, error: 'User not authenticated' };
     }
 
-    if (!input.protocolName || !input.protocolNumber || !input.trialPhase) {
+    if (!input.protocolName) {
       return {
         success: false,
-        error: 'Project Name, Project Number, and Trial Phase are required',
+        error: 'Project Name is required',
       };
     }
 
-    if (input.plannedStartDate && input.plannedEndDate) {
-      const startDate = new Date(input.plannedStartDate);
-      const endDate = new Date(input.plannedEndDate);
-      if (endDate < startDate) {
-        return {
-          success: false,
-          error: 'Planned End Date must be after Planned Start Date',
-        };
-      }
+    let protocolNumber = input.protocolNumber?.trim();
+    if (!protocolNumber) {
+      const { data: existing } = await supabase
+        .from('clinical_protocols')
+        .select('protocol_number, company_id')
+        .eq('id', protocolId)
+        .single();
+      protocolNumber = existing?.protocol_number ?? `PROJ-${Date.now()}`;
     }
 
-    if (input.plannedSites !== undefined && input.plannedSites < 0) {
-      return { success: false, error: 'Planned Sites must be a positive number' };
-    }
-    if (input.plannedSubjects !== undefined && input.plannedSubjects < 0) {
-      return {
-        success: false,
-        error: 'Planned Subjects must be a positive number',
-      };
-    }
+    const { data: proto } = await supabase
+      .from('clinical_protocols')
+      .select('company_id')
+      .eq('id', protocolId)
+      .single();
+
+    const countries = input.countries || [];
+    const totalSites = countries.reduce((sum, c) => sum + (c.plannedSites || 0), 0) || null;
+    const totalSubjects = countries.reduce((sum, c) => sum + (c.plannedSubjects || 0), 0) || null;
 
     const updateData: UpdateClinicalProtocolData = {
       id: protocolId,
-      protocol_number: input.protocolNumber,
+      protocol_number: protocolNumber,
       title: input.protocolName,
       objective: input.protocolDescription || null,
       phase: (legacyToPhase(input.trialPhase) ?? undefined) as import('@/lib/types/clinical-trials').ProtocolPhase | undefined,
       status: legacyToStatus(input.protocolStatus) as 'planned' | 'in_progress' | 'completed',
-      planned_sites_count: input.plannedSites ?? null,
-      planned_subjects_count: input.plannedSubjects ?? null,
-      planned_start_date: input.plannedStartDate || null,
-      planned_end_date: input.plannedEndDate || null,
+      planned_sites_count: totalSites,
+      planned_subjects_count: totalSubjects,
+      planned_start_date: null,
+      planned_end_date: null,
     };
 
     await updateClinicalProtocol(updateData);
+
+    if (proto?.company_id) {
+      await syncCountries(supabase, protocolId, proto.company_id, countries);
+    }
 
     revalidatePath('/protected');
 

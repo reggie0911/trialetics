@@ -14,51 +14,112 @@ export interface ActionResponse<T = unknown> {
 // =============================================
 
 export async function getClinicalTrialsStats(
-  companyId: string
+  companyId: string,
+  protocolId?: string
 ): Promise<ActionResponse<ClinicalTrialsStats>> {
   try {
     const supabase = await createClient();
 
-    // Get programs count
-    const { count: total_programs } = await supabase
-      .from('clinical_programs')
-      .select('*', { count: 'exact', head: true })
-      .eq('company_id', companyId);
+    let total_programs: number;
+    let total_protocols: number;
+    let active_protocols: number;
+    let total_regions: number;
+    let sites: { status: string }[] = [];
+    let total_subjects: number;
+    let enrolled_subjects: number;
 
-    // Get protocols count and breakdown
-    const { data: protocols } = await supabase
-      .from('clinical_protocols')
-      .select('status, phase')
-      .eq('company_id', companyId);
+    if (protocolId) {
+      // Scoped to a single protocol
+      const { data: protocol } = await supabase
+        .from('clinical_protocols')
+        .select('program_id, status')
+        .eq('id', protocolId)
+        .eq('company_id', companyId)
+        .single();
 
-    const total_protocols = protocols?.length || 0;
-    const active_protocols = protocols?.filter(p => p.status === 'in_progress').length || 0;
+      total_programs = protocol?.program_id ? 1 : 0;
+      total_protocols = protocol ? 1 : 0;
+      active_protocols = protocol?.status === 'in_progress' ? 1 : 0;
 
-    // Protocols by phase
-    const protocols_by_phase: Record<string, number> = {};
-    protocols?.forEach(protocol => {
-      if (protocol.phase) {
-        protocols_by_phase[protocol.phase] = (protocols_by_phase[protocol.phase] || 0) + 1;
+      const { count: regionsCount } = await supabase
+        .from('clinical_regions')
+        .select('*', { count: 'exact', head: true })
+        .eq('protocol_id', protocolId);
+
+      total_regions = regionsCount || 0;
+
+      const { data: sitesData } = await supabase
+        .from('clinical_sites')
+        .select('id, status')
+        .eq('protocol_id', protocolId);
+
+      sites = sitesData || [];
+
+      const siteIds = (sites as Array<{ id: string; status: string }>).map((s) => s.id);
+      if (siteIds.length === 0) {
+        total_subjects = 0;
+        enrolled_subjects = 0;
+      } else {
+        const { count: subjectsCount } = await supabase
+          .from('subjects')
+          .select('*', { count: 'exact', head: true })
+          .in('site_id', siteIds);
+
+        const { data: subjectsData } = await supabase
+          .from('subjects')
+          .select('status')
+          .in('site_id', siteIds);
+
+        total_subjects = subjectsCount || 0;
+        enrolled_subjects =
+          subjectsData?.filter((s: { status: string }) => s.status === 'enrolled').length || 0;
       }
-    });
+    } else {
+      // Company-wide aggregation
+      const { count: programsCount } = await supabase
+        .from('clinical_programs')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', companyId);
 
-    // Protocols by status
-    const protocols_by_status: Record<string, number> = {};
-    protocols?.forEach(protocol => {
-      protocols_by_status[protocol.status] = (protocols_by_status[protocol.status] || 0) + 1;
-    });
+      total_programs = programsCount || 0;
 
-    // Get regions count
-    const { count: total_regions } = await supabase
-      .from('clinical_regions')
-      .select('*', { count: 'exact', head: true })
-      .eq('company_id', companyId);
+      const { count: regionsCount } = await supabase
+        .from('clinical_regions')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', companyId);
 
-    // Get sites count and breakdown
-    const { data: sites } = await supabase
-      .from('clinical_sites')
-      .select('status')
-      .eq('company_id', companyId);
+      total_regions = regionsCount || 0;
+
+      const { data: protocolsData } = await supabase
+        .from('clinical_protocols')
+        .select('status')
+        .eq('company_id', companyId);
+
+      total_protocols = protocolsData?.length || 0;
+      active_protocols =
+        protocolsData?.filter((p: { status: string }) => p.status === 'in_progress').length || 0;
+
+      const { data: sitesData } = await supabase
+        .from('clinical_sites')
+        .select('status')
+        .eq('company_id', companyId);
+
+      sites = sitesData || [];
+
+      const { count: subjectsCount } = await supabase
+        .from('subjects')
+        .select('*', { count: 'exact', head: true })
+        .eq('company_id', companyId);
+
+      const { data: subjectsData } = await supabase
+        .from('subjects')
+        .select('status')
+        .eq('company_id', companyId);
+
+      total_subjects = subjectsCount || 0;
+      enrolled_subjects =
+        subjectsData?.filter((s: { status: string }) => s.status === 'enrolled').length || 0;
+    }
 
     const total_sites = sites?.length || 0;
     const enrolling_sites = sites?.filter(s => s.status === 'enrolling').length || 0;
@@ -72,12 +133,12 @@ export async function getClinicalTrialsStats(
     const stats: ClinicalTrialsStats = {
       total_programs: total_programs || 0,
       total_protocols,
+      active_protocols,
       total_regions: total_regions || 0,
       total_sites,
-      active_protocols,
       enrolling_sites,
-      protocols_by_phase,
-      protocols_by_status,
+      total_subjects: total_subjects || 0,
+      enrolled_subjects: enrolled_subjects || 0,
       sites_by_status,
     };
 

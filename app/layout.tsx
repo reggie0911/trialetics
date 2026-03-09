@@ -8,6 +8,7 @@ import { StyleGlideProvider } from "@/components/styleglide-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ReactQueryProvider } from "@/components/providers/react-query-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 const poppins = Poppins({
@@ -65,11 +66,13 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <ReactQueryProvider>
-            <StyleGlideProvider />
-            <Navbar />
-            <main className="flex-1">{children}</main>
-            <Footer />
-            <Toaster />
+            <TooltipProvider>
+              <StyleGlideProvider />
+              <Navbar />
+              <main className="flex-1">{children}</main>
+              <Footer />
+              <Toaster />
+            </TooltipProvider>
           </ReactQueryProvider>
         </ThemeProvider>
       </body>

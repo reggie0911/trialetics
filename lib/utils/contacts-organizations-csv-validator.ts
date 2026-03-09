@@ -205,6 +205,11 @@ export function validateContactRow(
   const state = getColumnValue(row, 'state', csvHeaders);
   const postalCode = getColumnValue(row, 'postal_code', csvHeaders);
   const country = getColumnValue(row, 'country', csvHeaders);
+  const youtubeUrl = getColumnValue(row, 'youtube_url', csvHeaders);
+  const linkedinUrl = getColumnValue(row, 'linkedin_url', csvHeaders);
+  const xUrl = getColumnValue(row, 'x_url', csvHeaders);
+  const facebookUrl = getColumnValue(row, 'facebook_url', csvHeaders);
+  const substackUrl = getColumnValue(row, 'substack_url', csvHeaders);
 
   // Required fields
   if (!firstName || firstName.length === 0) {
@@ -245,6 +250,20 @@ export function validateContactRow(
     warnings.push('Address provided but missing city or postal code');
   }
 
+  // Social URL validation
+  const socialUrls: Array<{ value: string | undefined; label: string }> = [
+    { value: youtubeUrl, label: 'youtube_url' },
+    { value: linkedinUrl, label: 'linkedin_url' },
+    { value: xUrl, label: 'x_url' },
+    { value: facebookUrl, label: 'facebook_url' },
+    { value: substackUrl, label: 'substack_url' },
+  ];
+  for (const { value, label } of socialUrls) {
+    if (value && !isValidURL(value)) {
+      warnings.push(`Invalid URL for ${label}: "${value}"`);
+    }
+  }
+
   if (errors.length > 0) {
     return {
       rowIndex,
@@ -272,6 +291,11 @@ export function validateContactRow(
     state: state || undefined,
     postal_code: postalCode || undefined,
     country: country || 'United States',
+    youtube_url: youtubeUrl || undefined,
+    linkedin_url: linkedinUrl || undefined,
+    x_url: xUrl || undefined,
+    facebook_url: facebookUrl || undefined,
+    substack_url: substackUrl || undefined,
   };
 
   return {

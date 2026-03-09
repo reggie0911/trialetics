@@ -67,7 +67,9 @@ export function CompanySettingsForm({ onSuccess }: CompanySettingsFormProps) {
       setCompanyId(company.id);
       setProfileId(profile.id);
       setCanEdit(true);
-      setName(company.name || '');
+      // Treat auto-generated "{email}'s Organization" as unset - keep input empty until user populates
+      const isDefaultName = company.name?.trim().endsWith("'s Organization");
+      setName(isDefaultName ? '' : (company.name || ''));
       setLogoUrl(company.logo_url ?? null);
       setPreviewUrl(company.logo_url ?? null);
     } catch (error) {

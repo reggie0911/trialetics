@@ -17,6 +17,7 @@ export type ContactRole =
   | 'site_staff' 
   | 'sponsor_rep' 
   | 'cro_rep' 
+  | 'clinical_research_associate'
   | 'regulatory' 
   | 'lab_director' 
   | 'qa_lead' 
@@ -32,16 +33,67 @@ export type ContactProjectRole =
   | 'principal_investigator' 
   | 'sub_investigator' 
   | 'coordinator' 
+  | 'site_staff'
+  | 'sponsor_rep'
+  | 'cro_rep'
   | 'medical_monitor' 
   | 'project_manager' 
   | 'data_manager' 
   | 'regulatory_lead' 
   | 'qa_lead' 
+  | 'lab_director'
+  | 'finance'
+  | 'contracts'
   | 'other';
+
+export type ContactType = 'investigator' | 'site_staff' | 'sponsor_rep' | 'cro_rep' | 'monitor' | 'data_manager' | 'regulatory' | 'pharmacist' | 'other';
+
+export type Salutation = 'Dr.' | 'Mr.' | 'Mrs.' | 'Ms.' | 'Prof.';
 
 export type EntityStatus = 'active' | 'inactive' | 'pending';
 
 export type AddressType = 'primary' | 'mailing' | 'billing' | 'shipping' | 'other';
+
+// CTMS many-to-many role structure
+export type CtmsRoleCategory =
+  | 'sponsor'
+  | 'cro'
+  | 'site'
+  | 'regulatory_ethics'
+  | 'vendors'
+  | 'financial'
+  | 'governance'
+  | 'technology'
+  | 'platform';
+
+export interface CtmsRole {
+  id: string;
+  slug: string;
+  name: string;
+  category: CtmsRoleCategory;
+  sort_order: number;
+  is_active: boolean;
+}
+
+export interface ContactRoleAssignment {
+  id: string;
+  contact_id: string;
+  role_id: string;
+  is_primary: boolean;
+  created_at: string;
+}
+
+export const CTMS_ROLE_CATEGORIES: Record<CtmsRoleCategory, string> = {
+  sponsor: 'Sponsor Organization',
+  cro: 'CRO',
+  site: 'Clinical Site',
+  regulatory_ethics: 'Regulatory & Ethics',
+  vendors: 'Vendors & Service Providers',
+  financial: 'Financial & Contracting',
+  governance: 'Study Governance & Committees',
+  technology: 'Technology & Systems',
+  platform: 'Trialetics / Platform',
+};
 
 // =============================================
 // Core Entity Interfaces
@@ -74,13 +126,29 @@ export interface Contact {
   email: string | null;
   phone: string | null;
   title: string | null;
+  contact_type: ContactType | null;
+  salutation: string | null;
+  middle_initial: string | null;
+  mobile_phone: string | null;
+  home_phone: string | null;
   credentials: string | null;
   license_number: string | null;
   primary_specialty: string | null;
   profile_image_url: string | null;
+  is_disqualified: boolean;
+  disqualification_reason: string | null;
+  therapeutic_qualifications: string[];
+  specialties: string[];
+  sub_specialties: string[];
+  professional_associations?: string[];
   status: EntityStatus;
   notes: string | null;
   manager_id: string | null;
+  youtube_url: string | null;
+  linkedin_url: string | null;
+  x_url: string | null;
+  facebook_url: string | null;
+  substack_url: string | null;
   metadata: Record<string, unknown>;
   created_by_id: string | null;
   creator_email: string | null;
@@ -120,6 +188,18 @@ export type OrganizationNoteType =
 export interface OrganizationNote {
   id: string;
   organization_id: string;
+  company_id: string;
+  content: string;
+  note_type: OrganizationNoteType | string | null;
+  created_by_id: string | null;
+  creator_email: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContactNote {
+  id: string;
+  contact_id: string;
   company_id: string;
   content: string;
   note_type: OrganizationNoteType | string | null;
@@ -277,6 +357,17 @@ export interface OrganizationContact {
   updated_at: string;
 }
 
+export type AccountType =
+  | 'irb'
+  | 'central_irb'
+  | 'cro'
+  | 'regional_cro'
+  | 'laboratory'
+  | 'central_laboratory'
+  | 'vendor'
+  | 'pharmacy'
+  | 'imaging_center';
+
 export interface OrganizationProject {
   id: string;
   organization_id: string;
@@ -285,35 +376,27 @@ export interface OrganizationProject {
   status: EntityStatus;
   start_date: string | null;
   end_date: string | null;
-  // Site milestone fields
-  site_initiation_date: string | null;
-  site_qualification_date: string | null;
-  irb_approval_date: string | null;
-  irb_expiration_date: string | null;
-  irb_approval_number: string | null;
-  irb_institution_name: string | null;
-  central_irb_name: string | null;
-  close_out_date: string | null;
-  first_subject_enrolled_date: string | null;
-  last_subject_enrolled_date: string | null;
-  last_completed_visit_date: string | null;
-  planned_subject_count: number | null;
-  enrolled_subject_count: number | null;
-  screen_failure_count: number | null;
-  completed_subject_count: number | null;
+  account_type: AccountType | null;
+  is_central: boolean;
+  institution_classification: string | null;
+  region_id?: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface ContactProject {
   id: string;
+  company_id: string;
   contact_id: string;
   protocol_id: string;
   organization_id: string | null;
+  clinical_site_id: string | null;
   role: ContactProjectRole;
   status: EntityStatus;
   start_date: string | null;
   end_date: string | null;
+  country: string | null;
+  address_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -357,6 +440,10 @@ export interface OrganizationWithRelations extends Organization {
   projects_count?: number;
 }
 
+export interface ContactRoleAssignmentWithRole extends ContactRoleAssignment {
+  role?: Pick<CtmsRole, 'id' | 'slug' | 'name' | 'category'> | null;
+}
+
 export interface ContactWithRelations extends Contact {
   organizations?: OrganizationContactWithOrganization[];
   projects?: ContactProjectWithProject[];
@@ -364,6 +451,9 @@ export interface ContactWithRelations extends Contact {
   primary_organization?: (Organization & { primary_address?: Address | null }) | null;
   organizations_count?: number;
   projects_count?: number;
+  /** Human-readable title derived from the primary role assignment. Falls back to contact.title for legacy records. */
+  displayTitle?: string | null;
+  roleAssignments?: ContactRoleAssignmentWithRole[];
 }
 
 // =============================================
@@ -393,13 +483,29 @@ export interface CreateContactData {
   email?: string | null;
   phone?: string | null;
   title?: string | null;
+  contact_type?: ContactType | null;
+  salutation?: string | null;
+  middle_initial?: string | null;
+  mobile_phone?: string | null;
+  home_phone?: string | null;
   credentials?: string | null;
   license_number?: string | null;
   primary_specialty?: string | null;
   profile_image_url?: string | null;
+  is_disqualified?: boolean;
+  disqualification_reason?: string | null;
+  therapeutic_qualifications?: string[];
+  specialties?: string[];
+  sub_specialties?: string[];
+  professional_associations?: string[];
   status?: EntityStatus;
   notes?: string | null;
   manager_id?: string | null;
+  youtube_url?: string | null;
+  linkedin_url?: string | null;
+  x_url?: string | null;
+  facebook_url?: string | null;
+  substack_url?: string | null;
   metadata?: Record<string, unknown>;
   inactive_date?: string | null;
 }
@@ -439,6 +545,8 @@ export interface AssignOrganizationToProjectData {
   organization_id: string;
   protocol_id: string;
   role: OrganizationProjectRole;
+  /** Required when protocol has regions_required and role = site */
+  region_id?: string | null;
   status: EntityStatus;
   start_date?: string | null;
   end_date?: string | null;
@@ -452,10 +560,11 @@ export interface AssignContactToProjectData {
   status: EntityStatus;
   start_date?: string | null;
   end_date?: string | null;
+  country?: string | null;
 }
 
 export interface UpdateSiteMilestonesData {
-  site_initiation_date?: string | null;
+  site_initiated_date?: string | null;
   site_qualification_date?: string | null;
   irb_approval_date?: string | null;
   irb_expiration_date?: string | null;
@@ -538,6 +647,7 @@ export const CONTACT_ROLE_LABELS: Record<ContactRole, string> = {
   site_staff: 'Site Staff',
   sponsor_rep: 'Sponsor Representative',
   cro_rep: 'CRO Representative',
+  clinical_research_associate: 'Clinical Research Associate',
   regulatory: 'Regulatory',
   lab_director: 'Lab Director',
   qa_lead: 'QA Lead',
@@ -562,13 +672,33 @@ export const CONTACT_PROJECT_ROLE_LABELS: Record<ContactProjectRole, string> = {
   principal_investigator: 'Principal Investigator',
   sub_investigator: 'Sub-Investigator',
   coordinator: 'Coordinator',
+  site_staff: 'Site Staff',
+  sponsor_rep: 'Sponsor Representative',
+  cro_rep: 'CRO Representative',
   medical_monitor: 'Medical Monitor',
   project_manager: 'Project Manager',
   data_manager: 'Data Manager',
   regulatory_lead: 'Regulatory Lead',
   qa_lead: 'QA Lead',
+  lab_director: 'Lab Director',
+  finance: 'Finance',
+  contracts: 'Contracts',
   other: 'Other',
 };
+
+export const CONTACT_TYPE_LABELS: Record<ContactType, string> = {
+  investigator: 'Investigator',
+  site_staff: 'Site Staff',
+  sponsor_rep: 'Sponsor Representative',
+  cro_rep: 'CRO Representative',
+  monitor: 'Monitor',
+  data_manager: 'Data Manager',
+  regulatory: 'Regulatory',
+  pharmacist: 'Pharmacist',
+  other: 'Other',
+};
+
+export const SALUTATION_OPTIONS: Salutation[] = ['Dr.', 'Mr.', 'Mrs.', 'Ms.', 'Prof.'];
 
 export const ENTITY_STATUS_LABELS: Record<EntityStatus, string> = {
   active: 'Active',
