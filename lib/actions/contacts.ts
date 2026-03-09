@@ -47,7 +47,7 @@ export async function getContacts(
           id,
           organization:organizations(id, name, organization_type)
         ),
-        contact_protocols(id)
+        protocol_contacts(id)
       `, { count: 'exact' })
       .eq('company_id', companyId)
       .order('last_name', { ascending: true });
@@ -78,7 +78,7 @@ export async function getContacts(
     // Transform the data to include counts and primary organization
     let contacts = (data || []).map((contact: any) => {
       const orgRelations = contact.organization_contacts || [];
-      const projectRelations = contact.contact_protocols || [];
+      const projectRelations = contact.protocol_contacts || [];
       const primaryOrgRelation = orgRelations.find((oc: any) => oc.is_primary) || orgRelations[0];
 
       return {
@@ -162,7 +162,7 @@ export async function getContact(contactId: string): Promise<ActionResponse<Cont
           *,
           organization:organizations(*)
         ),
-        contact_protocols(
+        protocol_contacts(
           *,
           protocol:clinical_protocols(id, protocol_number, title, status),
           organization:organizations(id, name)
@@ -172,8 +172,19 @@ export async function getContact(contactId: string): Promise<ActionResponse<Cont
       .single();
 
     if (error) {
-      console.error('Error fetching contact:', error);
-      return { success: false, error: error.message };
+      const pgError = error as { code?: string; message?: string; details?: string };
+      const errDetails = { code: pgError?.code, message: pgError?.message, details: pgError?.details };
+      console.error('Error fetching contact:', errDetails);
+
+      // PGRST116 = no rows returned (contact not found)
+      if (pgError?.code === 'PGRST116') {
+        return { success: false, error: 'Contact not found' };
+      }
+
+      return {
+        success: false,
+        error: pgError?.message ?? JSON.stringify(error) ?? 'Failed to fetch contact',
+      };
     }
 
     // Fetch addresses separately (polymorphic relationship)
@@ -208,11 +219,11 @@ export async function getContact(contactId: string): Promise<ActionResponse<Cont
     const contact: ContactWithRelations = {
       ...data,
       organizations: data.organization_contacts,
-      projects: data.contact_protocols,
+      projects: data.protocol_contacts,
       addresses: addresses || [],
       primary_organization: primaryOrg,
       organizations_count: data.organization_contacts?.length || 0,
-      projects_count: data.contact_protocols?.length || 0,
+      projects_count: data.protocol_contacts?.length || 0,
     };
 
     return { success: true, data: contact };
@@ -657,9 +668,21 @@ export async function assignContactToProject(
       return { success: false, error: 'User not authenticated' };
     }
 
+    // Look up company_id from the contact record
+    const { data: contactRow, error: contactLookupError } = await supabase
+      .from('contacts')
+      .select('company_id')
+      .eq('id', data.contact_id)
+      .single();
+
+    if (contactLookupError || !contactRow) {
+      return { success: false, error: 'Could not resolve company for contact' };
+    }
+
     const { error } = await supabase
-      .from('contact_protocols')
+      .from('protocol_contacts')
       .insert({
+        company_id: contactRow.company_id,
         contact_id: data.contact_id,
         protocol_id: data.protocol_id,
         organization_id: data.organization_id || null,
@@ -698,7 +721,7 @@ export async function removeContactFromProject(
     }
 
     const { error } = await supabase
-      .from('contact_protocols')
+      .from('protocol_contacts')
       .delete()
       .eq('id', relationshipId);
 

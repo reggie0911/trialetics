@@ -620,16 +620,18 @@ export function SiteDetailPageClient({
               <CardTitle className="text-xs md:text-xs font-medium">Site Milestones</CardTitle>
               {siteProject && (
                 <Tooltip>
-                  <TooltipTrigger>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setShowMilestoneDialog(true)}
-                      className="text-xs md:text-xs"
-                    >
-                      <Pencil className="h-3 w-3 mr-1" />
-                      Edit milestones
-                    </Button>
+                  <TooltipTrigger
+                    render={
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setShowMilestoneDialog(true)}
+                        className="text-xs md:text-xs"
+                      />
+                    }
+                  >
+                    <Pencil className="h-3 w-3 mr-1" />
+                    Edit milestones
                   </TooltipTrigger>
                   <TooltipContent>Edit site qualification dates, subject counts, and visit dates</TooltipContent>
                 </Tooltip>
