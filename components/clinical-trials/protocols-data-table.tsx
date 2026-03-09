@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { MoreHorizontal, Edit, Trash2, Users, BarChart3, FileText, GraduationCap } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, Users, BarChart3, FileText, GraduationCap, ExternalLink } from 'lucide-react';
 import { ProtocolContactsSheet } from './protocol-contacts-sheet';
 import { ProtocolStatusReportSheet } from './protocol-status-report-sheet';
 import { ProtocolTrainingSheet } from '@/components/clinical-training/protocol-training-sheet';
@@ -53,19 +53,19 @@ export function ProtocolsDataTable({
   const [trainingSheetProtocol, setTrainingSheetProtocol] = useState<ClinicalProtocolWithRelations | null>(null);
 
   const handleDelete = async (protocolId: string) => {
-    if (!confirm('Are you sure you want to delete this protocol? This will also delete all associated regions and sites.')) return;
+    if (!confirm('Are you sure you want to delete this project? This will also delete all associated countries and sites.')) return;
 
     const result = await deleteClinicalProtocol(protocolId);
     if (result.success) {
       toast({
         title: 'Success',
-        description: 'Protocol deleted successfully',
+        description: 'Project deleted successfully',
       });
       onRefresh();
     } else {
       toast({
         title: 'Error',
-        description: result.error || 'Failed to delete protocol',
+        description: result.error || 'Failed to delete project',
         variant: 'destructive',
       });
     }
@@ -78,7 +78,7 @@ export function ProtocolsDataTable({
   if (protocols.length === 0) {
     return (
       <div className="text-center text-sm text-muted-foreground">
-        No protocols found. Click "Add Protocol" to create one.
+        No projects found. Click "Add Project" to create one.
       </div>
     );
   }
@@ -89,12 +89,12 @@ export function ProtocolsDataTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-xs">Protocol #</TableHead>
+            <TableHead className="text-xs">Project #</TableHead>
             <TableHead className="text-xs">Title</TableHead>
+            <TableHead className="text-xs">Sponsor</TableHead>
             <TableHead className="text-xs">Phase</TableHead>
             <TableHead className="text-xs">Status</TableHead>
             <TableHead className="text-xs">Sites</TableHead>
-            <TableHead className="text-xs">Program</TableHead>
             <TableHead className="w-[50px]"></TableHead>
           </TableRow>
         </TableHeader>
@@ -104,6 +104,21 @@ export function ProtocolsDataTable({
               <TableCell className="text-xs font-medium">{protocol.protocol_number}</TableCell>
               <TableCell className="text-xs">
                 <span className="line-clamp-1">{protocol.title}</span>
+              </TableCell>
+              <TableCell className="text-xs">
+                {protocol.sponsor_organization ? (
+                  <Link
+                    href={`/protected/contacts-organizations/${protocol.sponsor_organization.id}`}
+                    className="text-primary hover:underline inline-flex items-center gap-1"
+                  >
+                    {protocol.sponsor_organization.name}
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                ) : protocol.sponsor ? (
+                  <span>{protocol.sponsor}</span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
               </TableCell>
               <TableCell className="text-xs">
                 {protocol.phase ? (
@@ -120,9 +135,6 @@ export function ProtocolsDataTable({
                 </Badge>
               </TableCell>
               <TableCell className="text-xs">{protocol.sites_count || 0}</TableCell>
-              <TableCell className="text-xs">
-                {protocol.program?.name || <span className="text-muted-foreground">—</span>}
-              </TableCell>
               <TableCell>
                 <DropdownMenu>
                   <DropdownMenuTrigger className="h-6 w-6 p-0 inline-flex items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground outline-none">

@@ -13,8 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Users, Building2, BarChart3, ExternalLink } from 'lucide-react';
 import { getProtocolContacts } from '@/lib/actions/protocol-contacts';
 import { getAccountAssociations } from '@/lib/actions/account-associations';
+import { getProtocolInstitutions } from '@/lib/actions/organizations';
 import type { ProtocolContactWithRelations } from '@/lib/actions/protocol-contacts';
-import { CONTACT_ROLE_LABELS, CONTACT_PROJECT_ROLE_LABELS } from '@/lib/types/contacts-organizations';
+import { CONTACT_ROLE_LABELS, CONTACT_PROJECT_ROLE_LABELS, ORGANIZATION_PROJECT_ROLE_LABELS } from '@/lib/types/contacts-organizations';
 import { ACCOUNT_TYPE_LABELS } from '@/lib/types/clinical-trials';
 import { ProtocolContactAssignDialog } from './protocol-contact-assign-dialog';
 
@@ -38,27 +39,19 @@ export function ProtocolContactsSheet({
   onSuccess,
 }: ProtocolContactsSheetProps) {
   const [contacts, setContacts] = useState<ProtocolContactWithRelations[]>([]);
-  const [accounts, setAccounts] = useState<Array<{ id: string; organization: { name: string }; account_type: string }>>([]);
+  const [institutions, setInstitutions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showAssignContact, setShowAssignContact] = useState(false);
 
   const loadData = async () => {
     if (!protocolId) return;
     setIsLoading(true);
-    const [contactsRes, accountsRes] = await Promise.all([
+    const [contactsRes, institutionsRes] = await Promise.all([
       getProtocolContacts(protocolId),
-      getAccountAssociations(companyId, { entity_type: 'protocol', entity_id: protocolId }),
+      getProtocolInstitutions(protocolId),
     ]);
     if (contactsRes.success && contactsRes.data) setContacts(contactsRes.data);
-    if (accountsRes.success && accountsRes.data?.accounts) {
-      setAccounts(
-        accountsRes.data.accounts.map((a: { id: string; organization?: { name: string }; account_type: string }) => ({
-          id: a.id,
-          organization: a.organization ?? { name: '—' },
-          account_type: a.account_type,
-        }))
-      );
-    }
+    if (institutionsRes.success && institutionsRes.data) setInstitutions(institutionsRes.data);
     setIsLoading(false);
   };
 
@@ -103,9 +96,19 @@ export function ProtocolContactsSheet({
                       className="flex items-center justify-between rounded-md border p-3 text-sm"
                     >
                       <div>
-                        <p className="font-medium">
-                          {pc.contact?.first_name} {pc.contact?.last_name}
-                        </p>
+                        {pc.contact?.id ? (
+                          <Link
+                            href={`/protected/contacts-organizations/contacts/${pc.contact.id}`}
+                            className="font-medium text-primary hover:underline inline-flex items-center gap-1"
+                          >
+                            {pc.contact.first_name} {pc.contact.last_name}
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
+                        ) : (
+                          <p className="font-medium">
+                            {pc.contact?.first_name} {pc.contact?.last_name}
+                          </p>
+                        )}
                         <p className="text-muted-foreground text-xs">
                           {(CONTACT_PROJECT_ROLE_LABELS as Record<string, string>)[pc.role] ?? CONTACT_ROLE_LABELS[pc.role as keyof typeof CONTACT_ROLE_LABELS] ?? pc.role}
                           {pc.contact?.email && ` · ${pc.contact.email}`}
@@ -149,28 +152,49 @@ export function ProtocolContactsSheet({
               </div>
             </div>
 
-            {/* Partner Organizations */}
+            {/* Study Institutions */}
             <div>
               <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
                 <Building2 className="h-4 w-4" />
-                Partner Organizations
+                Study Institutions
               </h3>
-              {accounts.length > 0 ? (
+              {institutions.length > 0 ? (
                 <div className="space-y-2">
-                  {accounts.map((pa) => (
+                  {institutions.map((inst: any) => (
                     <div
-                      key={pa.id}
+                      key={inst.id}
                       className="rounded-md border p-3 text-sm"
                     >
-                      <p className="font-medium">{pa.organization?.name ?? '—'}</p>
-                      <p className="text-muted-foreground text-xs">
-                        {ACCOUNT_TYPE_LABELS[pa.account_type as keyof typeof ACCOUNT_TYPE_LABELS] ?? pa.account_type}
-                      </p>
+                      <div className="flex items-center justify-between">
+                        {inst.organization?.id ? (
+                          <Link
+                            href={`/protected/contacts-organizations/${inst.organization.id}`}
+                            className="font-medium text-primary hover:underline inline-flex items-center gap-1"
+                          >
+                            {inst.organization.name}
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
+                        ) : (
+                          <p className="font-medium">{inst.organization?.name ?? '—'}</p>
+                        )}
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {(ORGANIZATION_PROJECT_ROLE_LABELS as Record<string, string>)[inst.role] ?? inst.role}
+                        </Badge>
+                      </div>
+                      <div className="flex gap-2 mt-1 text-xs text-muted-foreground">
+                        {inst.account_type && (
+                          <span>{ACCOUNT_TYPE_LABELS[inst.account_type as keyof typeof ACCOUNT_TYPE_LABELS] ?? inst.account_type}</span>
+                        )}
+                        {inst.is_central && <Badge variant="secondary" className="text-[10px] px-1">Central</Badge>}
+                        {inst.institution_classification && (
+                          <span className="capitalize">Classification: {inst.institution_classification}</span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">No partner organizations</p>
+                <p className="text-sm text-muted-foreground">No institutions assigned</p>
               )}
             </div>
           </div>

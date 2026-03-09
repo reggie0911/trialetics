@@ -542,35 +542,31 @@ export function TripReportTemplatePageClient({ template, companyId, initialSubSe
                     <td className="py-2 px-3 text-[12px]">
                       <div className="flex gap-0.5">
                         <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0"
-                                onClick={() => regenerateQuestion(questions.indexOf(q))}
-                                disabled={isRegenerating === questions.indexOf(q)}
-                              />
-                            }
-                          >
-                            {isRegenerating === questions.indexOf(q)
-                              ? <Loader2 className="h-3 w-3 animate-spin" />
-                              : <Sparkles className="h-3 w-3" />}
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => regenerateQuestion(questions.indexOf(q))}
+                              disabled={isRegenerating === questions.indexOf(q)}
+                            >
+                              {isRegenerating === questions.indexOf(q)
+                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                : <Sparkles className="h-3 w-3" />}
+                            </Button>
                           </TooltipTrigger>
                           <TooltipContent>Regenerate question with AI</TooltipContent>
                         </Tooltip>
                         <Tooltip>
-                          <TooltipTrigger
-                            render={
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                onClick={() => removeQuestion(questions.indexOf(q))}
-                              />
-                            }
-                          >
-                            <Trash2 className="h-3 w-3" />
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                              onClick={() => removeQuestion(questions.indexOf(q))}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
                           </TooltipTrigger>
                           <TooltipContent>Delete question</TooltipContent>
                         </Tooltip>

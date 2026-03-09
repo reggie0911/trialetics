@@ -23,13 +23,21 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { getAllOrganizations } from '@/lib/actions/organizations';
-import { assignContactToOrganization } from '@/lib/actions/contacts';
+import { assignContactToOrganization, updateOrganizationContact } from '@/lib/actions/contacts';
 import {
   Organization,
   ContactRole,
-  CONTACT_ROLE_LABELS,
   ORGANIZATION_TYPE_LABELS,
 } from '@/lib/types/contacts-organizations';
+
+export type EditingOrganizationAssignment = {
+  id: string;
+  organization: { name: string };
+  role: string;
+  is_primary: boolean;
+  start_date?: string | null;
+  end_date?: string | null;
+};
 
 interface AssignOrganizationDialogProps {
   open: boolean;
@@ -39,6 +47,7 @@ interface AssignOrganizationDialogProps {
   contactName: string;
   companyId: string;
   existingOrganizationIds?: string[];
+  editingAssignment?: EditingOrganizationAssignment | null;
 }
 
 export function AssignOrganizationDialog({
@@ -49,6 +58,7 @@ export function AssignOrganizationDialog({
   contactName,
   companyId,
   existingOrganizationIds = [],
+  editingAssignment = null,
 }: AssignOrganizationDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,12 +71,21 @@ export function AssignOrganizationDialog({
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
+  const isEditMode = !!editingAssignment;
+
   useEffect(() => {
     if (open) {
-      loadOrganizations();
-      resetForm();
+      if (editingAssignment) {
+        setSelectedOrgId('');
+        setIsPrimary(editingAssignment.is_primary);
+        setStartDate(editingAssignment.start_date || '');
+        setEndDate(editingAssignment.end_date || '');
+      } else {
+        loadOrganizations();
+        resetForm();
+      }
     }
-  }, [open]);
+  }, [open, editingAssignment]);
 
   const loadOrganizations = async () => {
     setIsLoading(true);
@@ -91,7 +110,30 @@ export function AssignOrganizationDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    if (isEditMode && editingAssignment) {
+      setIsSubmitting(true);
+      try {
+        const result = await updateOrganizationContact(editingAssignment.id, {
+          is_primary: isPrimary,
+          start_date: startDate || null,
+          end_date: endDate || null,
+        });
+        if (result.success) {
+          toast({ title: 'Organization assignment updated' });
+          onSuccess();
+          onOpenChange(false);
+        } else {
+          toast({ title: 'Error', description: result.error, variant: 'destructive' });
+        }
+      } catch (error) {
+        toast({ title: 'Error', description: 'An unexpected error occurred', variant: 'destructive' });
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
     if (!selectedOrgId) {
       toast({
         title: 'Error',
@@ -142,13 +184,79 @@ export function AssignOrganizationDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle className="text-base">Assign to Organization</DialogTitle>
+          <DialogTitle className="text-base">
+            {isEditMode ? 'Edit Organization Assignment' : 'Assign to Organization'}
+          </DialogTitle>
           <DialogDescription className="text-xs">
-            Assign {contactName} to an organization
+            {isEditMode
+              ? `Update assignment for ${editingAssignment?.organization?.name ?? 'this organization'}`
+              : `Assign ${contactName} to an organization`}
           </DialogDescription>
         </DialogHeader>
 
-        {isLoading ? (
+        {isEditMode ? (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1">
+              <Label className="text-xs">Organization</Label>
+              <div className="flex h-8 items-center rounded-md border border-input bg-muted/50 px-3 text-xs text-muted-foreground">
+                {editingAssignment?.organization?.name ?? 'Unknown'}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="is_primary"
+                checked={isPrimary}
+                onCheckedChange={(checked) => setIsPrimary(!!checked)}
+              />
+              <Label htmlFor="is_primary" className="text-xs font-normal cursor-pointer">
+                Primary organization for this contact
+              </Label>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="start_date" className="text-xs">Start Date</Label>
+                <Input
+                  id="start_date"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="text-xs md:text-xs h-8"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="end_date" className="text-xs">End Date</Label>
+                <Input
+                  id="end_date"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="text-xs md:text-xs h-8"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isSubmitting}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting} className="text-xs">
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        ) : isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
@@ -178,27 +286,6 @@ export function AssignOrganizationDialog({
                   {organizations.map((org) => (
                     <SelectItem key={org.id} value={org.id} className="text-xs">
                       {org.name} ({ORGANIZATION_TYPE_LABELS[org.organization_type]})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label htmlFor="role" className="text-xs">Role *</Label>
-              <Select
-                value={selectedRole}
-                onValueChange={(v) => v && setSelectedRole(v as ContactRole)}
-              >
-                <SelectTrigger className="text-xs md:text-xs w-full">
-                  <span className="text-xs capitalize">
-                    {selectedRole ? CONTACT_ROLE_LABELS[selectedRole] || selectedRole : 'Select role'}
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(CONTACT_ROLE_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value} className="text-xs">
-                      {label}
                     </SelectItem>
                   ))}
                 </SelectContent>

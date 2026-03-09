@@ -14,6 +14,9 @@ export default async function MCPage(
   const resolvedSearchParams = await props.searchParams;
   if (params) await params;
   const protocolId = resolvedSearchParams.protocol || null;
+  if (!protocolId) {
+    redirect('/protected');
+  }
   const supabase = await createClient();
 
   // Check authentication

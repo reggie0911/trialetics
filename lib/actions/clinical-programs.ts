@@ -39,7 +39,7 @@ export async function getClinicalPrograms(
 
     let query = supabase
       .from('clinical_programs')
-      .select('*, clinical_protocols(count)', { count: 'exact' })
+      .select('*, clinical_protocols(count), program_manager:contacts!clinical_programs_program_manager_contact_id_fkey(id, first_name, last_name, email)', { count: 'exact' })
       .eq('company_id', companyId);
 
     // Apply filters
@@ -76,7 +76,8 @@ export async function getClinicalPrograms(
     const programs = (data || []).map((program: any) => ({
       ...program,
       protocols_count: program.clinical_protocols?.[0]?.count || 0,
-      clinical_protocols: undefined, // Remove the raw count data
+      clinical_protocols: undefined,
+      program_manager: program.program_manager || null,
     }));
 
     return {

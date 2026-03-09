@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useState, useEffect, useMemo } from 'react';
+import { useForm, Controller } from 'react-hook-form';
 import { Loader2 } from 'lucide-react';
 import {
   Dialog,
@@ -14,9 +14,17 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { addOrganizationAddress, updateOrganizationAddress } from '@/lib/actions/organizations';
 import { Address, AddressType } from '@/lib/types/contacts-organizations';
+import { getCountryNames, getRegionForCountry, normalizeCountryForLookup } from '@/lib/data/countries';
 
 interface SiteAddressDialogProps {
   open: boolean;
@@ -54,8 +62,13 @@ export function SiteAddressDialog({
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditing = !!address;
+  const countryOptions = useMemo(() => getCountryNames(), []);
 
-  const { register, handleSubmit, reset } = useForm<AddressFormData>({
+  const defaultCountry = address?.country
+    ? normalizeCountryForLookup(address.country)
+    : 'United States of America';
+
+  const { register, handleSubmit, reset, control, watch } = useForm<AddressFormData>({
     defaultValues: {
       address_type: address?.address_type ?? 'shipping',
       street_1: address?.street_1 ?? '',
@@ -63,13 +76,18 @@ export function SiteAddressDialog({
       city: address?.city ?? '',
       state: address?.state ?? '',
       postal_code: address?.postal_code ?? '',
-      country: address?.country ?? '',
+      country: defaultCountry,
       notes: address?.notes ?? '',
     },
   });
 
+  const watchedCountry = watch('country');
+
   useEffect(() => {
     if (open) {
+      const country = address?.country
+        ? normalizeCountryForLookup(address.country)
+        : 'United States of America';
       reset({
         address_type: address?.address_type ?? 'shipping',
         street_1: address?.street_1 ?? '',
@@ -77,7 +95,7 @@ export function SiteAddressDialog({
         city: address?.city ?? '',
         state: address?.state ?? '',
         postal_code: address?.postal_code ?? '',
-        country: address?.country ?? '',
+        country,
         notes: address?.notes ?? '',
       });
     }
@@ -192,12 +210,29 @@ export function SiteAddressDialog({
             </div>
             <div className="space-y-1">
               <Label htmlFor="country" className="text-xs">Country</Label>
-              <Input
-                id="country"
-                className="text-xs md:text-xs h-8"
-                placeholder="Country"
-                {...register('country')}
+              <Controller
+                name="country"
+                control={control}
+                render={({ field }) => (
+                  <Select value={field.value || ''} onValueChange={field.onChange}>
+                    <SelectTrigger id="country" className="text-xs h-8 w-full">
+                      <SelectValue placeholder="Select country" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {countryOptions.map((name) => (
+                        <SelectItem key={name} value={name} className="text-xs">
+                          {name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               />
+              {watchedCountry && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Country Region: {getRegionForCountry(watchedCountry) ?? '—'}
+                </p>
+              )}
             </div>
           </div>
 

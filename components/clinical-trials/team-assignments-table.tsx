@@ -14,16 +14,24 @@ import { Badge } from '@/components/ui/badge';
 import { Edit, Trash2, UserPlus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { deleteTeamAssignment } from '@/lib/actions/team-assignments';
+import { deleteProtocolContact } from '@/lib/actions/protocol-contacts';
+import type { ProtocolContactWithRelations } from '@/lib/actions/protocol-contacts';
 import type { ProtocolTeamWithRelations, RegionTeamWithRelations, SiteTeamWithRelations, EntityType } from '@/lib/types/clinical-trials';
 import { TEAM_ROLE_LABELS } from '@/lib/types/clinical-trials';
+import { CONTACT_PROJECT_ROLE_LABELS } from '@/lib/types/contacts-organizations';
 
 type TeamAssignment = ProtocolTeamWithRelations | RegionTeamWithRelations | SiteTeamWithRelations;
+type TeamMemberItem = TeamAssignment | ProtocolContactWithRelations;
+
+function isProtocolContact(item: TeamMemberItem): item is ProtocolContactWithRelations {
+  return 'contact_id' in item && 'contact' in item;
+}
 
 interface TeamAssignmentsTableProps {
-  assignments: TeamAssignment[];
+  assignments: TeamMemberItem[];
   entityType: EntityType;
   isLoading: boolean;
-  onEdit: (assignment: TeamAssignment) => void;
+  onEdit: (assignment: TeamMemberItem) => void;
   onRefresh: () => void;
   companyId: string;
   canManage?: boolean;
@@ -41,14 +49,16 @@ export function TeamAssignmentsTable({
   const { toast } = useToast();
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (item: TeamMemberItem) => {
     if (!confirm('Are you sure you want to remove this team member?')) {
       return;
     }
 
-    setDeletingId(id);
+    setDeletingId(item.id);
 
-    const result = await deleteTeamAssignment(companyId, id, entityType);
+    const result = isProtocolContact(item)
+      ? await deleteProtocolContact(item.id)
+      : await deleteTeamAssignment(companyId, item.id, entityType);
 
     if (result.success) {
       toast({
@@ -76,14 +86,28 @@ export function TeamAssignmentsTable({
     });
   };
 
-  const getUserName = (assignment: TeamAssignment) => {
-    if (!assignment.user) return 'Unknown User';
-    const { first_name, last_name, email } = assignment.user;
-    if (first_name && last_name) {
-      return `${first_name} ${last_name}`;
+  const getMemberDisplayName = (item: TeamMemberItem) => {
+    if (isProtocolContact(item)) {
+      const c = item.contact;
+      if (!c) return 'Unknown Contact';
+      const name = [c.first_name, c.last_name].filter(Boolean).join(' ');
+      return name || c.email || 'Unknown Contact';
     }
-    return email;
+    const a = item as TeamAssignment;
+    if (!a.user) return 'Unknown User';
+    const { first_name, last_name, email } = a.user;
+    return first_name && last_name ? `${first_name} ${last_name}` : email;
   };
+
+  const getRoleLabel = (item: TeamMemberItem) => {
+    const role = item.role;
+    if (isProtocolContact(item)) {
+      return (CONTACT_PROJECT_ROLE_LABELS as Record<string, string>)[role] ?? role.replace(/_/g, ' ');
+    }
+    return (TEAM_ROLE_LABELS as Record<string, string>)[role] ?? role;
+  };
+
+  const showPrimaryColumn = entityType === 'protocol' && assignments.some((a) => !isProtocolContact(a));
 
   if (isLoading) {
     return (
@@ -107,57 +131,61 @@ export function TeamAssignmentsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-xs">User</TableHead>
+            <TableHead className="text-xs">Member</TableHead>
             <TableHead className="text-xs">Role</TableHead>
             <TableHead className="text-xs">Start Date</TableHead>
             <TableHead className="text-xs">End Date</TableHead>
             <TableHead className="text-xs">Status</TableHead>
-            <TableHead className="text-xs">Primary</TableHead>
+            {showPrimaryColumn && <TableHead className="text-xs">Primary</TableHead>}
             {canManage && <TableHead className="w-[100px] text-xs">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {assignments.map((assignment) => (
-            <TableRow key={assignment.id}>
+          {assignments.map((item) => (
+            <TableRow key={item.id}>
               <TableCell className="text-xs">
                 <div className="flex flex-col">
-                  <span className="font-medium">{getUserName(assignment)}</span>
-                  {assignment.user && (
-                    <span className="text-muted-foreground">{assignment.user.email}</span>
+                  <span className="font-medium">{getMemberDisplayName(item)}</span>
+                  {(isProtocolContact(item) ? item.contact?.email : (item as TeamAssignment).user?.email) && (
+                    <span className="text-muted-foreground">
+                      {isProtocolContact(item) ? item.contact?.email : (item as TeamAssignment).user?.email}
+                    </span>
                   )}
                 </div>
               </TableCell>
               <TableCell className="text-xs">
                 <Badge variant="outline" className="text-xs">
-                  {TEAM_ROLE_LABELS[assignment.role]}
+                  {getRoleLabel(item)}
                 </Badge>
               </TableCell>
-              <TableCell className="text-xs">{formatDate(assignment.start_date)}</TableCell>
-              <TableCell className="text-xs">{formatDate(assignment.end_date)}</TableCell>
+              <TableCell className="text-xs">{formatDate(item.start_date)}</TableCell>
+              <TableCell className="text-xs">{formatDate(item.end_date)}</TableCell>
               <TableCell className="text-xs">
                 <Badge
-                  variant={assignment.status === 'active' ? 'default' : 'secondary'}
+                  variant={(item.status === 'active' || item.status === 'pending') ? 'default' : 'secondary'}
                   className="text-xs"
                 >
-                  {assignment.status === 'active' ? 'Active' : 'Inactive'}
+                  {item.status === 'active' ? 'Active' : item.status === 'pending' ? 'Pending' : 'Inactive'}
                 </Badge>
               </TableCell>
-              <TableCell className="text-xs">
-                {assignment.is_primary ? (
-                  <Badge variant="default" className="text-xs">
-                    Yes
-                  </Badge>
-                ) : (
-                  <span className="text-muted-foreground">No</span>
-                )}
-              </TableCell>
+              {showPrimaryColumn && (
+                <TableCell className="text-xs">
+                  {!isProtocolContact(item) && (item as TeamAssignment).is_primary ? (
+                    <Badge variant="default" className="text-xs">
+                      Yes
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground">{isProtocolContact(item) ? '-' : 'No'}</span>
+                  )}
+                </TableCell>
+              )}
               {canManage && (
                 <TableCell>
                   <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => onEdit(assignment)}
+                      onClick={() => onEdit(item)}
                       className="h-7 px-2"
                     >
                       <Edit className="h-3 w-3" />
@@ -165,8 +193,8 @@ export function TeamAssignmentsTable({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDelete(assignment.id)}
-                      disabled={deletingId === assignment.id}
+                      onClick={() => handleDelete(item)}
+                      disabled={deletingId === item.id}
                       className="h-7 px-2 text-destructive hover:text-destructive"
                     >
                       <Trash2 className="h-3 w-3" />

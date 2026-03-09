@@ -65,6 +65,12 @@ export default async function OnboardingPage() {
     redirect('/protected');
   }
 
+  // Treat auto-generated "{email}'s Organization" as unset - show empty until user enters a real name
+  const effectiveCompanyName =
+    company.name && !company.name.trim().endsWith("'s Organization")
+      ? company.name
+      : '';
+
   // Fetch first project for the company (most recent) to pre-populate step 2
   const { data: firstProject } = await supabase
     .from('clinical_protocols')
@@ -96,7 +102,7 @@ export default async function OnboardingPage() {
         <AdminOnboardingWizard
           companyId={company.id}
           profileId={profile.id}
-          companyName={company.name ?? ''}
+          companyName={effectiveCompanyName}
           companyLogoUrl={company.logo_url}
           userEmail={profile.email || ''}
           initialProject={initialProject}

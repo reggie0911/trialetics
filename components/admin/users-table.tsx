@@ -5,7 +5,6 @@ import { Users, Shield, User, MoreHorizontal, Loader2, Ban, CheckCircle } from '
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -147,9 +146,6 @@ export function UsersTable({
             <Users className="h-5 w-5" />
             Company Users
           </CardTitle>
-          <CardDescription className="text-xs">
-            {users.length} {users.length === 1 ? 'user' : 'users'} in your company
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border">

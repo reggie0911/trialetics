@@ -8,6 +8,7 @@ import {
   BulkImportResult,
 } from '@/lib/types/contacts-organizations-csv';
 import { CreateAddressData } from '@/lib/types/contacts-organizations';
+import { ctmsSlugForContactRole } from '@/lib/utils/contact-title-mapping';
 
 export type ActionResponse<T> = {
   success: boolean;
@@ -161,11 +162,16 @@ export async function importContactChunk(
       last_name: c.last_name,
       email: c.email,
       phone: c.phone || null,
-      title: c.title || null,
+      title: null,
       credentials: c.credentials || null,
       license_number: c.license_number || null,
       status: 'active',
       notes: c.notes || null,
+      youtube_url: c.youtube_url || null,
+      linkedin_url: c.linkedin_url || null,
+      x_url: c.x_url || null,
+      facebook_url: c.facebook_url || null,
+      substack_url: c.substack_url || null,
       metadata: {},
       created_by_id: profileId,
       creator_email: creatorEmail,
@@ -227,6 +233,35 @@ export async function importContactChunk(
           result.warnings.push(`Some addresses failed to create: ${addressError.message}`);
         } else {
           result.addressesCreated = addressesToInsert.length;
+        }
+      }
+
+      // Create CTMS role assignments from CSV title column
+      const contactsWithTitle = insertedContacts.filter(({ source }) => !!source.title);
+      if (contactsWithTitle.length > 0) {
+        // Fetch all active ctms_roles once
+        const { data: allRoles } = await supabase
+          .from('ctms_roles')
+          .select('id, slug')
+          .eq('is_active', true);
+        const roleSlugToId = new Map((allRoles || []).map((r: any) => [r.slug, r.id]));
+
+        const roleAssignmentsToInsert: Array<{ contact_id: string; role_id: string; is_primary: boolean }> = [];
+        contactsWithTitle.forEach(({ contact, source }) => {
+          const slug = ctmsSlugForContactRole(source.title!);
+          if (!slug) return;
+          const roleId = roleSlugToId.get(slug);
+          if (!roleId) return;
+          roleAssignmentsToInsert.push({ contact_id: contact.id, role_id: roleId, is_primary: true });
+        });
+
+        if (roleAssignmentsToInsert.length > 0) {
+          const { error: roleError } = await supabase
+            .from('contact_role_assignments')
+            .insert(roleAssignmentsToInsert);
+          if (roleError) {
+            result.warnings.push(`Some role assignments failed to create: ${roleError.message}`);
+          }
         }
       }
 

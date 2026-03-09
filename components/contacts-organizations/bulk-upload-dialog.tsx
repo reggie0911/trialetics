@@ -270,6 +270,11 @@ export function BulkUploadDialog({
           state: c.state,
           postal_code: c.postal_code,
           country: c.country,
+          youtube_url: c.youtube_url,
+          linkedin_url: c.linkedin_url,
+          x_url: c.x_url,
+          facebook_url: c.facebook_url,
+          substack_url: c.substack_url,
           orgLinks: c.organization_name ? [{
             organization_name: c.organization_name,
             organization_site_id: c.organization_site_id,

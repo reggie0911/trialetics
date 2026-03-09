@@ -1,10 +1,8 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/server';
-import { ProtectedNavbar } from '@/components/layout/protected-navbar';
-import { ModuleNavbar } from '@/components/layout/module-navbar';
-import { ActivityCalendarClient } from '@/components/clinical-trials/activity-calendar-client';
+import { ActivityCalendarPage } from '@/components/clinical-trials/activity-calendar-page';
 
-export default async function ActivityCalendarPage() {
+export default async function CalendarPage() {
   const supabase = await createClient();
 
   const {
@@ -21,21 +19,5 @@ export default async function ActivityCalendarPage() {
 
   if (!profile?.company_id) redirect('/protected');
 
-  return (
-    <div className="min-h-screen bg-[#E9E9E9]">
-      <ProtectedNavbar />
-      <main className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 py-4 sm:py-8">
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Protocol Activity Calendar</h1>
-            <p className="text-sm text-muted-foreground">
-              View protocol activities and milestones by month
-            </p>
-          </div>
-          <ModuleNavbar />
-        </div>
-        <ActivityCalendarClient companyId={profile.company_id} />
-      </main>
-    </div>
-  );
+  return <ActivityCalendarPage companyId={profile.company_id} />;
 }

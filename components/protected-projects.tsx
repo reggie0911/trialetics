@@ -108,20 +108,14 @@ export function ProtectedProjects({ projects }: ProtectedProjectsProps) {
                     </Button>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-muted-foreground">
-                  {project.trial_phase && (
+                {project.trial_phase && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-muted-foreground">
                     <span>
-                      <span className="font-medium text-muted-foreground/80">Phase</span>{' '}
+                      <span className="font-medium text-muted-foreground/80">Phase:</span>{' '}
                       {project.trial_phase}
                     </span>
-                  )}
-                  {project.protocol_number && project.protocol_number !== '-' && (
-                    <span>
-                      <span className="font-medium text-muted-foreground/80">Protocol</span>{' '}
-                      {project.protocol_number}
-                    </span>
-                  )}
-                </div>
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="flex-1 space-y-3 pb-3">
                 {project.protocol_description && (
@@ -129,17 +123,23 @@ export function ProtectedProjects({ projects }: ProtectedProjectsProps) {
                     {project.protocol_description}
                   </p>
                 )}
+                {project.countries && project.countries.length > 0 && (
+                  <div className="text-sm text-muted-foreground">
+                    <span className="font-medium text-muted-foreground/80">Countries:</span>{' '}
+                    {project.countries.map((c) => c.countryName).join(', ')}
+                  </div>
+                )}
                 {(project.planned_sites || project.planned_subjects) && (
                   <div className="flex gap-4 text-sm text-muted-foreground">
-                    {project.planned_sites && (
+                    {project.planned_sites != null && project.planned_sites > 0 && (
                       <span>
-                        <span className="font-medium text-muted-foreground/80">Sites</span>{' '}
+                        <span className="font-medium text-muted-foreground/80">Sites:</span>{' '}
                         {project.planned_sites}
                       </span>
                     )}
-                    {project.planned_subjects && (
+                    {project.planned_subjects != null && project.planned_subjects > 0 && (
                       <span>
-                        <span className="font-medium text-muted-foreground/80">Subjects</span>{' '}
+                        <span className="font-medium text-muted-foreground/80">Subjects:</span>{' '}
                         {project.planned_subjects}
                       </span>
                     )}

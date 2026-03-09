@@ -459,7 +459,7 @@ export function MCPivotDataTable({
                         >
                           {showChangeTooltip ? (
                             <Tooltip>
-                              <TooltipTrigger>
+                              <TooltipTrigger asChild>
                                 <span className="cursor-help underline decoration-dotted">{displayValue}</span>
                               </TooltipTrigger>
                               <TooltipContent className="max-w-md text-[12px] p-3">

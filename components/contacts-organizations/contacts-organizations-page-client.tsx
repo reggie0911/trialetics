@@ -1,19 +1,22 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, RefreshCw, Plus, Building2, Users, MapPin, UserCheck } from 'lucide-react';
+import { Loader2, Plus, Building2, Users, MapPin, UserCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { OrganizationsTab } from './organizations-tab';
 import { ContactsTab } from './contacts-tab';
+import { UnassignedSitesTable } from './unassigned-sites-table';
 import { OrganizationFormDialog } from './organization-form-dialog';
 import { ContactFormDialog } from './contact-form-dialog';
 import { BulkUploadDialog } from './bulk-upload-dialog';
 import {
   getOrganizations,
   getContactsOrganizationsStats,
+  getUnassignedSites,
+  type UnassignedSitesFilters,
 } from '@/lib/actions/organizations';
 import { getContacts } from '@/lib/actions/contacts';
 import {
@@ -40,7 +43,7 @@ export function ContactsOrganizationsPageClient({
   const { toast } = useToast();
 
   // State
-  const [activeTab, setActiveTab] = useState<'organizations' | 'contacts'>('organizations');
+  const [activeTab, setActiveTab] = useState<'organizations' | 'contacts' | 'unassigned-sites'>('organizations');
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -61,6 +64,12 @@ export function ContactsOrganizationsPageClient({
     page: 1,
     pageSize: 25,
   });
+  const [unassignedFilters, setUnassignedFilters] = useState<UnassignedSitesFilters>({
+    page: 1,
+    pageSize: 25,
+  });
+  const [unassignedSites, setUnassignedSites] = useState<OrganizationWithRelations[]>([]);
+  const [unassignedTotal, setUnassignedTotal] = useState(0);
 
   // Dialog state
   const [isOrgDialogOpen, setIsOrgDialogOpen] = useState(false);
@@ -73,10 +82,11 @@ export function ContactsOrganizationsPageClient({
     }
 
     try {
-      const [orgsResult, contactsResult, statsResult] = await Promise.all([
+      const [orgsResult, contactsResult, statsResult, unassignedResult] = await Promise.all([
         getOrganizations(companyId, orgFilters),
         getContacts(companyId, contactFilters),
         getContactsOrganizationsStats(companyId),
+        getUnassignedSites(companyId, { page: 1, pageSize: 1 }),
       ]);
 
       if (orgsResult.success && orgsResult.data) {
@@ -136,6 +146,15 @@ export function ContactsOrganizationsPageClient({
     }
   }, [companyId, contactFilters]);
 
+  // Fetch unassigned sites only
+  const fetchUnassignedSites = useCallback(async () => {
+    const result = await getUnassignedSites(companyId, unassignedFilters);
+    if (result.success && result.data) {
+      setUnassignedSites(result.data.organizations);
+      setUnassignedTotal(result.data.total);
+    }
+  }, [companyId, unassignedFilters]);
+
   // Initial load
   useEffect(() => {
     fetchData();
@@ -154,6 +173,12 @@ export function ContactsOrganizationsPageClient({
     }
   }, [contactFilters]);
 
+  useEffect(() => {
+    if (!isLoading && activeTab === 'unassigned-sites') {
+      fetchUnassignedSites();
+    }
+  }, [activeTab, unassignedFilters, fetchUnassignedSites, isLoading]);
+
   const handleRefresh = () => {
     fetchData(true);
   };
@@ -166,6 +191,11 @@ export function ContactsOrganizationsPageClient({
   const handleContactSuccess = () => {
     setIsContactDialogOpen(false);
     fetchData(true);
+  };
+
+  const handleUnassignedRefresh = () => {
+    fetchData(true);
+    fetchUnassignedSites();
   };
 
   if (isLoading) {
@@ -182,14 +212,11 @@ export function ContactsOrganizationsPageClient({
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Organizations</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Institutions</CardTitle>
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.total_organizations || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats?.organizations_by_type.site || 0} sites, {stats?.organizations_by_type.sponsor || 0} sponsors
-            </p>
           </CardContent>
         </Card>
 
@@ -200,9 +227,6 @@ export function ContactsOrganizationsPageClient({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.active_sites || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              Clinical trial sites
-            </p>
           </CardContent>
         </Card>
 
@@ -213,9 +237,6 @@ export function ContactsOrganizationsPageClient({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.total_contacts || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats?.contacts_by_status.active || 0} active
-            </p>
           </CardContent>
         </Card>
 
@@ -226,41 +247,25 @@ export function ContactsOrganizationsPageClient({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats?.active_investigators || 0}</div>
-            <p className="text-xs text-muted-foreground">
-              PIs and Sub-Investigators
-            </p>
           </CardContent>
         </Card>
       </div>
 
       {/* Action Buttons */}
       <div className="flex justify-end gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="text-xs"
-        >
-          {isRefreshing ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-2 h-4 w-4" />
-          )}
-          Refresh
-        </Button>
         <BulkUploadDialog
           companyId={companyId}
           profileId={profileId}
           userEmail={userEmail}
           onSuccess={handleRefresh}
         />
-        {activeTab === 'organizations' ? (
+        {activeTab === 'organizations' && (
           <Button size="sm" onClick={() => setIsOrgDialogOpen(true)} className="text-xs">
             <Plus className="mr-2 h-4 w-4" />
-            Add Organization
+            Add Institution
           </Button>
-        ) : (
+        )}
+        {activeTab === 'contacts' && (
           <Button size="sm" onClick={() => setIsContactDialogOpen(true)} className="text-xs">
             <Plus className="mr-2 h-4 w-4" />
             Add Contact
@@ -271,15 +276,18 @@ export function ContactsOrganizationsPageClient({
       {/* Tabs */}
       <Tabs
         value={activeTab}
-        onValueChange={(value) => setActiveTab(value as 'organizations' | 'contacts')}
+        onValueChange={(value) => setActiveTab(value as 'organizations' | 'contacts' | 'unassigned-sites')}
         className="w-full"
       >
-        <TabsList className="grid w-full max-w-[400px] grid-cols-2">
+        <TabsList className="grid w-full max-w-[600px] grid-cols-3">
           <TabsTrigger value="organizations" className="text-xs">
-            Organizations ({organizationsTotal})
+            Institutions ({organizationsTotal})
           </TabsTrigger>
           <TabsTrigger value="contacts" className="text-xs">
             Contacts ({contactsTotal})
+          </TabsTrigger>
+          <TabsTrigger value="unassigned-sites" className="text-xs">
+            Unassigned Sites ({unassignedTotal})
           </TabsTrigger>
         </TabsList>
 
@@ -308,6 +316,18 @@ export function ContactsOrganizationsPageClient({
             profileId={profileId}
             userEmail={userEmail}
             userRole={userRole}
+          />
+        </TabsContent>
+
+        <TabsContent value="unassigned-sites" className="mt-6">
+          <UnassignedSitesTable
+            sites={unassignedSites}
+            total={unassignedTotal}
+            page={unassignedFilters.page || 1}
+            pageSize={unassignedFilters.pageSize || 25}
+            onPageChange={(page) => setUnassignedFilters((f) => ({ ...f, page }))}
+            onRefresh={handleUnassignedRefresh}
+            companyId={companyId}
           />
         </TabsContent>
       </Tabs>

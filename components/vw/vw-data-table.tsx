@@ -183,8 +183,10 @@ const AlertStatusBadge = ({
   
   return (
     <Tooltip>
-      <TooltipTrigger className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border cursor-help ${colors[status] || ""}`}>
-        {status}
+      <TooltipTrigger asChild>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border cursor-help ${colors[status] || ""}`}>
+          {status}
+        </span>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs text-[11px] whitespace-pre-line">
         <p className="font-semibold mb-1">{status} Status</p>

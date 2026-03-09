@@ -14,6 +14,33 @@ import type {
 } from '@/lib/types/clinical-trials';
 
 // =============================================
+// Get Company Profiles (for team assignment user picker)
+// =============================================
+
+export async function getCompanyProfilesForTeam(companyId: string) {
+  const supabase = await createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name, email')
+      .eq('company_id', companyId)
+      .eq('is_active', true)
+      .order('first_name', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching company profiles:', error);
+      return { success: false as const, error: 'Failed to fetch users', data: null };
+    }
+
+    return { success: true as const, data: data || [], error: null };
+  } catch (error) {
+    console.error('Error in getCompanyProfilesForTeam:', error);
+    return { success: false as const, error: 'An unexpected error occurred', data: null };
+  }
+}
+
+// =============================================
 // Get Team Assignments
 // =============================================
 

@@ -61,10 +61,10 @@ export function ContactsTab({
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(true);
 
-  // Get unique titles from all contacts
+  // Collect unique display titles from contacts (prefer displayTitle, fall back to raw title)
   const uniqueTitles = Array.from(new Set(
     contacts
-      .map((c) => c.title)
+      .map((c) => (c as any).displayTitle || c.title)
       .filter((title): title is string => !!title)
   )).sort();
 
@@ -196,7 +196,7 @@ export function ContactsTab({
                 >
                   <SelectTrigger id="title" className="text-xs h-8 w-full capitalize">
                     <SelectValue placeholder="Title">
-                      {filters.title && filters.title !== 'all' 
+                      {filters.title && filters.title !== 'all'
                         ? filters.title
                         : 'All Titles'}
                     </SelectValue>
@@ -204,7 +204,7 @@ export function ContactsTab({
                   <SelectContent>
                     <SelectItem value="all" className="text-xs">All Titles</SelectItem>
                     {uniqueTitles.map((title) => (
-                      <SelectItem key={title} value={title} className="text-xs">
+                      <SelectItem key={title} value={title} className="text-xs capitalize">
                         {title}
                       </SelectItem>
                     ))}
@@ -268,7 +268,12 @@ export function ContactsTab({
 
       {/* Data Table */}
       <ContactsDataTable
-        contacts={contacts}
+        contacts={filters.title && filters.title !== 'all'
+          ? contacts.filter((c) => {
+              const display = (c as any).displayTitle || c.title || '';
+              return display.toLowerCase().includes(filters.title!.toLowerCase());
+            })
+          : contacts}
         total={total}
         page={filters.page || 1}
         pageSize={filters.pageSize || 25}

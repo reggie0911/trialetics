@@ -19,7 +19,6 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -31,16 +30,16 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { createClinicalRegion, updateClinicalRegion } from '@/lib/actions/clinical-regions';
 import { getAllClinicalProtocols } from '@/lib/actions/clinical-protocols';
+import { CountryRegionEntryFields } from './country-region-entry-fields';
+import { getCountryNames, GEOGRAPHIC_REGIONS } from '@/lib/data/countries';
+import type { CountryEntry } from '@/lib/actions/projects';
 import type {
   ClinicalRegionWithRelations,
   ClinicalProtocol,
 } from '@/lib/types/clinical-trials';
 
 const regionSchema = z.object({
-  protocol_id: z.string().min(1, 'Protocol is required'),
-  region_name: z.string().min(1, 'Region name is required'),
-  planned_sites_count: z.coerce.number().optional(),
-  planned_subjects_count: z.coerce.number().optional(),
+  protocol_id: z.string().min(1, 'Project is required'),
 });
 
 type RegionFormData = z.infer<typeof regionSchema>;
@@ -50,7 +49,62 @@ interface RegionFormDialogProps {
   onOpenChange: (open: boolean) => void;
   companyId: string;
   region?: ClinicalRegionWithRelations | null;
+  /** Pre-select protocol when adding a new country (e.g. from project context) */
+  defaultProtocolId?: string;
+  /** When provided with defaultProtocolId, shows project name as static text instead of dropdown */
+  defaultProtocolDisplay?: string;
   onSuccess: () => void;
+}
+
+function emptyCountryEntry(): CountryEntry {
+  return {
+    countryName: '',
+    countryRegion: '',
+    plannedSites: undefined,
+    plannedSubjects: undefined,
+    plannedStartDate: '',
+    plannedEndDate: '',
+  };
+}
+
+function regionToCountryEntry(region: ClinicalRegionWithRelations): CountryEntry {
+  const countryNames = getCountryNames();
+  const isCountry = countryNames.includes(region.region_name);
+  const isGeographicRegion = (GEOGRAPHIC_REGIONS as readonly string[]).includes(region.region_name);
+  const metadata = region.metadata as { country_region?: string } | null | undefined;
+  const countryRegion = metadata?.country_region || '';
+
+  if (isCountry) {
+    return {
+      id: region.id,
+      countryName: region.region_name,
+      countryRegion: countryRegion || undefined,
+      plannedSites: region.planned_sites_count ?? undefined,
+      plannedSubjects: region.planned_subjects_count ?? undefined,
+      plannedStartDate: region.planned_start_date || '',
+      plannedEndDate: region.planned_end_date || '',
+    };
+  }
+  if (isGeographicRegion) {
+    return {
+      id: region.id,
+      countryName: '',
+      countryRegion: region.region_name,
+      plannedSites: region.planned_sites_count ?? undefined,
+      plannedSubjects: region.planned_subjects_count ?? undefined,
+      plannedStartDate: region.planned_start_date || '',
+      plannedEndDate: region.planned_end_date || '',
+    };
+  }
+  return {
+    id: region.id,
+    countryName: '',
+    countryRegion: region.region_name || countryRegion,
+    plannedSites: region.planned_sites_count ?? undefined,
+    plannedSubjects: region.planned_subjects_count ?? undefined,
+    plannedStartDate: region.planned_start_date || '',
+    plannedEndDate: region.planned_end_date || '',
+  };
 }
 
 export function RegionFormDialog({
@@ -58,69 +112,102 @@ export function RegionFormDialog({
   onOpenChange,
   companyId,
   region,
+  defaultProtocolId,
+  defaultProtocolDisplay,
   onSuccess,
 }: RegionFormDialogProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [protocols, setProtocols] = useState<ClinicalProtocol[]>([]);
+  const [countryEntry, setCountryEntry] = useState<CountryEntry>(emptyCountryEntry());
 
   const form = useForm<RegionFormData>({
     resolver: zodResolver(regionSchema),
     defaultValues: {
       protocol_id: '',
-      region_name: '',
-      planned_sites_count: undefined,
-      planned_subjects_count: undefined,
     },
   });
 
   useEffect(() => {
+    if (!open) return;
     const loadProtocols = async () => {
-      const result = await getAllClinicalProtocols(companyId);
+      const result = await getAllClinicalProtocols(companyId, undefined);
       if (result.success && result.data) {
-        // Filter to only show protocols with regions_required = true
-        setProtocols(result.data.filter(p => p.regions_required));
+        setProtocols(result.data);
       }
     };
     loadProtocols();
-  }, [companyId]);
+  }, [companyId, open, region]);
 
   useEffect(() => {
+    if (!open) return;
     if (region) {
-      form.reset({
-        protocol_id: region.protocol_id,
-        region_name: region.region_name,
-        planned_sites_count: region.planned_sites_count ?? undefined,
-        planned_subjects_count: region.planned_subjects_count ?? undefined,
-      });
+      form.reset({ protocol_id: region.protocol_id });
+      setCountryEntry(regionToCountryEntry(region));
     } else {
-      form.reset({
-        protocol_id: '',
-        region_name: '',
-        planned_sites_count: undefined,
-        planned_subjects_count: undefined,
-      });
+      form.reset({ protocol_id: defaultProtocolId || '' });
+      setCountryEntry(emptyCountryEntry());
     }
-  }, [region, form]);
+  }, [open, region, form, defaultProtocolId]);
+
+  const hasProtocolSelected =
+    !!form.watch('protocol_id') ||
+    !!(defaultProtocolId && defaultProtocolDisplay) ||
+    !!region;
+
+  const showStaticText =
+    (defaultProtocolId && defaultProtocolDisplay) || !!region;
+  const isProtocolRequirementMet = showStaticText
+    ? true
+    : protocols.length > 0 && hasProtocolSelected;
 
   const onSubmit = async (data: RegionFormData) => {
-    setIsSubmitting(true);
+    const hasCountry = !!countryEntry.countryName?.trim();
+    const hasRegion = !!countryEntry.countryRegion?.trim();
+    if (!hasCountry && !hasRegion) {
+      toast({
+        title: 'Validation error',
+        description: 'Country Name or Region is required',
+        variant: 'destructive',
+      });
+      return;
+    }
 
+    const region_name = hasCountry ? countryEntry.countryName : (countryEntry.countryRegion || '');
+    const metadata = { country_region: countryEntry.countryRegion || '' };
+
+    setIsSubmitting(true);
     try {
       const result = region
-        ? await updateClinicalRegion({ id: region.id, ...data })
-        : await createClinicalRegion(companyId, data);
+        ? await updateClinicalRegion({
+            id: region.id,
+            region_name,
+            planned_sites_count: countryEntry.plannedSites ?? null,
+            planned_subjects_count: countryEntry.plannedSubjects ?? null,
+            planned_start_date: countryEntry.plannedStartDate || null,
+            planned_end_date: countryEntry.plannedEndDate || null,
+            metadata,
+          })
+        : await createClinicalRegion(companyId, {
+            protocol_id: data.protocol_id || defaultProtocolId || '',
+            region_name,
+            planned_sites_count: countryEntry.plannedSites ?? null,
+            planned_subjects_count: countryEntry.plannedSubjects ?? null,
+            planned_start_date: countryEntry.plannedStartDate || null,
+            planned_end_date: countryEntry.plannedEndDate || null,
+            metadata,
+          });
 
       if (result.success) {
         toast({
           title: 'Success',
-          description: `Region ${region ? 'updated' : 'created'} successfully`,
+          description: `Country ${region ? 'updated' : 'created'} successfully`,
         });
         onSuccess();
       } else {
         toast({
           title: 'Error',
-          description: result.error || `Failed to ${region ? 'update' : 'create'} region`,
+          description: result.error || `Failed to ${region ? 'update' : 'create'} country`,
           variant: 'destructive',
         });
       }
@@ -139,11 +226,13 @@ export function RegionFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-lg font-semibold">{region ? 'Edit Region' : 'New Region'}</DialogTitle>
+          <DialogTitle className="text-lg font-semibold">
+            {region ? 'Edit Country' : 'New Country'}
+          </DialogTitle>
           <DialogDescription className="text-sm">
             {region
-              ? 'Update region details for this protocol'
-              : 'Add a new region to organize sites geographically'}
+              ? 'Update country details for this project'
+              : 'Add a new country to organize sites geographically'}
           </DialogDescription>
         </DialogHeader>
 
@@ -152,105 +241,85 @@ export function RegionFormDialog({
             <FormField
               control={form.control}
               name="protocol_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm font-medium">
-                    Protocol <span className="text-destructive">*</span>
-                  </FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={!!region}>
-                    <FormControl>
-                      <SelectTrigger className="h-10 w-[403px] [&>span]:truncate">
-                        <SelectValue 
-                          placeholder="Select a protocol"
-                          getDisplayLabel={(value) => {
-                            if (!value) return null;
-                            const protocol = protocols.find(p => p.id === value);
-                            return protocol ? `${protocol.protocol_number} - ${protocol.title}` : null;
-                          }}
-                        />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {protocols.map((protocol) => (
-                        <SelectItem key={protocol.id} value={protocol.id}>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="font-medium text-sm">{protocol.protocol_number}</span>
-                            <span className="text-xs text-muted-foreground line-clamp-1">{protocol.title}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              render={({ field }) => {
+                const showStaticText =
+                  (defaultProtocolId && defaultProtocolDisplay) || !!region;
+                const displayProtocol =
+                  region
+                    ? protocols.find((p) => p.id === (region.protocol_id ?? field.value))
+                    : null;
+                const staticDisplayText =
+                  defaultProtocolId && defaultProtocolDisplay
+                    ? defaultProtocolDisplay
+                    : region
+                      ? (displayProtocol
+                          ? `${displayProtocol.protocol_number} - ${displayProtocol.title}`
+                          : 'Loading...')
+                      : '';
 
-            <FormField
-              control={form.control}
-              name="region_name"
-              render={({ field }) => (
-                <FormItem className="max-w-[407px]">
-                  <FormLabel className="text-sm font-medium">
-                    Region Name <span className="text-destructive">*</span>
-                  </FormLabel>
-                  <FormControl>
-                    <Input 
-                      {...field} 
-                      className="h-10" 
-                      placeholder="e.g., North America, Europe, Asia-Pacific" 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="flex gap-4">
-              <FormField
-                control={form.control}
-                name="planned_sites_count"
-                render={({ field }) => (
+                return (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">Planned Sites</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="number"
-                        className="h-10 w-[100px]"
-                        placeholder="0"
-                        value={field.value ?? ''}
-                        onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
-                      />
-                    </FormControl>
+                    <FormLabel className="text-sm font-medium">
+                      Project <span className="text-destructive">*</span>
+                    </FormLabel>
+                    {showStaticText ? (
+                      <div className="h-10 w-full min-w-0 rounded-md border border-input bg-muted/50 px-3 flex items-center text-sm">
+                        <span className="truncate">{staticDisplayText}</span>
+                      </div>
+                    ) : (
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="h-10 w-full [&>span]:truncate">
+                            <SelectValue
+                              placeholder="Select a project"
+                              getDisplayLabel={(value) => {
+                                if (!value) return null;
+                                const protocol = protocols.find((p) => p.id === value);
+                                return protocol
+                                  ? `${protocol.protocol_number} - ${protocol.title}`
+                                  : null;
+                              }}
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {protocols.length === 0 ? (
+                            <div className="px-2 py-4 text-xs text-muted-foreground text-center">
+                              No projects found.
+                            </div>
+                          ) : (
+                            protocols.map((protocol) => (
+                              <SelectItem key={protocol.id} value={protocol.id}>
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="font-medium text-sm">{protocol.protocol_number}</span>
+                                  <span className="text-xs text-muted-foreground line-clamp-1">
+                                    {protocol.title}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {!showStaticText && protocols.length === 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Create a project first to add countries.
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
-                )}
-              />
+                );
+              }}
+            />
 
-              <FormField
-                control={form.control}
-                name="planned_subjects_count"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">Planned Subjects</FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        type="number"
-                        className="h-10 w-[100px]"
-                        placeholder="0"
-                        value={field.value ?? ''}
-                        onChange={(e) => field.onChange(e.target.value === '' ? undefined : Number(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            <CountryRegionEntryFields
+              value={countryEntry}
+              onChange={setCountryEntry}
+              showDelete={false}
+            />
 
-            <div className="flex justify-end gap-3 pt-4 border-t max-w-[406px]">
+            <div className="flex justify-end gap-3 pt-4 border-t">
               <Button
                 type="button"
                 variant="outline"
@@ -259,8 +328,11 @@ export function RegionFormDialog({
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Saving...' : region ? 'Update Region' : 'Create Region'}
+              <Button
+                type="submit"
+                disabled={isSubmitting || (!region && !isProtocolRequirementMet)}
+              >
+                {isSubmitting ? 'Saving...' : region ? 'Update Country' : 'Create Country'}
               </Button>
             </div>
           </form>

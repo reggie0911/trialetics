@@ -12,25 +12,29 @@ import { SiteFormDialog } from './site-form-dialog';
 
 interface SitesTabProps {
   companyId: string;
+  profileId: string;
+  email: string;
   onDataChange?: () => void;
 }
 
-export function SitesTab({ companyId, onDataChange }: SitesTabProps) {
+export function SitesTab({ companyId, profileId, email, onDataChange }: SitesTabProps) {
   const { toast } = useToast();
   const [sites, setSites] = useState<ClinicalSiteWithRelations[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const pageSize = 25;
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingSite, setEditingSite] = useState<ClinicalSiteWithRelations | null>(null);
+  const [assigningSite, setAssigningSite] = useState<ClinicalSiteWithRelations | null>(null);
 
   const loadSites = useCallback(async () => {
     setIsLoading(true);
     const result = await getClinicalSites(companyId, {
       search,
       page,
-      pageSize: 25,
+      pageSize,
     });
 
     if (result.success && result.data) {
@@ -55,10 +59,15 @@ export function SitesTab({ companyId, onDataChange }: SitesTabProps) {
     onDataChange?.();
     setShowCreateDialog(false);
     setEditingSite(null);
+    setAssigningSite(null);
   };
 
   const handleEdit = (site: ClinicalSiteWithRelations) => {
     setEditingSite(site);
+  };
+
+  const handleAssign = (site: ClinicalSiteWithRelations) => {
+    setAssigningSite(site);
   };
 
   return (
@@ -70,7 +79,10 @@ export function SitesTab({ companyId, onDataChange }: SitesTabProps) {
           <Input
             placeholder="Search sites..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             className="h-8 pl-8 text-xs"
           />
         </div>
@@ -89,22 +101,55 @@ export function SitesTab({ companyId, onDataChange }: SitesTabProps) {
         sites={sites}
         isLoading={isLoading}
         onEdit={handleEdit}
+        onAssign={handleAssign}
         onRefresh={loadSites}
         companyId={companyId}
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onPageChange={setPage}
       />
 
-      {/* Create/Edit Dialog */}
-      {(showCreateDialog || editingSite) && (
+      {/* Create Site Dialog */}
+      {showCreateDialog && (
         <SiteFormDialog
-          open={showCreateDialog || !!editingSite}
+          open={showCreateDialog}
           onOpenChange={(open) => {
-            if (!open) {
-              setShowCreateDialog(false);
-              setEditingSite(null);
-            }
+            if (!open) setShowCreateDialog(false);
           }}
           companyId={companyId}
+          profileId={profileId}
+          userEmail={email}
+          onSuccess={handleSuccess}
+        />
+      )}
+
+      {/* Edit Site Dialog */}
+      {editingSite && (
+        <SiteFormDialog
+          open={!!editingSite}
+          onOpenChange={(open) => {
+            if (!open) setEditingSite(null);
+          }}
+          companyId={companyId}
+          profileId={profileId}
+          userEmail={email}
           site={editingSite}
+          onSuccess={handleSuccess}
+        />
+      )}
+
+      {/* Assign to Protocol Dialog (org-only row) */}
+      {assigningSite && assigningSite.organization && (
+        <SiteFormDialog
+          open={!!assigningSite}
+          onOpenChange={(open) => {
+            if (!open) setAssigningSite(null);
+          }}
+          companyId={companyId}
+          profileId={profileId}
+          userEmail={email}
+          existingOrganization={assigningSite.organization}
           onSuccess={handleSuccess}
         />
       )}

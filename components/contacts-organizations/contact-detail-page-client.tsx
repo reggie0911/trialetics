@@ -7,7 +7,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Pencil, Mail, Phone, User, Users, FolderOpen, Plus, Trash2, Award } from 'lucide-react';
+import { format } from 'date-fns';
+import { ArrowLeft, Pencil, User, FileText } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -23,22 +25,31 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { removeContactFromOrganization, removeContactFromProject } from '@/lib/actions/contacts';
-import { formatFieldName } from '@/lib/utils';
+import { removeContactFromOrganization } from '@/lib/actions/contacts';
+import { updateProtocolContact } from '@/lib/actions/protocol-contacts';
 import {
   ContactWithRelations,
   ENTITY_STATUS_LABELS,
-  CONTACT_ROLE_LABELS,
-  CONTACT_PROJECT_ROLE_LABELS,
 } from '@/lib/types/contacts-organizations';
 import { ContactFormDialog } from './contact-form-dialog';
-import { AssignOrganizationDialog } from './assign-organization-dialog';
-import { ProjectAssignmentDialog } from './project-assignment-dialog';
+import { AssignOrganizationDialog, type EditingOrganizationAssignment } from './assign-organization-dialog';
+import { AssignProjectDialog, type EditingProjectAssignment } from './assign-project-dialog';
+import { AssignedProjectsCard } from './assigned-projects-card';
 import { ActivityTimeline } from './activity-timeline';
+import { ContactNotesSheet } from './contact-notes-sheet';
+import { EditableContactInfoCard } from './editable-contact-info-card';
+import { EditableCredentialsCard } from './editable-credentials-card';
+import { EditableProfessionalAssociationCard } from './editable-professional-association-card';
+import { EditableNotesCard } from './editable-notes-card';
+import { EditableRolesCard } from './editable-roles-card';
+import { ContactSocialCard } from './contact-social-card';
+import { AssignedOrganizationsCard } from './assigned-organizations-card';
+import type { ContactNote } from '@/lib/types/contacts-organizations';
 
 interface ContactDetailPageClientProps {
   contact: ContactWithRelations;
   activities: any[];
+  contactNotes?: ContactNote[];
   companyId: string;
   profileId: string;
   userEmail: string;
@@ -48,6 +59,7 @@ interface ContactDetailPageClientProps {
 export function ContactDetailPageClient({
   contact: initialContact,
   activities: initialActivities,
+  contactNotes = [],
   companyId,
   profileId,
   userEmail,
@@ -57,9 +69,15 @@ export function ContactDetailPageClient({
   const { toast } = useToast();
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showAssignOrg, setShowAssignOrg] = useState(false);
+  const [editingOrganization, setEditingOrganization] = useState<EditingOrganizationAssignment | null>(null);
   const [showAssignProject, setShowAssignProject] = useState(false);
+  const [editingProject, setEditingProject] = useState<EditingProjectAssignment | null>(null);
+  const [deactivateProjectConfirm, setDeactivateProjectConfirm] = useState<{ relationshipId: string; name: string } | null>(null);
+  const [isDeactivatingProject, setIsDeactivatingProject] = useState(false);
+  const [reactivateProjectConfirm, setReactivateProjectConfirm] = useState<{ relationshipId: string; name: string } | null>(null);
+  const [isReactivatingProject, setIsReactivatingProject] = useState(false);
+  const [showNotesSheet, setShowNotesSheet] = useState(false);
   const [removeOrgConfirm, setRemoveOrgConfirm] = useState<{ relationshipId: string; name: string } | null>(null);
-  const [removeProjectConfirm, setRemoveProjectConfirm] = useState<{ relationshipId: string; name: string } | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
 
   const handleBack = () => {
@@ -90,64 +108,117 @@ export function ContactDetailPageClient({
     setRemoveOrgConfirm(null);
   };
 
-  const handleRemoveProject = async () => {
-    if (!removeProjectConfirm) return;
-    
-    setIsRemoving(true);
-    const result = await removeContactFromProject(removeProjectConfirm.relationshipId);
-    
-    if (result.success) {
-      toast({
-        title: 'Project removed',
-        description: `Contact has been removed from ${removeProjectConfirm.name}.`,
-      });
-      router.refresh();
-    } else {
-      toast({
-        title: 'Error',
-        description: result.error || 'Failed to remove from project',
-        variant: 'destructive',
-      });
-    }
-    
-    setIsRemoving(false);
-    setRemoveProjectConfirm(null);
-  };
-
   const handleAssignSuccess = () => {
+    setEditingOrganization(null);
     router.refresh();
   };
 
+  const handleAssignOrgOpenChange = (open: boolean) => {
+    setShowAssignOrg(open);
+    if (!open) setEditingOrganization(null);
+  };
+
+  const handleEditOrganization = (oc: EditingOrganizationAssignment) => {
+    setEditingOrganization(oc);
+    setShowAssignOrg(true);
+  };
+
+  const handleAssignProjectSuccess = () => {
+    setEditingProject(null);
+    router.refresh();
+  };
+
+  const handleAssignProjectOpenChange = (open: boolean) => {
+    setShowAssignProject(open);
+    if (!open) setEditingProject(null);
+  };
+
+  const handleEditProject = (pc: { id: string; protocol?: { id: string; protocol_number: string | null; title: string | null }; role: string; status: string; start_date?: string | null; end_date?: string | null }) => {
+    setEditingProject({ id: pc.id, protocol: pc.protocol, role: pc.role, status: pc.status, start_date: pc.start_date, end_date: pc.end_date });
+    setShowAssignProject(true);
+  };
+
+  const handleDeactivateProject = async () => {
+    if (!deactivateProjectConfirm) return;
+    setIsDeactivatingProject(true);
+    const result = await updateProtocolContact(deactivateProjectConfirm.relationshipId, {
+      status: 'inactive',
+      end_date: format(new Date(), 'yyyy-MM-dd'),
+    });
+    if (result.success) {
+      toast({ title: 'Project deactivated', description: `Assignment to ${deactivateProjectConfirm.name} has been deactivated.` });
+      router.refresh();
+    } else {
+      toast({ title: 'Error', description: result.error || 'Failed to deactivate', variant: 'destructive' });
+    }
+    setIsDeactivatingProject(false);
+    setDeactivateProjectConfirm(null);
+  };
+
+  const handleReactivateFromEditDialog = (params: { relationshipId: string; name: string }) => {
+    setReactivateProjectConfirm(params);
+    setShowAssignProject(false);
+    setEditingProject(null);
+  };
+
+  const handleReactivateProject = async () => {
+    if (!reactivateProjectConfirm) return;
+    setIsReactivatingProject(true);
+    const result = await updateProtocolContact(reactivateProjectConfirm.relationshipId, {
+      status: 'active',
+      end_date: null,
+    });
+    if (result.success) {
+      toast({ title: 'Project reactivated', description: `Assignment to ${reactivateProjectConfirm.name} has been reactivated.` });
+      router.refresh();
+    } else {
+      toast({ title: 'Error', description: result.error || 'Failed to reactivate', variant: 'destructive' });
+    }
+    setIsReactivatingProject(false);
+    setReactivateProjectConfirm(null);
+  };
+
   const existingOrgIds = initialContact.organizations?.map((oc) => oc.organization.id) || [];
-  const existingProjectIds = initialContact.projects?.map((cp) => cp.protocol.id) || [];
+  const existingProjectIds = (initialContact as any).projects?.map((cp: any) => cp.protocol?.id).filter(Boolean) || [];
 
   return (
     <>
       <main className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 py-4 sm:py-8">
         {/* Header with Back button */}
         <div className="flex items-center justify-between mb-6">
-          <Button variant="ghost" onClick={handleBack} className="text-xs md:text-xs">
+          <Button variant="ghost" onClick={handleBack} className="text-xs md:text-xs" title="Back to Contacts & Organizations">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Contacts & Organizations
           </Button>
-          <Button onClick={() => setShowEditDialog(true)} className="text-xs md:text-xs">
-            <Pencil className="h-4 w-4 mr-2" />
-            Edit
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowNotesSheet(true)} className="text-xs md:text-xs" title="Notes">
+              <FileText className="h-4 w-4 mr-2" />
+              Notes
+            </Button>
+            <Button onClick={() => setShowEditDialog(true)} className="text-xs md:text-xs" title="Edit contact">
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+          </div>
         </div>
 
         {/* Contact name and badges */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
-            <User className="h-6 w-6 text-muted-foreground" />
+            <Avatar className="h-10 w-10 shrink-0 rounded-lg after:rounded-lg">
+              <AvatarImage src={initialContact.profile_image_url || undefined} alt="" className="rounded-lg" />
+              <AvatarFallback className="text-muted-foreground rounded-lg">
+                <User className="h-5 w-5" />
+              </AvatarFallback>
+            </Avatar>
             <h1 className="text-[32px] font-semibold tracking-[-1px]">
               {initialContact.first_name} {initialContact.last_name}
             </h1>
           </div>
           <div className="flex gap-2 items-center">
-            {initialContact.title && (
+            {(initialContact as any).displayTitle && (
               <span className="text-xs md:text-xs text-muted-foreground">
-                {CONTACT_ROLE_LABELS[initialContact.title as keyof typeof CONTACT_ROLE_LABELS] || formatFieldName(initialContact.title)}
+                {(initialContact as any).displayTitle}
               </span>
             )}
             <Badge
@@ -164,87 +235,49 @@ export function ContactDetailPageClient({
           <TabsList className="text-xs md:text-xs">
             <TabsTrigger value="overview" className="text-xs md:text-xs">Overview</TabsTrigger>
             <TabsTrigger value="activity" className="text-xs md:text-xs">Activity</TabsTrigger>
-            <TabsTrigger value="organizations" className="text-xs md:text-xs">
-              Organizations ({initialContact.organizations?.length || 0})
-            </TabsTrigger>
-            <TabsTrigger value="projects" className="text-xs md:text-xs">
-              Projects ({initialContact.projects?.length || 0})
-            </TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="mt-6">
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* Left Column */}
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {/* Column 1 */}
               <div className="space-y-4">
-                {/* Contact Information */}
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-xs md:text-xs font-medium">Contact Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {initialContact.email && (
-                      <div className="flex items-center gap-2 text-xs md:text-xs">
-                        <Mail className="h-4 w-4 text-muted-foreground" />
-                        <a href={`mailto:${initialContact.email}`} className="hover:underline">
-                          {initialContact.email}
-                        </a>
-                      </div>
-                    )}
-                    {initialContact.phone && (
-                      <div className="flex items-center gap-2 text-xs md:text-xs">
-                        <Phone className="h-4 w-4 text-muted-foreground" />
-                        <span>{initialContact.phone}</span>
-                      </div>
-                    )}
-                    {!initialContact.email && !initialContact.phone && (
-                      <p className="text-xs md:text-xs text-muted-foreground">No contact information</p>
-                    )}
-                  </CardContent>
-                </Card>
-
-                {/* Credentials */}
-                {(initialContact.credentials || initialContact.license_number) && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-xs md:text-xs font-medium flex items-center gap-2">
-                        <Award className="h-4 w-4" />
-                        Credentials
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-2 text-xs md:text-xs">
-                      {initialContact.credentials && (
-                        <div>
-                          <span className="text-muted-foreground">Credentials: </span>
-                          <span className="font-medium">{initialContact.credentials}</span>
-                        </div>
-                      )}
-                      {initialContact.license_number && (
-                        <div>
-                          <span className="text-muted-foreground">License Number: </span>
-                          <span className="font-medium">{initialContact.license_number}</span>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Notes */}
-                {initialContact.notes && (
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-xs md:text-xs font-medium">Notes</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-xs md:text-xs text-muted-foreground whitespace-pre-wrap">
-                        {initialContact.notes}
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
+                <AssignedOrganizationsCard
+                  contact={initialContact}
+                  onAssignClick={() => {
+                    setEditingOrganization(null);
+                    setShowAssignOrg(true);
+                  }}
+                  onEditClick={handleEditOrganization}
+                  onRemoveClick={setRemoveOrgConfirm}
+                />
+                <AssignedProjectsCard
+                  contact={initialContact}
+                  onAssignClick={() => {
+                    setEditingProject(null);
+                    setShowAssignProject(true);
+                  }}
+                  onEditClick={handleEditProject}
+                  onDeactivateClick={setDeactivateProjectConfirm}
+                  onReactivateClick={setReactivateProjectConfirm}
+                />
+                <EditableContactInfoCard contact={initialContact} onSuccess={() => router.refresh()} />
+                <EditableCredentialsCard contact={initialContact} onSuccess={() => router.refresh()} />
               </div>
 
-              {/* Right Column */}
+              {/* Column 2 */}
+              <div className="space-y-4">
+                <EditableProfessionalAssociationCard contact={initialContact} onSuccess={() => router.refresh()} />
+                <EditableNotesCard contact={initialContact} onSuccess={() => router.refresh()} />
+                <EditableRolesCard
+                  contactId={initialContact.id}
+                  initialRoleIds={(initialContact as any).roleAssignments?.map((a: any) => a.role_id) ?? []}
+                  onSuccess={() => router.refresh()}
+                />
+                <ContactSocialCard contact={initialContact} onSuccess={() => router.refresh()} />
+              </div>
+
+              {/* Column 3 */}
               <div className="space-y-4">
                 {/* Primary Organization */}
                 {initialContact.primary_organization && (
@@ -328,134 +361,6 @@ export function ContactDetailPageClient({
           <TabsContent value="activity" className="mt-6">
             <ActivityTimeline activities={initialActivities} />
           </TabsContent>
-
-          {/* Organizations Tab */}
-          <TabsContent value="organizations" className="mt-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <CardTitle className="text-xs md:text-xs font-medium flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Assigned Organizations
-                </CardTitle>
-                <Button
-                  onClick={() => setShowAssignOrg(true)}
-                  size="sm"
-                  className="text-xs md:text-xs"
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Assign Organization
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {initialContact.organizations && initialContact.organizations.length > 0 ? (
-                  <div className="space-y-3">
-                    {initialContact.organizations.map((oc) => (
-                      <div key={oc.id} className="flex items-center justify-between border-b pb-3 last:border-0">
-                        <div className="flex-1 text-xs md:text-xs">
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="font-medium">{oc.organization.name}</p>
-                            {oc.is_primary && (
-                              <Badge variant="default" className="text-[10px]">Primary</Badge>
-                            )}
-                          </div>
-                          <p className="text-muted-foreground capitalize">
-                            {CONTACT_ROLE_LABELS[oc.role]}
-                          </p>
-                          {(oc.start_date || oc.end_date) && (
-                            <p className="text-muted-foreground">
-                              {oc.start_date && new Date(oc.start_date).toLocaleDateString()}
-                              {' - '}
-                              {oc.end_date ? new Date(oc.end_date).toLocaleDateString() : 'Present'}
-                            </p>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setRemoveOrgConfirm({
-                              relationshipId: oc.id,
-                              name: oc.organization.name,
-                            })
-                          }
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs md:text-xs text-muted-foreground text-center py-6">
-                    No organizations assigned
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Projects Tab */}
-          <TabsContent value="projects" className="mt-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-3">
-                <CardTitle className="text-xs md:text-xs font-medium flex items-center gap-2">
-                  <FolderOpen className="h-4 w-4" />
-                  Assigned Projects
-                </CardTitle>
-                <Button
-                  onClick={() => setShowAssignProject(true)}
-                  size="sm"
-                  className="text-xs md:text-xs"
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Assign Project
-                </Button>
-              </CardHeader>
-              <CardContent>
-                {initialContact.projects && initialContact.projects.length > 0 ? (
-                  <div className="space-y-3">
-                    {initialContact.projects.map((cp) => (
-                      <div key={cp.id} className="flex items-center justify-between border-b pb-3 last:border-0">
-                        <div className="flex-1 text-xs md:text-xs">
-                          <p className="font-medium">
-                            {cp.protocol.protocol_number} - {cp.protocol.title}
-                          </p>
-                          <p className="text-muted-foreground capitalize">
-                            {CONTACT_PROJECT_ROLE_LABELS[cp.role]}
-                          </p>
-                          {cp.organization && (
-                            <p className="text-muted-foreground">at {cp.organization.name}</p>
-                          )}
-                          {(cp.start_date || cp.end_date) && (
-                            <p className="text-muted-foreground">
-                              {cp.start_date && new Date(cp.start_date).toLocaleDateString()}
-                              {' - '}
-                              {cp.end_date ? new Date(cp.end_date).toLocaleDateString() : 'Present'}
-                            </p>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setRemoveProjectConfirm({
-                              relationshipId: cp.id,
-                              name: `${cp.protocol.protocol_number} - ${cp.protocol.title}`,
-                            })
-                          }
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs md:text-xs text-muted-foreground text-center py-6">
-                    No projects assigned
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
         </Tabs>
       </main>
 
@@ -474,28 +379,73 @@ export function ContactDetailPageClient({
         }}
       />
 
+      {/* Assign Project Dialog */}
+      <AssignProjectDialog
+        open={showAssignProject}
+        onOpenChange={handleAssignProjectOpenChange}
+        onSuccess={handleAssignProjectSuccess}
+        contactId={initialContact.id}
+        companyId={companyId}
+        existingProjectIds={existingProjectIds}
+        editingProject={editingProject}
+        onReactivate={handleReactivateFromEditDialog}
+      />
+
       {/* Assign Organization Dialog */}
       <AssignOrganizationDialog
         open={showAssignOrg}
-        onOpenChange={setShowAssignOrg}
+        onOpenChange={handleAssignOrgOpenChange}
         contactId={initialContact.id}
         contactName={`${initialContact.first_name} ${initialContact.last_name}`}
         companyId={companyId}
         existingOrganizationIds={existingOrgIds}
+        editingAssignment={editingOrganization}
         onSuccess={handleAssignSuccess}
       />
 
-      {/* Assign Project Dialog */}
-      <ProjectAssignmentDialog
-        open={showAssignProject}
-        onOpenChange={setShowAssignProject}
-        entityType="contact"
-        entityId={initialContact.id}
-        entityName={`${initialContact.first_name} ${initialContact.last_name}`}
-        companyId={companyId}
-        existingProjectIds={existingProjectIds}
-        onSuccess={handleAssignSuccess}
-      />
+      {/* Deactivate Project Confirmation */}
+      <AlertDialog open={!!deactivateProjectConfirm} onOpenChange={() => setDeactivateProjectConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xs md:text-xs">Deactivate Project Assignment</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs md:text-xs">
+              Are you sure you want to deactivate this contact&apos;s assignment to {deactivateProjectConfirm?.name}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs md:text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="text-xs md:text-xs"
+              onClick={handleDeactivateProject}
+              disabled={isDeactivatingProject}
+            >
+              Deactivate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reactivate Project Confirmation */}
+      <AlertDialog open={!!reactivateProjectConfirm} onOpenChange={() => setReactivateProjectConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xs md:text-xs">Reactivate Project Assignment</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs md:text-xs">
+              Are you sure you want to reactivate this contact&apos;s assignment to {reactivateProjectConfirm?.name}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs md:text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="text-xs md:text-xs"
+              onClick={handleReactivateProject}
+              disabled={isReactivatingProject}
+            >
+              Reactivate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Remove Organization Confirmation */}
       <AlertDialog open={!!removeOrgConfirm} onOpenChange={() => setRemoveOrgConfirm(null)}>
@@ -519,27 +469,17 @@ export function ContactDetailPageClient({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Remove Project Confirmation */}
-      <AlertDialog open={!!removeProjectConfirm} onOpenChange={() => setRemoveProjectConfirm(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-xs md:text-xs">Remove Project</AlertDialogTitle>
-            <AlertDialogDescription className="text-xs md:text-xs">
-              Are you sure you want to remove this contact from {removeProjectConfirm?.name}?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="text-xs md:text-xs">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="text-xs md:text-xs"
-              onClick={handleRemoveProject}
-              disabled={isRemoving}
-            >
-              Remove
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Notes Sheet */}
+      <ContactNotesSheet
+        open={showNotesSheet}
+        onOpenChange={setShowNotesSheet}
+        contactId={initialContact.id}
+        contactName={`${initialContact.first_name} ${initialContact.last_name}`}
+        companyId={companyId}
+        profileId={profileId}
+        userEmail={userEmail}
+        initialNotes={contactNotes}
+      />
     </>
   );
 }

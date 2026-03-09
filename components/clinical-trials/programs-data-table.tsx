@@ -16,7 +16,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Edit, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Edit, Trash2, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
 import { PROTOCOL_STATUS_LABELS } from '@/lib/types/clinical-trials';
 import type { ClinicalProgramWithRelations } from '@/lib/types/clinical-trials';
 import { deleteClinicalProgram } from '@/lib/actions/clinical-programs';
@@ -39,19 +40,19 @@ export function ProgramsDataTable({
   const { toast } = useToast();
 
   const handleDelete = async (programId: string) => {
-    if (!confirm('Are you sure you want to delete this program?')) return;
+    if (!confirm('Are you sure you want to delete this project group?')) return;
 
     const result = await deleteClinicalProgram(programId);
     if (result.success) {
       toast({
         title: 'Success',
-        description: 'Program deleted successfully',
+        description: 'Project Group deleted successfully',
       });
       onRefresh();
     } else {
       toast({
         title: 'Error',
-        description: result.error || 'Failed to delete program',
+        description: result.error || 'Failed to delete project group',
         variant: 'destructive',
       });
     }
@@ -64,7 +65,7 @@ export function ProgramsDataTable({
   if (programs.length === 0) {
     return (
       <div className="text-center text-sm text-muted-foreground">
-        No programs found. Click "Add Program" to create one.
+        No project groups found. Click "Add Project Group" to create one.
       </div>
     );
   }
@@ -74,9 +75,10 @@ export function ProgramsDataTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-xs">Program Name</TableHead>
+            <TableHead className="text-xs">Project Group Name</TableHead>
+            <TableHead className="text-xs">Project Group Manager</TableHead>
             <TableHead className="text-xs">Status</TableHead>
-            <TableHead className="text-xs">Protocols</TableHead>
+            <TableHead className="text-xs">Projects</TableHead>
             <TableHead className="text-xs">Description</TableHead>
             <TableHead className="w-[50px]"></TableHead>
           </TableRow>
@@ -85,6 +87,19 @@ export function ProgramsDataTable({
           {programs.map((program) => (
             <TableRow key={program.id}>
               <TableCell className="text-xs font-medium">{program.name}</TableCell>
+              <TableCell className="text-xs">
+                {program.program_manager ? (
+                  <Link
+                    href={`/protected/contacts-organizations/contacts/${program.program_manager.id}`}
+                    className="text-primary hover:underline inline-flex items-center gap-1"
+                  >
+                    {program.program_manager.first_name} {program.program_manager.last_name}
+                    <ExternalLink className="h-3 w-3" />
+                  </Link>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </TableCell>
               <TableCell className="text-xs">
                 <Badge variant="outline" className="text-xs">
                   {PROTOCOL_STATUS_LABELS[program.status]}

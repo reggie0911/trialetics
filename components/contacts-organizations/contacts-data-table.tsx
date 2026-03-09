@@ -231,7 +231,7 @@ export function ContactsDataTable({
       // Create simplified columns for CSV export
       const csvColumns = [
         { header: 'Name', getValue: (c: ContactWithRelations) => `${c.first_name} ${c.last_name}${c.credentials ? `, ${c.credentials}` : ''}` },
-        { header: 'Title', getValue: (c: ContactWithRelations) => c.title || '' },
+        { header: 'Title', getValue: (c: ContactWithRelations) => (c as any).displayTitle || c.title || '' },
         { header: 'Email', getValue: (c: ContactWithRelations) => c.email || '' },
         { header: 'Phone', getValue: (c: ContactWithRelations) => c.phone || '' },
         { header: 'Organization', getValue: (c: ContactWithRelations) => c.primary_organization?.name || '' },

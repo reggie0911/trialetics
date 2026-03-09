@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { ChevronDown, ChevronUp, MapPin, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { getCountryNames, getRegionForCountry, normalizeCountryForLookup } from '@/lib/data/countries';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -50,7 +51,7 @@ const emptyAddress: AddressFormData = {
   city: '',
   state: '',
   postal_code: '',
-  country: 'United States',
+  country: 'United States of America',
   is_primary: false,
 };
 
@@ -62,6 +63,7 @@ export function AddressForm({
   defaultOpen = true,
 }: AddressFormProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const countryOptions = useMemo(() => getCountryNames(), []);
 
   const handleChange = (field: keyof AddressFormData, newValue: string | boolean) => {
     onChange({
@@ -199,13 +201,26 @@ export function AddressForm({
             </div>
             <div className="space-y-1">
               <Label htmlFor="country" className="text-xs">Country</Label>
-              <Input
-                id="country"
-                value={value.country}
-                onChange={(e) => handleChange('country', e.target.value)}
-                placeholder="United States"
-                className="text-xs placeholder:text-xs md:text-xs h-8"
-              />
+              <Select
+                value={value.country ? (normalizeCountryForLookup(value.country) || value.country) : ''}
+                onValueChange={(v) => handleChange('country', v)}
+              >
+                <SelectTrigger id="country" className="text-xs h-8 w-full">
+                  <SelectValue placeholder="Select country" />
+                </SelectTrigger>
+                <SelectContent>
+                  {countryOptions.map((name) => (
+                    <SelectItem key={name} value={name} className="text-xs">
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {value.country && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Country Region: {getRegionForCountry(value.country) ?? '—'}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -224,7 +239,7 @@ export function addressToFormData(address: Address | null): AddressFormData {
     city: address.city || '',
     state: address.state || '',
     postal_code: address.postal_code || '',
-    country: address.country || 'United States',
+    country: address.country ? normalizeCountryForLookup(address.country) : 'United States of America',
     is_primary: address.is_primary,
   };
 }

@@ -167,13 +167,14 @@ export function ContactImageUpload({
       onDrop={handleDrop}
     >
       {/* Avatar on the left */}
-      <Avatar className="h-16 w-16 shrink-0">
+      <Avatar className="h-16 w-16 shrink-0 rounded-lg after:rounded-lg">
         <AvatarImage 
           src={displayUrlWithCache || undefined} 
           alt="Contact profile" 
           key={displayUrlWithCache}
+          className="rounded-lg"
         />
-        <AvatarFallback className="text-xs">
+        <AvatarFallback className="text-xs rounded-lg">
           <User className="h-6 w-6" />
         </AvatarFallback>
       </Avatar>

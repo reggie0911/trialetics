@@ -41,11 +41,12 @@ export function ProtectedNavbar() {
       console.log('Loading profile for user:', user.id);
       
       // Simplified query - just get profile data without nested company join
+      // Use maybeSingle() to handle 0 rows without PGRST116 error (e.g. profile not created yet)
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('avatar_url, role, onboarding_completed_at, company_id')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
       
       if (error) {
         console.error('Profile query error - code:', error.code, 'message:', error.message);
@@ -85,8 +86,9 @@ export function ProtectedNavbar() {
         }
       }
       
-      console.log('Setting company name to:', companyNameValue);
-      setCompanyName(companyNameValue);
+      // Treat auto-generated "{email}'s Organization" as unset - keep empty until user populates
+      const isDefaultName = companyNameValue?.trim().endsWith("'s Organization");
+      setCompanyName(isDefaultName ? null : companyNameValue);
       
       setShowCompleteSetup(
         profile.role === 'admin' &&

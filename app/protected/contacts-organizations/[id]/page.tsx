@@ -51,11 +51,11 @@ export default async function OrganizationDetailPage(
     redirect('/protected/contacts-organizations');
   }
 
-  // Fetch Clinical Trials associations (clinical_sites, protocol_assignments, protocol_accounts)
+  // Fetch Clinical Trials associations (clinical_sites, protocol_assignments)
   const clinicalTrialsResult = await getOrganizationClinicalTrials(id);
   const clinicalTrials = clinicalTrialsResult.success && clinicalTrialsResult.data
     ? clinicalTrialsResult.data
-    : { clinical_sites: [], protocol_assignments: [], protocol_accounts: [] };
+    : { clinical_sites: [], protocol_assignments: [] };
 
   // Fetch activity history
   const activityResult = await getOrganizationActivity(id);

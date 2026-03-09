@@ -57,8 +57,6 @@ export function OnboardingStepProject({ initialProject, onCreated, onSkip }: Onb
     trialPhase: initialProject?.trialPhase ?? 'Phase I',
     protocolDescription: '',
     protocolStatus: initialProject?.protocolStatus ?? 'planning',
-    plannedSites: undefined,
-    plannedSubjects: undefined,
   });
 
   // Sync from initialProject prop (server-rendered)
@@ -98,10 +96,10 @@ export function OnboardingStepProject({ initialProject, onCreated, onSkip }: Onb
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.protocolName || !formData.protocolNumber || !formData.trialPhase) {
+    if (!formData.protocolName) {
       toast({
         title: 'Required fields',
-        description: 'Please fill in Project Name, Project Number, and Trial Phase.',
+        description: 'Please fill in Project Name.',
         variant: 'destructive',
       });
       return;
@@ -153,20 +151,6 @@ export function OnboardingStepProject({ initialProject, onCreated, onSkip }: Onb
               value={formData.protocolName}
               onChange={(e) => setFormData({ ...formData, protocolName: e.target.value })}
               placeholder="Enter project name"
-              className="text-[12px]"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="protocolNumber" className="text-[12px]">
-              Project Number
-            </Label>
-            <Input
-              id="protocolNumber"
-              value={formData.protocolNumber}
-              onChange={(e) => setFormData({ ...formData, protocolNumber: e.target.value })}
-              placeholder="Enter project number"
               className="text-[12px]"
               required
             />
