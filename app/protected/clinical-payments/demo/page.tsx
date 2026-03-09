@@ -1,11 +1,10 @@
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { ProtectedNavbar } from '@/components/layout/protected-navbar';
 import { ModuleNavbar } from '@/components/layout/module-navbar';
-import { ClinicalPaymentsPageClient } from '@/components/clinical-payments/clinical-payments-page-client';
+import { DemoPageClient } from '@/components/clinical-payments/demo-page-client';
 import { createClient } from '@/lib/server';
 
-export default async function ClinicalPaymentsPage() {
+export default async function ClinicalPaymentsDemoPage() {
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -31,27 +30,18 @@ export default async function ClinicalPaymentsPage() {
         <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-[32px] font-semibold mb-1 tracking-[-1px]">
-              Clinical Payments
+              Clinical Payments Demo
             </h1>
             <p className="text-xs text-muted-foreground">
-              Manage site payments, payment exceptions, and generate payment records for clinical trials
+              Seed realistic demo data, walk through the payment workflow, and reset when done.
             </p>
           </div>
-          <div className="flex items-center gap-4">
-            <Link
-              href="/protected/clinical-payments/demo"
-              className="inline-flex items-center rounded-md border border-dashed border-primary/40 bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
-            >
-              Demo Mode
-            </Link>
-            <ModuleNavbar />
-          </div>
+          <ModuleNavbar />
         </div>
 
-        <ClinicalPaymentsPageClient
+        <DemoPageClient
           companyId={profile.company_id}
           profileId={profile.id}
-          email={profile.email || user.email || ''}
         />
       </main>
     </div>
