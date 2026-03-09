@@ -47,7 +47,7 @@ export function EditableNotesCard({ contact, onSuccess }: EditableNotesCardProps
         <div className="flex items-center justify-between">
           <CardTitle className="text-xs md:text-xs font-medium">Notes</CardTitle>
           {!editing && (
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditing(true)}>
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditing(true)} title="Edit">
               <Pencil className="h-3 w-3" />
             </Button>
           )}

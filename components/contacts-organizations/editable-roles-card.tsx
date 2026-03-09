@@ -71,7 +71,7 @@ export function EditableRolesCard({ contactId, initialRoleIds = [], onSuccess }:
         <div className="flex items-center justify-between">
           <CardTitle className="text-xs md:text-xs font-medium">Roles</CardTitle>
           {!editing && (
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleEdit}>
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={handleEdit} title="Edit">
               <Pencil className="h-3 w-3" />
             </Button>
           )}

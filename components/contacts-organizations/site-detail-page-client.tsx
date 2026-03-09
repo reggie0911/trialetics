@@ -656,7 +656,7 @@ export function SiteDetailPageClient({
               <CardTitle className="text-xs md:text-xs font-medium">Site Milestones</CardTitle>
               {siteClinicalSite && (
                 <Tooltip>
-                  <TooltipTrigger render={<span />}>
+                  <TooltipTrigger asChild>
                     <Button
                       size="sm"
                       variant="secondary"

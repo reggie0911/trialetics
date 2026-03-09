@@ -1,26 +1,39 @@
 'use client';
 
-import { Plus, Trash2 } from 'lucide-react';
+import { format } from 'date-fns';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { ContactWithRelations } from '@/lib/types/contacts-organizations';
 
+type OrganizationContactRow = {
+  id: string;
+  organization: { name: string };
+  role: string;
+  is_primary: boolean;
+  start_date?: string | null;
+  end_date?: string | null;
+};
+
 interface AssignedOrganizationsCardProps {
   contact: ContactWithRelations;
   onAssignClick: () => void;
+  onEditClick: (oc: OrganizationContactRow) => void;
   onRemoveClick: (params: { relationshipId: string; name: string }) => void;
 }
 
-export function AssignedOrganizationsCard({ contact, onAssignClick, onRemoveClick }: AssignedOrganizationsCardProps) {
+export function AssignedOrganizationsCard({ contact, onAssignClick, onEditClick, onRemoveClick }: AssignedOrganizationsCardProps) {
   return (
     <Card className="w-[369px]">
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className="text-xs md:text-xs font-medium">Assigned Organizations</CardTitle>
-        <Button onClick={onAssignClick} size="sm" className="text-xs md:text-xs h-7">
-          <Plus className="h-3 w-3 mr-1" />
-          Assign Organization
-        </Button>
+        {(!contact.organizations || contact.organizations.length === 0) && (
+          <Button onClick={onAssignClick} size="sm" className="text-xs md:text-xs h-7" title="Assign Organization">
+            <Plus className="h-3 w-3 mr-1" />
+            Assign Organization
+          </Button>
+        )}
       </CardHeader>
       <CardContent>
         {contact.organizations && contact.organizations.length > 0 ? (
@@ -51,22 +64,39 @@ export function AssignedOrganizationsCard({ contact, onAssignClick, onRemoveClic
                     {addressStr && (
                       <p className="text-muted-foreground mt-1">{addressStr}</p>
                     )}
-                    {(oc.start_date || oc.end_date) && (
-                      <p className="text-muted-foreground mt-0.5">
-                        {oc.start_date && new Date(oc.start_date).toLocaleDateString()}
-                        {' – '}
-                        {oc.end_date ? new Date(oc.end_date).toLocaleDateString() : 'Present'}
-                      </p>
-                    )}
+                    <p className="text-muted-foreground mt-0.5">
+                      Start date:{' '}
+                      {oc.start_date || oc.end_date ? (
+                        <>
+                          {oc.start_date ? format(new Date(oc.start_date), 'dd-MMM-yyyy') : '—'}
+                          {' – '}
+                          {oc.end_date ? format(new Date(oc.end_date), 'dd-MMM-yyyy') : 'Present'}
+                        </>
+                      ) : (
+                        'Not set'
+                      )}
+                    </p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0 shrink-0 text-red-500 hover:text-red-600 hover:bg-red-50"
-                    onClick={() => onRemoveClick({ relationshipId: oc.id, name: oc.organization.name })}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      onClick={() => onEditClick(oc)}
+                      title="Edit"
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                      onClick={() => onRemoveClick({ relationshipId: oc.id, name: oc.organization.name })}
+                      title="Remove"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
               );
             })}

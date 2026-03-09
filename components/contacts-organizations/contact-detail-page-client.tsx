@@ -7,7 +7,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { format } from 'date-fns';
 import { ArrowLeft, Pencil, User, FileText } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -23,13 +25,16 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { removeContactFromOrganization, removeContactFromProject } from '@/lib/actions/contacts';
+import { removeContactFromOrganization } from '@/lib/actions/contacts';
+import { updateProtocolContact } from '@/lib/actions/protocol-contacts';
 import {
   ContactWithRelations,
   ENTITY_STATUS_LABELS,
 } from '@/lib/types/contacts-organizations';
 import { ContactFormDialog } from './contact-form-dialog';
-import { AssignOrganizationDialog } from './assign-organization-dialog';
+import { AssignOrganizationDialog, type EditingOrganizationAssignment } from './assign-organization-dialog';
+import { AssignProjectDialog, type EditingProjectAssignment } from './assign-project-dialog';
+import { AssignedProjectsCard } from './assigned-projects-card';
 import { ActivityTimeline } from './activity-timeline';
 import { ContactNotesSheet } from './contact-notes-sheet';
 import { EditableContactInfoCard } from './editable-contact-info-card';
@@ -39,7 +44,6 @@ import { EditableNotesCard } from './editable-notes-card';
 import { EditableRolesCard } from './editable-roles-card';
 import { ContactSocialCard } from './contact-social-card';
 import { AssignedOrganizationsCard } from './assigned-organizations-card';
-import { EditableProfileImageCard } from './editable-profile-image-card';
 import type { ContactNote } from '@/lib/types/contacts-organizations';
 
 interface ContactDetailPageClientProps {
@@ -65,6 +69,13 @@ export function ContactDetailPageClient({
   const { toast } = useToast();
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showAssignOrg, setShowAssignOrg] = useState(false);
+  const [editingOrganization, setEditingOrganization] = useState<EditingOrganizationAssignment | null>(null);
+  const [showAssignProject, setShowAssignProject] = useState(false);
+  const [editingProject, setEditingProject] = useState<EditingProjectAssignment | null>(null);
+  const [deactivateProjectConfirm, setDeactivateProjectConfirm] = useState<{ relationshipId: string; name: string } | null>(null);
+  const [isDeactivatingProject, setIsDeactivatingProject] = useState(false);
+  const [reactivateProjectConfirm, setReactivateProjectConfirm] = useState<{ relationshipId: string; name: string } | null>(null);
+  const [isReactivatingProject, setIsReactivatingProject] = useState(false);
   const [showNotesSheet, setShowNotesSheet] = useState(false);
   const [removeOrgConfirm, setRemoveOrgConfirm] = useState<{ relationshipId: string; name: string } | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
@@ -98,27 +109,93 @@ export function ContactDetailPageClient({
   };
 
   const handleAssignSuccess = () => {
+    setEditingOrganization(null);
     router.refresh();
   };
 
+  const handleAssignOrgOpenChange = (open: boolean) => {
+    setShowAssignOrg(open);
+    if (!open) setEditingOrganization(null);
+  };
+
+  const handleEditOrganization = (oc: EditingOrganizationAssignment) => {
+    setEditingOrganization(oc);
+    setShowAssignOrg(true);
+  };
+
+  const handleAssignProjectSuccess = () => {
+    setEditingProject(null);
+    router.refresh();
+  };
+
+  const handleAssignProjectOpenChange = (open: boolean) => {
+    setShowAssignProject(open);
+    if (!open) setEditingProject(null);
+  };
+
+  const handleEditProject = (pc: { id: string; protocol?: { id: string; protocol_number: string | null; title: string | null }; role: string; status: string; start_date?: string | null; end_date?: string | null }) => {
+    setEditingProject({ id: pc.id, protocol: pc.protocol, role: pc.role, status: pc.status, start_date: pc.start_date, end_date: pc.end_date });
+    setShowAssignProject(true);
+  };
+
+  const handleDeactivateProject = async () => {
+    if (!deactivateProjectConfirm) return;
+    setIsDeactivatingProject(true);
+    const result = await updateProtocolContact(deactivateProjectConfirm.relationshipId, {
+      status: 'inactive',
+      end_date: format(new Date(), 'yyyy-MM-dd'),
+    });
+    if (result.success) {
+      toast({ title: 'Project deactivated', description: `Assignment to ${deactivateProjectConfirm.name} has been deactivated.` });
+      router.refresh();
+    } else {
+      toast({ title: 'Error', description: result.error || 'Failed to deactivate', variant: 'destructive' });
+    }
+    setIsDeactivatingProject(false);
+    setDeactivateProjectConfirm(null);
+  };
+
+  const handleReactivateFromEditDialog = (params: { relationshipId: string; name: string }) => {
+    setReactivateProjectConfirm(params);
+    setShowAssignProject(false);
+    setEditingProject(null);
+  };
+
+  const handleReactivateProject = async () => {
+    if (!reactivateProjectConfirm) return;
+    setIsReactivatingProject(true);
+    const result = await updateProtocolContact(reactivateProjectConfirm.relationshipId, {
+      status: 'active',
+      end_date: null,
+    });
+    if (result.success) {
+      toast({ title: 'Project reactivated', description: `Assignment to ${reactivateProjectConfirm.name} has been reactivated.` });
+      router.refresh();
+    } else {
+      toast({ title: 'Error', description: result.error || 'Failed to reactivate', variant: 'destructive' });
+    }
+    setIsReactivatingProject(false);
+    setReactivateProjectConfirm(null);
+  };
+
   const existingOrgIds = initialContact.organizations?.map((oc) => oc.organization.id) || [];
-  const existingProjectIds = initialContact.projects?.map((cp) => cp.protocol.id) || [];
+  const existingProjectIds = (initialContact as any).projects?.map((cp: any) => cp.protocol?.id).filter(Boolean) || [];
 
   return (
     <>
       <main className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 py-4 sm:py-8">
         {/* Header with Back button */}
         <div className="flex items-center justify-between mb-6">
-          <Button variant="ghost" onClick={handleBack} className="text-xs md:text-xs">
+          <Button variant="ghost" onClick={handleBack} className="text-xs md:text-xs" title="Back to Contacts & Organizations">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Contacts & Organizations
           </Button>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setShowNotesSheet(true)} className="text-xs md:text-xs">
+            <Button variant="outline" onClick={() => setShowNotesSheet(true)} className="text-xs md:text-xs" title="Notes">
               <FileText className="h-4 w-4 mr-2" />
               Notes
             </Button>
-            <Button onClick={() => setShowEditDialog(true)} className="text-xs md:text-xs">
+            <Button onClick={() => setShowEditDialog(true)} className="text-xs md:text-xs" title="Edit contact">
               <Pencil className="h-4 w-4 mr-2" />
               Edit
             </Button>
@@ -128,7 +205,12 @@ export function ContactDetailPageClient({
         {/* Contact name and badges */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
-            <User className="h-6 w-6 text-muted-foreground" />
+            <Avatar className="h-10 w-10 shrink-0 rounded-lg after:rounded-lg">
+              <AvatarImage src={initialContact.profile_image_url || undefined} alt="" className="rounded-lg" />
+              <AvatarFallback className="text-muted-foreground rounded-lg">
+                <User className="h-5 w-5" />
+              </AvatarFallback>
+            </Avatar>
             <h1 className="text-[32px] font-semibold tracking-[-1px]">
               {initialContact.first_name} {initialContact.last_name}
             </h1>
@@ -160,11 +242,24 @@ export function ContactDetailPageClient({
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {/* Column 1 */}
               <div className="space-y-4">
-                <EditableProfileImageCard contact={initialContact} onSuccess={() => router.refresh()} />
                 <AssignedOrganizationsCard
                   contact={initialContact}
-                  onAssignClick={() => setShowAssignOrg(true)}
+                  onAssignClick={() => {
+                    setEditingOrganization(null);
+                    setShowAssignOrg(true);
+                  }}
+                  onEditClick={handleEditOrganization}
                   onRemoveClick={setRemoveOrgConfirm}
+                />
+                <AssignedProjectsCard
+                  contact={initialContact}
+                  onAssignClick={() => {
+                    setEditingProject(null);
+                    setShowAssignProject(true);
+                  }}
+                  onEditClick={handleEditProject}
+                  onDeactivateClick={setDeactivateProjectConfirm}
+                  onReactivateClick={setReactivateProjectConfirm}
                 />
                 <EditableContactInfoCard contact={initialContact} onSuccess={() => router.refresh()} />
                 <EditableCredentialsCard contact={initialContact} onSuccess={() => router.refresh()} />
@@ -284,16 +379,73 @@ export function ContactDetailPageClient({
         }}
       />
 
+      {/* Assign Project Dialog */}
+      <AssignProjectDialog
+        open={showAssignProject}
+        onOpenChange={handleAssignProjectOpenChange}
+        onSuccess={handleAssignProjectSuccess}
+        contactId={initialContact.id}
+        companyId={companyId}
+        existingProjectIds={existingProjectIds}
+        editingProject={editingProject}
+        onReactivate={handleReactivateFromEditDialog}
+      />
+
       {/* Assign Organization Dialog */}
       <AssignOrganizationDialog
         open={showAssignOrg}
-        onOpenChange={setShowAssignOrg}
+        onOpenChange={handleAssignOrgOpenChange}
         contactId={initialContact.id}
         contactName={`${initialContact.first_name} ${initialContact.last_name}`}
         companyId={companyId}
         existingOrganizationIds={existingOrgIds}
+        editingAssignment={editingOrganization}
         onSuccess={handleAssignSuccess}
       />
+
+      {/* Deactivate Project Confirmation */}
+      <AlertDialog open={!!deactivateProjectConfirm} onOpenChange={() => setDeactivateProjectConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xs md:text-xs">Deactivate Project Assignment</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs md:text-xs">
+              Are you sure you want to deactivate this contact&apos;s assignment to {deactivateProjectConfirm?.name}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs md:text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="text-xs md:text-xs"
+              onClick={handleDeactivateProject}
+              disabled={isDeactivatingProject}
+            >
+              Deactivate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reactivate Project Confirmation */}
+      <AlertDialog open={!!reactivateProjectConfirm} onOpenChange={() => setReactivateProjectConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-xs md:text-xs">Reactivate Project Assignment</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs md:text-xs">
+              Are you sure you want to reactivate this contact&apos;s assignment to {reactivateProjectConfirm?.name}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs md:text-xs">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="text-xs md:text-xs"
+              onClick={handleReactivateProject}
+              disabled={isReactivatingProject}
+            >
+              Reactivate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Remove Organization Confirmation */}
       <AlertDialog open={!!removeOrgConfirm} onOpenChange={() => setRemoveOrgConfirm(null)}>

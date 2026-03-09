@@ -522,6 +522,66 @@ export async function assignContactToOrganization(
 }
 
 // =============================================
+// UPDATE ORGANIZATION CONTACT
+// =============================================
+
+export async function updateOrganizationContact(
+  relationshipId: string,
+  data: { role?: string; is_primary?: boolean; start_date?: string | null; end_date?: string | null }
+): Promise<ActionResponse<null>> {
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    if (data.is_primary) {
+      const { data: row } = await supabase
+        .from('organization_contacts')
+        .select('contact_id')
+        .eq('id', relationshipId)
+        .single();
+      if (row?.contact_id) {
+        await supabase
+          .from('organization_contacts')
+          .update({ is_primary: false })
+          .eq('contact_id', row.contact_id)
+          .eq('is_primary', true)
+          .neq('id', relationshipId);
+      }
+    }
+
+    const updatePayload: Record<string, unknown> = {};
+    if (data.role !== undefined) updatePayload.role = data.role;
+    if (data.is_primary !== undefined) updatePayload.is_primary = data.is_primary;
+    if (data.start_date !== undefined) updatePayload.start_date = data.start_date;
+    if (data.end_date !== undefined) updatePayload.end_date = data.end_date;
+
+    if (Object.keys(updatePayload).length === 0) {
+      return { success: true, data: null };
+    }
+
+    const { error } = await supabase
+      .from('organization_contacts')
+      .update(updatePayload)
+      .eq('id', relationshipId);
+
+    if (error) {
+      console.error('Error updating organization contact:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/protected/contacts-organizations');
+    return { success: true, data: null };
+  } catch (error) {
+    console.error('Error in updateOrganizationContact:', error);
+    return { success: false, error: 'Failed to update organization assignment' };
+  }
+}
+
+// =============================================
 // ARCHIVE CONTACT FROM ORGANIZATION
 // =============================================
 

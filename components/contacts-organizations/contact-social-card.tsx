@@ -132,7 +132,7 @@ export function ContactSocialCard({ contact, onSuccess }: ContactSocialCardProps
         <div className="flex items-center justify-between">
           <CardTitle className="text-xs md:text-xs font-medium">Social Media</CardTitle>
           {!editing && (
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditing(true)}>
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditing(true)} title="Edit">
               <Pencil className="h-3 w-3" />
             </Button>
           )}

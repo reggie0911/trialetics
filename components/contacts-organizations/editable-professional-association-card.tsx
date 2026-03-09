@@ -58,7 +58,7 @@ export function EditableProfessionalAssociationCard({ contact, onSuccess }: Edit
             Professional Association
           </CardTitle>
           {!editing && (
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditing(true)}>
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditing(true)} title="Edit">
               <Pencil className="h-3 w-3" />
             </Button>
           )}
