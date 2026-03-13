@@ -68,7 +68,7 @@ export function AEPageClient({
       loadHeaderMappings();
       loadUploads();
     }
-  }, [companyId, protocolId]);
+  }, [companyId]);
 
   // Load AE data when upload is selected
   useEffect(() => {
@@ -92,7 +92,7 @@ export function AEPageClient({
     setIsLoading(true);
     setLoadingMessage("Loading uploads...");
     
-    const result = await getAEUploads(companyId, protocolId);
+    const result = await getAEUploads(companyId);
     if (result.success && result.data) {
       setUploads(result.data);
       
@@ -167,8 +167,7 @@ export function AEPageClient({
         profileId,
         fileName,
         newData,
-        columnConfigs,
-        protocolId
+        columnConfigs
       );
 
       if (result.success && result.data) {

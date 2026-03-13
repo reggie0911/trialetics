@@ -4,19 +4,7 @@ import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { AEPageClient } from '@/components/ae/ae-page-client';
 import { createClient } from '@/lib/server';
 
-export default async function AEPage(
-  props: {
-    params?: Promise<Record<string, string | string[]>>;
-    searchParams: Promise<{ protocol?: string }>;
-  }
-) {
-  const params = await props.params;
-  const resolvedSearchParams = await props.searchParams;
-  if (params) await params;
-  const protocolId = resolvedSearchParams.protocol || null;
-  if (!protocolId) {
-    redirect('/protected');
-  }
+export default async function AEPage() {
   const supabase = await createClient();
 
   // Check authentication
@@ -57,7 +45,6 @@ export default async function AEPage(
         <AEPageClient
           companyId={profile.company_id || ""}
           profileId={profile.id}
-          initialProtocolId={protocolId}
           isAdmin={profile.role === "admin"}
         />
       </main>

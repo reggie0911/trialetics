@@ -1,26 +1,17 @@
-import OpenAI from 'openai';
+import { streamText, tool, jsonSchema, stepCountIs } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import type { ModelMessage, Tool, TextPart, ImagePart } from 'ai';
 import type {
   ChatRequest,
   UserContext,
   StreamEvent,
   AgentConfig,
-  ChatCompletionMessageParam,
-  ChatCompletionTool,
+  ConfirmActionPayload,
 } from './types';
 import { identifyModule } from './context-builder';
-import { getToolDefinition } from './tool-registry';
 import { getAgent, findAgentForPage, getAllAgents } from './agents';
 import { createSSEStream } from './stream';
 import { getAgentOverride } from '@/lib/actions/ai-agent-overrides';
-import type { ConfirmActionPayload } from './types';
-
-let _openai: OpenAI | null = null;
-function getOpenAI(): OpenAI {
-  if (!_openai) {
-    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  }
-  return _openai;
-}
 
 const FALLBACK_AGENT_ID = 'dashboard-narrator';
 
@@ -39,22 +30,11 @@ async function selectAgent(request: ChatRequest, ctx: UserContext): Promise<Agen
   throw new Error('No agent available');
 }
 
-function buildOpenAITools(agent: AgentConfig): ChatCompletionTool[] {
-  return agent.tools.map(tool => ({
-    type: 'function' as const,
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters,
-    },
-  }));
-}
-
-async function buildMessages(
+async function buildSystemAndMessages(
   agent: AgentConfig,
   request: ChatRequest,
   ctx: UserContext
-): Promise<ChatCompletionMessageParam[]> {
+): Promise<{ system: string; messages: ModelMessage[] }> {
   const contextSummary = [
     `Current page: ${ctx.currentPage}`,
     ctx.protocolId ? `Active protocol ID: ${ctx.protocolId}` : null,
@@ -80,44 +60,37 @@ async function buildMessages(
 
   systemContent += `\n\n--- Session Context ---\n${contextSummary}`;
 
-  const messages: ChatCompletionMessageParam[] = [
-    {
-      role: 'system',
-      content: systemContent,
-    },
-  ];
+  const messages: ModelMessage[] = [];
 
   for (const msg of request.messages) {
     if (msg.attachments && msg.attachments.length > 0) {
-      const contentParts: Array<{ type: string; text?: string; image_url?: { url: string; detail: string } }> = [];
-
       const docTexts = msg.attachments
         .filter(a => a.type === 'document' && a.textContent)
         .map(a => `[Attached file: ${a.filename}]\n${a.textContent}`)
         .join('\n\n');
 
-      const textPart = docTexts
+      const textContent = docTexts
         ? `${docTexts}\n\n${msg.content}`
         : msg.content;
 
-      contentParts.push({ type: 'text', text: textPart });
+      const contentParts: Array<TextPart | ImagePart> = [
+        { type: 'text', text: textContent },
+      ];
 
       for (const att of msg.attachments) {
         if (att.type === 'image' && att.imageUrl) {
-          contentParts.push({
-            type: 'image_url',
-            image_url: { url: att.imageUrl, detail: 'auto' },
-          });
+          contentParts.push({ type: 'image', image: new URL(att.imageUrl) });
         }
       }
 
-      messages.push({ role: msg.role, content: contentParts } as any);
+      // Attachments are only sent from user messages in this app
+      messages.push({ role: 'user', content: contentParts });
     } else {
       messages.push({ role: msg.role, content: msg.content });
     }
   }
 
-  return messages;
+  return { system: systemContent, messages };
 }
 
 async function* runAgent(
@@ -125,128 +98,93 @@ async function* runAgent(
   request: ChatRequest,
   ctx: UserContext
 ): AsyncGenerator<StreamEvent, void, unknown> {
-  const tools = buildOpenAITools(agent);
-  let messages = await buildMessages(agent, request, ctx);
+  const { system, messages } = await buildSystemAndMessages(agent, request, ctx);
 
-  const MAX_TOOL_ROUNDS = 5;
+  // Queue for events emitted by tool execute callbacks
+  const eventQueue: StreamEvent[] = [];
+  const emitEvent = (event: StreamEvent) => eventQueue.push(event);
 
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const stream = await getOpenAI().chat.completions.create({
-      model: agent.model ?? 'gpt-4o',
-      messages,
-      tools: tools.length > 0 ? tools : undefined,
-      stream: true,
-    });
-
-    let currentToolCalls: Record<
-      number,
-      { id: string; name: string; arguments: string }
-    > = {};
-    let hasToolCalls = false;
-    let fullContent = '';
-
-    for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta;
-      if (!delta) continue;
-
-      if (delta.content) {
-        fullContent += delta.content;
-        yield { type: 'text_delta', data: delta.content };
-      }
-
-      if (delta.tool_calls) {
-        hasToolCalls = true;
-        for (const tc of delta.tool_calls) {
-          const idx = tc.index;
-          if (!currentToolCalls[idx]) {
-            currentToolCalls[idx] = {
-              id: tc.id ?? '',
-              name: tc.function?.name ?? '',
-              arguments: '',
-            };
-          }
-          if (tc.id) currentToolCalls[idx].id = tc.id;
-          if (tc.function?.name) currentToolCalls[idx].name = tc.function.name;
-          if (tc.function?.arguments) {
-            currentToolCalls[idx].arguments += tc.function.arguments;
-          }
-        }
-      }
-    }
-
-    if (!hasToolCalls) {
-      return;
-    }
-
-    messages = [
-      ...messages,
-      {
-        role: 'assistant' as const,
-        content: fullContent || null,
-        tool_calls: Object.values(currentToolCalls).map(tc => ({
-          id: tc.id,
-          type: 'function' as const,
-          function: { name: tc.name, arguments: tc.arguments },
-        })),
-      },
-    ];
-
-    for (const tc of Object.values(currentToolCalls)) {
-      yield { type: 'tool_call_start', data: tc.name };
-
-      const toolDef = await getToolDefinition(tc.name);
-      const handler = toolDef?.handler;
-      let result: unknown;
-
-      if (handler) {
-        try {
-          const args = JSON.parse(tc.arguments || '{}');
-
-          if (toolDef?.requiresConfirmation) {
-            const payload: ConfirmActionPayload = {
-              toolCallId: tc.id,
-              toolName: tc.name,
-              description: toolDef.description,
-              args,
-            };
-            yield { type: 'confirm_action', data: JSON.stringify(payload) };
-            result = { pending: true, message: `Action "${tc.name}" requires user confirmation.`, confirmPayload: payload };
-          } else {
-            result = await handler(args, ctx);
-          }
-        } catch (err) {
-          result = {
-            error: err instanceof Error ? err.message : 'Tool execution failed',
+  // Build AI SDK tools from agent's tool definitions
+  const tools: Record<string, Tool<any, any>> = {};
+  for (const toolDef of agent.tools) {
+    const capturedDef = toolDef;
+    tools[capturedDef.name] = tool({
+      description: capturedDef.description,
+      inputSchema: jsonSchema<Record<string, unknown>>(
+        capturedDef.parameters as Parameters<typeof jsonSchema>[0]
+      ),
+      execute: async (args: Record<string, unknown>) => {
+        if (capturedDef.requiresConfirmation) {
+          const payload: ConfirmActionPayload = {
+            toolCallId: crypto.randomUUID(),
+            toolName: capturedDef.name,
+            description: capturedDef.description,
+            args,
+          };
+          emitEvent({ type: 'confirm_action', data: JSON.stringify(payload) });
+          return {
+            pending: true,
+            message: `Action "${capturedDef.name}" requires user confirmation.`,
           };
         }
-      } else {
-        result = { error: `Unknown tool: ${tc.name}` };
-      }
 
-      const resultStr =
-        typeof result === 'string' ? result : JSON.stringify(result);
+        try {
+          const result = await capturedDef.handler(args, ctx);
 
-      if (typeof result === 'object' && result !== null && 'downloadUrl' in (result as Record<string, unknown>)) {
-        yield { type: 'file_download', data: JSON.stringify(result) };
-      }
+          if (result && typeof result === 'object' && 'downloadUrl' in (result as Record<string, unknown>)) {
+            emitEvent({ type: 'file_download', data: JSON.stringify(result) });
+          }
 
-      if (tc.name === 'generateTripReportQuestions' && typeof result === 'object' && result !== null && 'questions' in (result as Record<string, unknown>)) {
-        yield { type: 'generated_questions', data: JSON.stringify(result) };
-      }
+          if (
+            capturedDef.name === 'generateTripReportQuestions' &&
+            result &&
+            typeof result === 'object' &&
+            'questions' in (result as Record<string, unknown>)
+          ) {
+            emitEvent({ type: 'generated_questions', data: JSON.stringify(result) });
+          }
 
-      yield { type: 'tool_result', data: resultStr.slice(0, 500) };
+          return result;
+        } catch (err) {
+          return { error: err instanceof Error ? err.message : 'Tool execution failed' };
+        }
+      },
+    });
+  }
 
-      messages = [
-        ...messages,
-        {
-          role: 'tool' as const,
-          tool_call_id: tc.id,
-          content: resultStr,
-        },
-      ];
+  const hasTools = Object.keys(tools).length > 0;
+
+  const result = streamText({
+    model: openai(agent.model ?? 'gpt-4o'),
+    system,
+    messages,
+    tools: hasTools ? tools : undefined,
+    stopWhen: stepCountIs(5),
+  });
+
+  for await (const chunk of result.fullStream) {
+    // Yield any events queued by tool executes before processing the next chunk
+    while (eventQueue.length > 0) {
+      yield eventQueue.shift()!;
     }
 
-    currentToolCalls = {};
+    if (chunk.type === 'text-delta') {
+      yield { type: 'text_delta', data: chunk.text };
+    } else if (chunk.type === 'tool-input-start') {
+      yield { type: 'tool_call_start', data: chunk.toolName };
+    } else if (chunk.type === 'tool-result') {
+      yield {
+        type: 'tool_result',
+        data: JSON.stringify(chunk.output).slice(0, 500),
+      };
+    } else if (chunk.type === 'error') {
+      throw chunk.error;
+    }
+  }
+
+  // Yield any remaining queued events
+  while (eventQueue.length > 0) {
+    yield eventQueue.shift()!;
   }
 }
 

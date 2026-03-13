@@ -4,19 +4,7 @@ import { ModuleNavbar } from '@/components/layout/module-navbar';
 import { VWPageClient } from '@/components/vw/vw-page-client';
 import { createClient } from '@/lib/server';
 
-export default async function VWPage(
-  props: {
-    params?: Promise<Record<string, string | string[]>>;
-    searchParams: Promise<{ protocol?: string }>;
-  }
-) {
-  const params = await props.params;
-  const resolvedSearchParams = await props.searchParams;
-  if (params) await params;
-  const protocolId = resolvedSearchParams.protocol || null;
-  if (!protocolId) {
-    redirect('/protected');
-  }
+export default async function VWPage() {
   const supabase = await createClient();
 
   // Check authentication
@@ -54,7 +42,7 @@ export default async function VWPage(
         </div>
 
         {/* Client-side component for data management */}
-        <VWPageClient companyId={profile.company_id || ""} profileId={profile.id} initialProtocolId={protocolId} isAdmin={profile.role === "admin"} />
+        <VWPageClient companyId={profile.company_id || ""} profileId={profile.id} isAdmin={profile.role === "admin"} />
       </main>
     </div>
   );

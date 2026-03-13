@@ -121,7 +121,7 @@ export function VWPageClient({ companyId, profileId, initialProtocolId, isAdmin 
     setIsLoading(true);
     setLoadingMessage("Loading uploads...");
     
-    const result = await getVWUploads(companyId, protocolId);
+    const result = await getVWUploads(companyId);
     if (result.success && result.data) {
       setUploads(result.data);
       
@@ -196,8 +196,7 @@ export function VWPageClient({ companyId, profileId, initialProtocolId, isAdmin 
         profileId,
         fileName,
         newData,
-        columnConfigs,
-        protocolId
+        columnConfigs
       );
 
       if (result.success && result.data) {

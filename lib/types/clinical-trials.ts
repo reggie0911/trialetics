@@ -250,6 +250,8 @@ export interface ClinicalSiteWithRelations extends ClinicalSite {
     first_name: string;
     last_name: string;
     email: string | null;
+    /** Role name from ctms_roles (via contact_role_assignments) */
+    role_name?: string | null;
   } | null;
 }
 

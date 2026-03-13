@@ -1,1 +1,0 @@
-ALTER TABLE contacts ADD COLUMN IF NOT EXISTS inactive_date TIMESTAMPTZ;

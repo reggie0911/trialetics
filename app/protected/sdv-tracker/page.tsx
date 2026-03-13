@@ -5,19 +5,7 @@ import { SDVTrackerPage } from '@/components/sdv-tracker/sdv-tracker-page';
 import { createClient } from '@/lib/server';
 import { getSDVReports } from '@/lib/actions/sdv-tracker';
 
-export default async function SDVTrackerPageRoute(
-  props: {
-    params?: Promise<Record<string, string | string[]>>;
-    searchParams: Promise<{ protocol?: string }>;
-  }
-) {
-  const params = await props.params;
-  const resolvedSearchParams = await props.searchParams;
-  if (params) await params;
-  const protocolId = resolvedSearchParams.protocol || null;
-  if (!protocolId) {
-    redirect('/protected');
-  }
+export default async function SDVTrackerPageRoute() {
   const supabase = await createClient();
 
   // Check authentication
@@ -37,8 +25,7 @@ export default async function SDVTrackerPageRoute(
     redirect('/auth/login');
   }
 
-  // Fetch reports on the server to ensure we have a valid session
-  const initialReports = await getSDVReports(profile.company_id || '', protocolId);
+  const initialReports = await getSDVReports(profile.company_id || '');
 
   return (
     <div className="min-h-screen bg-[#E9E9E9]">
@@ -63,7 +50,6 @@ export default async function SDVTrackerPageRoute(
         <SDVTrackerPage
           companyId={profile.company_id || ""}
           profileId={profile.id}
-          initialProtocolId={protocolId}
           initialReports={initialReports}
           isAdmin={profile.role === "admin"}
         />

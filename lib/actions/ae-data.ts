@@ -106,23 +106,15 @@ export async function saveAEHeaderMappings(
 /**
  * Get AE uploads for a company, optionally filtered by protocol
  */
-export async function getAEUploads(
-  companyId: string,
-  protocolId?: string | null
-): Promise<ActionResponse<Tables<'ae_uploads'>[]>> {
+export async function getAEUploads(companyId: string): Promise<ActionResponse<Tables<'ae_uploads'>[]>> {
   try {
     const supabase = await createClient();
 
-    let query = supabase
+    const { data, error } = await supabase
       .from('ae_uploads')
       .select('*')
-      .eq('company_id', companyId);
-
-    if (protocolId) {
-      query = query.eq('protocol_id', protocolId);
-    }
-
-    const { data, error } = await query.order('created_at', { ascending: false });
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching AE uploads:', error);
@@ -148,13 +140,11 @@ export async function uploadAEData(
     columnId: string;
     label: string;
     tableOrder: number;
-  }>,
-  protocolId?: string | null
+  }>
 ): Promise<ActionResponse<string>> {
   try {
     const supabase = await createClient();
 
-    // 1. Create upload record
     const uploadInsert: TablesInsert<'ae_uploads'> = {
       company_id: companyId,
       uploaded_by: uploadedBy,
@@ -162,7 +152,6 @@ export async function uploadAEData(
       row_count: records.length,
       column_count: columnConfigs.length,
       filter_preferences: {},
-      protocol_id: protocolId || null,
     };
 
     const { data: uploadData, error: uploadError } = await supabase

@@ -1,4 +1,6 @@
-import OpenAI from 'openai';
+import { generateObject } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { z } from 'zod';
 import { createClient } from '@/lib/server';
 
 interface GenerateQuestionsInput {
@@ -162,29 +164,22 @@ Respond with a JSON object containing a "questions" key with an array of objects
 
 Example format: {"questions": [{"activity": "Verify...", "report_order": 1, "report_sub_section": "REGULATORY"}]}`;
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    messages: [{ role: 'user', content: prompt }],
-    response_format: { type: 'json_object' },
+  const { object: parsed } = await generateObject({
+    model: openai('gpt-4o'),
+    schema: z.object({
+      questions: z.array(
+        z.object({
+          activity: z.string(),
+          report_order: z.number(),
+          report_sub_section: z.string(),
+        })
+      ),
+    }),
+    prompt,
     temperature: 0.7,
   });
 
-  const content = completion.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error('No response from AI');
-  }
-
-  const parsed = JSON.parse(content);
-  let questions: GeneratedQuestion[];
-  if (Array.isArray(parsed)) {
-    questions = parsed;
-  } else if (parsed.questions && Array.isArray(parsed.questions)) {
-    questions = parsed.questions;
-  } else {
-    const firstArray = Object.values(parsed).find(v => Array.isArray(v)) as GeneratedQuestion[] | undefined;
-    questions = firstArray || [];
-  }
+  const questions: GeneratedQuestion[] = parsed.questions;
 
   const maxExistingOrder = (existingDetails || []).reduce(
     (max, d) => Math.max(max, (d as any).report_order ?? 0),

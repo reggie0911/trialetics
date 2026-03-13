@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { LogOut, Settings, Shield, Rocket, ListChecks } from 'lucide-react';
+import { LogOut, Settings } from 'lucide-react';
 import { useRouter, usePathname } from 'next/navigation';
 
 import Logo from '@/components/layout/logo';
@@ -90,11 +90,7 @@ export function ProtectedNavbar() {
       const isDefaultName = companyNameValue?.trim().endsWith("'s Organization");
       setCompanyName(isDefaultName ? null : companyNameValue);
       
-      setShowCompleteSetup(
-        profile.role === 'admin' &&
-        !profile.onboarding_completed_at &&
-        pathname !== '/protected/onboarding'
-      );
+      setShowCompleteSetup(false);
     } catch (error) {
       console.error('Unexpected error in loadUserProfile:', error);
     }
@@ -114,11 +110,7 @@ export function ProtectedNavbar() {
     }
   };
 
-  const isAdmin = userRole === 'admin';
-
-  // Determine the label based on company name or route fallback
-  const isDashboard = pathname?.startsWith('/protected/dashboard');
-  const label = companyName ?? (isDashboard ? 'CTMS' : 'Trialetics');
+  const label = companyName ?? 'Trialetics';
 
   return (
     <>
@@ -140,24 +132,6 @@ export function ProtectedNavbar() {
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                {showCompleteSetup && (
-                  <DropdownMenuItem
-                    onClick={() => router.push('/protected/onboarding')}
-                    className="cursor-pointer"
-                  >
-                    <Rocket className="mr-2 h-4 w-4" />
-                    <span>Complete setup</span>
-                  </DropdownMenuItem>
-                )}
-                {isAdmin && pathname !== '/protected/onboarding' && (
-                  <DropdownMenuItem
-                    onClick={() => router.push('/protected/onboarding')}
-                    className="cursor-pointer"
-                  >
-                    <ListChecks className="mr-2 h-4 w-4" />
-                    <span>Setup wizard</span>
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuItem 
                   onClick={() => setShowSettings(true)} 
                   className="cursor-pointer"
@@ -165,12 +139,6 @@ export function ProtectedNavbar() {
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </DropdownMenuItem>
-                {isAdmin && (
-                  <DropdownMenuItem onClick={() => router.push('/protected/admin')} className="cursor-pointer">
-                    <Shield className="mr-2 h-4 w-4" />
-                    <span>Admin</span>
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer">
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Log out</span>

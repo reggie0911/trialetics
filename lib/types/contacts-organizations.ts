@@ -257,6 +257,31 @@ export const SITE_VISIT_STATUS_LABELS: Record<SiteVisitStatus, string> = {
 };
 
 // =============================================
+// Site Milestones (Custom / Dynamic)
+// =============================================
+
+export type SiteMilestoneStatus = 'pending' | 'completed' | 'overdue' | 'not_applicable';
+
+export interface SiteMilestone {
+  id: string;
+  organization_id: string;
+  protocol_id: string | null;
+  name: string;
+  milestone_date: string | null;
+  status: SiteMilestoneStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const SITE_MILESTONE_STATUS_LABELS: Record<SiteMilestoneStatus, string> = {
+  pending: 'Pending',
+  completed: 'Completed',
+  overdue: 'Overdue',
+  not_applicable: 'N/A',
+};
+
+// =============================================
 // Site Contracts (Phase 5)
 // =============================================
 

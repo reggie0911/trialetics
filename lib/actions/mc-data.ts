@@ -95,23 +95,15 @@ export async function saveMCHeaderMappings(
 /**
  * Get MC uploads for a company, optionally filtered by protocol
  */
-export async function getMCUploads(
-  companyId: string,
-  protocolId?: string | null
-): Promise<ActionResponse<Tables<'mc_uploads'>[]>> {
+export async function getMCUploads(companyId: string): Promise<ActionResponse<Tables<'mc_uploads'>[]>> {
   try {
     const supabase = await createClient();
 
-    let query = supabase
+    const { data, error } = await supabase
       .from('mc_uploads')
       .select('*')
-      .eq('company_id', companyId);
-
-    if (protocolId) {
-      query = query.eq('protocol_id', protocolId);
-    }
-
-    const { data, error } = await query.order('created_at', { ascending: false });
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching MC uploads:', error);
@@ -137,13 +129,11 @@ export async function uploadMCData(
     columnId: string;
     label: string;
     tableOrder: number;
-  }>,
-  protocolId?: string | null
+  }>
 ): Promise<ActionResponse<string>> {
   try {
     const supabase = await createClient();
 
-    // 1. Create upload record
     const uploadInsert: TablesInsert<'mc_uploads'> = {
       company_id: companyId,
       uploaded_by: uploadedBy,
@@ -151,7 +141,6 @@ export async function uploadMCData(
       row_count: records.length,
       column_count: columnConfigs.length,
       filter_preferences: {},
-      protocol_id: protocolId || null,
     };
 
     const { data: uploadData, error: uploadError } = await supabase

@@ -364,7 +364,7 @@ export function PatientsPageClient({
       loadUploads(companyId);
       loadHeaderMappings(companyId);
     }
-  }, [companyId, protocolId]);
+  }, [companyId]);
 
   // Load patient data when upload changes
   useEffect(() => {
@@ -379,7 +379,7 @@ export function PatientsPageClient({
     setIsLoading(true);
     setLoadingMessage("Loading uploads...");
     
-    const result = await getPatientUploads(projectId, protocolId);
+    const result = await getPatientUploads(projectId);
     if (result.success && result.data) {
       setUploads(result.data);
       // Auto-select most recent upload
@@ -503,8 +503,7 @@ export function PatientsPageClient({
         companyId,
         fileName,
         filteredData,
-        newConfigs,
-        protocolId
+        newConfigs
       );
       
       if (result.success && result.data) {

@@ -30,7 +30,6 @@ import { computeAggregationsFromSiteSummary } from '@/lib/utils/sdv-aggregations
 interface SDVTrackerPageProps {
   companyId: string;
   profileId: string;
-  initialProtocolId?: string | null;
   initialReports?: SDVReport[];
   isAdmin?: boolean;
 }
@@ -38,13 +37,10 @@ interface SDVTrackerPageProps {
 export function SDVTrackerPage({
   companyId,
   profileId,
-  initialProtocolId,
   initialReports = [],
   isAdmin = false,
 }: SDVTrackerPageProps) {
-  // Report state
   const [reports, setReports] = useState<SDVReport[]>(initialReports);
-  const [protocolId, setProtocolId] = useState<string | null>(initialProtocolId ?? null);
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [selectedReport, setSelectedReport] = useState<SDVReport | null>(null);
 
@@ -85,12 +81,12 @@ export function SDVTrackerPage({
     selectedReportIdRef.current = selectedReportId;
   }, [selectedReportId]);
 
-  // Fetch reports — depends only on companyId / protocolId so it does NOT
+  // Fetch reports — depends only on companyId
   // re-fire every time a report is selected (which previously could clear `reports`).
   const fetchReports = useCallback(async () => {
     setIsLoadingReports(true);
     try {
-      const reportsData = await getSDVReports(companyId, protocolId);
+      const reportsData = await getSDVReports(companyId);
       setReports(reportsData);
       
       // Auto-select the first complete report if nothing is selected yet
@@ -105,7 +101,7 @@ export function SDVTrackerPage({
     } finally {
       setIsLoadingReports(false);
     }
-  }, [companyId, protocolId]); // selectedReportId intentionally excluded — use ref instead
+  }, [companyId]);
 
   // Fetch data for selected report
   const fetchReportData = useCallback(async (reportId: string) => {
@@ -212,13 +208,6 @@ export function SDVTrackerPage({
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Re-fetch when protocol changes (but not on mount if we have initialReports)
-  useEffect(() => {
-    if (protocolId !== initialProtocolId) {
-      fetchReports();
-    }
-  }, [protocolId, initialProtocolId, fetchReports]);
-
   // Fetch data when report selection changes
   useEffect(() => {
     if (selectedReportId) {
@@ -272,7 +261,7 @@ export function SDVTrackerPage({
 
   // Handle create report
   const handleCreateReport = useCallback(async (name: string, description?: string): Promise<SDVReport | null> => {
-    const { data, error } = await createSDVReport(companyId, profileId, name, description, protocolId);
+    const { data, error } = await createSDVReport(companyId, profileId, name, description);
     if (error || !data) {
       console.error('Error creating report:', error);
       return null;
@@ -454,7 +443,6 @@ export function SDVTrackerPage({
               hasSiteData={hasSiteData}
               hasSDVData={hasSDVData}
               onUploadComplete={handleUploadComplete}
-              protocolId={protocolId}
             />
           </CardContent>
         </Card>

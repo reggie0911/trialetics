@@ -23,8 +23,7 @@ export async function uploadPatientData(
   companyId: string,
   fileName: string,
   patientRecords: PatientRecord[],
-  columnConfigs: ColumnConfig[],
-  protocolId?: string | null
+  columnConfigs: ColumnConfig[]
 ): Promise<ActionResponse<{ uploadId: string }>> {
   try {
     const supabase = await createClient();
@@ -53,7 +52,6 @@ export async function uploadPatientData(
       row_count: patientRecords.length,
       column_count: columnConfigs.length,
       filter_preferences: {},
-      protocol_id: protocolId || null,
     };
 
     const { data: upload, error: uploadError } = await supabase
@@ -310,23 +308,15 @@ function categorizePatientRecord(record: PatientRecord, uploadId: string): Table
 /**
  * Get all uploads for a company, optionally filtered by protocol
  */
-export async function getPatientUploads(
-  companyId: string,
-  protocolId?: string | null
-): Promise<ActionResponse<Tables<'patient_uploads'>[]>> {
+export async function getPatientUploads(companyId: string): Promise<ActionResponse<Tables<'patient_uploads'>[]>> {
   try {
     const supabase = await createClient();
 
-    let query = supabase
+    const { data, error } = await supabase
       .from('patient_uploads')
       .select('*')
-      .eq('company_id', companyId);
-
-    if (protocolId) {
-      query = query.eq('protocol_id', protocolId);
-    }
-
-    const { data, error } = await query.order('created_at', { ascending: false });
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching uploads:', error);
