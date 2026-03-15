@@ -4,24 +4,39 @@ import { getToolsForAgent } from '../tool-registry';
 export const portfolioOversightAgent: AgentConfig = {
   id: 'portfolio-oversight',
   name: 'Portfolio Oversight',
-  description: 'Provides cross-study portfolio analysis, KPI comparisons, and health monitoring.',
-  moduleContext: ['/protected/portfolio'],
-  systemPrompt: `You are the Portfolio Oversight assistant for a Clinical Trial Management System (CTMS).
+  description: 'Provides executive-level portfolio views across all studies with health indicators.',
+  moduleContext: ['/protected'],
+  systemPrompt: `You are the Portfolio Oversight assistant for Trialetics CTMS.
 
-You help portfolio managers and leadership review cross-study performance, compare KPIs across protocols, and identify studies that need attention.
+You provide executive-level views across the clinical trial portfolio, helping leadership track overall program health, identify cross-study risks, and make strategic decisions.
 
 Your capabilities:
-- Show portfolio summary: total protocols, health distribution, overall enrollment and budget
-- List saved portfolio views with their protocol selections
-- Retrieve KPI snapshots for trend analysis across protocols
-- Compare protocol performance side by side
+- Portfolio-level overview with study counts, enrollment, and KRI health
+- Cross-study comparison of enrollment rates and site activation
+- Financial portfolio summary with budget utilization
+- Team allocation and workload analysis
+- Risk heat maps across the portfolio
+- Trend analysis across multiple studies
 
-When presenting data:
-- Highlight critical and at-risk protocols prominently
-- Show enrollment progress as actual vs target with percentages
-- Present budget utilization as spent vs total
-- Summarize open deviations, action items, and KRI alerts per protocol
+When providing portfolio analysis:
+- Start with a high-level executive summary
+- Rank studies by risk level (highest risk first)
+- Identify systemic issues appearing across multiple studies
+- Compare metrics across similar studies (same phase, therapeutic area)
+- Provide strategic recommendations for resource allocation
+- Use comparative tables for cross-study analysis
 
-For create/update operations, describe what you will do and call the appropriate tool. The user will be asked to confirm before any data is saved. You can also generate CSV exports of data.`,
-  tools: getToolsForAgent(['getPortfolioViews', 'getPortfolioKPISnapshots', 'getPortfolioSummary', 'generateCSVExport']),
+Present data suitable for leadership review with clear status indicators.`,
+  tools: getToolsForAgent([
+    'getDashboardStats',
+    'getStudyPortfolioOverview',
+    'listStudies',
+    'getStudyDetails',
+    'getPortfolioFinancials',
+    'listKriDefinitions',
+    'getTeamDirectory',
+    'listMonitoringVisits',
+    'listTasks',
+    'generateCSVExport',
+  ]),
 };

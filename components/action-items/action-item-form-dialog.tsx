@@ -71,7 +71,11 @@ export function ActionItemFormDialog({ open, onOpenChange, onSuccess }: ActionIt
             <div className="space-y-2">
               <Label>Priority</Label>
               <Select value={priority} onValueChange={(v) => setPriority(v as ActionItemPriority)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue
+                    getDisplayLabel={(v) => ACTION_ITEM_PRIORITY_LABELS[v as ActionItemPriority] ?? v}
+                  />
+                </SelectTrigger>
                 <SelectContent>
                   {Object.entries(ACTION_ITEM_PRIORITY_LABELS).map(([k, v]) => (
                     <SelectItem key={k} value={k}>{v}</SelectItem>
@@ -82,7 +86,11 @@ export function ActionItemFormDialog({ open, onOpenChange, onSuccess }: ActionIt
             <div className="space-y-2">
               <Label>Source</Label>
               <Select value={sourceType} onValueChange={(v) => setSourceType(v as ActionItemSourceType)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue
+                    getDisplayLabel={(v) => ACTION_ITEM_SOURCE_LABELS[v as ActionItemSourceType] ?? v}
+                  />
+                </SelectTrigger>
                 <SelectContent>
                   {Object.entries(ACTION_ITEM_SOURCE_LABELS).map(([k, v]) => (
                     <SelectItem key={k} value={k}>{v}</SelectItem>

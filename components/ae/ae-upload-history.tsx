@@ -65,17 +65,15 @@ export function AEUploadHistory({
   return (
     <>
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <Button variant="outline" size="sm" asChild>
-          <SheetTrigger className="text-[11px] h-8">
-            <History className="h-3 w-3 mr-2" />
-            Upload History
-            {uploads.length > 0 && (
-              <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0">
-                {uploads.length}
-              </Badge>
-            )}
-          </SheetTrigger>
-        </Button>
+        <SheetTrigger render={<Button variant="outline" size="sm" className="text-[11px] h-8" />}>
+          <History className="h-3 w-3 mr-2" />
+          Upload History
+          {uploads.length > 0 && (
+            <Badge variant="secondary" className="ml-2 text-[10px] px-1.5 py-0">
+              {uploads.length}
+            </Badge>
+          )}
+        </SheetTrigger>
         <SheetContent className="w-full sm:max-w-md">
           <SheetHeader>
             <SheetTitle>AE Upload History</SheetTitle>

@@ -141,27 +141,23 @@ export default function Hero() {
           <Button
             size="lg"
             className="rounded-full !pl-5.5 before:rounded-full"
-            asChild
+            render={<a href="https://www.linkedin.com/company/trialetics-io" target="_blank" rel="noopener noreferrer" />}
           >
-            <a href="https://www.linkedin.com/company/trialetics-io" target="_blank" rel="noopener noreferrer">
-              Connect With Us
-              <div className="bg-background/15 border-background/10 grid size-5.5 place-items-center rounded-full border">
-                <ChevronRight className="size-4" />
-              </div>
-            </a>
+            Connect With Us
+            <div className="bg-background/15 border-background/10 grid size-5.5 place-items-center rounded-full border">
+              <ChevronRight className="size-4" />
+            </div>
           </Button>
           <Button
             size="lg"
             variant="outline"
             className="rounded-full !pl-5.5"
-            asChild
+            render={<a href="/app-store" />}
           >
-            <a href="/app-store">
-              Visit Our App Store
-              <div className="bg-background/15 border-background/10 grid size-5.5 place-items-center rounded-full border">
-                <ChevronRight className="size-4" />
-              </div>
-            </a>
+            Visit Our App Store
+            <div className="bg-background/15 border-background/10 grid size-5.5 place-items-center rounded-full border">
+              <ChevronRight className="size-4" />
+            </div>
           </Button>
         </motion.div>
 

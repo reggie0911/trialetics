@@ -67,15 +67,13 @@ export function GroupedColumnVisibility({
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <Button variant="outline" size="sm" className="gap-2 text-xs" asChild>
-        <DialogTrigger>
-          <Eye className="h-4 w-4" />
-          Columns
-          <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-            {columns.filter(c => c.visible).length}/{columns.length}
-          </Badge>
-        </DialogTrigger>
-      </Button>
+      <DialogTrigger render={<Button variant="outline" size="sm" className="gap-2 text-xs" />}>
+        <Eye className="h-4 w-4" />
+        Columns
+        <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
+          {columns.filter(c => c.visible).length}/{columns.length}
+        </Badge>
+      </DialogTrigger>
       <DialogContent className="max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Column Visibility (Grouped by Visit)</DialogTitle>

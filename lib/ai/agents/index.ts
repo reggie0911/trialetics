@@ -3,30 +3,35 @@ import type { AgentConfig } from '../types';
 type AgentLoader = () => Promise<AgentConfig>;
 
 const agentLoaders: Record<string, AgentLoader> = {
+  // CTMS core agents (with working tools)
+  'dashboard-narrator': () => import('./dashboard-narrator').then(m => m.dashboardNarratorAgent),
+  'study-risk-assessor': () => import('./study-risk-assessor').then(m => m.studyRiskAssessorAgent),
+  'enrollment-forecast': () => import('./enrollment-forecast').then(m => m.enrollmentForecastAgent),
+  'kri-sentinel': () => import('./kri-sentinel').then(m => m.kriSentinelAgent),
+  'task-orchestrator': () => import('./task-orchestrator').then(m => m.taskOrchestratorAgent),
+  'adhoc-reporting': () => import('./adhoc-reporting').then(m => m.adhocReportingAgent),
+  'site-performance': () => import('./site-performance').then(m => m.sitePerformanceAgent),
+  'spend-forecast': () => import('./spend-forecast').then(m => m.spendForecastAgent),
+  'monitoring-planner': () => import('./monitoring-planner').then(m => m.monitoringPlannerAgent),
+  'trip-report-summarizer': () => import('./trip-report-summarizer').then(m => m.tripReportSummarizerAgent),
+  'portfolio-oversight': () => import('./portfolio-oversight').then(m => m.portfolioOversightAgent),
+  // Legacy/tracker agents
   'contacts-organizations': () => import('./contacts-organizations').then(m => m.contactsOrganizationsAgent),
   'document-librarian': () => import('./document-librarian').then(m => m.documentLibrarianAgent),
   'subject-journey': () => import('./subject-journey').then(m => m.subjectJourneyAgent),
-  'monitoring-planner': () => import('./monitoring-planner').then(m => m.monitoringPlannerAgent),
   'sdv-progress': () => import('./sdv-progress').then(m => m.sdvProgressAgent),
   'payments-reconciliation': () => import('./payments-reconciliation').then(m => m.paymentsReconciliationAgent),
   'calendar-visit-window': () => import('./calendar-visit-window').then(m => m.calendarVisitWindowAgent),
   'training-compliance': () => import('./training-compliance').then(m => m.trainingComplianceAgent),
-  'dashboard-narrator': () => import('./dashboard-narrator').then(m => m.dashboardNarratorAgent),
   'study-manager': () => import('./study-manager').then(m => m.studyManagerAgent),
   'startup-activation': () => import('./startup-activation').then(m => m.startupActivationAgent),
   'milestones-timeline': () => import('./milestones-timeline').then(m => m.milestonesTimelineAgent),
-  'site-performance': () => import('./site-performance').then(m => m.sitePerformanceAgent),
   'vendor-oversight': () => import('./vendor-oversight').then(m => m.vendorOversightAgent),
   'tmf-quality': () => import('./tmf-quality').then(m => m.tmfQualityAgent),
   'reg-doc-reconciliation': () => import('./reg-doc-reconciliation').then(m => m.regDocReconciliationAgent),
   'irb-ec-coordinator': () => import('./irb-ec-coordinator').then(m => m.irbEcCoordinatorAgent),
-  'enrollment-forecast': () => import('./enrollment-forecast').then(m => m.enrollmentForecastAgent),
   'evr-writer': () => import('./evr-writer').then(m => m.evrWriterAgent),
   'action-issue': () => import('./action-issue').then(m => m.actionIssueAgent),
-  'spend-forecast': () => import('./spend-forecast').then(m => m.spendForecastAgent),
-  'kri-sentinel': () => import('./kri-sentinel').then(m => m.kriSentinelAgent),
-  'task-orchestrator': () => import('./task-orchestrator').then(m => m.taskOrchestratorAgent),
-  'adhoc-reporting': () => import('./adhoc-reporting').then(m => m.adhocReportingAgent),
   'workflow-automation': () => import('./workflow-automation').then(m => m.workflowAutomationAgent),
   'access-compliance': () => import('./access-compliance').then(m => m.accessComplianceAgent),
   'audit-inspection': () => import('./audit-inspection').then(m => m.auditInspectionAgent),
@@ -35,7 +40,6 @@ const agentLoaders: Record<string, AgentLoader> = {
   'edc-sync': () => import('./edc-sync').then(m => m.edcSyncAgent),
   'safety-reconciliation': () => import('./safety-reconciliation').then(m => m.safetyReconciliationAgent),
   'finance-erp-integration': () => import('./finance-erp-integration').then(m => m.financeErpIntegrationAgent),
-  'portfolio-oversight': () => import('./portfolio-oversight').then(m => m.portfolioOversightAgent),
   'resource-capacity': () => import('./resource-capacity').then(m => m.resourceCapacityAgent),
   'contracts-budget': () => import('./contracts-budget').then(m => m.contractsBudgetAgent),
   'randomization-supply': () => import('./randomization-supply').then(m => m.randomizationSupplyAgent),
@@ -63,10 +67,21 @@ async function loadAllAgents(): Promise<AgentConfig[]> {
 }
 
 const moduleContextMap: Record<string, string[]> = {
+  // CTMS core routes (matched first)
+  'study-risk-assessor': ['/protected/studies'],
+  'site-performance': ['/protected/sites'],
+  'enrollment-forecast': ['/protected/subjects'],
+  'task-orchestrator': ['/protected/tasks'],
+  'monitoring-planner': ['/protected/visits'],
+  'trip-report-summarizer': ['/protected/visits'],
+  'spend-forecast': ['/protected/financials'],
+  'kri-sentinel': ['/protected/reports'],
+  'adhoc-reporting': ['/protected/reports'],
+  'portfolio-oversight': ['/protected'],
+  // Legacy/tracker routes
   'contacts-organizations': ['/protected/contacts-organizations'],
   'document-librarian': ['/protected/document-management'],
   'subject-journey': ['/protected/patients', '/protected/visit-templates'],
-  'monitoring-planner': ['/protected/trip-reports'],
   'sdv-progress': ['/protected/sdv-tracker', '/protected/source-data-verification'],
   'payments-reconciliation': ['/protected/clinical-payments'],
   'calendar-visit-window': ['/protected/vw', '/protected/visit-templates'],
@@ -74,18 +89,12 @@ const moduleContextMap: Record<string, string[]> = {
   'study-manager': ['/protected/clinical-trials'],
   'startup-activation': ['/protected/site-startup'],
   'milestones-timeline': ['/protected/clinical-trials/calendar'],
-  'site-performance': ['/protected/clinical-trials'],
   'vendor-oversight': ['/protected/vendor-management'],
   'tmf-quality': ['/protected/etmf'],
   'reg-doc-reconciliation': ['/protected/document-management/reconciliation'],
   'irb-ec-coordinator': ['/protected/irb-tracking'],
-  'enrollment-forecast': ['/protected/enrollment-forecasting'],
   'evr-writer': ['/protected/trip-reports'],
   'action-issue': ['/protected/action-items'],
-  'spend-forecast': ['/protected/financial-forecasting'],
-  'kri-sentinel': ['/protected/kri-monitor'],
-  'task-orchestrator': ['/protected/tasks'],
-  'adhoc-reporting': ['/protected/reports'],
   'workflow-automation': ['/protected/workflows'],
   'access-compliance': ['/protected/admin'],
   'audit-inspection': ['/protected/audit-trail'],
@@ -94,7 +103,6 @@ const moduleContextMap: Record<string, string[]> = {
   'edc-sync': ['/protected/integrations/edc'],
   'safety-reconciliation': ['/protected/integrations/safety'],
   'finance-erp-integration': ['/protected/integrations/finance'],
-  'portfolio-oversight': ['/protected/portfolio'],
   'resource-capacity': ['/protected/resources'],
   'contracts-budget': ['/protected/clinical-trials/rate-lists', '/protected/clinical-payments'],
   'randomization-supply': ['/protected/randomization-supply'],
@@ -105,13 +113,18 @@ const moduleContextMap: Record<string, string[]> = {
 };
 
 export function findAgentIdForPage(pagePath: string): string | null {
+  let bestMatch: { agentId: string; length: number } | null = null;
+
   for (const [agentId, contexts] of Object.entries(moduleContextMap)) {
     if (agentId === 'dashboard-narrator') continue;
     for (const ctx of contexts) {
-      if (pagePath.startsWith(ctx)) return agentId;
+      if (pagePath.startsWith(ctx) && ctx.length > (bestMatch?.length ?? 0)) {
+        bestMatch = { agentId, length: ctx.length };
+      }
     }
   }
-  return null;
+
+  return bestMatch?.agentId ?? null;
 }
 
 export async function getAgent(id: string): Promise<AgentConfig | null> {

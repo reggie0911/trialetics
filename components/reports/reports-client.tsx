@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, FileText, Play } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getReportTemplates, getSavedReports } from '@/lib/actions/reports';
+import { getReportTemplates, getReportsSavedReports } from '@/lib/actions/reports';
 import type { ReportTemplate, SavedReport } from '@/lib/types/reports';
 import { DATA_SOURCES } from '@/lib/types/reports';
 import { ReportBuilder } from './report-builder';
@@ -27,7 +27,7 @@ export function ReportsClient({ companyId, profileId }: ReportsClientProps) {
     setIsLoading(true);
     const [templatesRes, reportsRes] = await Promise.all([
       getReportTemplates(companyId),
-      getSavedReports(companyId),
+      getReportsSavedReports(companyId),
     ]);
     if (templatesRes.success && templatesRes.data) setTemplates(templatesRes.data);
     if (reportsRes.success && reportsRes.data) setSavedReports(reportsRes.data);

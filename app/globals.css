@@ -11,6 +11,14 @@
   --text-6xxl: 4rem;
   --spacing: 0.25rem;
 
+  /* Compact 12px UI: remap text-sm → 12px */
+  --text-sm: 0.75rem;
+  --text-sm--line-height: 1.25rem;
+
+  /* Headings: text-2xl = 32px */
+  --text-2xl: 2rem;
+  --text-2xl--line-height: 2.5rem;
+
   /* StyleGlide */
   --display-weight: 600;
   --text-weight: 400;
@@ -156,6 +164,7 @@
   }
   body {
     @apply bg-background text-foreground font-text font-weight-text;
+    font-size: 0.75rem; /* 12px global default */
   }
   h1,
   h2,
@@ -171,6 +180,15 @@
   .section-padding {
     @apply py-17 md:py-24 lg:py-28;
   }
+}
+
+/* Global input text size: 12px for all form inputs */
+input,
+textarea,
+select,
+[role="combobox"],
+[role="listbox"] {
+  font-size: 12px !important;
 }
 
 /* Toast max height to prevent overflow with long messages */

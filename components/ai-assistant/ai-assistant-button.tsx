@@ -25,7 +25,6 @@ export function AIAssistantButton() {
 
   return (
     <>
-      {/* Floating Button */}
       <Button
         onClick={() => setIsOpen(true)}
         className="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full shadow-lg hover:scale-105 transition-transform duration-200"
@@ -33,8 +32,29 @@ export function AIAssistantButton() {
       >
         <Sparkles className="h-6 w-6" />
       </Button>
+      <AIAssistantPanel open={isOpen} onOpenChange={setIsOpen} />
+    </>
+  );
+}
 
-      {/* AI Assistant Panel */}
+export function AIAssistantInlineButton() {
+  const [isOpen, setIsOpen] = useState(false);
+  const pathname = usePathname();
+
+  if (TRACKER_ROUTES.some(route => pathname.startsWith(route))) {
+    return null;
+  }
+
+  return (
+    <>
+      <Button
+        onClick={() => setIsOpen(true)}
+        variant="ghost"
+        size="icon"
+        className="h-9 w-9"
+      >
+        <Sparkles className="h-4 w-4" />
+      </Button>
       <AIAssistantPanel open={isOpen} onOpenChange={setIsOpen} />
     </>
   );

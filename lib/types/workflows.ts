@@ -21,7 +21,6 @@ export const WORKFLOW_ACTION_LABELS: Record<WorkflowActionType, string> = {
 export const WORKFLOW_TARGET_TABLES = [
   { value: 'deviations', label: 'Deviations' },
   { value: 'action_items', label: 'Action Items' },
-  { value: 'protocol_tasks', label: 'Tasks' },
   { value: 'clinical_protocols', label: 'Protocols' },
   { value: 'subjects', label: 'Subjects' },
   { value: 'site_contracts', label: 'Site Contracts' },

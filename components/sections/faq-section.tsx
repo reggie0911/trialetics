@@ -145,14 +145,12 @@ export default function FAQSection() {
                 size="lg"
                 variant="outline"
                 className="group h-12 w-full gap-4"
-                asChild
+                render={<Link href="https://www.linkedin.com/company/trialetics-io" target="_blank" rel="noopener noreferrer" />}
               >
-                <Link href="https://www.linkedin.com/company/trialetics-io" target="_blank" rel="noopener noreferrer">
-                  Contact With Us
-                  <div className="bg-secondary dark:bg-accent border-input grid size-5.5 place-items-center rounded-full border">
-                    <ChevronRightIcon className="size-4 transition-transform group-hover:translate-x-0.25" />
-                  </div>
-                </Link>
+                Contact With Us
+                <div className="bg-secondary dark:bg-accent border-input grid size-5.5 place-items-center rounded-full border">
+                  <ChevronRightIcon className="size-4 transition-transform group-hover:translate-x-0.25" />
+                </div>
               </Button>
             </CardFooter>
           </Card>

@@ -107,21 +107,17 @@ export default function EngagementCTA() {
                   Whether your project demands a custom solution developed within our 8-week timeframe or an immediate implementation from our app store, our team is ready to assist.
                 </p>
                 <div className="flex flex-col gap-4 pt-4 sm:flex-row sm:justify-center">
-                  <Button size="lg" className="group h-14 !pl-6" asChild>
-                    <Link href="https://www.linkedin.com/company/trialetics-io" target="_blank" rel="noopener noreferrer">
-                      Connect With Us
-                      <div className="bg-background/15 border-background/10 grid size-6 place-items-center rounded-full border">
-                        <ChevronRight className="size-5 transition-transform group-hover:translate-x-0.25" />
-                      </div>
-                    </Link>
+                  <Button size="lg" className="group h-14 !pl-6" render={<Link href="https://www.linkedin.com/company/trialetics-io" target="_blank" rel="noopener noreferrer" />}>
+                    Connect With Us
+                    <div className="bg-background/15 border-background/10 grid size-6 place-items-center rounded-full border">
+                      <ChevronRight className="size-5 transition-transform group-hover:translate-x-0.25" />
+                    </div>
                   </Button>
-                  <Button size="lg" variant="outline" className="group h-14 !pl-6" asChild>
-                    <Link href="/app-store">
-                      Visit Our App Store
-                      <div className="bg-background/15 border-background/10 grid size-6 place-items-center rounded-full border">
-                        <ChevronRight className="size-5 transition-transform group-hover:translate-x-0.25" />
-                      </div>
-                    </Link>
+                  <Button size="lg" variant="outline" className="group h-14 !pl-6" render={<Link href="/app-store" />}>
+                    Visit Our App Store
+                    <div className="bg-background/15 border-background/10 grid size-6 place-items-center rounded-full border">
+                      <ChevronRight className="size-5 transition-transform group-hover:translate-x-0.25" />
+                    </div>
                   </Button>
                 </div>
                 <p className="text-muted-foreground/70 pt-4 text-sm">
