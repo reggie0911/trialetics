@@ -233,33 +233,21 @@ export function DemoPageClient({ companyId, profileId }: DemoPageClientProps) {
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col sm:flex-row gap-3">
-              <Link href="/protected/clinical-payments" className="flex-1">
-                <Button variant="outline" className="w-full text-xs h-auto py-3" asChild>
-                  <span>
-                    <Banknote className="mr-2 h-4 w-4" />
-                    Open Clinical Payments
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </span>
-                </Button>
-              </Link>
-              <Link href="/protected/clinical-trials" className="flex-1">
-                <Button variant="outline" className="w-full text-xs h-auto py-3" asChild>
-                  <span>
-                    <Building2 className="mr-2 h-4 w-4" />
-                    View Clinical Trials
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </span>
-                </Button>
-              </Link>
-              <Link href="/protected/contacts-organizations" className="flex-1">
-                <Button variant="outline" className="w-full text-xs h-auto py-3" asChild>
-                  <span>
-                    <FileText className="mr-2 h-4 w-4" />
-                    View Contacts & Orgs
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </span>
-                </Button>
-              </Link>
+              <Button variant="outline" className="w-full text-xs h-auto py-3 flex-1" render={<Link href="/protected/clinical-payments" />}>
+                <Banknote className="mr-2 h-4 w-4" />
+                Open Clinical Payments
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              <Button variant="outline" className="w-full text-xs h-auto py-3 flex-1" render={<Link href="/protected/clinical-trials" />}>
+                <Building2 className="mr-2 h-4 w-4" />
+                View Clinical Trials
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              <Button variant="outline" className="w-full text-xs h-auto py-3 flex-1" render={<Link href="/protected/contacts-organizations" />}>
+                <FileText className="mr-2 h-4 w-4" />
+                View Contacts & Orgs
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
             </div>
           </CardContent>
         </Card>
