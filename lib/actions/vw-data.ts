@@ -227,23 +227,15 @@ export async function saveVWHeaderMappings(
 /**
  * Get VW uploads for a company, optionally filtered by protocol
  */
-export async function getVWUploads(
-  companyId: string,
-  protocolId?: string | null
-): Promise<ActionResponse<Tables<'vw_uploads'>[]>> {
+export async function getVWUploads(companyId: string): Promise<ActionResponse<Tables<'vw_uploads'>[]>> {
   try {
     const supabase = await createClient();
 
-    let query = supabase
+    const { data, error } = await supabase
       .from('vw_uploads')
       .select('*')
-      .eq('company_id', companyId);
-
-    if (protocolId) {
-      query = query.eq('protocol_id', protocolId);
-    }
-
-    const { data, error } = await query.order('created_at', { ascending: false });
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching VW uploads:', error);
@@ -269,13 +261,11 @@ export async function uploadVWData(
     columnId: string;
     label: string;
     tableOrder: number;
-  }>,
-  protocolId?: string | null
+  }>
 ): Promise<ActionResponse<string>> {
   try {
     const supabase = await createClient();
 
-    // 1. Create upload record
     const uploadInsert: TablesInsert<'vw_uploads'> = {
       company_id: companyId,
       uploaded_by: uploadedBy,
@@ -283,7 +273,6 @@ export async function uploadVWData(
       row_count: records.length,
       column_count: columnConfigs.length,
       filter_preferences: {},
-      protocol_id: protocolId || null,
     };
 
     const { data: uploadData, error: uploadError } = await supabase

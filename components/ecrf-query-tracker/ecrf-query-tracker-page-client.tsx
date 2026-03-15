@@ -167,7 +167,7 @@ export function ECRFQueryTrackerPageClient({
     setIsLoading(true);
     setLoadingMessage("Loading uploads...");
     
-    const result = await getECRFUploads(companyId, protocolId);
+    const result = await getECRFUploads(companyId);
     if (result.success && result.data) {
       setUploads(result.data);
       
@@ -291,8 +291,7 @@ export function ECRFQueryTrackerPageClient({
         profileId,
         fileName,
         newData,
-        columnConfigs,
-        protocolId
+        columnConfigs
       );
 
       if (result.success && result.data) {

@@ -23,7 +23,7 @@ export async function listAgentOverrides(): Promise<AgentOverride[]> {
     .order('updated_at', { ascending: false });
 
   if (error) throw new Error(error.message);
-  return (data || []) as AgentOverride[];
+  return (data || []) as unknown as AgentOverride[];
 }
 
 export async function getAgentOverride(agentId: string): Promise<AgentOverride | null> {
@@ -39,7 +39,7 @@ export async function getAgentOverride(agentId: string): Promise<AgentOverride |
     .single();
 
   if (error) return null;
-  return data as AgentOverride;
+  return data as unknown as AgentOverride;
 }
 
 export interface UpsertAgentOverrideInput {
@@ -76,7 +76,7 @@ export async function upsertAgentOverride(input: UpsertAgentOverrideInput): Prom
     .single();
 
   if (error) throw new Error(error.message);
-  return data as AgentOverride;
+  return data as unknown as AgentOverride;
 }
 
 export async function deleteAgentOverride(agentId: string): Promise<void> {

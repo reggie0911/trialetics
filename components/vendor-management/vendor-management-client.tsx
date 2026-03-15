@@ -48,7 +48,7 @@ export function VendorManagementClient({ companyId }: VendorManagementClientProp
 
   // Form states
   const [orgId, setOrgId] = useState('');
-  const [vendorCat, setVendorCat] = useState('other');
+  const [vendorCat, setVendorCat] = useState<import('@/lib/types/vendor-management').VendorCategory>('other');
   const [servicesDesc, setServicesDesc] = useState('');
   const [contractVendorId, setContractVendorId] = useState('');
   const [contractTitle, setContractTitle] = useState('');
@@ -231,7 +231,7 @@ export function VendorManagementClient({ companyId }: VendorManagementClientProp
             </div>
             <div className="space-y-2">
               <Label>Category</Label>
-              <Select value={vendorCat} onValueChange={setVendorCat}>
+              <Select value={vendorCat} onValueChange={(v) => setVendorCat(v as import('@/lib/types/vendor-management').VendorCategory)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {Object.entries(VENDOR_CATEGORY_LABELS).map(([k, v]) => (

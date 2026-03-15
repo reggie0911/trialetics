@@ -47,7 +47,6 @@ interface SDVUploadWizardV2Props {
   hasSiteData: boolean;
   hasSDVData: boolean;
   onUploadComplete: () => void;
-  protocolId?: string | null;
 }
 
 type UploadStep = 'site_data' | 'sdv_data' | 'complete';
@@ -80,7 +79,6 @@ export function SDVUploadWizardV2({
   hasSiteData: hasSiteDataProp,
   hasSDVData: hasSDVDataProp,
   onUploadComplete,
-  protocolId,
 }: SDVUploadWizardV2Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState<UploadStep>(
@@ -172,8 +170,7 @@ export function SDVUploadWizardV2({
         reportId,
         fileType,
         file.name,
-        totalRecords,
-        protocolId
+        totalRecords
       );
       
       if (createError || !upload) {

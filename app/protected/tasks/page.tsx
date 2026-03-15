@@ -1,41 +1,43 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/server';
-import { ProtectedNavbar } from '@/components/layout/protected-navbar';
-import { ModuleNavbar } from '@/components/layout/module-navbar';
-import { TasksClient } from '@/components/tasks/tasks-client';
+import { getAllMilestones } from '@/lib/actions/milestones';
+import { getAllTasks, getTaskDashboardCounts } from '@/lib/actions/tasks';
+import { getStudies } from '@/lib/actions/studies';
+import { TasksClient } from '@/components/ctms/tasks/tasks-client';
 
 export default async function TasksPage() {
   const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+  const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/auth/login');
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, company_id')
+    .select('role')
     .eq('user_id', user.id)
     .single();
 
-  if (!profile?.company_id) redirect('/protected');
+  const [milestones, tasks, studies, counts] = await Promise.all([
+    getAllMilestones(),
+    getAllTasks(),
+    getStudies(),
+    getTaskDashboardCounts(),
+  ]);
 
   return (
-    <div className="min-h-screen bg-[#E9E9E9]">
-      <ProtectedNavbar />
-      <main className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 py-4 sm:py-8">
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Task Management</h1>
-            <p className="text-sm text-muted-foreground">
-              Cross-protocol task assignments, dependencies, and team collaboration
-            </p>
-          </div>
-          <ModuleNavbar />
-        </div>
-        <TasksClient companyId={profile.company_id} profileId={profile.id} />
-      </main>
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Project Team Tasks</h1>
+        <p className="text-sm text-muted-foreground">
+          Manage milestone-based task groups and assign work to team members and sites.
+        </p>
+      </div>
+      <TasksClient
+        initialMilestones={milestones}
+        initialTasks={tasks}
+        studies={studies.map((s) => ({ id: s.id, title: s.title }))}
+        initialCounts={counts}
+        isAdmin={profile?.role === 'admin'}
+      />
     </div>
   );
 }

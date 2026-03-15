@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { AlertTriangle } from 'lucide-react';
-import { updateActionItem, deleteActionItem } from '@/lib/actions/action-items';
+import { updateActionItem } from '@/lib/actions/action-items';
 import {
   ACTION_ITEM_STATUS_LABELS,
   ACTION_ITEM_PRIORITY_LABELS,
@@ -50,13 +50,6 @@ export function ActionItemDetailSheet({ item, open, onOpenChange, onUpdate }: Ac
     setIsSaving(true);
     await updateActionItem(item.id, { escalated: true });
     setIsSaving(false);
-    onUpdate();
-  };
-
-  const handleDelete = async () => {
-    if (!confirm('Delete this action item?')) return;
-    await deleteActionItem(item.id);
-    onOpenChange(false);
     onUpdate();
   };
 
@@ -125,7 +118,11 @@ export function ActionItemDetailSheet({ item, open, onOpenChange, onUpdate }: Ac
             <div className="space-y-2">
               <Label>Status</Label>
               <Select value={status} onValueChange={(v) => setStatus(v as ActionItemStatus)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue
+                    getDisplayLabel={(v) => ACTION_ITEM_STATUS_LABELS[v as ActionItemStatus] ?? v}
+                  />
+                </SelectTrigger>
                 <SelectContent>
                   {Object.entries(ACTION_ITEM_STATUS_LABELS).map(([k, v]) => (
                     <SelectItem key={k} value={k}>{v}</SelectItem>
@@ -136,7 +133,11 @@ export function ActionItemDetailSheet({ item, open, onOpenChange, onUpdate }: Ac
             <div className="space-y-2">
               <Label>Priority</Label>
               <Select value={priority} onValueChange={(v) => setPriority(v as ActionItemPriority)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger>
+                  <SelectValue
+                    getDisplayLabel={(v) => ACTION_ITEM_PRIORITY_LABELS[v as ActionItemPriority] ?? v}
+                  />
+                </SelectTrigger>
                 <SelectContent>
                   {Object.entries(ACTION_ITEM_PRIORITY_LABELS).map(([k, v]) => (
                     <SelectItem key={k} value={k}>{v}</SelectItem>
@@ -160,7 +161,7 @@ export function ActionItemDetailSheet({ item, open, onOpenChange, onUpdate }: Ac
 
           <div className="flex gap-2">
             <Button onClick={handleSave} disabled={isSaving} className="flex-1">
-              {isSaving ? 'Saving...' : 'Save Changes'}
+              {isSaving ? 'Saving...' : 'Save'}
             </Button>
             {!item.escalated && (
               <Button variant="outline" onClick={handleEscalate} disabled={isSaving}>
@@ -169,9 +170,6 @@ export function ActionItemDetailSheet({ item, open, onOpenChange, onUpdate }: Ac
             )}
           </div>
 
-          <Button variant="destructive" size="sm" onClick={handleDelete} className="w-full">
-            Delete Action Item
-          </Button>
         </div>
       </SheetContent>
     </Sheet>

@@ -12,16 +12,9 @@ export async function executeWorkflowAction(
   const config = action.action_config;
 
   switch (action.action_type) {
-    case 'send_notification': {
-      if (!config.recipient_id) return;
-      await supabase.from('task_notifications').insert({
-        company_id: companyId,
-        task_id: triggerRecord?.id as string,
-        recipient_id: config.recipient_id,
-        type: 'assigned',
-      });
+    case 'send_notification':
+      // Task notifications removed; no-op for backwards compatibility
       break;
-    }
 
     case 'create_action_item': {
       await supabase.from('action_items').insert({
@@ -52,13 +45,8 @@ export async function executeWorkflowAction(
       break;
     }
 
-    case 'assign_task': {
-      if (!config.assigned_to_id || !triggerRecord?.id) return;
-      await supabase
-        .from('protocol_tasks')
-        .update({ assigned_to_id: config.assigned_to_id })
-        .eq('id', triggerRecord.id as string);
+    default:
+      // assign_task and other removed action types; no-op for backwards compatibility
       break;
-    }
   }
 }

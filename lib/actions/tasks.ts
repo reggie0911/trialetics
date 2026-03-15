@@ -1,325 +1,342 @@
 'use server';
 
-import { createClient } from '@/lib/server';
 import { revalidatePath } from 'next/cache';
-import type {
-  ProtocolTask,
-  TaskComment,
-  TaskNotification,
-  CreateTaskInput,
-  UpdateTaskInput,
-  TaskFilters,
-  TaskStats,
-} from '@/lib/types/tasks';
+import { createClient } from '@/lib/server';
+import type { Task, TaskWithRelations, TaskComment, TaskCommentWithAuthor, TaskStatus } from '@/lib/types/tasks';
 
-export interface ActionResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  error?: string;
+async function getProfileId(): Promise<string> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('user_id', user.id)
+    .single();
+  if (!profile) throw new Error('No profile found');
+  return profile.id;
 }
 
-const TASK_SELECT = `*, assigned_to:profiles!protocol_tasks_assigned_to_id_fkey(id, first_name, last_name, email), assigned_by:profiles!protocol_tasks_assigned_by_id_fkey(id, first_name, last_name), protocol:clinical_protocols(id, title, protocol_number), depends_on:protocol_tasks!protocol_tasks_depends_on_id_fkey(id, name)`;
+export interface TaskFilters {
+  search?: string;
+  status?: string;
+  priority?: string;
+  assignedToMe?: boolean;
+  studyId?: string;
+  study_id?: string;
+  milestoneId?: string;
+  siteId?: string;
+}
 
-export async function getTasks(
-  companyId: string,
-  filters?: TaskFilters
-): Promise<ActionResponse<{ items: ProtocolTask[]; total: number }>> {
-  try {
-    const supabase = await createClient();
-    const page = filters?.page || 1;
-    const pageSize = filters?.pageSize || 50;
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
+const TASK_SELECT = 'id, study_id, milestone_id, title, description, assigned_to, site_id, created_by, priority, status, on_track_status, planned_start_date, due_date, completed_date, sort_order, created_at, updated_at, study_sites(id, name, site_number), profiles!tasks_assigned_to_fkey(id, first_name, last_name, email), study_milestones(id, name)';
 
-    let query = supabase
-      .from('protocol_tasks')
-      .select(TASK_SELECT, { count: 'exact' })
-      .eq('company_id', companyId);
+export async function getAllTasks(filters?: TaskFilters): Promise<TaskWithRelations[]> {
+  const supabase = await createClient();
+  let query = supabase
+    .from('tasks')
+    .select(TASK_SELECT)
+    .order('due_date', { ascending: true, nullsFirst: true })
+    .order('created_at', { ascending: true });
 
-    if (filters?.status && filters.status !== 'all') query = query.eq('status', filters.status);
-    if (filters?.priority && filters.priority !== 'all') query = query.eq('priority', filters.priority);
-    if (filters?.assigned_to_id) query = query.eq('assigned_to_id', filters.assigned_to_id);
-    if (filters?.protocol_id) query = query.eq('protocol_id', filters.protocol_id);
-    if (filters?.search) {
-      query = query.or(`name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
-    }
-
-    const { data, error, count } = await query
-      .order('sort_order', { ascending: true })
-      .order('created_at', { ascending: false })
-      .range(from, to);
-
-    if (error) return { success: false, error: error.message };
-    return { success: true, data: { items: (data || []) as ProtocolTask[], total: count || 0 } };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+  if (filters?.studyId ?? filters?.study_id) {
+    query = query.eq('study_id', filters.studyId ?? filters.study_id);
   }
-}
-
-export async function getMyTasks(
-  profileId: string
-): Promise<ActionResponse<ProtocolTask[]>> {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from('protocol_tasks')
-      .select(TASK_SELECT)
-      .eq('assigned_to_id', profileId)
-      .in('status', ['planned', 'in_progress', 'on_hold'])
-      .order('due_date', { ascending: true, nullsFirst: false })
-      .order('priority', { ascending: true })
-      .limit(100);
-
-    if (error) return { success: false, error: error.message };
-    return { success: true, data: (data || []) as ProtocolTask[] };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+  if (filters?.milestoneId) {
+    query = query.eq('milestone_id', filters.milestoneId);
   }
+  if (filters?.status && filters.status !== 'all') {
+    query = query.eq('status', filters.status);
+  }
+  if (filters?.priority) {
+    query = query.eq('priority', filters.priority);
+  }
+  if (filters?.assignedToMe) {
+    const profileId = await getProfileId();
+    query = query.eq('assigned_to', profileId);
+  }
+  if (filters?.siteId) {
+    query = query.eq('site_id', filters.siteId);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data as unknown as TaskWithRelations[]) ?? [];
 }
 
-export async function createTask(input: CreateTaskInput): Promise<ActionResponse<ProtocolTask>> {
+export async function getStudyTasks(studyId: string): Promise<TaskWithRelations[]> {
+  return getAllTasks({ studyId });
+}
+
+export async function getTasksByMilestone(milestoneId: string): Promise<TaskWithRelations[]> {
+  return getAllTasks({ milestoneId });
+}
+
+export async function getTasksBySite(siteId: string): Promise<TaskWithRelations[]> {
+  return getAllTasks({ siteId });
+}
+
+export async function getTaskById(id: string): Promise<TaskWithRelations | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('tasks')
+    .select(TASK_SELECT)
+    .eq('id', id)
+    .single();
+  if (error) return null;
+  return data as unknown as TaskWithRelations;
+}
+
+export interface TaskDashboardCounts {
+  total: number;
+  not_started: number;
+  in_progress: number;
+  completed: number;
+  blocked: number;
+}
+
+export async function getTaskDashboardCounts(studyId?: string, assignedToMe?: boolean): Promise<TaskDashboardCounts> {
+  const supabase = await createClient();
+  let query = supabase.from('tasks').select('status');
+  if (studyId) query = query.eq('study_id', studyId);
+  if (assignedToMe) {
+    const profileId = await getProfileId();
+    query = query.eq('assigned_to', profileId);
+  }
+  const { data, error } = await query;
+  if (error) return { total: 0, not_started: 0, in_progress: 0, completed: 0, blocked: 0 };
+  const rows = data ?? [];
+  const total = rows.length;
+  const not_started = rows.filter((r: { status: string }) => r.status === 'not_started').length;
+  const in_progress = rows.filter((r: { status: string }) => r.status === 'in_progress').length;
+  const completed = rows.filter((r: { status: string }) => r.status === 'completed').length;
+  const blocked = rows.filter((r: { status: string }) => r.status === 'blocked').length;
+  return { total, not_started, in_progress, completed, blocked };
+}
+
+export async function getMyTasks(): Promise<TaskWithRelations[]> {
+  return getAllTasks({ assignedToMe: true });
+}
+
+export interface CreateTaskInput {
+  study_id: string;
+  milestone_id?: string;
+  title: string;
+  description?: string;
+  priority?: string;
+  status?: TaskStatus;
+  due_date?: string;
+  planned_start_date?: string;
+  assigned_to?: string;
+  site_id?: string;
+  on_track_status?: string;
+}
+
+export async function createTask(
+  input: CreateTaskInput
+): Promise<{ data: Task | null; error: string | null }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: 'Not authenticated' };
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, company_id')
-      .eq('user_id', user.id)
-      .single();
-
-    if (!profile?.company_id) return { success: false, error: 'Profile not found' };
-
+    const profileId = await getProfileId();
     const { data, error } = await supabase
-      .from('protocol_tasks')
+      .from('tasks')
       .insert({
-        company_id: profile.company_id,
-        protocol_id: input.protocol_id,
-        name: input.name,
+        study_id: input.study_id,
+        milestone_id: input.milestone_id ?? null,
+        title: input.title,
         description: input.description ?? null,
-        priority: input.priority ?? 'medium',
-        assigned_to_id: input.assigned_to_id ?? null,
-        assigned_by_id: input.assigned_to_id ? profile.id : null,
+        priority: input.priority ?? 'low',
+        status: input.status ?? 'not_started',
         due_date: input.due_date ?? null,
         planned_start_date: input.planned_start_date ?? null,
-        planned_end_date: input.planned_end_date ?? null,
-        depends_on_id: input.depends_on_id ?? null,
-        tags: input.tags ?? [],
-        sort_order: 0,
-        budgeted_cost: 0,
+        assigned_to: input.assigned_to ?? null,
+        site_id: input.site_id ?? null,
+        created_by: profileId,
+        on_track_status: input.on_track_status ?? null,
       })
       .select()
       .single();
-
-    if (error) return { success: false, error: error.message };
-
-    if (input.assigned_to_id && input.assigned_to_id !== profile.id) {
-      await supabase.from('task_notifications').insert({
-        company_id: profile.company_id,
-        task_id: data.id,
-        recipient_id: input.assigned_to_id,
-        type: 'assigned',
-      });
-    }
-
+    if (error) return { data: null, error: error.message };
     revalidatePath('/protected/tasks');
-    revalidatePath('/protected/clinical-trials');
-    return { success: true, data: data as ProtocolTask };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    revalidatePath('/protected/my-tasks');
+    return { data: data as unknown as Task, error: null };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }
 }
 
-export async function updateTask(id: string, input: UpdateTaskInput): Promise<ActionResponse<ProtocolTask>> {
+export interface CreateGroupTaskInput {
+  study_id: string;
+  milestone_name: string;
+  task_name: string;
+  description?: string;
+  department?: string;
+  number_of_individual_tasks: number;
+  planned_start_date?: string;
+  planned_due_date?: string;
+}
+
+export async function createGroupTask(
+  input: CreateGroupTaskInput
+): Promise<{ data: { milestoneId: string }; error: string | null }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: 'Not authenticated' };
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, company_id')
-      .eq('user_id', user.id)
+    const { data: milestone, error: milestoneError } = await supabase
+      .from('study_milestones')
+      .insert({
+        study_id: input.study_id,
+        name: input.milestone_name,
+        description: input.description ?? null,
+        department: input.department ?? null,
+        planned_start_date: input.planned_start_date ?? null,
+        planned_due_date: input.planned_due_date ?? null,
+        status: 'pending',
+      })
+      .select('id')
       .single();
 
-    const { data: oldTask } = await supabase
-      .from('protocol_tasks')
-      .select('assigned_to_id, status')
-      .eq('id', id)
-      .single();
+    if (milestoneError || !milestone) {
+      return { data: { milestoneId: '' }, error: milestoneError?.message ?? 'Failed to create milestone.' };
+    }
+
+    const profileId = await getProfileId();
+    const n = Math.max(1, Math.min(Number(input.number_of_individual_tasks) || 1, 500));
+    const taskRows = Array.from({ length: n }, (_, i) => ({
+      study_id: input.study_id,
+      milestone_id: milestone.id,
+      title: input.task_name,
+      description: input.description ?? null,
+      priority: 'low',
+      status: 'not_started',
+      planned_start_date: input.planned_start_date ?? null,
+      due_date: input.planned_due_date ?? null,
+      sort_order: i,
+      created_by: profileId,
+    }));
+
+    const { error: tasksError } = await supabase.from('tasks').insert(taskRows);
+    if (tasksError) {
+      await supabase.from('study_milestones').delete().eq('id', milestone.id);
+      return { data: { milestoneId: '' }, error: tasksError.message };
+    }
+
+    revalidatePath('/protected/tasks');
+    return { data: { milestoneId: milestone.id }, error: null };
+  } catch (err) {
+    return {
+      data: { milestoneId: '' },
+      error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+    };
+  }
+}
+
+export interface UpdateTaskInput {
+  status?: TaskStatus;
+  priority?: string;
+  on_track_status?: string | null;
+  site_id?: string | null;
+  assigned_to?: string | null;
+  description?: string | null;
+  planned_start_date?: string | null;
+  due_date?: string | null;
+  title?: string;
+}
+
+export async function updateTask(
+  id: string,
+  input: UpdateTaskInput
+): Promise<{ data: Task | null; error: string | null }> {
+  const supabase = await createClient();
+  try {
+    const payload: Record<string, unknown> = {};
+    if (input.status != null) payload.status = input.status;
+    if (input.priority != null) payload.priority = input.priority;
+    if (input.on_track_status !== undefined) payload.on_track_status = input.on_track_status;
+    if (input.site_id !== undefined) payload.site_id = input.site_id;
+    if (input.assigned_to !== undefined) payload.assigned_to = input.assigned_to;
+    if (input.description !== undefined) payload.description = input.description;
+    if (input.planned_start_date !== undefined) payload.planned_start_date = input.planned_start_date;
+    if (input.due_date !== undefined) payload.due_date = input.due_date;
+    if (input.title != null) payload.title = input.title;
+    if (input.status === 'completed') {
+      payload.completed_date = new Date().toISOString().slice(0, 10);
+    }
 
     const { data, error } = await supabase
-      .from('protocol_tasks')
-      .update(input)
+      .from('tasks')
+      .update(payload)
       .eq('id', id)
       .select()
       .single();
-
-    if (error) return { success: false, error: error.message };
-
-    if (profile?.company_id && input.assigned_to_id && input.assigned_to_id !== oldTask?.assigned_to_id && input.assigned_to_id !== profile.id) {
-      await supabase.from('task_notifications').insert({
-        company_id: profile.company_id,
-        task_id: id,
-        recipient_id: input.assigned_to_id,
-        type: 'assigned',
-      });
-    }
-
-    if (profile?.company_id && input.status === 'completed' && oldTask?.assigned_to_id && oldTask.assigned_to_id !== profile.id) {
-      await supabase.from('task_notifications').insert({
-        company_id: profile.company_id,
-        task_id: id,
-        recipient_id: oldTask.assigned_to_id,
-        type: 'completed',
-      });
-    }
-
+    if (error) return { data: null, error: error.message };
     revalidatePath('/protected/tasks');
-    revalidatePath('/protected/clinical-trials');
-    return { success: true, data: data as ProtocolTask };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    revalidatePath('/protected/my-tasks');
+    return { data: data as unknown as Task, error: null };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }
 }
 
-export async function getTaskStats(companyId: string, profileId?: string): Promise<ActionResponse<TaskStats>> {
+export async function deleteTask(id: string): Promise<{ error: string | null }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
-    const { data: tasks, error } = await supabase
-      .from('protocol_tasks')
-      .select('status, priority, due_date')
-      .eq('company_id', companyId);
+    const { data: task, error: fetchError } = await supabase
+      .from('tasks')
+      .select('created_by')
+      .eq('id', id)
+      .single();
+    if (fetchError || !task) return { error: 'Task not found.' };
 
-    if (error) return { success: false, error: error.message };
-
-    let unreadCount = 0;
-    if (profileId) {
-      const { count } = await supabase
-        .from('task_notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('recipient_id', profileId)
-        .eq('read', false);
-      unreadCount = count || 0;
+    const profileId = await getProfileId();
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', profileId)
+      .single();
+    const isAdmin = profile?.role === 'admin';
+    const isCreator = task.created_by != null && task.created_by === profileId;
+    if (!isAdmin && !isCreator) {
+      return { error: 'You can only delete tasks you created, or ask an admin.' };
     }
 
-    const items = tasks || [];
-    const today = new Date().toISOString().split('T')[0];
-
-    return {
-      success: true,
-      data: {
-        total: items.length,
-        planned: items.filter(t => t.status === 'planned').length,
-        in_progress: items.filter(t => t.status === 'in_progress').length,
-        completed: items.filter(t => t.status === 'completed').length,
-        on_hold: items.filter(t => t.status === 'on_hold').length,
-        overdue: items.filter(t => t.due_date && t.due_date < today && ['planned', 'in_progress'].includes(t.status!)).length,
-        critical: items.filter(t => t.priority === 'critical' && ['planned', 'in_progress'].includes(t.status!)).length,
-        unread_notifications: unreadCount,
-      },
-    };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    const { error } = await supabase.from('tasks').delete().eq('id', id);
+    if (error) return { error: error.message };
+    revalidatePath('/protected/tasks');
+    revalidatePath('/protected/my-tasks');
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }
+}
+
+// Comments
+
+export async function getTaskComments(taskId: string): Promise<TaskCommentWithAuthor[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('task_comments')
+    .select('id, task_id, author_id, content, created_at, profiles(first_name, last_name)')
+    .eq('task_id', taskId)
+    .order('created_at', { ascending: true });
+  if (error) return [];
+  return (data as unknown as TaskCommentWithAuthor[]) ?? [];
 }
 
 export async function addTaskComment(
   taskId: string,
   content: string
-): Promise<ActionResponse<TaskComment>> {
+): Promise<{ data: TaskComment | null; error: string | null }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: 'Not authenticated' };
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, company_id')
-      .eq('user_id', user.id)
-      .single();
-
-    if (!profile?.company_id) return { success: false, error: 'Profile not found' };
-
+    const authorId = await getProfileId();
     const { data, error } = await supabase
       .from('task_comments')
-      .insert({
-        company_id: profile.company_id,
-        task_id: taskId,
-        author_id: profile.id,
-        content,
-      })
-      .select(`*, author:profiles!task_comments_author_id_fkey(id, first_name, last_name, email)`)
+      .insert({ task_id: taskId, author_id: authorId, content: content.trim() })
+      .select()
       .single();
-
-    if (error) return { success: false, error: error.message };
-    return { success: true, data: data as TaskComment };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
-  }
-}
-
-export async function getTaskComments(taskId: string): Promise<ActionResponse<TaskComment[]>> {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from('task_comments')
-      .select(`*, author:profiles!task_comments_author_id_fkey(id, first_name, last_name, email)`)
-      .eq('task_id', taskId)
-      .order('created_at', { ascending: true });
-
-    if (error) return { success: false, error: error.message };
-    return { success: true, data: (data || []) as TaskComment[] };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
-  }
-}
-
-export async function getTaskNotifications(profileId: string): Promise<ActionResponse<TaskNotification[]>> {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from('task_notifications')
-      .select(`*, task:protocol_tasks(id, name)`)
-      .eq('recipient_id', profileId)
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (error) return { success: false, error: error.message };
-    return { success: true, data: (data || []) as TaskNotification[] };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
-  }
-}
-
-export async function markNotificationRead(notificationId: string): Promise<ActionResponse<null>> {
-  try {
-    const supabase = await createClient();
-    const { error } = await supabase
-      .from('task_notifications')
-      .update({ read: true })
-      .eq('id', notificationId);
-
-    if (error) return { success: false, error: error.message };
-    return { success: true, data: null };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
-  }
-}
-
-export async function markAllNotificationsRead(profileId: string): Promise<ActionResponse<null>> {
-  try {
-    const supabase = await createClient();
-    const { error } = await supabase
-      .from('task_notifications')
-      .update({ read: true })
-      .eq('recipient_id', profileId)
-      .eq('read', false);
-
-    if (error) return { success: false, error: error.message };
-    return { success: true, data: null };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    if (error) return { data: null, error: error.message };
+    revalidatePath('/protected/tasks');
+    return { data: data as unknown as TaskComment, error: null };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }
 }

@@ -1,441 +1,349 @@
 'use server';
 
-import { createClient } from '@/lib/server';
 import { revalidatePath } from 'next/cache';
+import { createClient } from '@/lib/server';
 import type {
-  CreateSubjectData,
-  UpdateSubjectData,
-  SubjectWithRelations,
-  SubjectFilters,
-} from '@/lib/types/clinical-trials';
+  Subject,
+  Study,
+  StudySite,
+  SubjectStatus,
+  SubjectWithSite,
+  SubjectWithDetails,
+  SubjectVisit,
+  VisitStatus,
+  EnrollmentFunnelData,
+} from '@/lib/types/ctms';
 
-// =============================================
-// Get Subjects
-// =============================================
+// --------------- Subjects ---------------
 
-export async function getSubjects(
-  companyId: string,
-  filters: SubjectFilters = {}
-) {
-  const supabase = await createClient();
-  const { search, site_id, protocol_id, status, enrollment_date_from, enrollment_date_to, page = 1, pageSize = 50 } = filters;
-
-  try {
-    // If protocol_id is provided, get site IDs for that protocol first
-    let siteIds: string[] | undefined;
-    if (protocol_id && !site_id) {
-      const { data: sites } = await supabase
-        .from('clinical_sites')
-        .select('id')
-        .eq('protocol_id', protocol_id);
-      siteIds = (sites || []).map((s: { id: string }) => s.id);
-      if (siteIds.length === 0) {
-        return {
-          success: true,
-          data: { subjects: [], total: 0, page, pageSize },
-          error: null,
-        };
-      }
-    }
-
-    let query = supabase
-      .from('subjects')
-      .select(
-        `
-        *,
-        site:site_id (
-          id,
-          site_number,
-          organization:organization_id (
-            id,
-            name
-          )
-        )
-      `,
-        { count: 'exact' }
-      )
-      .eq('company_id', companyId);
-
-    if (search) {
-      query = query.or(`screening_number.ilike.%${search}%,subject_number.ilike.%${search}%`);
-    }
-
-    if (site_id) {
-      query = query.eq('site_id', site_id);
-    } else if (siteIds && siteIds.length > 0) {
-      query = query.in('site_id', siteIds);
-    }
-
-    if (status && status !== 'all') {
-      query = query.eq('status', status);
-    }
-
-    if (enrollment_date_from) {
-      query = query.gte('enrollment_date', enrollment_date_from);
-    }
-
-    if (enrollment_date_to) {
-      query = query.lte('enrollment_date', enrollment_date_to);
-    }
-
-    query = query
-      .order('created_at', { ascending: false })
-      .range((page - 1) * pageSize, page * pageSize - 1);
-
-    const { data, error, count } = await query;
-
-    if (error) {
-      console.error('Error fetching subjects:', error);
-      return {
-        success: false,
-        error: 'Failed to fetch subjects',
-        data: null,
-      };
-    }
-
-    return {
-      success: true,
-      data: {
-        subjects: data || [],
-        total: count || 0,
-        page,
-        pageSize,
-      },
-      error: null,
-    };
-  } catch (error) {
-    console.error('Error in getSubjects:', error);
-    return {
-      success: false,
-      error: 'An unexpected error occurred',
-      data: null,
-    };
-  }
+export interface SubjectWithStudySite extends Subject {
+  study_sites: Pick<StudySite, 'site_number' | 'name'>;
+  studies: Pick<Study, 'protocol_number' | 'title'>;
 }
 
-// =============================================
-// Get Single Subject
-// =============================================
-
-export async function getSubject(companyId: string, id: string) {
+export async function getSubjectCountBySite(siteId: string): Promise<number> {
   const supabase = await createClient();
-
-  try {
-    const { data, error } = await supabase
-      .from('subjects')
-      .select(
-        `
-        *,
-        site:site_id (
-          id,
-          site_number,
-          status,
-          protocol_id,
-          organization:organization_id (
-            id,
-            name
-          )
-        )
-      `
-      )
-      .eq('id', id)
-      .eq('company_id', companyId)
-      .single();
-
-    if (error) {
-      console.error('Error fetching subject:', error);
-      return {
-        success: false,
-        error: 'Failed to fetch subject',
-        data: null,
-      };
-    }
-
-    return {
-      success: true,
-      data,
-      error: null,
-    };
-  } catch (error) {
-    console.error('Error in getSubject:', error);
-    return {
-      success: false,
-      error: 'An unexpected error occurred',
-      data: null,
-    };
-  }
+  const { count, error } = await supabase
+    .from('subjects')
+    .select('id', { count: 'exact', head: true })
+    .eq('site_id', siteId)
+    .in('status', ['randomized', 'active', 'completed']);
+  if (error) return 0;
+  return count ?? 0;
 }
 
-// =============================================
-// Create Subject
-// =============================================
+export async function getAllSubjects(): Promise<SubjectWithStudySite[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('subjects')
+    .select('*, study_sites(site_number, name), studies(protocol_number, title)')
+    .order('updated_at', { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data as unknown as SubjectWithStudySite[]) ?? [];
+}
+
+export interface SubjectFilters {
+  search?: string;
+  status?: SubjectStatus;
+  siteId?: string;
+}
+
+export async function getStudySubjects(
+  studyId: string,
+  filters?: SubjectFilters
+): Promise<SubjectWithSite[]> {
+  const supabase = await createClient();
+
+  let query = supabase
+    .from('subjects')
+    .select('*, study_sites(site_number, name)')
+    .eq('study_id', studyId)
+    .order('subject_number');
+
+  if (filters?.status) {
+    query = query.eq('status', filters.status);
+  }
+
+  if (filters?.siteId) {
+    query = query.eq('site_id', filters.siteId);
+  }
+
+  if (filters?.search) {
+    query = query.or(
+      `subject_number.ilike.%${filters.search}%,screening_number.ilike.%${filters.search}%,randomization_number.ilike.%${filters.search}%`
+    );
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data as unknown as SubjectWithSite[]) ?? [];
+}
+
+export async function getSubjectById(id: string): Promise<SubjectWithDetails | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('subjects')
+    .select('*, study_sites(site_number, name), subject_visits(*)')
+    .eq('id', id)
+    .order('visit_number', { referencedTable: 'subject_visits', ascending: true })
+    .single();
+
+  if (error) return null;
+  return data as unknown as SubjectWithDetails;
+}
+
+export async function getEnrollmentFunnel(studyId: string): Promise<EnrollmentFunnelData> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('subjects')
+    .select('status')
+    .eq('study_id', studyId);
+
+  if (error) throw new Error(error.message);
+
+  const counts: EnrollmentFunnelData = {
+    preScreening: 0,
+    screening: 0,
+    screenFailed: 0,
+    randomized: 0,
+    active: 0,
+    completed: 0,
+    withdrawn: 0,
+    discontinued: 0,
+    total: data?.length ?? 0,
+  };
+
+  for (const row of data ?? []) {
+    switch (row.status) {
+      case 'pre_screening': counts.preScreening++; break;
+      case 'screening': counts.screening++; break;
+      case 'screen_failed': counts.screenFailed++; break;
+      case 'randomized': counts.randomized++; break;
+      case 'active': counts.active++; break;
+      case 'completed': counts.completed++; break;
+      case 'withdrawn': counts.withdrawn++; break;
+      case 'discontinued': counts.discontinued++; break;
+    }
+  }
+
+  return counts;
+}
+
+export interface CreateSubjectInput {
+  study_id: string;
+  site_id: string;
+  subject_number: string;
+  screening_number?: string;
+  randomization_number?: string;
+  status?: SubjectStatus;
+  screening_date?: string;
+  randomization_date?: string;
+}
 
 export async function createSubject(
-  companyId: string,
-  profileId: string,
-  email: string,
-  data: CreateSubjectData
-) {
+  input: CreateSubjectInput
+): Promise<{ data: Subject | null; error: string | null }> {
   const supabase = await createClient();
 
   try {
-    const {
-      site_id,
-      screening_number,
-      subject_number,
-      status,
-      enrollment_date,
-      screening_date,
-      completion_date,
-      termination_date,
-      termination_reason,
-      screen_failure_reason,
-      demographic_data,
-      metadata,
-    } = data;
-
-    // Check for duplicate subject_number at this site
-    if (subject_number) {
-      const { data: existing } = await supabase
-        .from('subjects')
-        .select('id')
-        .eq('site_id', site_id)
-        .eq('subject_number', subject_number)
-        .eq('company_id', companyId)
-        .single();
-
-      if (existing) {
-        return {
-          success: false,
-          error: 'A subject with this number already exists at this site',
-          data: null,
-        };
-      }
-    }
-
-    const insertData = {
-      company_id: companyId,
-      site_id,
-      screening_number: screening_number || null,
-      subject_number: subject_number || null,
-      status: status || 'screening',
-      enrollment_date: enrollment_date || null,
-      screening_date: screening_date || null,
-      completion_date: completion_date || null,
-      termination_date: termination_date || null,
-      termination_reason: termination_reason || null,
-      screen_failure_reason: screen_failure_reason || null,
-      demographic_data: demographic_data || {},
-      metadata: metadata || {},
-      created_by_id: profileId,
-      creator_email: email,
-    };
-
-    const { data: subject, error } = await supabase
-      .from('subjects')
-      .insert(insertData)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating subject:', error);
-      return {
-        success: false,
-        error: 'Failed to create subject',
-        data: null,
-      };
-    }
-
-    // Update site milestone counts
-    await updateSiteMilestones(companyId, site_id);
-
-    revalidatePath('/protected/clinical-trials');
-    return {
-      success: true,
-      data: subject,
-      error: null,
-    };
-  } catch (error) {
-    console.error('Error in createSubject:', error);
-    return {
-      success: false,
-      error: 'An unexpected error occurred',
-      data: null,
-    };
-  }
-}
-
-// =============================================
-// Update Subject
-// =============================================
-
-export async function updateSubject(
-  companyId: string,
-  updateData: UpdateSubjectData
-) {
-  const supabase = await createClient();
-
-  try {
-    const { id, subject_number, site_id, ...rest } = updateData;
-
-    // If updating subject_number, check for duplicates
-    if (subject_number && site_id) {
-      const { data: existing } = await supabase
-        .from('subjects')
-        .select('id')
-        .eq('site_id', site_id)
-        .eq('subject_number', subject_number)
-        .eq('company_id', companyId)
-        .neq('id', id)
-        .single();
-
-      if (existing) {
-        return {
-          success: false,
-          error: 'A subject with this number already exists at this site',
-          data: null,
-        };
-      }
-    }
-
-    const updates: Record<string, any> = { ...rest, updated_at: new Date().toISOString() };
-    if (subject_number !== undefined) updates.subject_number = subject_number;
-
     const { data, error } = await supabase
       .from('subjects')
-      .update(updates)
-      .eq('id', id)
-      .eq('company_id', companyId)
+      .insert({
+        study_id: input.study_id,
+        site_id: input.site_id,
+        subject_number: input.subject_number,
+        screening_number: input.screening_number || null,
+        randomization_number: input.randomization_number || null,
+        status: input.status || 'pre_screening',
+        screening_date: input.screening_date || null,
+        randomization_date: input.randomization_date || null,
+      })
       .select()
       .single();
 
     if (error) {
-      console.error('Error updating subject:', error);
-      return {
-        success: false,
-        error: 'Failed to update subject',
-        data: null,
-      };
+      if (error.code === '23505') {
+        return { data: null, error: 'A subject with this number already exists in this study.' };
+      }
+      return { data: null, error: error.message };
     }
 
-    // Get site_id from the subject if not provided
-    const finalSiteId = site_id || data.site_id;
-    if (finalSiteId) {
-      await updateSiteMilestones(companyId, finalSiteId);
-    }
-
-    revalidatePath('/protected/clinical-trials');
-    revalidatePath('/protected/source-data-verification');
-    return {
-      success: true,
-      data,
-      error: null,
-    };
-  } catch (error) {
-    console.error('Error in updateSubject:', error);
-    return {
-      success: false,
-      error: 'An unexpected error occurred',
-      data: null,
-    };
+    revalidatePath('/protected');
+    revalidatePath(`/protected/studies/${input.study_id}`);
+    return { data: data as unknown as Subject, error: null };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }
 }
 
-// =============================================
-// Delete Subject
-// =============================================
+export interface UpdateSubjectInput {
+  id: string;
+  study_id: string;
+  site_id?: string;
+  subject_number?: string;
+  screening_number?: string;
+  randomization_number?: string;
+  status?: SubjectStatus;
+  screening_date?: string;
+  randomization_date?: string;
+  completion_date?: string;
+  withdrawal_date?: string;
+  withdrawal_reason?: string;
+}
 
-export async function deleteSubject(companyId: string, id: string) {
+export async function updateSubject(
+  input: UpdateSubjectInput
+): Promise<{ error: string | null }> {
   const supabase = await createClient();
 
   try {
-    // Get subject to know which site to update
-    const { data: subject } = await supabase
-      .from('subjects')
-      .select('site_id')
-      .eq('id', id)
-      .eq('company_id', companyId)
-      .single();
+    const { id, study_id, ...updates } = input;
+    const cleanUpdates: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        cleanUpdates[key] = value === '' ? null : value;
+      }
+    }
 
     const { error } = await supabase
       .from('subjects')
-      .delete()
-      .eq('id', id)
-      .eq('company_id', companyId);
+      .update(cleanUpdates)
+      .eq('id', id);
 
     if (error) {
-      console.error('Error deleting subject:', error);
-      return {
-        success: false,
-        error: 'Failed to delete subject',
-      };
+      if (error.code === '23505') {
+        return { error: 'A subject with this number already exists in this study.' };
+      }
+      return { error: error.message };
     }
 
-    // Update site milestones
-    if (subject?.site_id) {
-      await updateSiteMilestones(companyId, subject.site_id);
-    }
-
-    revalidatePath('/protected/clinical-trials');
-    return {
-      success: true,
-      error: null,
-    };
-  } catch (error) {
-    console.error('Error in deleteSubject:', error);
-    return {
-      success: false,
-      error: 'An unexpected error occurred',
-    };
+    revalidatePath(`/protected/studies/${study_id}`);
+    revalidatePath(`/protected/subjects/${id}`);
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }
 }
 
-// =============================================
-// Helper: Update Site Milestones
-// =============================================
-
-async function updateSiteMilestones(companyId: string, siteId: string) {
+export async function deleteSubject(
+  id: string,
+  studyId: string
+): Promise<{ error: string | null }> {
   const supabase = await createClient();
 
   try {
-    // Get all subjects for this site
-    const { data: subjects } = await supabase
+    const { error } = await supabase
       .from('subjects')
-      .select('*')
-      .eq('site_id', siteId)
-      .eq('company_id', companyId);
+      .delete()
+      .eq('id', id);
 
-    if (!subjects) return;
+    if (error) return { error: error.message };
 
-    // Calculate counts
-    const enrolled_subject_count = subjects.filter((s) => s.status === 'enrolled' || s.status === 'completed').length;
-    const screen_failure_count = subjects.filter((s) => s.status === 'screen_failure').length;
-    const completed_subject_count = subjects.filter((s) => s.status === 'completed').length;
-    const early_terminated_count = subjects.filter((s) => s.status === 'terminated').length;
-
-    // Calculate dates
-    const enrolledSubjects = subjects.filter((s) => s.enrollment_date).sort((a, b) => 
-      new Date(a.enrollment_date!).getTime() - new Date(b.enrollment_date!).getTime()
-    );
-
-    const first_subject_enrolled_date = enrolledSubjects.length > 0 ? enrolledSubjects[0].enrollment_date : null;
-    const last_subject_enrolled_date = enrolledSubjects.length > 0 ? enrolledSubjects[enrolledSubjects.length - 1].enrollment_date : null;
-
-    // Update site
-    await supabase
-      .from('clinical_sites')
-      .update({
-        enrolled_subject_count,
-        screen_failure_count,
-        completed_subject_count,
-        early_terminated_count,
-        first_subject_enrolled_date,
-        last_subject_enrolled_date,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', siteId)
-      .eq('company_id', companyId);
-  } catch (error) {
-    console.error('Error updating site milestones:', error);
+    revalidatePath(`/protected/studies/${studyId}`);
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }
 }
+
+// --------------- Visits ---------------
+
+export interface AddVisitInput {
+  subject_id: string;
+  visit_name: string;
+  visit_number: number;
+  planned_date?: string;
+  actual_date?: string;
+  status?: VisitStatus;
+  window_start?: string;
+  window_end?: string;
+  notes?: string;
+}
+
+export async function addSubjectVisit(
+  input: AddVisitInput,
+  subjectId: string
+): Promise<{ data: SubjectVisit | null; error: string | null }> {
+  const supabase = await createClient();
+
+  try {
+    const { data, error } = await supabase
+      .from('subject_visits')
+      .insert({
+        subject_id: input.subject_id,
+        visit_name: input.visit_name,
+        visit_number: input.visit_number,
+        planned_date: input.planned_date || null,
+        actual_date: input.actual_date || null,
+        status: input.status || 'scheduled',
+        window_start: input.window_start || null,
+        window_end: input.window_end || null,
+        notes: input.notes || null,
+      })
+      .select()
+      .single();
+
+    if (error) return { data: null, error: error.message };
+
+    revalidatePath(`/protected/subjects/${subjectId}`);
+    return { data: data as unknown as SubjectVisit, error: null };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+export async function updateSubjectVisit(
+  id: string,
+  subjectId: string,
+  updates: Partial<Omit<AddVisitInput, 'subject_id'>>
+): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+
+  try {
+    const cleanUpdates: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        cleanUpdates[key] = value === '' ? null : value;
+      }
+    }
+
+    const { error } = await supabase
+      .from('subject_visits')
+      .update(cleanUpdates)
+      .eq('id', id);
+
+    if (error) return { error: error.message };
+
+    revalidatePath(`/protected/subjects/${subjectId}`);
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+export async function deleteSubjectVisit(
+  id: string,
+  subjectId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+
+  try {
+    const { error } = await supabase
+      .from('subject_visits')
+      .delete()
+      .eq('id', id);
+
+    if (error) return { error: error.message };
+
+    revalidatePath(`/protected/subjects/${subjectId}`);
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+

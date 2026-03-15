@@ -188,8 +188,8 @@ export function HeaderMappingUpload({
                     disabled={isProcessing}
                   />
                   <label htmlFor="header-csv-upload">
-                    <Button variant="secondary" size="sm" asChild disabled={isProcessing}>
-                      <span>Browse Files</span>
+                    <Button variant="secondary" size="sm" render={<span />} disabled={isProcessing}>
+                      Browse Files
                     </Button>
                   </label>
                 </>

@@ -94,8 +94,7 @@ export async function createUploadRecord(
   reportId: string,
   fileType: 'site_data_entry' | 'sdv_data',
   fileName: string,
-  totalCount: number,
-  protocolId?: string | null
+  totalCount: number
 ): Promise<{ data: SDVUploadV2 | null; error: string | null }> {
   const supabase = await createClient();
   
@@ -113,7 +112,6 @@ export async function createUploadRecord(
         processed_count: 0,
         total_count: totalCount,
         record_count: 0,
-        protocol_id: protocolId || null,
       })
       .select()
       .single();

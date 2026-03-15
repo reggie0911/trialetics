@@ -131,19 +131,17 @@ export default function WhyWeBegan() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col gap-3 sm:flex-row sm:gap-4">
-              <Button className="!text-sm shadow-none" size="lg" asChild>
-                <Link href="#">Explore Lumen</Link>
+              <Button className="!text-sm shadow-none" size="lg" render={<Link href="#" />}>
+                Explore Lumen
               </Button>
               <Button
                 variant="outline"
                 className="border-input !text-sm shadow-none"
                 size="lg"
-                asChild
+                render={<Link href="/contact" />}
               >
-                <Link href="/contact">
-                  Contact Us
-                  <MailIcon className="size-4" />
-                </Link>
+                Contact Us
+                <MailIcon className="size-4" />
               </Button>
             </div>
           </div>

@@ -132,23 +132,15 @@ export async function saveECRFHeaderMappings(
 /**
  * Get eCRF uploads for a company
  */
-export async function getECRFUploads(
-  companyId: string,
-  protocolId?: string | null
-): Promise<ActionResponse<Tables<'ecrf_uploads'>[]>> {
+export async function getECRFUploads(companyId: string): Promise<ActionResponse<Tables<'ecrf_uploads'>[]>> {
   try {
     const supabase = await createClient();
 
-    let query = supabase
+    const { data, error } = await supabase
       .from('ecrf_uploads')
       .select('*')
-      .eq('company_id', companyId);
-
-    if (protocolId) {
-      query = query.eq('protocol_id', protocolId);
-    }
-
-    const { data, error } = await query.order('created_at', { ascending: false });
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching eCRF uploads:', error);
@@ -174,13 +166,11 @@ export async function uploadECRFData(
     columnId: string;
     label: string;
     tableOrder: number;
-  }>,
-  protocolId?: string | null
+  }>
 ): Promise<ActionResponse<string>> {
   try {
     const supabase = await createClient();
 
-    // 1. Create upload record
     const uploadInsert: TablesInsert<'ecrf_uploads'> = {
       company_id: companyId,
       uploaded_by: uploadedBy,
@@ -188,7 +178,6 @@ export async function uploadECRFData(
       row_count: records.length,
       column_count: columnConfigs.length,
       filter_preferences: {},
-      protocol_id: protocolId || null,
     };
 
     const { data: uploadData, error: uploadError } = await supabase

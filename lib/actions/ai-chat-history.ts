@@ -28,7 +28,7 @@ export async function listChatSessions(limit = 50): Promise<ChatSessionSummary[]
     .limit(limit);
 
   if (error) throw new Error(error.message);
-  return (data || []) as ChatSessionSummary[];
+  return (data || []) as unknown as ChatSessionSummary[];
 }
 
 export async function getChatSession(id: string): Promise<ChatSessionFull | null> {
@@ -44,7 +44,7 @@ export async function getChatSession(id: string): Promise<ChatSessionFull | null
     .single();
 
   if (error) return null;
-  return data as ChatSessionFull;
+  return data as unknown as ChatSessionFull;
 }
 
 export interface SaveChatSessionInput {
@@ -88,7 +88,7 @@ export async function saveChatSession(input: SaveChatSessionInput): Promise<Chat
       .single();
 
     if (error) throw new Error(error.message);
-    return data as ChatSessionFull;
+    return data as unknown as ChatSessionFull;
   }
 
   const { data, error } = await supabase
@@ -105,7 +105,7 @@ export async function saveChatSession(input: SaveChatSessionInput): Promise<Chat
     .single();
 
   if (error) throw new Error(error.message);
-  return data as ChatSessionFull;
+  return data as unknown as ChatSessionFull;
 }
 
 export async function deleteChatSession(id: string): Promise<void> {

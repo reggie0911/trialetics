@@ -1,81 +1,61 @@
 'use server';
 
-import { createClient } from '@/lib/server';
 import { revalidatePath } from 'next/cache';
+import { createClient } from '@/lib/server';
 import type {
   CustomTrackerDefinition,
   CustomField,
   CustomFieldValue,
   CreateTrackerDefinitionInput,
-  UpdateTrackerDefinitionInput,
   CreateCustomFieldInput,
   SetCustomFieldValueInput,
-  TrackerFilters,
 } from '@/lib/types/custom-trackers';
 
-export type ActionResponse<T> = {
-  success: boolean;
-  data?: T;
-  error?: string;
-};
+async function getProfileWithCompany(): Promise<{ id: string; company_id: string } | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase.from('profiles').select('id, company_id').eq('user_id', user.id).single();
+  return data ?? null;
+}
 
 export async function getTrackerDefinitions(
-  companyId: string,
-  filters?: TrackerFilters
-): Promise<ActionResponse<{ items: CustomTrackerDefinition[]; total: number }>> {
+  companyId: string
+): Promise<{ success: boolean; data?: { items: CustomTrackerDefinition[] }; error?: string }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
-    let query = supabase
+    const { data, error } = await supabase
       .from('custom_tracker_definitions')
-      .select('*, created_by:profiles!custom_tracker_definitions_created_by_id_fkey(id, first_name, last_name)', { count: 'exact' })
+      .select('id, company_id, name, description, slug, icon, entity_type, columns, active, created_by_id, created_at, updated_at, created_by:profiles!custom_tracker_definitions_created_by_id_fkey(id, first_name, last_name)')
       .eq('company_id', companyId)
       .order('created_at', { ascending: false });
 
-    if (filters?.active !== undefined) {
-      query = query.eq('active', filters.active);
-    }
-    if (filters?.search) {
-      query = query.ilike('name', `%${filters.search}%`);
-    }
-
-    const pageSize = filters?.pageSize || 25;
-    const page = filters?.page || 1;
-    const from = (page - 1) * pageSize;
-    query = query.range(from, from + pageSize - 1);
-
-    const { data, error, count } = await query;
     if (error) return { success: false, error: error.message };
-
-    return { success: true, data: { items: (data || []) as CustomTrackerDefinition[], total: count || 0 } };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    return { success: true, data: { items: (data as unknown as CustomTrackerDefinition[]) ?? [] } };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 }
 
 export async function createTrackerDefinition(
   input: CreateTrackerDefinitionInput
-): Promise<ActionResponse<CustomTrackerDefinition>> {
+): Promise<{ success: boolean; data?: CustomTrackerDefinition; error?: string }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: 'Not authenticated' };
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, company_id')
-      .eq('user_id', user.id)
-      .single();
-    if (!profile?.company_id) return { success: false, error: 'Profile not found' };
+    const profile = await getProfileWithCompany();
+    if (!profile) return { success: false, error: 'Not authenticated' };
 
     const { data, error } = await supabase
       .from('custom_tracker_definitions')
       .insert({
         company_id: profile.company_id,
         name: input.name,
-        description: input.description || null,
+        description: input.description ?? null,
         slug: input.slug,
-        icon: input.icon || null,
-        entity_type: input.entity_type || null,
+        icon: input.icon ?? null,
+        entity_type: input.entity_type ?? null,
+        columns: [],
+        active: true,
         created_by_id: profile.id,
       })
       .select()
@@ -83,42 +63,21 @@ export async function createTrackerDefinition(
 
     if (error) return { success: false, error: error.message };
     revalidatePath('/protected/custom-trackers');
-    return { success: true, data: data as CustomTrackerDefinition };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
-  }
-}
-
-export async function updateTrackerDefinition(
-  id: string,
-  input: UpdateTrackerDefinitionInput
-): Promise<ActionResponse<CustomTrackerDefinition>> {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from('custom_tracker_definitions')
-      .update(input)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) return { success: false, error: error.message };
-    revalidatePath('/protected/custom-trackers');
-    return { success: true, data: data as CustomTrackerDefinition };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    return { success: true, data: data as unknown as CustomTrackerDefinition };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 }
 
 export async function getCustomFields(
   companyId: string,
   trackerDefinitionId?: string
-): Promise<ActionResponse<CustomField[]>> {
+): Promise<{ success: boolean; data?: CustomField[]; error?: string }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
     let query = supabase
       .from('custom_fields')
-      .select('*')
+      .select('id, company_id, tracker_definition_id, field_name, field_type, field_label, options, required, sort_order, created_at')
       .eq('company_id', companyId)
       .order('sort_order', { ascending: true });
 
@@ -128,173 +87,84 @@ export async function getCustomFields(
 
     const { data, error } = await query;
     if (error) return { success: false, error: error.message };
-    return { success: true, data: (data || []) as CustomField[] };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    return { success: true, data: (data as unknown as CustomField[]) ?? [] };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 }
 
 export async function createCustomField(
   input: CreateCustomFieldInput
-): Promise<ActionResponse<CustomField>> {
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: 'Not authenticated' };
+    const profile = await getProfileWithCompany();
+    if (!profile) return { success: false, error: 'Not authenticated' };
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('user_id', user.id)
-      .single();
-    if (!profile?.company_id) return { success: false, error: 'Profile not found' };
-
-    const { data, error } = await supabase
-      .from('custom_fields')
-      .insert({
-        company_id: profile.company_id,
-        tracker_definition_id: input.tracker_definition_id,
-        field_name: input.field_name,
-        field_type: input.field_type,
-        field_label: input.field_label,
-        options: input.options || null,
-        required: input.required || false,
-        sort_order: input.sort_order || 0,
-      })
-      .select()
-      .single();
-
+    const { error } = await supabase.from('custom_fields').insert({
+      company_id: profile.company_id,
+      tracker_definition_id: input.tracker_definition_id,
+      field_name: input.field_name,
+      field_type: input.field_type,
+      field_label: input.field_label,
+      options: input.options ?? null,
+      required: input.required ?? false,
+      sort_order: input.sort_order ?? 0,
+    });
     if (error) return { success: false, error: error.message };
     revalidatePath('/protected/custom-trackers');
-    return { success: true, data: data as CustomField };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
-  }
-}
-
-export async function getCustomFieldValues(
-  companyId: string,
-  trackerDefinitionId: string,
-  entityId?: string
-): Promise<ActionResponse<CustomFieldValue[]>> {
-  try {
-    const supabase = await createClient();
-    let query = supabase
-      .from('custom_field_values')
-      .select('*')
-      .eq('company_id', companyId)
-      .eq('tracker_definition_id', trackerDefinitionId);
-
-    if (entityId) {
-      query = query.eq('entity_id', entityId);
-    }
-
-    const { data, error } = await query;
-    if (error) return { success: false, error: error.message };
-    return { success: true, data: (data || []) as CustomFieldValue[] };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
-  }
-}
-
-export async function setCustomFieldValue(
-  input: SetCustomFieldValueInput
-): Promise<ActionResponse<CustomFieldValue>> {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: 'Not authenticated' };
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('company_id')
-      .eq('user_id', user.id)
-      .single();
-    if (!profile?.company_id) return { success: false, error: 'Profile not found' };
-
-    const { data: existing } = await supabase
-      .from('custom_field_values')
-      .select('id')
-      .eq('company_id', profile.company_id)
-      .eq('tracker_definition_id', input.tracker_definition_id)
-      .eq('entity_id', input.entity_id)
-      .eq('field_id', input.field_id)
-      .maybeSingle();
-
-    const valueData = {
-      value_text: input.value_text ?? null,
-      value_number: input.value_number ?? null,
-      value_date: input.value_date ?? null,
-      value_boolean: input.value_boolean ?? null,
-      value_json: input.value_json ?? null,
-    };
-
-    if (existing?.id) {
-      const { data, error } = await supabase
-        .from('custom_field_values')
-        .update(valueData)
-        .eq('id', existing.id)
-        .select()
-        .single();
-
-      if (error) return { success: false, error: error.message };
-      revalidatePath('/protected/custom-trackers');
-      return { success: true, data: data as CustomFieldValue };
-    }
-
-    const { data, error } = await supabase
-      .from('custom_field_values')
-      .insert({
-        company_id: profile.company_id,
-        tracker_definition_id: input.tracker_definition_id,
-        entity_id: input.entity_id,
-        field_id: input.field_id,
-        ...valueData,
-      })
-      .select()
-      .single();
-
-    if (error) return { success: false, error: error.message };
-    revalidatePath('/protected/custom-trackers');
-    return { success: true, data: data as CustomFieldValue };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 }
 
 export async function getTrackerData(
   companyId: string,
-  trackerDefinitionId: string,
-  page = 1,
-  pageSize = 25
-): Promise<ActionResponse<{ entities: string[]; values: CustomFieldValue[]; total: number }>> {
+  trackerDefinitionId: string
+): Promise<{ success: boolean; data?: { entities: string[]; values: CustomFieldValue[] }; error?: string }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
-
-    const { data: allValues, error } = await supabase
+    const { data, error } = await supabase
       .from('custom_field_values')
-      .select('*')
+      .select('id, company_id, tracker_definition_id, entity_id, field_id, value_text, value_number, value_date, value_boolean, value_json, created_at, updated_at')
       .eq('company_id', companyId)
       .eq('tracker_definition_id', trackerDefinitionId);
 
     if (error) return { success: false, error: error.message };
+    const values = (data as unknown as CustomFieldValue[]) ?? [];
+    const entities = [...new Set(values.map((v) => v.entity_id))];
+    return { success: true, data: { entities, values } };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+}
 
-    const entityIds = [...new Set((allValues || []).map(v => v.entity_id))];
-    const total = entityIds.length;
-    const from = (page - 1) * pageSize;
-    const pagedEntities = entityIds.slice(from, from + pageSize);
+export async function setCustomFieldValue(
+  input: SetCustomFieldValueInput
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
+  try {
+    const profile = await getProfileWithCompany();
+    if (!profile) return { success: false, error: 'Not authenticated' };
 
-    const pagedValues = (allValues || []).filter(v => pagedEntities.includes(v.entity_id));
+    const { error } = await supabase
+      .from('custom_field_values')
+      .upsert({
+        company_id: profile.company_id,
+        tracker_definition_id: input.tracker_definition_id,
+        entity_id: input.entity_id,
+        field_id: input.field_id,
+        value_text: input.value_text ?? null,
+        value_number: input.value_number ?? null,
+        value_date: input.value_date ?? null,
+        value_boolean: input.value_boolean ?? null,
+        value_json: input.value_json ?? null,
+      }, { onConflict: 'tracker_definition_id,entity_id,field_id' });
 
-    return {
-      success: true,
-      data: {
-        entities: pagedEntities,
-        values: pagedValues as CustomFieldValue[],
-        total,
-      },
-    };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 }

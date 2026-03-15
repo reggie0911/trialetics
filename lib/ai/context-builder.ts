@@ -2,6 +2,16 @@ import { createClient } from '@/lib/server';
 import type { ChatRequest, UserContext } from './types';
 
 const MODULE_MAP: Record<string, string> = {
+  '/protected/studies': 'studies',
+  '/protected/sites': 'sites',
+  '/protected/subjects': 'subjects',
+  '/protected/tasks': 'tasks',
+  '/protected/countries': 'countries',
+  '/protected/team': 'team',
+  '/protected/visits': 'visits',
+  '/protected/financials': 'financials',
+  '/protected/reports': 'reports',
+  '/protected/settings/billing': 'billing',
   '/protected/contacts-organizations': 'contacts-organizations',
   '/protected/document-management': 'document-management',
   '/protected/patients': 'subjects',

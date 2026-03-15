@@ -1,5 +1,3 @@
-import type { ChatCompletionMessageParam, ChatCompletionTool } from 'openai/resources/chat/completions';
-
 export interface AgentConfig {
   id: string;
   name: string;
@@ -63,5 +61,3 @@ export interface ConfirmActionPayload {
   description: string;
   args: Record<string, unknown>;
 }
-
-export type { ChatCompletionMessageParam, ChatCompletionTool };

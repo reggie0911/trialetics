@@ -344,10 +344,8 @@ const Pricing32 = ({ className }: Pricing32Props) => {
 
         {/* Contact CTA */}
         <div className="mt-12 flex items-center justify-center">
-          <Button size="lg" variant="outline" asChild>
-            <a href="https://www.linkedin.com/company/trialetics-io" target="_blank" rel="noopener noreferrer">
-              Have questions? Connect with us
-            </a>
+          <Button size="lg" variant="outline" render={<a href="https://www.linkedin.com/company/trialetics-io" target="_blank" rel="noopener noreferrer" />}>
+            Have questions? Connect with us
           </Button>
         </div>
       </div>
@@ -394,11 +392,14 @@ const PlanCard = ({
       <div className="mt-4 mb-6 text-sm text-muted-foreground leading-relaxed">
         {plan.description}
       </div>
-      <Button className="w-full" variant={plan.mostPopular ? "default" : "outline"} size="lg" asChild>
-        <a href={plan.cta.href} target={plan.cta.href.startsWith("http") ? "_blank" : undefined} rel={plan.cta.href.startsWith("http") ? "noopener noreferrer" : undefined}>
-          {plan.cta.text}
-          <ArrowRight />
-        </a>
+      <Button
+        className="w-full"
+        variant={plan.mostPopular ? "default" : "outline"}
+        size="lg"
+        render={<a href={plan.cta.href} target={plan.cta.href.startsWith("http") ? "_blank" : undefined} rel={plan.cta.href.startsWith("http") ? "noopener noreferrer" : undefined} />}
+      >
+        {plan.cta.text}
+        <ArrowRight />
       </Button>
       <div className="mt-6 flex flex-col gap-3">
         {plan.features.map((feature, index) => (

@@ -1,9 +1,7 @@
 import { redirect } from 'next/navigation';
-
-import { ProtectedNavbar } from '@/components/layout/protected-navbar';
-import { NoProjectsFallback } from '@/components/no-projects-fallback';
-import { ProjectSelectorPage } from '@/components/protected/project-selector-page';
 import { createClient } from '@/lib/server';
+import { getDashboardStats } from '@/lib/actions/dashboard';
+import { DashboardContent } from '@/components/ctms/dashboard-content';
 
 export default async function ProtectedPage() {
   const supabase = await createClient();
@@ -15,29 +13,27 @@ export default async function ProtectedPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, role, onboarding_completed_at, company_id, email, first_name')
+    .select('id, first_name, company_id')
     .eq('user_id', data.user.id)
     .single();
-
-  if (profile?.role === 'admin' && !profile?.onboarding_completed_at) {
-    redirect('/protected/onboarding');
-  }
 
   if (!profile || !profile.company_id) {
     redirect('/auth/login');
   }
 
+  const stats = await getDashboardStats();
+
+  const { data: recentStudies } = await supabase
+    .from('studies')
+    .select('id, protocol_number, title, phase, status, updated_at')
+    .order('updated_at', { ascending: false })
+    .limit(5);
+
   return (
-    <div className="min-h-screen bg-[#E9E9E9]">
-      <ProtectedNavbar />
-      <main className="mx-auto w-full max-w-[1400px] px-4 sm:px-6 py-4 sm:py-8">
-        <ProjectSelectorPage
-          companyId={profile.company_id}
-          profileId={profile.id}
-          email={profile.email ?? data.user.email ?? ''}
-          firstName={profile.first_name}
-        />
-      </main>
-    </div>
+    <DashboardContent
+      firstName={profile.first_name}
+      stats={stats}
+      recentStudies={recentStudies ?? []}
+    />
   );
 }

@@ -1,36 +1,19 @@
 'use server';
 
 import { createClient } from '@/lib/server';
-import type {
-  AuditLogEntry,
-  AuditExport,
-  AuditFilters,
-} from '@/lib/types/audit-trail';
-
-export interface ActionResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
+import type { AuditLogEntry, AuditFilters, AuditExportType } from '@/lib/types/audit-trail';
 
 export async function getAuditLog(
   companyId: string,
   filters?: AuditFilters
-): Promise<ActionResponse<{ entries: AuditLogEntry[]; total: number }>> {
+): Promise<{ success: boolean; data?: { entries: AuditLogEntry[]; total: number }; error?: string }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
-    const page = filters?.page || 1;
-    const pageSize = filters?.pageSize || 50;
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-
     let query = supabase
       .from('audit_log')
-      .select(
-        `*, performed_by:profiles!audit_log_performed_by_id_fkey(id, first_name, last_name, email)`,
-        { count: 'exact' }
-      )
-      .eq('company_id', companyId);
+      .select('id, company_id, table_name, record_id, action, old_data, new_data, changed_fields, performed_by_id, performed_by_email, ip_address, created_at, performed_by:profiles!audit_log_performed_by_id_fkey(id, first_name, last_name, email)', { count: 'exact' })
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
 
     if (filters?.table_name && filters.table_name !== 'all') {
       query = query.eq('table_name', filters.table_name);
@@ -48,105 +31,51 @@ export async function getAuditLog(
       query = query.gte('created_at', filters.date_from);
     }
     if (filters?.date_to) {
-      query = query.lte('created_at', filters.date_to + 'T23:59:59');
+      query = query.lte('created_at', filters.date_to + 'T23:59:59.999Z');
     }
     if (filters?.search) {
-      query = query.or(
-        `performed_by_email.ilike.%${filters.search}%,table_name.ilike.%${filters.search}%`
-      );
+      query = query.or(`record_id.ilike.%${filters.search}%,performed_by_email.ilike.%${filters.search}%`);
     }
 
-    const { data, error, count } = await query
-      .order('created_at', { ascending: false })
-      .range(from, to);
+    const page = filters?.page ?? 1;
+    const pageSize = filters?.pageSize ?? 50;
+    const from = (page - 1) * pageSize;
+    query = query.range(from, from + pageSize - 1);
 
+    const { data, error, count } = await query;
     if (error) return { success: false, error: error.message };
-    return {
-      success: true,
-      data: { entries: (data || []) as AuditLogEntry[], total: count || 0 },
-    };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
-  }
-}
-
-export async function getAuditLogForEntity(
-  tableName: string,
-  recordId: string
-): Promise<ActionResponse<AuditLogEntry[]>> {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from('audit_log')
-      .select(
-        `*, performed_by:profiles!audit_log_performed_by_id_fkey(id, first_name, last_name, email)`
-      )
-      .eq('table_name', tableName)
-      .eq('record_id', recordId)
-      .order('created_at', { ascending: false })
-      .limit(100);
-
-    if (error) return { success: false, error: error.message };
-    return { success: true, data: (data || []) as AuditLogEntry[] };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    return { success: true, data: { entries: (data as unknown as AuditLogEntry[]) ?? [], total: count ?? 0 } };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 }
 
 export async function requestAuditExport(
   filters: AuditFilters,
-  exportType: 'inspection_package' | 'ad_hoc' = 'ad_hoc'
-): Promise<ActionResponse<AuditExport>> {
+  exportType: AuditExportType
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: 'Not authenticated' };
-
     const { data: profile } = await supabase
       .from('profiles')
       .select('id, company_id')
       .eq('user_id', user.id)
       .single();
+    if (!profile) return { success: false, error: 'Profile not found' };
 
-    if (!profile?.company_id) return { success: false, error: 'Profile not found' };
-
-    const { data, error } = await supabase
-      .from('audit_exports')
-      .insert({
-        company_id: profile.company_id,
-        export_type: exportType,
-        filters: filters as Record<string, unknown>,
-        status: 'completed',
-        requested_by_id: profile.id,
-        completed_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
+    const { error } = await supabase.from('audit_exports').insert({
+      company_id: profile.company_id,
+      export_type: exportType,
+      filters: filters ?? null,
+      status: 'pending',
+      requested_by_id: profile.id,
+    });
 
     if (error) return { success: false, error: error.message };
-    return { success: true, data: data as AuditExport };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
-  }
-}
-
-export async function getAuditExports(
-  companyId: string
-): Promise<ActionResponse<AuditExport[]>> {
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from('audit_exports')
-      .select(
-        `*, requested_by:profiles!audit_exports_requested_by_id_fkey(id, first_name, last_name)`
-      )
-      .eq('company_id', companyId)
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (error) return { success: false, error: error.message };
-    return { success: true, data: (data || []) as AuditExport[] };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 }

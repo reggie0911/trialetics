@@ -1,39 +1,44 @@
 'use server';
 
-import { createClient } from '@/lib/server';
 import { revalidatePath } from 'next/cache';
+import { createClient } from '@/lib/server';
 import type {
   ActionItem,
-  CreateActionItemInput,
-  UpdateActionItemInput,
   ActionItemFilters,
   ActionItemStats,
+  CreateActionItemInput,
+  UpdateActionItemInput,
 } from '@/lib/types/action-items';
 
-export interface ActionResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  error?: string;
+const ACTION_ITEM_SELECT =
+  'id, company_id, protocol_id, title, description, status, priority, category, source_type, source_id, assigned_to_id, assigned_by_id, due_date, resolved_date, resolution_notes, escalated, escalated_at, created_at, updated_at, assigned_to:profiles!action_items_assigned_to_id_fkey(id, first_name, last_name), assigned_by:profiles!action_items_assigned_by_id_fkey(id, first_name, last_name), protocol:studies(id, title, protocol_number)';
+
+async function getProfileId(): Promise<string> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('user_id', user.id)
+    .single();
+  if (!profile) throw new Error('No profile found');
+  return profile.id;
 }
 
 export async function getActionItems(
   companyId: string,
   filters?: ActionItemFilters
-): Promise<ActionResponse<{ items: ActionItem[]; total: number }>> {
+): Promise<{ success: boolean; data?: { items: ActionItem[]; total: number }; error?: string }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
-    const page = filters?.page || 1;
-    const pageSize = filters?.pageSize || 25;
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-
     let query = supabase
       .from('action_items')
-      .select(
-        `*, assigned_to:profiles!action_items_assigned_to_id_fkey(id, first_name, last_name), assigned_by:profiles!action_items_assigned_by_id_fkey(id, first_name, last_name), protocol:clinical_protocols(id, title, protocol_number)`,
-        { count: 'exact' }
-      )
-      .eq('company_id', companyId);
+      .select(ACTION_ITEM_SELECT, { count: 'exact' })
+      .eq('company_id', companyId)
+      .order('created_at', { ascending: false });
 
     if (filters?.status && filters.status !== 'all') {
       query = query.eq('status', filters.status);
@@ -51,144 +56,132 @@ export async function getActionItems(
       query = query.eq('protocol_id', filters.protocol_id);
     }
     if (filters?.overdue_only) {
-      query = query.lt('due_date', new Date().toISOString().split('T')[0]).in('status', ['open', 'in_progress']);
+      query = query
+        .lt('due_date', new Date().toISOString().slice(0, 10))
+        .not('status', 'in', '("resolved","closed")');
     }
     if (filters?.search) {
-      query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+      query = query.ilike('title', `%${filters.search}%`);
     }
 
-    const { data, error, count } = await query
-      .order('created_at', { ascending: false })
-      .range(from, to);
+    const page = filters?.page ?? 1;
+    const pageSize = filters?.pageSize ?? 25;
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+    query = query.range(from, to);
 
+    const { data, error, count } = await query;
     if (error) return { success: false, error: error.message };
-    return { success: true, data: { items: (data || []) as ActionItem[], total: count || 0 } };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    return {
+      success: true,
+      data: { items: (data as unknown as ActionItem[]) ?? [], total: count ?? 0 },
+    };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 }
 
-export async function getActionItem(id: string): Promise<ActionResponse<ActionItem>> {
+export async function getActionItemStats(
+  companyId: string
+): Promise<{ success: boolean; data?: ActionItemStats; error?: string }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
     const { data, error } = await supabase
       .from('action_items')
-      .select(
-        `*, assigned_to:profiles!action_items_assigned_to_id_fkey(id, first_name, last_name), assigned_by:profiles!action_items_assigned_by_id_fkey(id, first_name, last_name), protocol:clinical_protocols(id, title, protocol_number)`
-      )
-      .eq('id', id)
-      .single();
+      .select('status, priority, due_date')
+      .eq('company_id', companyId);
 
     if (error) return { success: false, error: error.message };
-    return { success: true, data: data as ActionItem };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+
+    const rows = data ?? [];
+    const today = new Date().toISOString().slice(0, 10);
+    const stats: ActionItemStats = {
+      total: rows.length,
+      open: rows.filter((r) => r.status === 'open').length,
+      in_progress: rows.filter((r) => r.status === 'in_progress').length,
+      resolved: rows.filter((r) => r.status === 'resolved').length,
+      closed: rows.filter((r) => r.status === 'closed').length,
+      overdue: rows.filter(
+        (r) =>
+          r.due_date &&
+          r.due_date < today &&
+          r.status !== 'resolved' &&
+          r.status !== 'closed'
+      ).length,
+      critical: rows.filter((r) => r.priority === 'critical').length,
+    };
+    return { success: true, data: stats };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 }
 
 export async function createActionItem(
   input: CreateActionItemInput
-): Promise<ActionResponse<ActionItem>> {
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: 'Not authenticated' };
-
+    const profileId = await getProfileId();
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, company_id')
-      .eq('user_id', user.id)
+      .select('company_id')
+      .eq('id', profileId)
       .single();
+    if (!profile) return { success: false, error: 'Profile not found' };
 
-    if (!profile?.company_id) return { success: false, error: 'Profile not found' };
-
-    const { data, error } = await supabase
-      .from('action_items')
-      .insert({
-        ...input,
-        company_id: profile.company_id,
-        assigned_by_id: profile.id,
-      })
-      .select()
-      .single();
+    const { error } = await supabase.from('action_items').insert({
+      company_id: profile.company_id,
+      title: input.title,
+      description: input.description ?? null,
+      priority: input.priority ?? 'medium',
+      source_type: input.source_type ?? 'general',
+      source_id: input.source_id ?? null,
+      protocol_id: input.protocol_id ?? null,
+      assigned_to_id: input.assigned_to_id ?? null,
+      due_date: input.due_date ?? null,
+      category: input.category ?? null,
+      status: 'open',
+      assigned_by_id: profileId,
+    });
 
     if (error) return { success: false, error: error.message };
     revalidatePath('/protected/action-items');
-    return { success: true, data: data as ActionItem };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 }
 
 export async function updateActionItem(
   id: string,
   input: UpdateActionItemInput
-): Promise<ActionResponse<ActionItem>> {
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = await createClient();
   try {
-    const supabase = await createClient();
-
-    const updateData: Record<string, unknown> = { ...input };
-    if (input.status === 'resolved' && !input.resolution_notes) {
-      updateData.resolved_date = new Date().toISOString();
+    const payload: Record<string, unknown> = {};
+    if (input.title != null) payload.title = input.title;
+    if (input.description !== undefined) payload.description = input.description;
+    if (input.status != null) {
+      payload.status = input.status;
+      if (input.status === 'resolved' || input.status === 'closed') {
+        payload.resolved_date = new Date().toISOString().slice(0, 10);
+      }
     }
-    if (input.status === 'resolved') {
-      updateData.resolved_date = new Date().toISOString();
-    }
-    if (input.escalated) {
-      updateData.escalated_at = new Date().toISOString();
+    if (input.priority != null) payload.priority = input.priority;
+    if (input.category !== undefined) payload.category = input.category;
+    if (input.assigned_to_id !== undefined) payload.assigned_to_id = input.assigned_to_id;
+    if (input.due_date !== undefined) payload.due_date = input.due_date;
+    if (input.resolution_notes !== undefined) payload.resolution_notes = input.resolution_notes;
+    if (input.escalated != null) {
+      payload.escalated = input.escalated;
+      if (input.escalated) payload.escalated_at = new Date().toISOString();
     }
 
-    const { data, error } = await supabase
-      .from('action_items')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
-
+    const { error } = await supabase.from('action_items').update(payload).eq('id', id);
     if (error) return { success: false, error: error.message };
     revalidatePath('/protected/action-items');
-    return { success: true, data: data as ActionItem };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
-  }
-}
-
-export async function deleteActionItem(id: string): Promise<ActionResponse<null>> {
-  try {
-    const supabase = await createClient();
-    const { error } = await supabase.from('action_items').delete().eq('id', id);
-
-    if (error) return { success: false, error: error.message };
-    revalidatePath('/protected/action-items');
-    return { success: true, data: null };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
-  }
-}
-
-export async function getActionItemStats(companyId: string, protocolId?: string): Promise<ActionResponse<ActionItemStats>> {
-  try {
-    const supabase = await createClient();
-    let query = supabase.from('action_items').select('status, priority, due_date').eq('company_id', companyId);
-    if (protocolId) query = query.eq('protocol_id', protocolId);
-
-    const { data, error } = await query;
-    if (error) return { success: false, error: error.message };
-
-    const items = data || [];
-    const today = new Date().toISOString().split('T')[0];
-    const stats: ActionItemStats = {
-      total: items.length,
-      open: items.filter(i => i.status === 'open').length,
-      in_progress: items.filter(i => i.status === 'in_progress').length,
-      resolved: items.filter(i => i.status === 'resolved').length,
-      closed: items.filter(i => i.status === 'closed').length,
-      overdue: items.filter(i => i.due_date && i.due_date < today && ['open', 'in_progress'].includes(i.status)).length,
-      critical: items.filter(i => i.priority === 'critical' && ['open', 'in_progress'].includes(i.status)).length,
-    };
-
-    return { success: true, data: stats };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 }

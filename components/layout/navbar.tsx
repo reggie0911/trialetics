@@ -197,9 +197,9 @@ const Navbar = () => {
                   isHomePage && !isScrolled && button.variant === 'ghost' && 'text-white hover:text-white/80 hover:bg-white/10',
                   isHomePage && !isScrolled && button.variant === 'default' && 'bg-white text-black hover:bg-white/90'
                 )}
-                asChild
+                render={<Link href={button.href} />}
               >
-                <Link href={button.href}>{button.label}</Link>
+                {button.label}
               </Button>
             ))}
           </div>
@@ -312,12 +312,10 @@ const Navbar = () => {
                 variant={
                   button.variant === 'ghost' ? 'outline' : button.variant
                 }
-                asChild
                 className="h-12 flex-1 rounded-sm shadow-sm"
+                render={<Link href={button.href} onClick={() => setIsMenuOpen(false)} />}
               >
-                <Link href={button.href} onClick={() => setIsMenuOpen(false)}>
-                  {button.label}
-                </Link>
+                {button.label}
               </Button>
             ))}
           </div>

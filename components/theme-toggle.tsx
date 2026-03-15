@@ -2,7 +2,6 @@
 
 import { motion as m } from 'motion/react';
 import { useTheme } from 'next-themes';
-import { useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -13,7 +12,6 @@ interface ThemeToggleProps {
 
 export function ThemeToggle({ className }: ThemeToggleProps) {
   const { theme, setTheme } = useTheme();
-  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const shineVariant = {
     hidden: {
@@ -69,26 +67,20 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
       },
     },
   };
-  const toggleTheme = () => {
+  const toggleTheme = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (document.startViewTransition) {
-      // Get the button's position using ref
-      const rect = buttonRef.current?.getBoundingClientRect();
+      const rect = e.currentTarget.getBoundingClientRect();
+      const x = (rect.left + rect.right) / 2;
+      const y = (rect.top + rect.bottom) / 2;
 
-      if (rect) {
-        // Calculate position relative to viewport
-        const x = (rect.left + rect.right) / 2;
-        const y = (rect.top + rect.bottom) / 2;
-
-        // Set the CSS variables for the animation
-        document.documentElement.style.setProperty(
-          '--x',
-          `${(x / window.innerWidth) * 100}%`,
-        );
-        document.documentElement.style.setProperty(
-          '--y',
-          `${(y / window.innerHeight) * 100}%`,
-        );
-      }
+      document.documentElement.style.setProperty(
+        '--x',
+        `${(x / window.innerWidth) * 100}%`,
+      );
+      document.documentElement.style.setProperty(
+        '--y',
+        `${(y / window.innerHeight) * 100}%`,
+      );
 
       // Remove page-transition class to avoid conflicts
       document.documentElement.classList.remove('page-transition');
@@ -117,7 +109,6 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
       size="icon"
       onClick={toggleTheme}
       data-theme-toggle
-      ref={buttonRef}
       className={cn(className)}
     >
       <m.svg
