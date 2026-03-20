@@ -10,15 +10,18 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createClient } from '@/lib/client';
-import { cn } from '@/lib/utils';
+
+const COMPANY_NAME_MAX_LEN = 200;
 
 export default function SignUpPage() {
   const [firstName, setFirstName] = useState('');
+  const [companyName, setCompanyName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const router = useRouter();
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -27,22 +30,65 @@ export default function SignUpPage() {
     setIsLoading(true);
     setError(null);
 
+    if (!termsAccepted) {
+      setError('Please accept the Terms and Conditions to continue.');
+      setIsLoading(false);
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       setIsLoading(false);
       return;
     }
 
+    const emailTrimmed = email.trim();
+    if (!emailTrimmed) {
+      setError('Please enter a valid email address.');
+      setIsLoading(false);
+      return;
+    }
+
+    const firstTrimmed = firstName.trim();
+    if (!firstTrimmed) {
+      setError('Please enter your first name.');
+      setIsLoading(false);
+      return;
+    }
+
+    const companyTrimmed = companyName.trim();
+    if (!companyTrimmed) {
+      setError('Please enter your company or organization name.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (companyTrimmed.length > COMPANY_NAME_MAX_LEN) {
+      setError(`Company name must be at most ${COMPANY_NAME_MAX_LEN} characters.`);
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
+      const { data, error } = await supabase.auth.signUp({
+        email: emailTrimmed,
         password,
         options: {
-          data: { first_name: firstName },
+          data: {
+            first_name: firstTrimmed,
+            company_name: companyTrimmed,
+          },
           emailRedirectTo: `${window.location.origin}/auth/callback?next=/protected`,
         },
       });
       if (error) throw error;
+
+      // Email confirmation off: session is returned immediately; go straight in.
+      if (data.session) {
+        router.refresh();
+        router.push('/protected');
+        return;
+      }
 
       router.push('/auth/sign-up-success');
     } catch (error: unknown) {
@@ -72,7 +118,12 @@ export default function SignUpPage() {
           </div>
           <div className="mt-6 grid gap-4">
             <div className="grid gap-1.5">
-              <Label htmlFor="first-name">First name</Label>
+              <Label htmlFor="first-name">
+                First name{' '}
+                <span className="text-destructive" aria-hidden="true">
+                  *
+                </span>
+              </Label>
               <Input
                 id="first-name"
                 type="text"
@@ -83,7 +134,30 @@ export default function SignUpPage() {
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="company-name">
+                Company name{' '}
+                <span className="text-destructive" aria-hidden="true">
+                  *
+                </span>
+              </Label>
+              <Input
+                id="company-name"
+                type="text"
+                placeholder="Your organization"
+                required
+                autoComplete="organization"
+                maxLength={COMPANY_NAME_MAX_LEN}
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="email">
+                Email{' '}
+                <span className="text-destructive" aria-hidden="true">
+                  *
+                </span>
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -117,7 +191,11 @@ export default function SignUpPage() {
             </div>
             <div className="flex items-start justify-between gap-1.5">
               <div className="flex items-center gap-1.5">
-                <Checkbox id="terms" required />
+                <Checkbox
+                  id="terms"
+                  checked={termsAccepted}
+                  onCheckedChange={(v) => setTermsAccepted(v === true)}
+                />
                 <Label htmlFor="terms" className="">
                   I agree to the{' '}
                 </Label>

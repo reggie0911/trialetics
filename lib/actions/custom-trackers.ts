@@ -10,6 +10,7 @@ import type {
   CreateCustomFieldInput,
   SetCustomFieldValueInput,
 } from '@/lib/types/custom-trackers';
+import { requireTrackerDefinitionAccess } from '@/lib/actions/tracker-definition-access';
 
 async function getProfileWithCompany(): Promise<{ id: string; company_id: string } | null> {
   const supabase = await createClient();
@@ -26,8 +27,9 @@ export async function getTrackerDefinitions(
   try {
     const { data, error } = await supabase
       .from('custom_tracker_definitions')
-      .select('id, company_id, name, description, slug, icon, entity_type, columns, active, created_by_id, created_at, updated_at, created_by:profiles!custom_tracker_definitions_created_by_id_fkey(id, first_name, last_name)')
+      .select('id, company_id, name, description, slug, icon, entity_type, columns, active, platform_access_enabled, created_by_id, created_at, updated_at, created_by:profiles!custom_tracker_definitions_created_by_id_fkey(id, first_name, last_name)')
       .eq('company_id', companyId)
+      .eq('platform_access_enabled', true)
       .order('created_at', { ascending: false });
 
     if (error) return { success: false, error: error.message };
@@ -75,6 +77,9 @@ export async function getCustomFields(
 ): Promise<{ success: boolean; data?: CustomField[]; error?: string }> {
   const supabase = await createClient();
   try {
+    if (trackerDefinitionId) {
+      await requireTrackerDefinitionAccess(trackerDefinitionId);
+    }
     let query = supabase
       .from('custom_fields')
       .select('id, company_id, tracker_definition_id, field_name, field_type, field_label, options, required, sort_order, created_at')
@@ -101,6 +106,8 @@ export async function createCustomField(
     const profile = await getProfileWithCompany();
     if (!profile) return { success: false, error: 'Not authenticated' };
 
+    await requireTrackerDefinitionAccess(input.tracker_definition_id);
+
     const { error } = await supabase.from('custom_fields').insert({
       company_id: profile.company_id,
       tracker_definition_id: input.tracker_definition_id,
@@ -125,6 +132,8 @@ export async function getTrackerData(
 ): Promise<{ success: boolean; data?: { entities: string[]; values: CustomFieldValue[] }; error?: string }> {
   const supabase = await createClient();
   try {
+    await requireTrackerDefinitionAccess(trackerDefinitionId);
+
     const { data, error } = await supabase
       .from('custom_field_values')
       .select('id, company_id, tracker_definition_id, entity_id, field_id, value_text, value_number, value_date, value_boolean, value_json, created_at, updated_at')
@@ -147,6 +156,8 @@ export async function setCustomFieldValue(
   try {
     const profile = await getProfileWithCompany();
     if (!profile) return { success: false, error: 'Not authenticated' };
+
+    await requireTrackerDefinitionAccess(input.tracker_definition_id);
 
     const { error } = await supabase
       .from('custom_field_values')

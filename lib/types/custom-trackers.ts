@@ -20,6 +20,8 @@ export interface CustomTrackerDefinition {
   entity_type: string | null;
   columns: Record<string, unknown>[];
   active: boolean;
+  /** Platform licensing; must be true along with company.has_tracker_access */
+  platform_access_enabled?: boolean;
   created_by_id: string | null;
   created_at: string;
   updated_at: string;

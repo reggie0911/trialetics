@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   FileText,
   Calendar,
@@ -120,7 +120,6 @@ function formatDate(dateStr: string | null): string {
 }
 
 interface TripReportsPageClientProps {
-  initialTab?: 'summary' | 'tracker' | 'admin' | 'review';
   initialSummaryList: TripReportSummaryRow[];
   templateCount: number;
   initialTemplates: TemplateWithQuestionCount[];
@@ -128,12 +127,9 @@ interface TripReportsPageClientProps {
   trackerRows: TripReportTrackerRow[];
   trackerMetrics: TrackerComplianceMetrics;
   initialReviewQueue: TripReportReviewQueueRow[];
-  initialCreateVisitOpen?: boolean;
-  initialTemplateId?: string | null;
 }
 
 export function TripReportsPageClient({
-  initialTab = 'summary',
   initialSummaryList,
   templateCount,
   initialTemplates,
@@ -141,21 +137,22 @@ export function TripReportsPageClient({
   trackerRows,
   trackerMetrics,
   initialReviewQueue,
-  initialCreateVisitOpen,
-  initialTemplateId,
 }: TripReportsPageClientProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<string>(initialTab);
-  const [createVisitOpen, setCreateVisitOpen] = useState(Boolean(initialCreateVisitOpen));
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<string>('summary');
+  const [createVisitOpen, setCreateVisitOpen] = useState(false);
+
   useEffect(() => {
-    setActiveTab(initialTab);
-  }, [initialTab]);
-  useEffect(() => {
-    if (initialCreateVisitOpen) {
+    const tab = searchParams.get('tab');
+    if (tab === 'admin' || tab === 'tracker' || tab === 'summary' || tab === 'review') {
+      setActiveTab(tab);
+    }
+    if (searchParams.get('createVisit') === '1') {
       setCreateVisitOpen(true);
       setActiveTab('summary');
     }
-  }, [initialCreateVisitOpen]);
+  }, [searchParams]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [trackerStatusFilter, setTrackerStatusFilter] = useState<string>('all');
   const [trackerStudyFilter, setTrackerStudyFilter] = useState<string>('all');
@@ -1072,7 +1069,7 @@ export function TripReportsPageClient({
           onOpenChange={setCreateVisitOpen}
           studies={studies}
           templates={initialTemplates}
-          initialTemplateId={initialTemplateId}
+          initialTemplateId={searchParams.get('templateId')}
           onSuccess={refresh}
         />
         <AddEditTemplateModal

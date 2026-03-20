@@ -1,0 +1,6 @@
+import { requireCtmsAccess } from '@/lib/server/require-ctms-access';
+
+export default async function FinancialsLayout({ children }: { children: React.ReactNode }) {
+  await requireCtmsAccess();
+  return children;
+}

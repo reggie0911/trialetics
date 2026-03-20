@@ -47,6 +47,7 @@ export async function updateSession(request: NextRequest) {
     '/pricing',
     '/blog',
     '/faq',
+    '/join',
     '/terms-and-conditions',
     '/privacy-policy',
   ]
@@ -55,6 +56,10 @@ export async function updateSession(request: NextRequest) {
   )
 
   if (!user && !isPublicRoute) {
+    // API routes must not be redirected to HTML login (webhooks, public endpoints, etc.).
+    if (request.nextUrl.pathname.startsWith('/api/')) {
+      return supabaseResponse
+    }
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'

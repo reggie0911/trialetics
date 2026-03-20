@@ -2,6 +2,10 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/server';
 import { getDashboardStats } from '@/lib/actions/dashboard';
 import { DashboardContent } from '@/components/ctms/dashboard-content';
+import {
+  ModulesDashboardContent,
+  type ModulesDashboardCustomItem,
+} from '@/components/ctms/modules-dashboard-content';
 
 export default async function ProtectedPage() {
   const supabase = await createClient();
@@ -15,10 +19,46 @@ export default async function ProtectedPage() {
     .from('profiles')
     .select('id, first_name, company_id')
     .eq('user_id', data.user.id)
-    .single();
+    .maybeSingle();
 
-  if (!profile || !profile.company_id) {
+  if (!profile?.company_id) {
     redirect('/auth/login');
+  }
+
+  const { data: company } = await supabase
+    .from('companies')
+    .select('has_ctms_access, has_tracker_access, has_etmf_access, enabled_study_tracker_keys')
+    .eq('id', profile.company_id)
+    .maybeSingle();
+
+  const hasCtmsAccess = company?.has_ctms_access !== false;
+  const hasTrackerAccess = company?.has_tracker_access === true;
+  const hasEtmfAccess = company?.has_etmf_access === true;
+  const studyTrackerMenuKeys =
+    hasTrackerAccess
+      ? ((company?.enabled_study_tracker_keys as string[] | null | undefined) ?? [])
+      : [];
+
+  let customTrackers: ModulesDashboardCustomItem[] = [];
+  if (hasTrackerAccess) {
+    const { data: defs } = await supabase
+      .from('custom_tracker_definitions')
+      .select('id, name, slug')
+      .eq('company_id', profile.company_id)
+      .eq('platform_access_enabled', true)
+      .order('name');
+    customTrackers = (defs as ModulesDashboardCustomItem[]) ?? [];
+  }
+
+  if (!hasCtmsAccess) {
+    return (
+      <ModulesDashboardContent
+        firstName={profile.first_name}
+        hasEtmfAccess={hasEtmfAccess}
+        studyTrackerMenuKeys={studyTrackerMenuKeys}
+        customTrackers={customTrackers}
+      />
+    );
   }
 
   const stats = await getDashboardStats();
