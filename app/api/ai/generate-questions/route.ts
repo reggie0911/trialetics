@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/server';
-import { generateQuestionsForTemplate } from '@/lib/ai/generate-trip-report-questions';
+import { generateVisitReportQuestions } from '@/lib/ai/generate-visit-report-questions';
 
 export async function POST(request: Request) {
   try {
@@ -33,8 +33,17 @@ export async function POST(request: Request) {
       return Response.json({ error: 'templateId is required' }, { status: 400 });
     }
 
-    const result = await generateQuestionsForTemplate(profile.company_id, {
+    const studyDescription = typeof body.studyDescription === 'string' ? body.studyDescription.trim() : '';
+    if (!studyDescription || studyDescription.length < 20) {
+      return Response.json(
+        { error: 'studyDescription is required (minimum 20 characters)' },
+        { status: 400 }
+      );
+    }
+
+    const result = await generateVisitReportQuestions(profile.company_id, {
       templateId: body.templateId,
+      studyDescription,
       numQuestions: body.numQuestions,
       focusSections: body.focusSections,
       additionalContext: body.additionalContext,

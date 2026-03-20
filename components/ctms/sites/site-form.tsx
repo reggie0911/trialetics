@@ -53,9 +53,10 @@ interface SiteFormProps {
   site?: StudySite;
   countries: Pick<StudyCountry, 'id' | 'country_name' | 'country_code'>[];
   mode: 'create' | 'edit';
+  onSuccess?: () => void;
 }
 
-export function SiteForm({ studyId, site, countries, mode }: SiteFormProps) {
+export function SiteForm({ studyId, site, countries, mode, onSuccess }: SiteFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -102,7 +103,11 @@ export function SiteForm({ studyId, site, countries, mode }: SiteFormProps) {
           return;
         }
         toast.success('Site updated successfully');
-        router.push(`/protected/sites/${site!.id}`);
+        if (onSuccess) {
+          onSuccess();
+        } else {
+          router.push(`/protected/sites/${site!.id}`);
+        }
       }
     } finally {
       setIsSubmitting(false);
@@ -347,13 +352,15 @@ export function SiteForm({ studyId, site, countries, mode }: SiteFormProps) {
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {mode === 'create' ? 'Create Site' : 'Save Changes'}
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.back()}
-          >
-            Cancel
-          </Button>
+          {!onSuccess && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.back()}
+            >
+              Cancel
+            </Button>
+          )}
         </div>
       </form>
     </Form>

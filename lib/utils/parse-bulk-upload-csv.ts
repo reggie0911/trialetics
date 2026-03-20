@@ -27,7 +27,7 @@ function parseCsvRow(row: string): string[] {
 }
 
 /**
- * Parse CSV content for bulk upload. Expected columns: Question, Report Sub Section, Report Order (optional).
+ * Parse CSV content for bulk upload. Expected columns: Question, Report Sub Section (optional), Report Order (optional).
  * Returns array of questions (activity_type: 'checklist' for questions).
  */
 export function parseBulkUploadCsv(contents: string): { success: true; data: BulkUploadQuestion[] } | { success: false; error: string } {

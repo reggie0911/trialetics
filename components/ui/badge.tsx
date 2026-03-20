@@ -37,6 +37,7 @@ function Badge({
     props: mergeProps<"span">(
       {
         className: cn(badgeVariants({ className, variant })),
+        suppressHydrationWarning: true,
       },
       props
     ),

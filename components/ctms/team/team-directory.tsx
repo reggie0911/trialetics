@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useMemo, useCallback, useTransition } from 'react';
+import { useState, useMemo, useCallback, useTransition, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -15,6 +16,11 @@ import {
   Download,
   Trash2,
   Building2,
+  UserPlus,
+  Mail,
+  RefreshCw,
+  Link2,
+  Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -59,6 +65,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
 
 import type {
@@ -77,18 +84,48 @@ import {
   updateTeamMember,
   removeTeamMember,
   getTeamDirectory,
+  inviteUser,
+  resendInvite,
+  revokeInvite,
+  createJoinLink,
+  getJoinLinks,
+  revokeJoinLink,
+  type PendingInvitation,
+  type JoinLink,
 } from '@/lib/actions/team';
+
+/** Readable title for study selects (title case per word). */
+function formatStudyTitleLabel(title: string): string {
+  return title
+    .trim()
+    .split(/\s+/)
+    .map((word) => {
+      if (!word) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ');
+}
+
+function studySelectDisplayLabel(studies: Study[], studyId: string | null | undefined, placeholder: string): string {
+  if (!studyId?.trim()) return placeholder;
+  const t = studies.find((s) => s.id === studyId)?.title?.trim();
+  if (!t) return placeholder;
+  return formatStudyTitleLabel(t);
+}
 
 interface TeamDirectoryProps {
   members: TeamMemberWithStudies[];
   studies: Study[];
   teamRoles: TeamRole[];
+  pendingInvitations?: PendingInvitation[];
+  joinLinks?: JoinLink[];
+  isAdmin?: boolean;
 }
 
 type AssignmentStatusFilter = 'all' | 'has_assignments' | 'no_assignments';
 type AppRoleFilter = 'all' | 'admin' | 'user';
 
-export function TeamDirectory({ members: initialMembers, studies, teamRoles }: TeamDirectoryProps) {
+export function TeamDirectory({ members: initialMembers, studies, teamRoles, pendingInvitations = [], joinLinks: initialJoinLinks = [], isAdmin }: TeamDirectoryProps) {
   const [members, setMembers] = useState(initialMembers);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -98,7 +135,42 @@ export function TeamDirectory({ members: initialMembers, studies, teamRoles }: T
   const [editingMember, setEditingMember] = useState<TeamMemberWithStudies | null>(null);
   const [editingAssignment, setEditingAssignment] = useState<{ member: TeamMemberWithStudies; assignment: TeamMemberWithStudies['assignments'][number] } | null>(null);
   const [addingAssignmentFor, setAddingAssignmentFor] = useState<TeamMemberWithStudies | null>(null);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [joinLinkDialogOpen, setJoinLinkDialogOpen] = useState(false);
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'members' | 'pending'>('members');
   const [, startTransition] = useTransition();
+  const router = useRouter();
+
+  const handleResendInvite = async (invitationId: string) => {
+    setPendingActionId(invitationId);
+    try {
+      const { error } = await resendInvite(invitationId);
+      if (error) {
+        toast.error(error);
+      } else {
+        toast.success('Invitation resent');
+        router.refresh();
+      }
+    } finally {
+      setPendingActionId(null);
+    }
+  };
+
+  const handleRevokeInvite = async (invitationId: string) => {
+    setPendingActionId(invitationId);
+    try {
+      const { error } = await revokeInvite(invitationId);
+      if (error) {
+        toast.error(error);
+      } else {
+        toast.success('Invitation revoked');
+        router.refresh();
+      }
+    } finally {
+      setPendingActionId(null);
+    }
+  };
 
   const refreshMembers = useCallback(() => {
     startTransition(async () => {
@@ -160,13 +232,28 @@ export function TeamDirectory({ members: initialMembers, studies, teamRoles }: T
   };
 
   const exportCsv = () => {
-    const rows = [['Name', 'Email', 'App Role', 'Assignments', 'Studies']];
+    const rows: string[][] = [['Name', 'Email', 'App Role', 'Assignments', 'Studies']];
     filteredMembers.forEach((m) => {
       const name = [m.first_name, m.last_name].filter(Boolean).join(' ') || 'Unknown';
       const studyTitles = m.assignments.map((a) => a.study_title).join('; ');
       rows.push([name, m.email ?? '', m.app_role, String(m.assignments.length), studyTitles]);
     });
-    const csv = rows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(',')).join('\n');
+    if (pendingInvitations.length > 0) {
+      rows.push([]);
+      rows.push(['Pending Invitations']);
+      rows.push(['Email', 'Name', 'Role', 'Invited By', 'Invited Date']);
+      pendingInvitations.forEach((inv) => {
+        const name = [inv.first_name, inv.last_name].filter(Boolean).join(' ') || '—';
+        rows.push([
+          inv.email,
+          name,
+          inv.role === 'admin' ? 'Admin' : 'User',
+          inv.invited_by_name ?? '—',
+          new Date(inv.invited_at).toLocaleDateString(),
+        ]);
+      });
+    }
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -177,7 +264,7 @@ export function TeamDirectory({ members: initialMembers, studies, teamRoles }: T
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" suppressHydrationWarning>
       {/* Summary bar */}
       <Card className="rounded-lg">
         <CardContent className="flex flex-wrap items-center gap-4 md:gap-6 py-4">
@@ -186,6 +273,9 @@ export function TeamDirectory({ members: initialMembers, studies, teamRoles }: T
             { label: 'With Assignments', value: members.filter((m) => m.assignments.length > 0).length, markerColor: 'bg-emerald-500' },
             { label: 'Total Assignments', value: members.reduce((sum, m) => sum + m.assignments.length, 0), markerColor: 'bg-blue-500' },
             { label: 'Active Roles', value: activeRolesCount, markerColor: 'bg-violet-500' },
+            ...(pendingInvitations.length > 0
+              ? [{ label: 'Pending Invites', value: pendingInvitations.length, markerColor: 'bg-amber-500' as string }]
+              : []),
           ].map((item) => (
             <div
               key={item.label}
@@ -202,87 +292,103 @@ export function TeamDirectory({ members: initialMembers, studies, teamRoles }: T
         </CardContent>
       </Card>
 
-      {/* Filters Row */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-        <div className="relative flex-1 w-full sm:max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search by name or email..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
+      <Tabs defaultValue="members" className="space-y-4">
+        <div className="flex items-center justify-between gap-4 border-b border-border">
+          <TabsList className="h-auto border-0 p-0">
+            <TabsTrigger value="members">Team Members</TabsTrigger>
+            <TabsTrigger value="pending">
+              Pending Invitations {pendingInvitations.length > 0 && `(${pendingInvitations.length})`}
+            </TabsTrigger>
+          </TabsList>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => setJoinLinkDialogOpen(true)}>
+                  <Link2 className="mr-2 h-4 w-4" />
+                  Join Links
+                </Button>
+                <Button variant="default" size="sm" onClick={() => setInviteDialogOpen(true)}>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Invite User
+                </Button>
+              </>
+            )}
+            <Button variant="outline" size="sm" onClick={exportCsv}>
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
+          </div>
         </div>
-        <Select value={roleFilter} onValueChange={setRoleFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue
-              placeholder="All Roles"
-              getDisplayLabel={(v) => {
-                if (v === 'all') return 'All Roles';
-                return TEAM_ROLE_OPTIONS.find((o) => o.value === v)?.label ?? String(v);
-              }}
-            />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Roles</SelectItem>
-            {TEAM_ROLE_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as AssignmentStatusFilter)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue
-              placeholder="All Members"
-              getDisplayLabel={(v) => {
-                if (v === 'all') return 'All Members';
-                if (v === 'has_assignments') return 'Has Assignments';
-                return 'No Assignments';
-              }}
-            />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Members</SelectItem>
-            <SelectItem value="has_assignments">Has Assignments</SelectItem>
-            <SelectItem value="no_assignments">No Assignments</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={appRoleFilter} onValueChange={(v) => setAppRoleFilter(v as AppRoleFilter)}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue
-              placeholder="All App Roles"
-              getDisplayLabel={(v) => {
-                if (v === 'all') return 'All App Roles';
-                if (v === 'admin') return 'Admin';
-                return 'User';
-              }}
-            />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All App Roles</SelectItem>
-            <SelectItem value="admin">Admin</SelectItem>
-            <SelectItem value="user">User</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button variant="outline" size="sm" onClick={exportCsv} className="ml-auto">
-          <Download className="mr-2 h-4 w-4" />
-          Export CSV
-        </Button>
-      </div>
 
-      {/* Table */}
-      {filteredMembers.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <UserCircle className="h-10 w-10 text-muted-foreground mb-3" />
-            <p className="text-sm font-medium text-muted-foreground">No team members found</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Adjust filters or invite team members to your company.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="rounded-md border">
+        <TabsContent value="members" className="mt-4 space-y-4">
+          {/* Filters Row */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <div className="relative flex-1 w-full sm:max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or email..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All Roles">
+                  {roleFilter === 'all' ? 'All Roles' : TEAM_ROLE_OPTIONS.find((o) => o.value === roleFilter)?.label ?? roleFilter}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Roles</SelectItem>
+                {TEAM_ROLE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as AssignmentStatusFilter)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue
+                  placeholder="All Members"
+                  getDisplayLabel={(v) => {
+                    if (v === 'all') return 'All Members';
+                    if (v === 'has_assignments') return 'Has Assignments';
+                    return 'No Assignments';
+                  }}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Members</SelectItem>
+                <SelectItem value="has_assignments">Has Assignments</SelectItem>
+                <SelectItem value="no_assignments">No Assignments</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={appRoleFilter} onValueChange={(v) => setAppRoleFilter(v as AppRoleFilter)}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="All App Roles">
+                  {appRoleFilter === 'all' ? 'All App Roles' : appRoleFilter === 'admin' ? 'Admin' : 'User'}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All App Roles</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="user">User</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Team Members Table */}
+          {filteredMembers.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <UserCircle className="h-10 w-10 text-muted-foreground mb-3" />
+                <p className="text-sm font-medium text-muted-foreground">No team members found</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Adjust filters or invite team members to your company.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -322,6 +428,118 @@ export function TeamDirectory({ members: initialMembers, studies, teamRoles }: T
           </Table>
         </div>
       )}
+        </TabsContent>
+
+        <TabsContent value="pending" className="mt-4">
+          {pendingInvitations.length === 0 ? (
+            <Card className="rounded-lg border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20">
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <Mail className="h-10 w-10 text-amber-600 dark:text-amber-500 mb-3" />
+                <p className="text-sm font-medium text-muted-foreground">No pending invitations.</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use Invite User to send invitations to new team members.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="rounded-lg border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20">
+              <CardContent className="py-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground mb-3">
+                  <Mail className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+                  <span>Pending Invitations</span>
+                </div>
+                <div className="rounded-md border bg-background">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Email</TableHead>
+                        <TableHead className="text-xs">Name</TableHead>
+                        <TableHead className="text-xs">Role</TableHead>
+                        <TableHead className="text-xs">Invited By</TableHead>
+                        <TableHead className="text-xs">Invited Date</TableHead>
+                        {isAdmin && (
+                          <TableHead className="text-xs w-[100px]">Actions</TableHead>
+                        )}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pendingInvitations.map((inv) => {
+                        const name = [inv.first_name, inv.last_name].filter(Boolean).join(' ') || '—';
+                        const invitedDate = new Date(inv.invited_at).toLocaleDateString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        });
+                        const isActioning = pendingActionId === inv.id;
+                        return (
+                          <TableRow key={inv.id} className="h-[40px]">
+                            <TableCell className="text-xs font-medium">{inv.email}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{name}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="text-[10px]">
+                                {inv.role === 'admin' ? 'Admin' : 'User'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {inv.invited_by_name ?? '—'}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">{invitedDate}</TableCell>
+                            {isAdmin && (
+                              <TableCell className="whitespace-nowrap">
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0"
+                                    onClick={() => handleResendInvite(inv.id)}
+                                    disabled={isActioning}
+                                    title="Resend invite"
+                                  >
+                                    <RefreshCw className={`h-3.5 w-3.5 ${isActioning ? 'animate-spin' : ''}`} />
+                                  </Button>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger
+                                      render={
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 w-7 p-0"
+                                          disabled={isActioning}
+                                          title="Revoke invite"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                        </Button>
+                                      }
+                                    />
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>Revoke Invitation</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Revoke the invitation for {inv.email}? They will no longer be able to join using the invite link.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => handleRevokeInvite(inv.id)}>
+                                          Revoke
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  </AlertDialog>
+                                </div>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Edit Member Dialog */}
       {editingMember && (
@@ -354,6 +572,25 @@ export function TeamDirectory({ members: initialMembers, studies, teamRoles }: T
           open={!!addingAssignmentFor}
           onOpenChange={(open) => { if (!open) setAddingAssignmentFor(null); }}
           onSuccess={() => { setAddingAssignmentFor(null); refreshMembers(); }}
+        />
+      )}
+
+      {/* Invite User Dialog */}
+      <InviteUserDialog
+        open={inviteDialogOpen}
+        onOpenChange={setInviteDialogOpen}
+        onSuccess={() => { setInviteDialogOpen(false); refreshMembers(); router.refresh(); }}
+        studies={studies}
+      />
+
+      {/* Join Link Manager Dialog */}
+      {isAdmin && (
+        <JoinLinkManagerDialog
+          open={joinLinkDialogOpen}
+          onOpenChange={setJoinLinkDialogOpen}
+          initialLinks={initialJoinLinks}
+          studies={studies}
+          onSuccess={() => { router.refresh(); }}
         />
       )}
     </div>
@@ -791,7 +1028,7 @@ function AddAssignmentDialog({
     resolver: zodResolver(addAssignmentSchema),
     defaultValues: {
       study_id: '',
-      role: 'CRA',
+      role: 'clinical_research_associate',
       custom_role_id: '',
       start_date: '',
       end_date: '',
@@ -836,12 +1073,14 @@ function AddAssignmentDialog({
               <SelectTrigger className="w-full">
                 <SelectValue
                   placeholder="Select study"
-                  getDisplayLabel={(v) => studies.find((s) => s.id === v)?.title ?? 'Select study'}
+                  getDisplayLabel={(v) => studySelectDisplayLabel(studies, v, 'Select study')}
                 />
               </SelectTrigger>
               <SelectContent>
                 {studies.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
+                  <SelectItem key={s.id} value={s.id}>
+                    {formatStudyTitleLabel(s.title)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -904,6 +1143,499 @@ function AddAssignmentDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// =====================================================
+// Invite User Dialog
+// =====================================================
+
+const inviteUserSchema = z.object({
+  email: z.string().email('Valid email is required'),
+  first_name: z.string().optional(),
+  last_name: z.string().optional(),
+  role: z.enum(['admin', 'user']),
+  study_id: z.string().min(1, 'Study is required'),
+  study_role: z.string().min(1, 'Study role is required'),
+});
+
+type InviteUserValues = z.infer<typeof inviteUserSchema>;
+
+function InviteUserDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+  studies,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+  studies: Study[];
+}) {
+  const form = useForm<InviteUserValues>({
+    resolver: zodResolver(inviteUserSchema),
+    defaultValues: {
+      email: '',
+      first_name: '',
+      last_name: '',
+      role: 'user',
+      study_id: '',
+      study_role: 'clinical_research_associate',
+    },
+  });
+
+  const onSubmit = async (values: InviteUserValues) => {
+    const { data, error } = await inviteUser({
+      email: values.email,
+      first_name: values.first_name || undefined,
+      last_name: values.last_name || undefined,
+      role: values.role,
+      study_id: values.study_id,
+      study_role: values.study_role as TeamMemberRole,
+    });
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    toast.success('Invitation sent');
+    form.reset({ email: '', first_name: '', last_name: '', role: 'user', study_id: '', study_role: 'clinical_research_associate' });
+    onOpenChange(false);
+    onSuccess();
+  };
+
+  const hasStudies = studies.length > 0;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Invite User</DialogTitle>
+          <DialogDescription>
+            Send an invitation to a new team member. They will receive an email with a link to join your organization.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <div className="space-y-2">
+            <Label>Email</Label>
+            <Input
+              type="email"
+              placeholder="colleague@example.com"
+              {...form.register('email')}
+            />
+            {form.formState.errors.email && (
+              <p className="text-xs text-destructive">{form.formState.errors.email.message}</p>
+            )}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>First Name (optional)</Label>
+              <Input {...form.register('first_name')} />
+            </div>
+            <div className="space-y-2">
+              <Label>Last Name (optional)</Label>
+              <Input {...form.register('last_name')} />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label>App Role</Label>
+            <Select
+              value={form.watch('role')}
+              onValueChange={(val) => form.setValue('role', val as 'admin' | 'user')}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue
+                  placeholder="Select role"
+                  getDisplayLabel={(v) => (v === 'admin' ? 'Admin' : 'User')}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">User</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Study</Label>
+            <Select
+              value={form.watch('study_id')}
+              onValueChange={(val) => form.setValue('study_id', val)}
+              disabled={!hasStudies}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue
+                  placeholder="Select study"
+                  getDisplayLabel={(v) => studySelectDisplayLabel(studies, v, 'Select study')}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {studies.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {formatStudyTitleLabel(s.title)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {!hasStudies && (
+              <p className="text-xs text-muted-foreground">Create a study first to invite team members.</p>
+            )}
+            {form.formState.errors.study_id && (
+              <p className="text-xs text-destructive">{form.formState.errors.study_id.message}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label>Study Role</Label>
+            <Select
+              value={form.watch('study_role') || 'clinical_research_associate'}
+              onValueChange={(val) => form.setValue('study_role', val)}
+              disabled={!hasStudies}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue
+                  placeholder="Select role"
+                  getDisplayLabel={(v) => TEAM_ROLE_OPTIONS.find((o) => o.value === v)?.label ?? v}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                {TEAM_ROLE_OPTIONS.filter((o) => o.value !== 'custom').map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {form.formState.errors.study_role && (
+              <p className="text-xs text-destructive">{form.formState.errors.study_role.message}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={form.formState.isSubmitting || !hasStudies}>
+              {form.formState.isSubmitting ? 'Sending...' : 'Send Invitation'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// =====================================================
+// Join Link Manager Dialog
+// =====================================================
+
+const joinLinkFormSchema = z.object({
+  label: z.string().optional(),
+  role: z.enum(['admin', 'user']),
+  expiresInDays: z.union([z.literal(0), z.literal(7), z.literal(30), z.literal(90)]),
+  maxUses: z.string().optional(),
+  study_id: z.string().optional(),
+  study_role: z.string().optional(),
+});
+
+type JoinLinkFormValues = z.infer<typeof joinLinkFormSchema>;
+
+function JoinLinkManagerDialog({
+  open,
+  onOpenChange,
+  initialLinks,
+  studies,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initialLinks: JoinLink[];
+  studies: Study[];
+  onSuccess: () => void;
+}) {
+  const [links, setLinks] = useState<JoinLink[]>(initialLinks);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [, startTransition] = useTransition();
+
+  const form = useForm<JoinLinkFormValues>({
+    resolver: zodResolver(joinLinkFormSchema),
+    defaultValues: {
+      label: '',
+      role: 'user',
+      expiresInDays: 0,
+      maxUses: '',
+      study_id: '',
+      study_role: 'clinical_research_associate',
+    },
+  });
+
+  const joinLinkStudyId = form.watch('study_id');
+  const hasStudies = studies.length > 0;
+
+  const loadLinks = useCallback(async () => {
+    const data = await getJoinLinks();
+    setLinks(data);
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      setLinks(initialLinks);
+      startTransition(() => {
+        loadLinks();
+      });
+    }
+  }, [open, loadLinks, initialLinks]);
+
+  const handleCopy = (token: string) => {
+    const siteUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const url = `${siteUrl}/join/${token}`;
+    navigator.clipboard.writeText(url);
+    toast.success('Link copied to clipboard');
+  };
+
+  const handleRevoke = async (linkId: string) => {
+    setRevokingId(linkId);
+    try {
+      const { error } = await revokeJoinLink(linkId);
+      if (error) {
+        toast.error(error);
+      } else {
+        toast.success('Join link revoked');
+        await loadLinks();
+        onSuccess();
+      }
+    } finally {
+      setRevokingId(null);
+    }
+  };
+
+  const handleCreate = async (values: JoinLinkFormValues) => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await createJoinLink({
+        role: values.role,
+        label: values.label?.trim() || undefined,
+        expiresInDays: values.expiresInDays === 0 ? undefined : values.expiresInDays,
+        maxUses: values.maxUses ? parseInt(values.maxUses, 10) : undefined,
+      });
+      if (error) {
+        toast.error(error);
+      } else if (data) {
+        toast.success('Join link created');
+        setLinks((prev) => [data, ...prev]);
+        form.reset({
+          label: '',
+          role: 'user',
+          expiresInDays: 0,
+          maxUses: '',
+          study_id: '',
+          study_role: 'clinical_research_associate',
+        });
+        setShowCreateForm(false);
+        handleCopy(data.token);
+        onSuccess();
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const formatExpiry = (expiresAt: string | null) => {
+    if (!expiresAt) return 'Never';
+    const d = new Date(expiresAt);
+    return d.toLocaleDateString();
+  };
+
+  const formatUses = (useCount: number, maxUses: number | null) => {
+    if (maxUses == null) return `${useCount} / Unlimited`;
+    return `${useCount} / ${maxUses}`;
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Join Links</DialogTitle>
+          <DialogDescription>
+            Share these links so new users can create an account and join your company. Anyone with a link can sign up.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          {!showCreateForm ? (
+            <Button variant="outline" size="sm" onClick={() => setShowCreateForm(true)} className="w-full">
+              <Plus className="mr-2 h-4 w-4" />
+              Generate New Link
+            </Button>
+          ) : (
+            <form onSubmit={form.handleSubmit(handleCreate)} className="space-y-4 rounded-md border p-4">
+              <div className="space-y-2">
+                <Label>Label (optional)</Label>
+                <Input placeholder="e.g. Marketing team" {...form.register('label')} />
+              </div>
+              <div className="space-y-2">
+                <Label>Role</Label>
+                <Select
+                  value={form.watch('role')}
+                  onValueChange={(v) => form.setValue('role', v as 'admin' | 'user')}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">User</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Study (optional)</Label>
+                <Select
+                  value={form.watch('study_id') || '__none__'}
+                  onValueChange={(v) => {
+                    if (v === '__none__') {
+                      form.setValue('study_id', '');
+                      form.setValue('study_role', 'clinical_research_associate');
+                    } else {
+                      form.setValue('study_id', v);
+                    }
+                  }}
+                  disabled={!hasStudies}
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder="No study assignment"
+                      getDisplayLabel={(v) =>
+                        !v || v === '__none__'
+                          ? 'No study assignment'
+                          : studySelectDisplayLabel(studies, v, 'Select study')
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No study assignment</SelectItem>
+                    {studies.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {formatStudyTitleLabel(s.title)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {!hasStudies && (
+                  <p className="text-xs text-muted-foreground">Create a study first to assign new members to a study.</p>
+                )}
+              </div>
+              {joinLinkStudyId && joinLinkStudyId !== '__none__' && (
+                <div className="space-y-2">
+                  <Label>Study role</Label>
+                  <Select
+                    value={form.watch('study_role') || 'clinical_research_associate'}
+                    onValueChange={(v) => form.setValue('study_role', v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        getDisplayLabel={(v) => TEAM_ROLE_OPTIONS.find((o) => o.value === v)?.label ?? String(v)}
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TEAM_ROLE_OPTIONS.filter((o) => o.value !== 'custom').map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label>Expires in</Label>
+                <Select
+                  value={String(form.watch('expiresInDays'))}
+                  onValueChange={(v) => form.setValue('expiresInDays', parseInt(v, 10) as 0 | 7 | 30 | 90)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">Never</SelectItem>
+                    <SelectItem value="7">7 days</SelectItem>
+                    <SelectItem value="30">30 days</SelectItem>
+                    <SelectItem value="90">90 days</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Max uses (optional)</Label>
+                <Input type="number" min={1} placeholder="Unlimited" {...form.register('maxUses')} />
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="ghost" onClick={() => setShowCreateForm(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading ? 'Creating...' : 'Create Link'}
+                </Button>
+              </div>
+            </form>
+          )}
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Active links</p>
+            {links.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No active join links. Generate one above.</p>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {links.map((link) => (
+                  <div
+                    key={link.id}
+                    className="flex items-center justify-between gap-2 rounded-md border p-3 text-sm"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate">{link.label || 'Unnamed link'}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Role: {link.role}
+                        {link.study_id
+                          ? ` · Study: ${studies.find((s) => s.id === link.study_id)?.title ?? link.study_id} (${TEAM_ROLE_LABEL[link.study_role as TeamMemberRole] ?? link.study_role})`
+                          : ''}
+                        {' '}
+                        · Expires: {formatExpiry(link.expires_at)} · Uses: {formatUses(link.use_count, link.max_uses)}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopy(link.token)}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground text-destructive hover:text-destructive disabled:pointer-events-none disabled:opacity-50"
+                          disabled={revokingId === link.id}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Revoke this join link?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Anyone with this link will no longer be able to use it to join your company.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={() => handleRevoke(link.id)}
+                            >
+                              Revoke
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

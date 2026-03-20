@@ -361,3 +361,12 @@ html.theme-transition::view-transition-new(root) {
     transform: none !important;
   }
 }
+
+/* Visit Report PDF capture: prevent component cutoff */
+.print-pdf-source .bg-card,
+.print-pdf-source [data-slot='card'] {
+  page-break-inside: avoid;
+}
+.print-pdf-source tr {
+  page-break-inside: avoid;
+}

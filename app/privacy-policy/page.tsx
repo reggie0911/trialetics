@@ -239,9 +239,9 @@ export default function PrivacyPolicy() {
                       </a>
                     </li>
                     <li>
-                      <strong>Loops.so</strong> - We use Loops for email communications and transactional emails to users related to their specific use of the Service. Loops maintains strong security practices and provides data protection measures.{' '}
-                      <a href="https://loops.so/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                        https://loops.so/privacy
+                      <strong>Resend</strong> - We use Resend for transactional emails to users related to their specific use of the Service (e.g., team invitations). Resend maintains strong security practices and provides data protection measures.{' '}
+                      <a href="https://resend.com/legal/privacy" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                        https://resend.com/legal/privacy
                       </a>
                     </li>
                   </ul>

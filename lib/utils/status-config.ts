@@ -80,6 +80,13 @@ export const STATUS_CONFIG: Record<string, StatusEntry> = {
   on_track: { label: 'On Track', variant: 'success' },
   at_risk: { label: 'At Risk', variant: 'warning' },
   off_track: { label: 'Off Track', variant: 'destructive' },
+
+  // Visit Report status
+  report_pending: { label: 'Report Pending', variant: 'secondary' },
+  authoring: { label: 'Authoring', variant: 'info' },
+  under_review: { label: 'Under Review', variant: 'warning' },
+  returned: { label: 'Returned', variant: 'destructive' },
+  approved_and_signed: { label: 'Approved and Signed', variant: 'success' },
 };
 
 export function getStatusConfig(status: string): StatusEntry {
