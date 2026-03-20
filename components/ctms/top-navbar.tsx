@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -13,7 +13,6 @@ import {
   ClipboardCheck,
   DollarSign,
   BarChart3,
-  FileQuestion,
   Calendar,
   Pill,
   Menu,
@@ -25,6 +24,8 @@ import {
   ListTodo,
   CheckSquare,
   FileText,
+  Shield,
+  LineChart,
 } from 'lucide-react';
 
 import Logo from '@/components/layout/logo';
@@ -50,6 +51,8 @@ import {
 } from '@/components/ui/sheet';
 import { ProfileSettingsModal } from '@/components/profile/profile-settings-modal';
 import { createClient } from '@/lib/client';
+import { studyTrackerNavItems } from '@/lib/nav/study-trackers';
+import type { StudyTrackerNavItem } from '@/lib/nav/study-trackers';
 import type { SubscriptionPlan } from '@/lib/types/ctms';
 import { cn } from '@/lib/utils';
 
@@ -68,20 +71,24 @@ const ctmsNavItems = [
   { label: 'Reports', href: '/protected/reports', icon: BarChart3 },
 ];
 
-const trackerNavItems = [
-  { label: 'MRace Tracker', href: '/protected/patients', icon: Users },
-  { label: 'AE Metrics', href: '/protected/ae', icon: BarChart3 },
-  { label: 'eCRF Query Tracker', href: '/protected/ecrf-query-tracker', icon: FileQuestion },
-  { label: 'SDV Tracker', href: '/protected/sdv-tracker', icon: ClipboardCheck },
-  { label: 'Visit Window', href: '/protected/vw', icon: Calendar },
-  { label: 'Med Compliance', href: '/protected/mc', icon: Pill },
-];
-
 const proFeatureRoutes = ['/protected/financials', '/protected/reports'];
 const enterpriseFeatureRoutes: string[] = [];
 
+export type CustomTrackerNavItem = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
 interface TopNavbarProps {
+  /** When false, CTMS nav and inline AI are hidden (tracker/eTMF-only tenants). */
+  hasCtmsAccess: boolean;
   hasTrackerAccess: boolean;
+  hasEtmfAccess: boolean;
+  isPlatformAdmin: boolean;
+  /** Keys from `companies.enabled_study_tracker_keys` to show under Custom → Study trackers (serializable). */
+  studyTrackerMenuKeys: string[];
+  customTrackerNavItems: CustomTrackerNavItem[];
   companyName: string | null;
   userName: string;
   userEmail: string;
@@ -89,8 +96,16 @@ interface TopNavbarProps {
   currentPlan: SubscriptionPlan;
 }
 
-function getPageName(pathname: string): string {
-  const allItems = [...ctmsNavItems, ...trackerNavItems];
+function getPageName(pathname: string, customNames: CustomTrackerNavItem[]): string {
+  if (pathname.startsWith('/protected/etmf')) return 'eTMF';
+  if (pathname.startsWith('/protected/platform/')) return 'Platform admin';
+  for (const t of customNames) {
+    if (pathname === `/protected/custom-trackers/${t.slug}` || pathname.startsWith(`/protected/custom-trackers/${t.slug}/`)) {
+      return t.name;
+    }
+  }
+  if (pathname.startsWith('/protected/custom-trackers')) return 'Custom trackers';
+  const allItems = [...ctmsNavItems, ...studyTrackerNavItems];
   for (const item of allItems) {
     if ('exact' in item && item.exact) {
       if (pathname === item.href) return item.label;
@@ -103,7 +118,12 @@ function getPageName(pathname: string): string {
 }
 
 export function TopNavbar({
+  hasCtmsAccess,
   hasTrackerAccess,
+  hasEtmfAccess,
+  isPlatformAdmin,
+  studyTrackerMenuKeys,
+  customTrackerNavItems,
   companyName,
   userName,
   userEmail,
@@ -115,7 +135,12 @@ export function TopNavbar({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  const pageName = getPageName(pathname);
+  const studyTrackerMenuItems = useMemo(
+    () => studyTrackerNavItems.filter((i) => studyTrackerMenuKeys.includes(i.key)),
+    [studyTrackerMenuKeys]
+  );
+
+  const pageName = getPageName(pathname, customTrackerNavItems);
 
   const isActive = (href: string, exact?: boolean) => {
     if (exact) return pathname === href;
@@ -128,8 +153,12 @@ export function TopNavbar({
     return (requiresPro && currentPlan === 'basic') || (requiresEnterprise && currentPlan !== 'enterprise');
   };
 
-  const isCtmsActive = ctmsNavItems.some((item) => isActive(item.href, item.exact));
-  const isCustomActive = trackerNavItems.some((item) => isActive(item.href));
+  const isCtmsActive =
+    hasCtmsAccess && ctmsNavItems.some((item) => isActive(item.href, item.exact));
+  const isEtmfActive = pathname === '/protected/etmf' || pathname.startsWith('/protected/etmf/');
+  const isCustomActive =
+    studyTrackerNavItems.some((item) => isActive(item.href)) ||
+    pathname.startsWith('/protected/custom-trackers');
 
   const handleLogout = async () => {
     const supabase = createClient();
@@ -160,48 +189,71 @@ export function TopNavbar({
         <div className="flex items-center gap-1 shrink-0 ml-auto">
           {/* Compact Nav Dropdowns (desktop) */}
           <div className="hidden lg:flex items-center gap-1">
-            {/* CTMS */}
+            {/* CTMS — always shown (like eTMF); menu items only when licensed */}
             <DropdownMenu>
               <DropdownMenuTrigger
                 className={cn(
                   'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
-                  isCtmsActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                  hasCtmsAccess
+                    ? isCtmsActive
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
                 )}
               >
                 CTMS
                 <ChevronDown className="h-3 w-3" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={8} className="min-w-48">
-                {ctmsNavItems.map((item) => {
-                  const locked = isLocked(item.href);
-                  const active = isActive(item.href, item.exact);
-                  return (
-                    <DropdownMenuItem
-                      key={item.href}
-                      className={cn('cursor-pointer', locked && 'opacity-50')}
-                      onClick={() => router.push(locked ? '/protected/settings/billing' : item.href)}
-                    >
-                      <item.icon className="mr-2 h-4 w-4" />
-                      {item.label}
-                      {locked && <Lock className="h-2.5 w-2.5 ml-auto" />}
-                    </DropdownMenuItem>
-                  );
-                })}
+                {hasCtmsAccess ? (
+                  ctmsNavItems.map((item) => {
+                    const locked = isLocked(item.href);
+                    return (
+                      <DropdownMenuItem
+                        key={item.href}
+                        className={cn('cursor-pointer', locked && 'opacity-50')}
+                        onClick={() => router.push(locked ? '/protected/settings/billing' : item.href)}
+                      >
+                        <item.icon className="mr-2 h-4 w-4" />
+                        {item.label}
+                        {locked && <Lock className="h-2.5 w-2.5 ml-auto" />}
+                      </DropdownMenuItem>
+                    );
+                  })
+                ) : (
+                  <div className="px-2 py-2 text-xs text-muted-foreground">Not enabled for your organization</div>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* eTMF (placeholder) */}
+            {/* eTMF */}
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal text-muted-foreground hover:text-foreground hover:bg-muted transition-colors whitespace-nowrap outline-none border border-border">
+              <DropdownMenuTrigger
+                className={cn(
+                  'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
+                  hasEtmfAccess
+                    ? isEtmfActive
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                )}
+              >
                 eTMF
                 <ChevronDown className="h-3 w-3" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={8} className="min-w-48">
-                <div className="px-2 py-2 text-xs text-muted-foreground">Coming soon</div>
+                {hasEtmfAccess ? (
+                  <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/etmf')}>
+                    <FileText className="mr-2 h-4 w-4" />
+                    eTMF home
+                  </DropdownMenuItem>
+                ) : (
+                  <div className="px-2 py-2 text-xs text-muted-foreground">Not enabled for your organization</div>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* Custom (trackers) - gated by hasTrackerAccess */}
+            {/* Custom (study trackers + custom definitions) */}
             {hasTrackerAccess && (
               <DropdownMenu>
                 <DropdownMenuTrigger
@@ -213,30 +265,80 @@ export function TopNavbar({
                   Custom
                   <ChevronDown className="h-3 w-3" />
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" sideOffset={8} className="min-w-48">
-                  {trackerNavItems.map((item) => (
-                    <DropdownMenuItem key={item.href} className="cursor-pointer" onClick={() => router.push(item.href)}>
-                      <item.icon className="mr-2 h-4 w-4" />
-                      {item.label}
-                    </DropdownMenuItem>
-                  ))}
+                <DropdownMenuContent align="end" sideOffset={8} className="min-w-48 max-h-[min(24rem,70vh)] overflow-y-auto">
+                  {studyTrackerMenuItems.length > 0 ? (
+                    <>
+                      <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                        Study trackers
+                      </div>
+                      {studyTrackerMenuItems.map((item) => (
+                        <DropdownMenuItem key={item.href} className="cursor-pointer" onClick={() => router.push(item.href)}>
+                          <item.icon className="mr-2 h-4 w-4" />
+                          {item.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </>
+                  ) : (
+                    <div className="px-2 py-2 text-xs text-muted-foreground">No study trackers enabled for your organization.</div>
+                  )}
+                  {customTrackerNavItems.length > 0 && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                        Custom
+                      </div>
+                      {customTrackerNavItems.map((t) => (
+                        <DropdownMenuItem
+                          key={t.id}
+                          className="cursor-pointer"
+                          onClick={() => router.push(`/protected/custom-trackers/${t.slug}`)}
+                        >
+                          <FileText className="mr-2 h-4 w-4" />
+                          {t.name}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/custom-trackers')}>
+                        <FileText className="mr-2 h-4 w-4" />
+                        All custom trackers…
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
 
-            {/* Modules (placeholder) */}
+            {/* Modules — includes platform admin entry when entitled */}
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal text-muted-foreground hover:text-foreground hover:bg-muted transition-colors whitespace-nowrap outline-none border border-border">
                 Modules
                 <ChevronDown className="h-3 w-3" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={8} className="min-w-48">
-                <div className="px-2 py-2 text-xs text-muted-foreground">Coming soon</div>
+                {isPlatformAdmin ? (
+                  <>
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() => router.push('/protected/platform/companies')}
+                    >
+                      <Shield className="mr-2 h-4 w-4" />
+                      Company module access
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() => router.push('/protected/platform/analytics')}
+                    >
+                      <LineChart className="mr-2 h-4 w-4" />
+                      Platform analytics
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <div className="px-2 py-2 text-xs text-muted-foreground">Coming soon</div>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
 
-          <AIAssistantInlineButton />
+          {hasCtmsAccess && <AIAssistantInlineButton />}
           <ThemeToggle className="h-9 w-9" />
 
           <DropdownMenu>
@@ -256,6 +358,15 @@ export function TopNavbar({
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
               </DropdownMenuItem>
+              {isPlatformAdmin && (
+                <DropdownMenuItem
+                  onClick={() => router.push('/protected/platform/companies')}
+                  className="cursor-pointer"
+                >
+                  <Shield className="mr-2 h-4 w-4" />
+                  Company module access
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => router.push('/protected/settings/billing')} className="cursor-pointer">
                 <CreditCard className="mr-2 h-4 w-4" />
                 Billing
@@ -289,58 +400,127 @@ export function TopNavbar({
           </SheetHeader>
           <div className="flex flex-col py-2 overflow-y-auto max-h-[calc(100vh-60px)]">
             <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">CTMS</p>
-            {ctmsNavItems.map((item) => {
-              const locked = isLocked(item.href);
-              const active = isActive(item.href, item.exact);
-              return (
-                <Link
-                  key={item.href}
-                  href={locked ? '/protected/settings/billing' : item.href}
-                  onClick={() => setMobileOpen(false)}
-                  className={cn(
-                    'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
-                    active ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
-                    locked && 'opacity-50',
-                  )}
-                >
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
-                  {locked && <Lock className="h-3 w-3 ml-auto" />}
-                </Link>
-              );
-            })}
-
+            {hasCtmsAccess ? (
+              ctmsNavItems.map((item) => {
+                const locked = isLocked(item.href);
+                const active = isActive(item.href, item.exact);
+                return (
+                  <Link
+                    key={item.href}
+                    href={locked ? '/protected/settings/billing' : item.href}
+                    onClick={() => setMobileOpen(false)}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                      active ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
+                      locked && 'opacity-50',
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    {item.label}
+                    {locked && <Lock className="h-3 w-3 ml-auto" />}
+                  </Link>
+                );
+              })
+            ) : (
+              <div className="px-4 py-2 text-sm text-muted-foreground">Not enabled for your organization</div>
+            )}
             <Separator className="my-2" />
             <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">eTMF</p>
-            <div className="px-4 py-2 text-sm text-muted-foreground">Coming soon</div>
+            {hasEtmfAccess ? (
+              <Link
+                href="/protected/etmf"
+                onClick={() => setMobileOpen(false)}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                  isEtmfActive ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
+                )}
+              >
+                <FileText className="h-4 w-4" />
+                eTMF home
+              </Link>
+            ) : (
+              <div className="px-4 py-2 text-sm text-muted-foreground">Not enabled for your organization</div>
+            )}
 
             {hasTrackerAccess && (
               <>
                 <Separator className="my-2" />
                 <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Custom</p>
-                {trackerNavItems.map((item) => {
-                  const active = isActive(item.href);
-                  return (
+                {studyTrackerMenuItems.length > 0 ? (
+                  <>
+                    <p className="px-4 py-1 text-[10px] text-muted-foreground">Study trackers</p>
+                    {studyTrackerMenuItems.map((item) => {
+                      const active = isActive(item.href);
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setMobileOpen(false)}
+                          className={cn(
+                            'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                            active ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
+                          )}
+                        >
+                          <item.icon className="h-4 w-4" />
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <p className="px-4 py-2 text-xs text-muted-foreground">No study trackers enabled.</p>
+                )}
+                {customTrackerNavItems.length > 0 && (
+                  <>
+                    <p className="px-4 py-1 text-[10px] text-muted-foreground">Builder</p>
+                    {customTrackerNavItems.map((t) => (
+                      <Link
+                        key={t.id}
+                        href={`/protected/custom-trackers/${t.slug}`}
+                        onClick={() => setMobileOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
+                      >
+                        <FileText className="h-4 w-4" />
+                        {t.name}
+                      </Link>
+                    ))}
                     <Link
-                      key={item.href}
-                      href={item.href}
+                      href="/protected/custom-trackers"
                       onClick={() => setMobileOpen(false)}
-                      className={cn(
-                        'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
-                        active ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
-                      )}
+                      className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
                     >
-                      <item.icon className="h-4 w-4" />
-                      {item.label}
+                      <FileText className="h-4 w-4" />
+                      All custom trackers…
                     </Link>
-                  );
-                })}
+                  </>
+                )}
               </>
             )}
 
             <Separator className="my-2" />
             <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Modules</p>
-            <div className="px-4 py-2 text-sm text-muted-foreground">Coming soon</div>
+            {isPlatformAdmin ? (
+              <>
+                <Link
+                  href="/protected/platform/companies"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
+                >
+                  <Shield className="h-4 w-4" />
+                  Company module access
+                </Link>
+                <Link
+                  href="/protected/platform/analytics"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
+                >
+                  <LineChart className="h-4 w-4" />
+                  Platform analytics
+                </Link>
+              </>
+            ) : (
+              <div className="px-4 py-2 text-sm text-muted-foreground">Coming soon</div>
+            )}
           </div>
         </SheetContent>
       </Sheet>

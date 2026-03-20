@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { useMemo, useState } from 'react';
 
 import Logo from '@/components/layout/logo';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,14 @@ export function LoginForm({ next }: LoginFormProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
+  const searchParams = useSearchParams();
+  const reasonMessage = useMemo(() => {
+    const r = searchParams.get('reason');
+    if (r === 'profile') {
+      return 'Your account is missing a workspace profile. Try signing in again, or contact support if this continues.';
+    }
+    return null;
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,14 +36,22 @@ export function LoginForm({ next }: LoginFormProps) {
     setIsLoading(true);
     setError(null);
 
+    const emailTrimmed = email.trim();
+    if (!emailTrimmed) {
+      setError('Please enter a valid email address.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const { error } = await supabase.auth.signInWithPassword({
-        email,
+        email: emailTrimmed,
         password,
       });
       if (error) throw error;
-      router.refresh();
-      router.push(next ?? '/protected');
+      // Full navigation so the proxy sees auth cookies on the next request (avoids RSC race with router.push).
+      const target = next && next.startsWith('/') && !next.startsWith('//') ? next : '/protected';
+      window.location.assign(target);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'An error occurred';
       if (message.includes('Invalid login credentials') || message.includes('invalid_credentials')) {
@@ -97,6 +112,9 @@ export function LoginForm({ next }: LoginFormProps) {
                 Forgot password?
               </Link>
             </div>
+            {reasonMessage && !error && (
+              <p className="text-sm text-amber-600 dark:text-amber-500 text-center">{reasonMessage}</p>
+            )}
             {error && (
               <p className="text-sm text-red-500 text-center">{error}</p>
             )}

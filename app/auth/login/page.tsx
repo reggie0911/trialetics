@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { LoginForm } from './login-form';
 
 function isValidRedirect(path: string | string[] | null | undefined): path is string {
@@ -14,5 +15,15 @@ export default async function LoginPage({
   const nextRaw = resolved?.next;
   const next = isValidRedirect(nextRaw) ? (Array.isArray(nextRaw) ? nextRaw[0] : nextRaw) : null;
 
-  return <LoginForm next={next} />;
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-svh items-center justify-center text-sm text-muted-foreground">
+          Loading…
+        </div>
+      }
+    >
+      <LoginForm next={next} />
+    </Suspense>
+  );
 }

@@ -12,9 +12,10 @@ import { TrackerDetailView } from './tracker-detail-view';
 interface CustomTrackersClientProps {
   companyId: string;
   profileId: string;
+  initialTrackerId?: string | null;
 }
 
-export function CustomTrackersClient({ companyId, profileId }: CustomTrackersClientProps) {
+export function CustomTrackersClient({ companyId, profileId, initialTrackerId }: CustomTrackersClientProps) {
   const [trackers, setTrackers] = useState<CustomTrackerDefinition[]>([]);
   const [fieldCounts, setFieldCounts] = useState<Record<string, number>>({});
   const [selectedTracker, setSelectedTracker] = useState<CustomTrackerDefinition | null>(null);
@@ -43,6 +44,14 @@ export function CustomTrackersClient({ companyId, profileId }: CustomTrackersCli
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (!initialTrackerId || loading) return;
+    const match = trackers.find((t) => t.id === initialTrackerId);
+    if (match) {
+      setSelectedTracker(match);
+    }
+  }, [initialTrackerId, trackers, loading]);
 
   const handleTrackerSelect = (tracker: CustomTrackerDefinition) => {
     setSelectedTracker(tracker);

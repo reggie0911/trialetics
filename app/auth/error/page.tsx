@@ -1,14 +1,12 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+'use client';
 
-export default async function Page(
-  props: {
-    params?: Promise<Record<string, string | string[]>>;
-    searchParams: Promise<{ error?: string }>;
-  }
-) {
-  const params = await props.params;
-  const resolvedSearchParams = await props.searchParams;
-  if (props.params) await props.params;
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+function AuthErrorContent() {
+  const searchParams = useSearchParams();
+  const error = searchParams.get('error');
 
   return (
     <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
@@ -19,8 +17,8 @@ export default async function Page(
               <CardTitle className="text-2xl">Sorry, something went wrong.</CardTitle>
             </CardHeader>
             <CardContent>
-              {resolvedSearchParams?.error ? (
-                <p className="text-sm text-muted-foreground">Code error: {resolvedSearchParams.error}</p>
+              {error ? (
+                <p className="text-sm text-muted-foreground">Code error: {error}</p>
               ) : (
                 <p className="text-sm text-muted-foreground">An unspecified error occurred.</p>
               )}
@@ -29,5 +27,19 @@ export default async function Page(
         </div>
       </div>
     </div>
-  )
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-svh w-full items-center justify-center p-6 text-sm text-muted-foreground">
+          Loading…
+        </div>
+      }
+    >
+      <AuthErrorContent />
+    </Suspense>
+  );
 }
