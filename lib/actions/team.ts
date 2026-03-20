@@ -2,6 +2,8 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/server';
+import { createAdminClient } from '@/lib/server-admin';
+import { resend, getInviteEmailHtml } from '@/lib/email';
 import type {
   TeamRole,
   StudyTeamMember,
@@ -9,6 +11,13 @@ import type {
   TeamMemberRole,
   TeamMemberWithStudies,
 } from '@/lib/types/ctms';
+import {
+  JOIN_STUDY_ID_META_KEY,
+  JOIN_STUDY_ROLE_META_KEY,
+} from '@/lib/auth/study-assignment-on-signup';
+
+const STUDY_TEAM_ROLE_CONSTRAINT_HINT =
+  'Study role is not allowed by the database. Apply pending Supabase migrations (e.g. 20260325000000 or 20260327000000) so study_team_members roles match the app.';
 
 async function getCompanyId(): Promise<string> {
   const supabase = await createClient();
@@ -21,6 +30,19 @@ async function getCompanyId(): Promise<string> {
     .single();
   if (!profile?.company_id) throw new Error('No company found');
   return profile.company_id;
+}
+
+async function getAdminProfile(): Promise<{ id: string; company_id: string; role: string }> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id, company_id, role')
+    .eq('user_id', user.id)
+    .single();
+  if (!profile?.company_id) throw new Error('No company found');
+  return profile;
 }
 
 // =====================================================
@@ -138,6 +160,9 @@ export async function addTeamMember(
       if (error.message.includes('duplicate') || error.message.includes('unique')) {
         return { data: null, error: 'This person already has this role on this study.' };
       }
+      if (error.message.includes('study_team_members_role_check')) {
+        return { data: null, error: STUDY_TEAM_ROLE_CONSTRAINT_HINT };
+      }
       return { data: null, error: error.message };
     }
 
@@ -179,7 +204,12 @@ export async function updateTeamMember(
       .update(cleanUpdates)
       .eq('id', id);
 
-    if (error) return { error: error.message };
+    if (error) {
+      if (error.message.includes('study_team_members_role_check')) {
+        return { error: STUDY_TEAM_ROLE_CONSTRAINT_HINT };
+      }
+      return { error: error.message };
+    }
 
     revalidatePath(`/protected/studies/${study_id}`);
     revalidatePath('/protected/team');
@@ -215,10 +245,10 @@ export async function removeTeamMember(
 // =====================================================
 
 export async function getTeamDirectory(): Promise<TeamMemberWithStudies[]> {
-  const supabase = await createClient();
   const companyId = await getCompanyId();
+  const admin = createAdminClient();
 
-  const { data: profiles, error: profilesError } = await supabase
+  const { data: profiles, error: profilesError } = await admin
     .from('profiles')
     .select('id, first_name, last_name, email, avatar_url, role')
     .eq('company_id', companyId)
@@ -229,7 +259,7 @@ export async function getTeamDirectory(): Promise<TeamMemberWithStudies[]> {
 
   const profileIds = profiles.map((p) => p.id);
 
-  const { data: assignments, error: assignError } = await supabase
+  const { data: assignments, error: assignError } = await admin
     .from('study_team_members')
     .select('id, study_id, profile_id, role, is_active, custom_role_id, team_roles(role_name), studies(title), study_sites(name)')
     .in('profile_id', profileIds);
@@ -297,5 +327,584 @@ export async function updateProfile(
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+// =====================================================
+// Pending Invitations
+// =====================================================
+
+export interface PendingInvitation {
+  id: string;
+  email: string;
+  role: string;
+  first_name: string | null;
+  last_name: string | null;
+  invited_at: string;
+  invited_by_name?: string;
+}
+
+export async function getPendingInvitations(): Promise<PendingInvitation[]> {
+  try {
+    const supabase = await createClient();
+    const companyId = await getCompanyId();
+
+    const { data, error } = await supabase
+      .from('invitations')
+      .select('id, email, role, first_name, last_name, invited_at, invited_by')
+      .eq('company_id', companyId)
+      .eq('status', 'pending')
+      .gt('invited_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+      .order('invited_at', { ascending: false });
+
+    if (error) {
+      if (process.env.NODE_ENV === 'development') {
+        const msg = (error as { message?: string; code?: string }).message
+          ?? (error as { code?: string }).code
+          ?? Object.prototype.toString.call(error);
+        console.warn('getPendingInvitations:', msg);
+      }
+      return [];
+    }
+
+    if (!data || data.length === 0) return [];
+
+    const inviterIds = [...new Set(data.map((r: Record<string, unknown>) => r.invited_by as string).filter(Boolean))];
+    if (inviterIds.length === 0) {
+      return data.map((row: Record<string, unknown>) => ({
+        id: row.id as string,
+        email: row.email as string,
+        role: row.role as string,
+        first_name: row.first_name as string | null,
+        last_name: row.last_name as string | null,
+        invited_at: row.invited_at as string,
+        invited_by_name: undefined,
+      }));
+    }
+
+    const { data: inviterProfiles } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name')
+      .in('id', inviterIds);
+
+    const inviterMap = new Map(
+      (inviterProfiles ?? []).map((p: Record<string, unknown>) => [
+        p.id,
+        [p.first_name, p.last_name].filter(Boolean).join(' ').trim() || undefined,
+      ])
+    );
+
+    return data.map((row: Record<string, unknown>) => ({
+      id: row.id as string,
+      email: row.email as string,
+      role: row.role as string,
+      first_name: row.first_name as string | null,
+      last_name: row.last_name as string | null,
+      invited_at: row.invited_at as string,
+      invited_by_name: inviterMap.get(row.invited_by as string),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// =====================================================
+// Invite User
+// =====================================================
+
+export interface InviteUserInput {
+  email: string;
+  first_name?: string;
+  last_name?: string;
+  role: 'admin' | 'user';
+  study_id: string;
+  study_role: TeamMemberRole;
+}
+
+export async function inviteUser(
+  input: InviteUserInput
+): Promise<{ data: { invited: boolean } | null; error: string | null }> {
+  try {
+    const profile = await getAdminProfile();
+    if (profile.role !== 'admin') {
+      return { data: null, error: 'Only admins can invite users.' };
+    }
+
+    const { email, first_name, last_name, role, study_id, study_role } = input;
+    const emailTrimmed = email.trim().toLowerCase();
+    if (!emailTrimmed) {
+      return { data: null, error: 'Email is required.' };
+    }
+    if (!study_id?.trim()) {
+      return { data: null, error: 'Study is required.' };
+    }
+    if (!study_role) {
+      return { data: null, error: 'Study role is required.' };
+    }
+
+    const supabaseCheck = await createClient();
+    const { data: study } = await supabaseCheck
+      .from('studies')
+      .select('id')
+      .eq('id', study_id)
+      .eq('company_id', profile.company_id)
+      .single();
+    if (!study) {
+      return { data: null, error: 'Invalid study selected.' };
+    }
+
+    const resendApiKey = process.env.RESEND_API_KEY;
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Trialetics <noreply@trialetics.io>';
+    if (!resendApiKey) {
+      return { data: null, error: 'Email invite is not configured. Contact support.' };
+    }
+
+    const supabase = await createClient();
+    const { error: inviteErr } = await supabase
+      .from('invitations')
+      .upsert(
+        {
+          company_id: profile.company_id,
+          email: emailTrimmed,
+          role,
+          first_name: first_name?.trim() || null,
+          last_name: last_name?.trim() || null,
+          invited_by: profile.id,
+          status: 'pending',
+          invited_at: new Date().toISOString(),
+          study_id,
+          study_role,
+        },
+        { onConflict: 'company_id,email' }
+      );
+
+    if (inviteErr) {
+      console.error('Invitation record upsert error:', inviteErr);
+      return { data: null, error: `Could not save invitation: ${inviteErr.message}` };
+    }
+
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+
+    const admin = createAdminClient();
+    const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+      type: 'invite',
+      email: emailTrimmed,
+      options: {
+        data: {
+          company_id: profile.company_id,
+          role: role,
+          first_name: first_name?.trim() || '',
+          last_name: last_name?.trim() || '',
+        },
+      },
+    });
+
+    if (linkError) {
+      if (linkError.message.includes('already been registered') || linkError.message.includes('already exists')) {
+        return { data: null, error: 'This email is already registered.' };
+      }
+      return { data: null, error: linkError.message };
+    }
+
+    const tokenHash = linkData?.properties?.hashed_token;
+    if (!tokenHash) {
+      return { data: null, error: 'Failed to generate invite link.' };
+    }
+
+    const inviteLink = `${siteUrl}/auth/confirm?token_hash=${tokenHash}&type=invite`;
+
+    const { error: emailError } = await resend!.emails.send({
+      from: fromEmail,
+      to: [emailTrimmed],
+      subject: "You're invited to join Trialetics",
+      html: getInviteEmailHtml(first_name?.trim() || '', last_name?.trim() || '', inviteLink),
+    });
+
+    if (emailError) {
+      console.error('Resend invite API error:', emailError);
+      return { data: null, error: 'Failed to send invite email. Please try again.' };
+    }
+
+    revalidatePath('/protected/team');
+    return { data: { invited: true }, error: null };
+  } catch (err) {
+    return {
+      data: null,
+      error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+    };
+  }
+}
+
+// =====================================================
+// Resend & Revoke Invite
+// =====================================================
+
+export async function resendInvite(invitationId: string): Promise<{ error: string | null }> {
+  try {
+    const profile = await getAdminProfile();
+    if (profile.role !== 'admin') {
+      return { error: 'Only admins can resend invitations.' };
+    }
+
+    const supabase = await createClient();
+    const { data: inv, error: fetchErr } = await supabase
+      .from('invitations')
+      .select('id, email, first_name, last_name, role, company_id')
+      .eq('id', invitationId)
+      .eq('company_id', profile.company_id)
+      .eq('status', 'pending')
+      .single();
+
+    if (fetchErr || !inv) {
+      return { error: 'Invitation not found or no longer pending.' };
+    }
+
+    const emailTrimmed = (inv.email as string).trim().toLowerCase();
+    const resendApiKey = process.env.RESEND_API_KEY;
+    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Trialetics <noreply@trialetics.io>';
+    if (!resendApiKey) {
+      return { error: 'Email invite is not configured. Contact support.' };
+    }
+
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+
+    const admin = createAdminClient();
+    const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+      type: 'invite',
+      email: emailTrimmed,
+      options: {
+        data: {
+          company_id: profile.company_id,
+          role: inv.role as string,
+          first_name: (inv.first_name as string)?.trim() || '',
+          last_name: (inv.last_name as string)?.trim() || '',
+        },
+      },
+    });
+
+    if (linkError) {
+      if (linkError.message.includes('already been registered') || linkError.message.includes('already exists')) {
+        return { error: 'This user has already accepted the invitation.' };
+      }
+      return { error: linkError.message };
+    }
+
+    const tokenHash = linkData?.properties?.hashed_token;
+    if (!tokenHash) {
+      return { error: 'Failed to generate invite link.' };
+    }
+
+    const inviteLink = `${siteUrl}/auth/confirm?token_hash=${tokenHash}&type=invite`;
+
+    const { error: emailError } = await resend!.emails.send({
+      from: fromEmail,
+      to: [emailTrimmed],
+      subject: "You're invited to join Trialetics",
+      html: getInviteEmailHtml(
+        (inv.first_name as string)?.trim() || '',
+        (inv.last_name as string)?.trim() || '',
+        inviteLink
+      ),
+    });
+
+    if (emailError) {
+      console.error('Resend invite API error:', emailError);
+      return { error: 'Failed to send invite email. Please try again.' };
+    }
+
+    await supabase
+      .from('invitations')
+      .update({ invited_at: new Date().toISOString() })
+      .eq('id', invitationId)
+      .eq('company_id', profile.company_id);
+
+    revalidatePath('/protected/team');
+    return { error: null };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+    };
+  }
+}
+
+export async function revokeInvite(invitationId: string): Promise<{ error: string | null }> {
+  try {
+    const profile = await getAdminProfile();
+    if (profile.role !== 'admin') {
+      return { error: 'Only admins can revoke invitations.' };
+    }
+
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from('invitations')
+      .update({ status: 'expired' })
+      .eq('id', invitationId)
+      .eq('company_id', profile.company_id)
+      .eq('status', 'pending');
+
+    if (error) {
+      return { error: error.message };
+    }
+
+    revalidatePath('/protected/team');
+    return { error: null };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+    };
+  }
+}
+
+// =====================================================
+// Shareable Company Join Links
+// =====================================================
+
+export interface JoinLink {
+  id: string;
+  company_id: string;
+  token: string;
+  role: string;
+  label: string | null;
+  study_id: string | null;
+  study_role: string | null;
+  expires_at: string | null;
+  max_uses: number | null;
+  use_count: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface CreateJoinLinkInput {
+  role: 'admin' | 'user';
+  label?: string;
+  expiresInDays?: number;
+  maxUses?: number;
+  study_id?: string;
+  study_role?: TeamMemberRole;
+}
+
+export async function createJoinLink(
+  input: CreateJoinLinkInput
+): Promise<{ data: JoinLink | null; error: string | null }> {
+  try {
+    const profile = await getAdminProfile();
+    if (profile.role !== 'admin') {
+      return { data: null, error: 'Only admins can create join links.' };
+    }
+
+    const expiresAt =
+      input.expiresInDays != null && input.expiresInDays > 0
+        ? new Date(Date.now() + input.expiresInDays * 24 * 60 * 60 * 1000).toISOString()
+        : null;
+
+    const studyId = input.study_id?.trim() || null;
+    let studyRole: string | null = input.study_role?.trim() || null;
+    if (studyId && !studyRole) {
+      studyRole = 'clinical_research_associate';
+    }
+    if (!studyId) {
+      studyRole = null;
+    }
+
+    const supabase = await createClient();
+    if (studyId) {
+      const { data: studyRow, error: studyErr } = await supabase
+        .from('studies')
+        .select('id')
+        .eq('id', studyId)
+        .eq('company_id', profile.company_id)
+        .maybeSingle();
+      if (studyErr || !studyRow) {
+        return { data: null, error: 'Invalid study selected.' };
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('company_join_links')
+      .insert({
+        company_id: profile.company_id,
+        role: input.role,
+        label: input.label?.trim() || null,
+        study_id: studyId,
+        study_role: studyRole,
+        expires_at: expiresAt,
+        max_uses: input.maxUses ?? null,
+        created_by: profile.id,
+      })
+      .select()
+      .single();
+
+    if (error) return { data: null, error: error.message };
+
+    revalidatePath('/protected/team');
+    return { data: data as JoinLink, error: null };
+  } catch (err) {
+    return {
+      data: null,
+      error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+    };
+  }
+}
+
+export async function getJoinLinks(): Promise<JoinLink[]> {
+  try {
+    const profile = await getAdminProfile();
+    if (profile.role !== 'admin') return [];
+
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('company_join_links')
+      .select('*')
+      .eq('company_id', profile.company_id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false });
+
+    if (error) return [];
+    return (data as JoinLink[]) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function revokeJoinLink(linkId: string): Promise<{ error: string | null }> {
+  try {
+    const profile = await getAdminProfile();
+    if (profile.role !== 'admin') {
+      return { error: 'Only admins can revoke join links.' };
+    }
+
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from('company_join_links')
+      .update({ is_active: false })
+      .eq('id', linkId)
+      .eq('company_id', profile.company_id);
+
+    if (error) return { error: error.message };
+
+    revalidatePath('/protected/team');
+    return { error: null };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+    };
+  }
+}
+
+export async function validateJoinToken(token: string): Promise<{
+  valid: boolean;
+  companyName?: string;
+  companyId?: string;
+  role?: string;
+  studyId?: string | null;
+  studyRole?: string | null;
+  error?: string;
+}> {
+  try {
+    if (!token?.trim()) return { valid: false, error: 'Invalid link.' };
+
+    const admin = createAdminClient();
+    const { data: link, error: linkErr } = await admin
+      .from('company_join_links')
+      .select('id, company_id, role, study_id, study_role, expires_at, max_uses, use_count, is_active')
+      .eq('token', token.trim())
+      .single();
+
+    if (linkErr || !link) return { valid: false, error: 'Invalid or expired link.' };
+    if (!link.is_active) return { valid: false, error: 'This link has been revoked.' };
+    if (link.expires_at && new Date(link.expires_at) < new Date()) {
+      return { valid: false, error: 'This link has expired.' };
+    }
+    if (link.max_uses != null && (link.use_count ?? 0) >= link.max_uses) {
+      return { valid: false, error: 'This link has reached its maximum uses.' };
+    }
+
+    const { data: company } = await admin
+      .from('companies')
+      .select('name')
+      .eq('id', link.company_id)
+      .single();
+
+    return {
+      valid: true,
+      companyName: (company as { name?: string })?.name ?? 'this organization',
+      companyId: link.company_id,
+      role: link.role,
+      studyId: (link as { study_id?: string | null }).study_id ?? null,
+      studyRole: (link as { study_role?: string | null }).study_role ?? null,
+    };
+  } catch {
+    return { valid: false, error: 'Invalid or expired link.' };
+  }
+}
+
+export async function joinViaLink(
+  token: string,
+  email: string,
+  password: string,
+  firstName: string,
+  lastName?: string
+): Promise<{ error: string | null }> {
+  try {
+    const validation = await validateJoinToken(token);
+    if (!validation.valid || !validation.companyId || !validation.role) {
+      return { error: validation.error ?? 'Invalid or expired link.' };
+    }
+
+    const admin = createAdminClient();
+    const { data: row } = await admin.from('company_join_links').select('use_count').eq('token', token).single();
+    if (row) {
+      await admin
+        .from('company_join_links')
+        .update({ use_count: (row.use_count ?? 0) + 1 })
+        .eq('token', token);
+    }
+
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const redirectTo = `${siteUrl}/auth/callback?next=/protected`;
+
+    const signUpData: Record<string, string> = {
+      company_id: validation.companyId!,
+      role: validation.role!,
+      first_name: firstName?.trim() || '',
+      last_name: lastName?.trim() || '',
+    };
+    if (validation.studyId) {
+      signUpData[JOIN_STUDY_ID_META_KEY] = validation.studyId;
+      signUpData[JOIN_STUDY_ROLE_META_KEY] =
+        validation.studyRole?.trim() || 'clinical_research_associate';
+      const { data: studyOk } = await admin
+        .from('studies')
+        .select('id')
+        .eq('id', validation.studyId)
+        .eq('company_id', validation.companyId!)
+        .maybeSingle();
+      if (!studyOk) {
+        return { error: 'This join link references an invalid study.' };
+      }
+    }
+
+    const supabase = await createClient();
+    const { error: signUpErr } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
+      password,
+      options: {
+        data: signUpData,
+        emailRedirectTo: redirectTo,
+      },
+    });
+
+    if (signUpErr) {
+      if (signUpErr.message.includes('already registered') || signUpErr.message.includes('already exists')) {
+        return { error: 'An account with this email already exists. Try signing in or use a different email.' };
+      }
+      return { error: signUpErr.message };
+    }
+
+    return { error: null };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+    };
   }
 }

@@ -36,3 +36,25 @@ export async function getCompanyTrackerAccess(companyId: string): Promise<boolea
 
   return company?.has_tracker_access === true;
 }
+
+export async function getCompanyLogoUrl(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('company_id')
+    .eq('user_id', user.id)
+    .single();
+
+  if (!profile?.company_id) return null;
+
+  const { data: company } = await supabase
+    .from('companies')
+    .select('logo_url')
+    .eq('id', profile.company_id)
+    .single();
+
+  return company?.logo_url ?? null;
+}

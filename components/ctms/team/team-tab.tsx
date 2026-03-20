@@ -313,7 +313,7 @@ function AddTeamMemberDialog({
     resolver: zodResolver(addMemberSchema),
     defaultValues: {
       profile_id: '',
-      role: 'CRA',
+      role: 'clinical_research_associate',
       custom_role_id: '',
       site_id: '',
       start_date: '',

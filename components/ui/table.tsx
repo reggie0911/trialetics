@@ -6,10 +6,11 @@ import { cn } from "@/lib/utils"
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-x-auto">
+    <div data-slot="table-container" className="relative w-full overflow-x-auto" suppressHydrationWarning>
       <table
         data-slot="table"
         className={cn("w-full caption-bottom text-xs", className)}
+        suppressHydrationWarning
         {...props}
       />
     </div>
@@ -31,6 +32,7 @@ function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
     <tbody
       data-slot="table-body"
       className={cn("[&_tr:last-child]:border-0", className)}
+      suppressHydrationWarning
       {...props}
     />
   )
@@ -51,6 +53,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn("hover:bg-[#79D7BE] data-[state=selected]:bg-muted border-b transition-colors h-[40px]", className)}
+      suppressHydrationWarning
       {...props}
     />
   )
@@ -71,6 +74,7 @@ function TableCell({ className, ...props }: React.ComponentProps<"td">) {
     <td
       data-slot="table-cell"
       className={cn("p-2 align-middle whitespace-nowrap border-r border-border [&:has([role=checkbox])]:pr-0", className)}
+      suppressHydrationWarning
       {...props}
     />
   )

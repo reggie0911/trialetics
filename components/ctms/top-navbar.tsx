@@ -24,6 +24,7 @@ import {
   Lock,
   ListTodo,
   CheckSquare,
+  FileText,
 } from 'lucide-react';
 
 import Logo from '@/components/layout/logo';
@@ -60,6 +61,7 @@ const ctmsNavItems = [
   { label: 'Countries', href: '/protected/countries', icon: Globe },
   { label: 'Team', href: '/protected/team', icon: UsersRound },
   { label: 'Visits', href: '/protected/visits', icon: ClipboardCheck },
+  { label: 'Trip Reports', href: '/protected/trip-reports', icon: FileText },
   { label: 'My Tasks', href: '/protected/my-tasks', icon: CheckSquare },
   { label: 'Project Team Tasks', href: '/protected/tasks', icon: ListTodo },
   { label: 'Financials', href: '/protected/financials', icon: DollarSign },

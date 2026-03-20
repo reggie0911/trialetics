@@ -43,23 +43,7 @@ export default function SignUpPage() {
         },
       });
       if (error) throw error;
-      
-      // Add contact to Loops (fire-and-forget with logging)
-      fetch('/api/loops/contacts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, firstName }),
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (!data.success) {
-            console.error('Failed to add contact to Loops:', data.message);
-          } else {
-            console.log('Successfully added contact to Loops');
-          }
-        })
-        .catch(err => console.error('Error calling Loops API:', err));
-      
+
       router.push('/auth/sign-up-success');
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'An error occurred';
@@ -74,9 +58,9 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="grid min-h-svh lg:grid-cols-2">
-      <div className="container w-full max-w-sm self-center justify-self-center">
-        <form onSubmit={handleSignUp} className={cn('flex flex-col py-20 lg:py-0')}>
+    <div className="flex min-h-svh items-center justify-center">
+      <div className="container w-full max-w-sm">
+        <form onSubmit={handleSignUp} className="flex flex-col py-12">
           <div className="flex flex-col items-center gap-6 text-center">
             <Logo onlyLogo={true} />
             <div className="flex flex-col items-center gap-2">

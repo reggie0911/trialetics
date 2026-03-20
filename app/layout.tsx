@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Poppins } from "next/font/google";
 import "./globals.css";
 
-import Footer from "@/components/layout/footer";
-import Navbar from "@/components/layout/navbar";
+import { ConditionalLayoutShell } from "@/components/layout/conditional-layout-shell";
 import { StyleGlideProvider } from "@/components/styleglide-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ReactQueryProvider } from "@/components/providers/react-query-provider";
@@ -68,9 +67,7 @@ export default function RootLayout({
           <ReactQueryProvider>
             <TooltipProvider>
               <StyleGlideProvider />
-              <Navbar />
-              <main className="flex-1">{children}</main>
-              <Footer />
+              <ConditionalLayoutShell>{children}</ConditionalLayoutShell>
               <Toaster />
             </TooltipProvider>
           </ReactQueryProvider>

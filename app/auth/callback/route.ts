@@ -1,4 +1,9 @@
 import { createClient } from '@/lib/server'
+import { createAdminClient } from '@/lib/server-admin'
+import {
+  applyJoinLinkStudyAssignmentFromUserMetadata,
+  applyPendingInvitationStudyAssignment,
+} from '@/lib/auth/study-assignment-on-signup'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
@@ -38,16 +43,46 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Redirect deactivated users to deactivated page instead of protected
-    if (data?.user && next.startsWith('/protected')) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('is_active')
-        .eq('user_id', data.user.id)
-        .single()
+    if (data?.user) {
+      const userEmail = data.user.email?.toLowerCase()
 
-      if (profile?.is_active === false) {
-        return NextResponse.redirect(new URL('/auth/deactivated', request.url))
+      // Mark pending invitation as accepted when an invited user confirms
+      if (userEmail) {
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('id, company_id, is_active')
+            .eq('user_id', data.user.id)
+            .single()
+
+          if (profile?.company_id && profile.id) {
+            const admin = createAdminClient()
+            const invResult = await applyPendingInvitationStudyAssignment(admin, {
+              profileId: profile.id,
+              companyId: profile.company_id,
+              email: userEmail,
+            })
+            if (!invResult.ok) {
+              console.error('Invitation study assignment failed:', invResult.error)
+            }
+
+            const meta = (data.user.user_metadata ?? {}) as Record<string, unknown>
+            const joinResult = await applyJoinLinkStudyAssignmentFromUserMetadata(admin, {
+              profileId: profile.id,
+              companyId: profile.company_id,
+              userMetadata: meta,
+            })
+            if (!joinResult.ok) {
+              console.error('Join link study assignment failed:', joinResult.error)
+            }
+          }
+
+          if (profile?.is_active === false && next.startsWith('/protected')) {
+            return NextResponse.redirect(new URL('/auth/deactivated', request.url))
+          }
+        } catch (err) {
+          console.error('Post-sign-in profile / assignment flow failed:', err)
+        }
       }
     }
   }

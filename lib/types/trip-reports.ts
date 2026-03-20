@@ -86,7 +86,7 @@ export type ChecklistResponse = 'yes' | 'no' | 'nd' | 'na';
 export const CHECKLIST_RESPONSE_LABELS: Record<ChecklistResponse, string> = {
   yes: 'Yes',
   no: 'No',
-  nd: 'N/D',
+  nd: '—', // Legacy: no longer offered; display existing as em-dash
   na: 'N/A',
 };
 

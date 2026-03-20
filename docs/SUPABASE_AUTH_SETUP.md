@@ -55,7 +55,14 @@ If confirmation emails aren't arriving:
 | Login | `/auth/login` | Email/password sign-in |
 | Email confirm (token) | `/auth/confirm` | Handles `?token_hash=` and `?type=` from email link |
 | Auth callback (code) | `/auth/callback` | Exchanges `?code=` for session (OAuth, invite) |
+| Set password (invite/reset) | `/auth/update-password` | Invited users set password before dashboard |
 | Error | `/auth/error` | Displays auth errors |
+
+### Invite Flow Redirect (Critical)
+
+For **team invites** to work, Supabase must be able to redirect to `/auth/callback`. If this URL is missing from the Redirect URLs allowlist, invited users will land on the marketing landing page `/` instead.
+
+**Required:** `http://localhost:3000/auth/callback` (dev) and `https://yourdomain.com/auth/callback` (prod) must be in **Auth → URL Configuration → Redirect URLs**.
 
 ## Environment Variables
 

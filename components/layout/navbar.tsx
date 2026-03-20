@@ -192,6 +192,7 @@ const Navbar = () => {
                 key={button.label}
                 size="sm"
                 variant={button.variant}
+                nativeButton={false}
                 className={cn(
                   "rounded-full shadow-none",
                   isHomePage && !isScrolled && button.variant === 'ghost' && 'text-white hover:text-white/80 hover:bg-white/10',

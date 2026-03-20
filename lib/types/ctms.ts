@@ -234,7 +234,25 @@ export interface EnrollmentFunnelData {
   total: number;
 }
 
-export type TeamMemberRole = 'project_manager' | 'CRA' | 'data_manager' | 'medical_monitor' | 'statistician' | 'regulatory' | 'pharmacovigilance' | 'custom';
+export type TeamMemberRole =
+  | 'accounts_payable_specialist'
+  | 'biostatistician'
+  | 'clinical_contracts_specialist'
+  | 'clinical_data_manager'
+  | 'clinical_project_manager'
+  | 'clinical_research_associate'
+  | 'clinical_trial_assistant'
+  | 'contracts_manager'
+  | 'cra_manager'
+  | 'executive_director'
+  | 'inventory_specialist'
+  | 'medical_writer'
+  | 'regulatory_specialist'
+  | 'safety_specialist'
+  | 'site_budget_specialist'
+  | 'study_startup_specialist'
+  | 'vendor_manager'
+  | 'custom';
 
 export interface TeamRole {
   id: string;
@@ -287,28 +305,48 @@ export interface TeamMemberWithStudies {
 }
 
 export const TEAM_ROLE_OPTIONS: { value: TeamMemberRole; label: string }[] = [
-  { value: 'project_manager', label: 'Project Manager' },
-  { value: 'CRA', label: 'Clinical Research Associate' },
-  { value: 'data_manager', label: 'Data Manager' },
-  { value: 'medical_monitor', label: 'Medical Monitor' },
-  { value: 'statistician', label: 'Statistician' },
-  { value: 'regulatory', label: 'Regulatory' },
-  { value: 'pharmacovigilance', label: 'Pharmacovigilance' },
+  { value: 'accounts_payable_specialist', label: 'Accounts Payable Specialist' },
+  { value: 'biostatistician', label: 'Biostatistician' },
+  { value: 'clinical_contracts_specialist', label: 'Clinical Contracts Specialist' },
+  { value: 'clinical_data_manager', label: 'Clinical Data Manager' },
+  { value: 'clinical_project_manager', label: 'Clinical Project Manager' },
+  { value: 'clinical_research_associate', label: 'Clinical Research Associate' },
+  { value: 'clinical_trial_assistant', label: 'Clinical Trial Assistant' },
+  { value: 'contracts_manager', label: 'Contracts Manager' },
+  { value: 'cra_manager', label: 'CRA Manager' },
+  { value: 'executive_director', label: 'Executive Director' },
+  { value: 'inventory_specialist', label: 'Inventory Specialist' },
+  { value: 'medical_writer', label: 'Medical Writer' },
+  { value: 'regulatory_specialist', label: 'Regulatory Specialist' },
+  { value: 'safety_specialist', label: 'Safety Specialist' },
+  { value: 'site_budget_specialist', label: 'Site Budget Specialist' },
+  { value: 'study_startup_specialist', label: 'Study Startup Specialist' },
+  { value: 'vendor_manager', label: 'Vendor Manager' },
   { value: 'custom', label: 'Custom Role' },
 ];
 
 export const TEAM_ROLE_LABEL: Record<TeamMemberRole, string> = {
-  project_manager: 'Project Manager',
-  CRA: 'Clinical Research Associate',
-  data_manager: 'Data Manager',
-  medical_monitor: 'Medical Monitor',
-  statistician: 'Statistician',
-  regulatory: 'Regulatory',
-  pharmacovigilance: 'Pharmacovigilance',
+  accounts_payable_specialist: 'Accounts Payable Specialist',
+  biostatistician: 'Biostatistician',
+  clinical_contracts_specialist: 'Clinical Contracts Specialist',
+  clinical_data_manager: 'Clinical Data Manager',
+  clinical_project_manager: 'Clinical Project Manager',
+  clinical_research_associate: 'Clinical Research Associate',
+  clinical_trial_assistant: 'Clinical Trial Assistant',
+  contracts_manager: 'Contracts Manager',
+  cra_manager: 'CRA Manager',
+  executive_director: 'Executive Director',
+  inventory_specialist: 'Inventory Specialist',
+  medical_writer: 'Medical Writer',
+  regulatory_specialist: 'Regulatory Specialist',
+  safety_specialist: 'Safety Specialist',
+  site_budget_specialist: 'Site Budget Specialist',
+  study_startup_specialist: 'Study Startup Specialist',
+  vendor_manager: 'Vendor Manager',
   custom: 'Custom',
 };
 
-export type MonitoringVisitType = 'routine' | 'for_cause' | 'close_out' | 'pre_study' | 'interim';
+export type MonitoringVisitType = 'routine' | 'for_cause' | 'close_out' | 'pre_study' | 'interim' | 'sqv' | 'siv' | 'monitoring';
 
 export type MonitoringVisitStatus = 'planned' | 'confirmed' | 'completed' | 'cancelled';
 
@@ -328,6 +366,11 @@ export interface MonitoringVisit {
   actual_date: string | null;
   status: MonitoringVisitStatus;
   notes: string | null;
+  visit_name: string | null;
+  visit_location: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  description: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -339,6 +382,14 @@ export interface MonitoringVisitWithRelations extends MonitoringVisit {
   trip_reports: TripReport[];
 }
 
+export type VisitReportStatusType =
+  | 'report_pending'
+  | 'authoring'
+  | 'submitted'
+  | 'under_review'
+  | 'returned'
+  | 'approved_and_signed';
+
 export interface TripReport {
   id: string;
   visit_id: string;
@@ -349,6 +400,12 @@ export interface TripReport {
   approved_by: string | null;
   approved_date: string | null;
   status: TripReportStatus;
+  template_id: string | null;
+  report_status: VisitReportStatusType | null;
+  submission_due_date: string | null;
+  approval_due_date: string | null;
+  reviewer_id: string | null;
+  reviewed_at: string | null;
   created_at: string;
 }
 
@@ -387,6 +444,9 @@ export const VISIT_TYPE_OPTIONS: { value: MonitoringVisitType; label: string }[]
   { value: 'close_out', label: 'Close-Out' },
   { value: 'pre_study', label: 'Pre-Study' },
   { value: 'interim', label: 'Interim' },
+  { value: 'sqv', label: 'Site Qualification Visit' },
+  { value: 'siv', label: 'Site Initiation Visit' },
+  { value: 'monitoring', label: 'Interim Monitoring Visit' },
 ];
 
 export const MONITORING_VISIT_STATUS_OPTIONS: { value: MonitoringVisitStatus; label: string }[] = [
@@ -420,6 +480,9 @@ export const VISIT_TYPE_LABEL: Record<MonitoringVisitType, string> = {
   close_out: 'Close-Out',
   pre_study: 'Pre-Study',
   interim: 'Interim',
+  sqv: 'Site Qualification Visit',
+  siv: 'Site Initiation Visit',
+  monitoring: 'Interim Monitoring Visit',
 };
 
 export const MONITORING_VISIT_STATUS_LABEL: Record<MonitoringVisitStatus, string> = {

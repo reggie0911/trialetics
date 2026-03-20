@@ -47,23 +47,7 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
         },
       })
       if (error) throw error
-      
-      // Add contact to Loops (fire-and-forget with logging)
-      fetch('/api/loops/contacts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, firstName }),
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (!data.success) {
-            console.error('Failed to add contact to Loops:', data.message)
-          } else {
-            console.log('Successfully added contact to Loops')
-          }
-        })
-        .catch(err => console.error('Error calling Loops API:', err))
-      
+
       router.push('/auth/sign-up-success')
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred')
