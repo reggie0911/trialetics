@@ -2,16 +2,26 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { PasscodeDialog } from "@/components/ui/passcode-dialog";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle } from "lucide-react";
 import { parseTransposedHeaderCSV, HeaderMapping, VisitGroupSpan } from "@/lib/utils/header-mapper";
+
+const MAPPING_PASSCODE_STORAGE_KEY = "patients-mapping-passcode-verified";
+
+function isMappingPasscodeVerified(): boolean {
+  try {
+    return sessionStorage.getItem(MAPPING_PASSCODE_STORAGE_KEY) === "true";
+  } catch {
+    return false;
+  }
+}
 
 interface HeaderMappingUploadProps {
   onMappingLoad: (mappings: HeaderMapping[], spans: VisitGroupSpan[]) => void;
@@ -33,6 +43,7 @@ export function HeaderMappingUpload({
   const [isProcessing, setIsProcessing] = useState(false);
   const [showOverrideWarning, setShowOverrideWarning] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [showPasscodeDialog, setShowPasscodeDialog] = useState(false);
 
   const handleFile = async (file: File) => {
     // If there's an existing mapping, show override warning first
@@ -100,28 +111,54 @@ export function HeaderMappingUpload({
     if (file) handleFile(file);
   };
 
+  const openUploadDialog = () => {
+    if (disabled) return;
+    if (!isMappingPasscodeVerified()) {
+      setShowPasscodeDialog(true);
+      return;
+    }
+    setIsOpen(true);
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogTrigger
-        disabled={disabled}
-        className={`inline-flex items-center cursor-pointer justify-center gap-2 whitespace-nowrap rounded-md text-xs font-medium transition-all disabled:pointer-events-none disabled:opacity-50 border shadow-sm h-9 px-4 ${
-          hasExistingMapping 
-            ? 'bg-green-50 hover:bg-green-100 text-green-700 border-green-300' 
-            : 'bg-background hover:bg-accent hover:text-accent-foreground'
-        }`}
-      >
-        {hasExistingMapping ? (
-          <>
-            <CheckCircle2 className="w-3 h-3" />
-            Loaded ({mappingCount})
-          </>
-        ) : (
-          <>
-            <FileSpreadsheet className="w-3 h-3" />
-            Load Header Map
-          </>
-        )}
-      </DialogTrigger>
+    <>
+      <PasscodeDialog
+        open={showPasscodeDialog}
+        onVerified={() => {
+          setShowPasscodeDialog(false);
+          setIsOpen(true);
+        }}
+        onDismiss={() => setShowPasscodeDialog(false)}
+        storageKey={MAPPING_PASSCODE_STORAGE_KEY}
+        mode="account_password"
+        title="Confirm your identity"
+        description="Enter your login password to load or change the header mapping."
+      />
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={disabled}
+          onClick={openUploadDialog}
+          className={`h-9 px-4 text-xs font-medium gap-2 ${
+            hasExistingMapping
+              ? "bg-green-50 hover:bg-green-100 text-green-700 border-green-300"
+              : ""
+          }`}
+        >
+          {hasExistingMapping ? (
+            <>
+              <CheckCircle2 className="w-3 h-3" />
+              Loaded ({mappingCount})
+            </>
+          ) : (
+            <>
+              <FileSpreadsheet className="w-3 h-3" />
+              Load Header Map
+            </>
+          )}
+        </Button>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Upload Header Mapping CSV</DialogTitle>
@@ -205,5 +242,6 @@ export function HeaderMappingUpload({
         )}
       </DialogContent>
     </Dialog>
+    </>
   );
 }

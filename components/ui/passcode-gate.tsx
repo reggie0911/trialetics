@@ -3,30 +3,44 @@
 import { useState, useEffect } from "react";
 import { Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PasscodeDialog } from "./passcode-dialog";
+import {
+  PasscodeDialog,
+  type PasscodeDialogMode,
+} from "./passcode-dialog";
 
 export interface PasscodeGateProps {
   children: React.ReactNode;
   storageKey: string;
-  envVarName: string;
+  mode?: PasscodeDialogMode;
+  envVarName?: string;
   title?: string;
   description?: string;
 }
 
 /**
- * Wraps children and only renders them when the user has entered the correct passcode.
- * When not verified, shows a locked button that opens the passcode dialog.
+ * Wraps children and only renders them after verification (sessionStorage).
+ * When not verified, shows a locked button that opens the passcode / re-auth dialog.
  */
 export function PasscodeGate({
   children,
   storageKey,
+  mode = "account_password",
   envVarName,
-  title = "Passcode Required",
-  description = "This feature requires a passcode to access. Please enter the passcode to continue.",
+  title,
+  description,
 }: PasscodeGateProps) {
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [isChecking, setIsChecking] = useState(true);
   const [showPasscodeDialog, setShowPasscodeDialog] = useState(false);
+
+  const defaultTitle =
+    mode === "account_password"
+      ? "Confirm your identity"
+      : "Passcode required";
+  const defaultDescription =
+    mode === "account_password"
+      ? "Enter your login password to access these tools."
+      : "This feature requires a passcode to access. Please enter the passcode to continue.";
 
   useEffect(() => {
     const checkVerification = () => {
@@ -76,15 +90,17 @@ export function PasscodeGate({
           className="gap-2 text-xs text-muted-foreground hover:text-foreground"
         >
           <Lock className="h-3 w-3" />
-          Enter Passcode
+          {mode === "account_password" ? "Unlock tools" : "Enter passcode"}
         </Button>
         <PasscodeDialog
           open={showPasscodeDialog}
           onVerified={handleVerified}
+          onDismiss={() => setShowPasscodeDialog(false)}
           storageKey={storageKey}
+          mode={mode}
           envVarName={envVarName}
-          title={title}
-          description={description}
+          title={title ?? defaultTitle}
+          description={description ?? defaultDescription}
         />
       </>
     );
