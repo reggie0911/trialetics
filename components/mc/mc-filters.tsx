@@ -280,19 +280,19 @@ export function MCFilters({
                   <SelectItem value="all" className="text-[11px]">All</SelectItem>
                   <SelectItem value="Yes" className="text-[11px]">
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-yellow-400"></span>
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-yellow-500 dark:bg-yellow-400" />
                       Has Changes (Yes)
                     </span>
                   </SelectItem>
                   <SelectItem value="No" className="text-[11px]">
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-green-400"></span>
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-green-600 dark:bg-green-400" />
                       No Changes (No)
                     </span>
                   </SelectItem>
                   <SelectItem value="-" className="text-[11px]">
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-gray-400"></span>
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-muted-foreground/60" />
                       First Visit (-)
                     </span>
                   </SelectItem>

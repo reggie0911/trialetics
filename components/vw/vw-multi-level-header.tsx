@@ -14,10 +14,10 @@ import {
 } from "@/components/ui/select";
 import { VWRecord } from "./vw-csv-upload-dialog";
 
-// Alternating group colors
+// Alternating group bands (theme-aware; avoids white/gray-200 in dark mode)
 const GROUP_COLORS = {
-  even: 'bg-white',
-  odd: 'bg-gray-200',
+  even: "bg-muted/25",
+  odd: "bg-muted/50",
 };
 
 export { GROUP_COLORS };
@@ -72,7 +72,7 @@ export function MultiLevelVWHeader({
             <th
               key={`visit-group-${idx}`}
               colSpan={span.columnCount}
-              className={`text-center font-bold border-r text-xs py-2 ${idx % 2 === 0 ? GROUP_COLORS.even : GROUP_COLORS.odd}`}
+              className={`text-center font-bold border-r border-border text-foreground text-xs py-2 ${idx % 2 === 0 ? GROUP_COLORS.even : GROUP_COLORS.odd}`}
             >
               {span.visitGroup}
             </th>
@@ -94,7 +94,7 @@ export function MultiLevelVWHeader({
             return (
               <th
                 key={header.id}
-                className={`text-[12px] p-1 px-2 font-medium whitespace-nowrap border-b text-left align-middle ${bgColorClass}`}
+                className={`text-[12px] p-1 px-2 font-medium whitespace-nowrap border-b border-border text-left align-middle text-foreground ${bgColorClass}`}
               >
                 {/* Header Label with Sort */}
                 <div 

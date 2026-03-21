@@ -98,7 +98,7 @@ export function MCUploadHistory({
                     return (
                       <div
                         key={upload.id}
-                        className={`group relative border rounded-md p-3 cursor-pointer transition-colors hover:bg-accent ${
+                        className={`group relative cursor-pointer rounded-md border border-border p-3 transition-colors hover:bg-accent ${
                           isSelected ? 'bg-accent border-primary' : ''
                         }`}
                         onClick={() => handleSelect(upload.id)}

@@ -171,7 +171,7 @@ export function PatientDataTable({
       )}
 
       <div
-        className="print-table-container overflow-x-auto border rounded-md"
+        className="print-table-container overflow-x-auto rounded-md border border-border"
         onScroll={handleScroll}
       >
         <DndContext
@@ -204,10 +204,10 @@ export function PatientDataTable({
                 </TableRow>
               ) : (
                 table.getRowModel().rows.map((row) => (
-                  <TableRow 
+                  <TableRow
                     key={row.id}
                     onDoubleClick={() => onRowDoubleClick?.(row.original)}
-                    className="cursor-pointer group hover:!bg-[#79D7BE]"
+                    className="group cursor-pointer"
                   >
                     {row.getVisibleCells().map((cell, colIdx) => {
                       const groupIndex = columnToGroupIndex.get(cell.column.id) ?? 0;
@@ -335,7 +335,9 @@ function DragAlongCell({ cell, isFirstColumn, columnConfig, groupIndex, rowData 
     <TableCell
       ref={setNodeRef}
       className={`text-xs p-1 px-2 whitespace-nowrap text-center ${
-        isFirstColumn ? "bg-white font-medium" : `${bgColorClass} group-hover:!bg-transparent`
+        isFirstColumn
+          ? "bg-card font-medium"
+          : `${bgColorClass} group-hover:!bg-transparent`
       }`}
       style={style}
     >
@@ -358,7 +360,7 @@ function DragAlongCell({ cell, isFirstColumn, columnConfig, groupIndex, rowData 
               <span className="font-medium">{visitGroup}</span>
             </div>
             {isBMIColumn && (
-              <div className="pt-1 border-t mt-1">
+              <div className="mt-1 border-t border-border pt-1">
                 <p className="text-muted-foreground text-[10px]">
                   Note: BMI calculation requires Height and Weight.
                   For BSI (Body Shape Index), Waist Circumference is also required.
@@ -366,7 +368,7 @@ function DragAlongCell({ cell, isFirstColumn, columnConfig, groupIndex, rowData 
               </div>
             )}
             {value && value.length > 50 && (
-              <div className="pt-1 border-t mt-1">
+              <div className="mt-1 border-t border-border pt-1">
                 <span className="text-muted-foreground">Value:</span>
                 <p className="mt-0.5">{value}</p>
               </div>
@@ -409,14 +411,14 @@ function formatCellValue(value: string | undefined, dataType: string) {
 function getCellColor(columnId: string, value: string | undefined) {
   // Color coding for status fields
   if (columnId.includes("RAMCD")) {
-    if (value === "Green") return "text-green-600";
-    if (value === "Yellow") return "text-yellow-600";
-    if (value === "Red") return "text-red-600";
+    if (value === "Green") return "text-green-600 dark:text-green-400";
+    if (value === "Yellow") return "text-yellow-700 dark:text-yellow-300";
+    if (value === "Red") return "text-red-600 dark:text-red-400";
   }
-  
+
   if (columnId.includes("Locked") && value) {
-    return "text-blue-600 font-medium";
+    return "font-medium text-blue-600 dark:text-blue-400";
   }
-  
+
   return "";
 }

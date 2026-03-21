@@ -51,7 +51,7 @@ export function VWCategoriesChart({ data, selectedCategory, onCategoryClick }: V
   const chartConfig = {
     count: {
       label: "Count",
-      color: "hsl(var(--chart-1))",
+      color: "var(--chart-1)",
     },
   };
 
@@ -104,7 +104,10 @@ export function VWCategoriesChart({ data, selectedCategory, onCategoryClick }: V
         </div>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[200px] w-full">
+        <ChartContainer
+          config={chartConfig}
+          className="h-[200px] w-full [&_.recharts-cartesian-axis-tick_text]:!fill-foreground [&_.recharts-label-list_text]:!fill-foreground"
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={chartData}
@@ -116,14 +119,14 @@ export function VWCategoriesChart({ data, selectedCategory, onCategoryClick }: V
               }}
               style={{ cursor: 'pointer' }}
             >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-border/60" />
               <XAxis
                 dataKey="category"
                 angle={0}
                 textAnchor="middle"
                 height={40}
                 interval={0}
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
               />
               <YAxis hide />
               <ChartTooltip content={<ChartTooltipContent />} />
@@ -131,7 +134,7 @@ export function VWCategoriesChart({ data, selectedCategory, onCategoryClick }: V
                 {chartData.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
-                    fill={ALERT_COLORS[entry.category] || "hsl(var(--chart-1))"}
+                    fill={ALERT_COLORS[entry.category] || "var(--chart-1)"}
                     opacity={selectedCategory ? (entry.category === selectedCategory ? 1 : 0.3) : 1}
                     style={{ cursor: 'pointer' }}
                   />
@@ -139,7 +142,7 @@ export function VWCategoriesChart({ data, selectedCategory, onCategoryClick }: V
                 <LabelList
                   dataKey="count"
                   position="top"
-                  style={{ fontSize: 11, fill: "hsl(var(--foreground))" }}
+                  style={{ fontSize: 11, fill: "var(--foreground)" }}
                 />
               </Bar>
             </BarChart>

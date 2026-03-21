@@ -4,24 +4,15 @@ import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, LabelList, Text } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, LabelList } from "recharts";
 import { X } from "lucide-react";
 
-function CustomAxisTick(props: { x?: number; y?: number; payload?: { value: string }; [key: string]: unknown }) {
-  const { x = 0, y = 0, payload } = props;
-  const value = payload?.value ?? "";
-  return (
-    <Text
-      x={x}
-      y={y}
-      textAnchor="middle"
-      angle={0}
-      verticalAnchor="start"
-      style={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
-    >
-      {value}
-    </Text>
-  );
+const MAX_CATEGORY_TICK_CHARS = 40;
+
+function truncateCategoryTick(value: string) {
+  const v = String(value);
+  if (v.length <= MAX_CATEGORY_TICK_CHARS) return v;
+  return `${v.slice(0, MAX_CATEGORY_TICK_CHARS - 1)}…`;
 }
 
 interface MCCategoriesChartProps {
@@ -31,11 +22,11 @@ interface MCCategoriesChartProps {
 }
 
 const CHART_COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-5))",
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
 ];
 
 export function MCCategoriesChart({ data, selectedCategory, onCategoryClick }: MCCategoriesChartProps) {
@@ -61,10 +52,22 @@ export function MCCategoriesChart({ data, selectedCategory, onCategoryClick }: M
     return sortedData;
   }, [data]);
 
+  const yAxisWidth = useMemo(() => {
+    if (chartData.length === 0) return 100;
+    const longest = chartData.reduce((m, d) => Math.max(m, d.category.length), 0);
+    const effectiveLen = Math.min(longest, MAX_CATEGORY_TICK_CHARS);
+    return Math.min(340, Math.max(100, Math.round(effectiveLen * 5.4 + 28)));
+  }, [chartData]);
+
+  const chartHeight = useMemo(
+    () => Math.min(720, Math.max(260, chartData.length * 28 + 56)),
+    [chartData.length]
+  );
+
   const chartConfig = {
     count: {
       label: "Count",
-      color: "hsl(var(--chart-1))",
+      color: "var(--chart-1)",
     },
   };
 
@@ -117,42 +120,55 @@ export function MCCategoriesChart({ data, selectedCategory, onCategoryClick }: M
         </div>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="h-[200px] w-full">
+        <ChartContainer
+          config={chartConfig}
+          className="aspect-auto w-full min-h-[260px]"
+          style={{ height: chartHeight }}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
+              layout="vertical"
               data={chartData}
-              margin={{ top: 20, right: 20, left: 20, bottom: 60 }}
+              margin={{ top: 12, right: 36, left: 8, bottom: 12 }}
               onClick={(e: any) => {
                 if (e && e.activePayload && e.activePayload[0]) {
                   handleBarClick(e.activePayload[0].payload);
                 }
               }}
-              style={{ cursor: 'pointer' }}
+              style={{ cursor: "pointer" }}
             >
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} className="stroke-border/60" />
               <XAxis
-                dataKey="category"
-                angle={0}
-                textAnchor="middle"
-                height={40}
-                interval={0}
-                tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                type="number"
+                tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                allowDecimals={false}
               />
-              <YAxis hide />
+              <YAxis
+                type="category"
+                dataKey="category"
+                width={yAxisWidth}
+                reversed
+                tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
+                tickFormatter={truncateCategoryTick}
+                interval={0}
+              />
               <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+              <Bar dataKey="count" radius={[0, 4, 4, 0]}>
                 {chartData.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
                     fill={CHART_COLORS[index % CHART_COLORS.length]}
                     opacity={selectedCategory ? (entry.category === selectedCategory ? 1 : 0.3) : 1}
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: "pointer" }}
                   />
                 ))}
                 <LabelList
                   dataKey="count"
-                  position="top"
-                  style={{ fontSize: 11, fill: "hsl(var(--foreground))" }}
+                  position="right"
+                  style={{
+                    fontSize: 10,
+                    fill: "var(--foreground)",
+                  }}
                 />
               </Bar>
             </BarChart>

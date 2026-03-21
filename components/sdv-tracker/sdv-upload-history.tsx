@@ -61,21 +61,21 @@ export function SDVUploadHistory({
     switch (status) {
       case 'completed':
         return (
-          <Badge variant="default" className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0 gap-1">
+          <Badge variant="default" className="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 text-[10px] px-1.5 py-0 gap-1">
             <CheckCircle2 className="h-2.5 w-2.5" />
             Completed
           </Badge>
         );
       case 'processing':
         return (
-          <Badge variant="default" className="bg-blue-100 text-blue-700 text-[10px] px-1.5 py-0 gap-1">
+          <Badge variant="default" className="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 text-[10px] px-1.5 py-0 gap-1">
             <Loader2 className="h-2.5 w-2.5 animate-spin" />
             Processing
           </Badge>
         );
       case 'failed':
         return (
-          <Badge variant="default" className="bg-red-100 text-red-700 text-[10px] px-1.5 py-0 gap-1">
+          <Badge variant="default" className="bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 text-[10px] px-1.5 py-0 gap-1">
             <XCircle className="h-2.5 w-2.5" />
             Failed
           </Badge>
@@ -88,13 +88,13 @@ export function SDVUploadHistory({
   const getFileTypeBadge = (fileType: string) => {
     if (fileType === 'site_data_entry') {
       return (
-        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200">
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800">
           Site Data
         </Badge>
       );
     }
     return (
-      <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-orange-50 text-orange-700 border-orange-200">
+      <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-300 dark:border-orange-800">
         SDV Data
       </Badge>
     );
@@ -141,7 +141,7 @@ export function SDVUploadHistory({
 
         {/* Error Message (if failed) */}
         {upload.status === 'failed' && upload.error_message && (
-          <div className="text-[10px] text-red-600 mt-1.5 bg-red-50 rounded px-2 py-1">
+          <div className="text-[10px] text-red-600 dark:text-red-400 mt-1.5 bg-red-50 dark:bg-red-950/40 rounded px-2 py-1">
             {upload.error_message}
           </div>
         )}

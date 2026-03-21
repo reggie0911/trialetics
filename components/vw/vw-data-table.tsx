@@ -86,9 +86,12 @@ const AlertStatusBadge = ({
   if (!status) return <span>—</span>;
   
   const colors: Record<string, string> = {
-    GREEN: "bg-green-500 text-white border-green-500",
-    YELLOW: "bg-yellow-500 text-white border-yellow-500",
-    RED: "bg-red-500 text-white border-red-500",
+    GREEN:
+      "border border-green-600/35 bg-green-500/15 text-green-800 dark:border-green-500/40 dark:bg-green-500/20 dark:text-green-300",
+    YELLOW:
+      "border border-yellow-600/35 bg-yellow-500/15 text-yellow-900 dark:border-yellow-500/40 dark:bg-yellow-500/20 dark:text-yellow-200",
+    RED:
+      "border border-red-600/35 bg-red-500/15 text-red-800 dark:border-red-500/40 dark:bg-red-500/20 dark:text-red-300",
   };
   
   // Parse date string properly, handling timezone issues
@@ -423,7 +426,7 @@ export function VWDataTable({
           </thead>
           <tbody className="[&_tr:last-child]:border-0">
             {table.getRowModel().rows.length === 0 ? (
-              <tr className="border-b">
+              <tr className="border-b border-border">
                 <td
                   colSpan={columns.length}
                   className="h-24 text-center text-[12px] text-muted-foreground p-2"
@@ -433,7 +436,10 @@ export function VWDataTable({
               </tr>
             ) : (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="group h-[40px] hover:bg-[#79D7BE] border-b transition-all duration-500 ease-in-out">
+                <tr
+                  key={row.id}
+                  className="group h-[40px] border-b border-border transition-all duration-500 ease-in-out hover:bg-primary/10 dark:hover:bg-primary/15"
+                >
                   {row.getVisibleCells().map((cell) => {
                     const value = cell.getValue() as string | undefined;
                     const columnId = cell.column.id;
@@ -520,7 +526,7 @@ export function VWDataTable({
           </Button>
           
           <div className="flex items-center gap-1">
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-[11px] font-medium text-foreground">
               Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
             </p>
           </div>

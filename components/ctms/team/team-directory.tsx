@@ -626,7 +626,7 @@ function MemberRows({
 }) {
   return (
     <>
-      <TableRow className="hover:bg-[#79D7BE] cursor-pointer h-[40px]" onClick={onToggleExpand}>
+      <TableRow className="h-[40px] cursor-pointer" onClick={onToggleExpand}>
         <TableCell className="p-2 whitespace-nowrap border-r border-border w-[30px]">
           <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
             {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}

@@ -52,7 +52,10 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
   return (
     <tr
       data-slot="table-row"
-      className={cn("hover:bg-[#79D7BE] data-[state=selected]:bg-muted border-b transition-colors h-[40px]", className)}
+      className={cn(
+        "h-[40px] border-b border-border transition-colors hover:bg-primary/10 data-[state=selected]:bg-muted dark:hover:bg-primary/15",
+        className
+      )}
       suppressHydrationWarning
       {...props}
     />

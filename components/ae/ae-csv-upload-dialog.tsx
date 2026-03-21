@@ -396,15 +396,15 @@ export function AECSVUploadDialog({ onUpload, companyId, profileId }: AECSVUploa
 
           {previewData.length > 0 && !error && (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-xs text-green-600">
-                <CheckCircle2 className="w-4 h-4" />
+              <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
                 Successfully parsed {previewData.length} rows (showing preview)
               </div>
               
-              <div className="border rounded-md overflow-hidden">
-                <div className="overflow-x-auto max-h-48">
+              <div className="overflow-hidden rounded-md border border-border">
+                <div className="max-h-48 overflow-x-auto">
                   <table className="w-full text-xs">
-                    <thead className="bg-muted sticky top-0">
+                    <thead className="sticky top-0 bg-muted">
                       <tr>
                         {REQUIRED_COLUMNS.slice(0, 5).map((key) => (
                           <th
@@ -419,7 +419,7 @@ export function AECSVUploadDialog({ onUpload, companyId, profileId }: AECSVUploa
                     </thead>
                     <tbody>
                       {previewData.map((row, idx) => (
-                        <tr key={idx} className="border-t">
+                        <tr key={idx} className="border-t border-border">
                           {REQUIRED_COLUMNS.slice(0, 5).map((col) => (
                             <td
                               key={col}

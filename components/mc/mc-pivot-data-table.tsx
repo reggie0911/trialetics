@@ -32,10 +32,10 @@ import {
   generateVisitGroupSpans,
 } from "@/lib/utils/mc-pivot-transformer";
 
-// Alternating group colors
+// Alternating group bands (theme-aware)
 const GROUP_COLORS = {
-  even: 'bg-white',
-  odd: 'bg-gray-200',
+  even: "bg-muted/25",
+  odd: "bg-muted/50",
 };
 
 // Date columns that should be formatted as dd-mmm-yyyy
@@ -319,7 +319,7 @@ export function MCPivotDataTable({
       <div 
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="overflow-x-auto border rounded-md"
+        className="overflow-x-auto rounded-md border border-border"
       >
         <table className="w-full caption-bottom text-sm">
           <thead className="sticky top-0 z-30 bg-background">
@@ -338,7 +338,7 @@ export function MCPivotDataTable({
             
             {/* Column Name Row */}
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id} className="bg-background border-b">
+              <tr key={headerGroup.id} className="border-b border-border bg-background">
                 {headerGroup.headers.map((header) => {
                   const columnId = header.column.id;
                   const uniqueValues = columnUniqueValues[columnId] || [];
@@ -349,7 +349,7 @@ export function MCPivotDataTable({
                   return (
                     <th
                       key={header.id}
-                      className={`text-[12px] p-1 px-2 font-medium whitespace-nowrap border-b text-left align-middle ${bgColorClass}`}
+                      className={`text-[12px] p-1 px-2 font-medium whitespace-nowrap border-b border-border text-left align-middle text-foreground ${bgColorClass}`}
                     >
                       {/* Header Label with Sort */}
                       <div 
@@ -370,7 +370,9 @@ export function MCPivotDataTable({
                           header.column.setFilterValue(value === "all" ? undefined : value);
                         }}
                       >
-                        <SelectTrigger className="h-3.5 text-[11px] bg-background text-muted-foreground border-0 shadow-none pb-2 justify-start">
+                        <SelectTrigger
+                          className={`h-3.5 text-[11px] text-muted-foreground border-0 shadow-none pb-2 justify-start ${bgColorClass}`}
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent className="max-h-[300px]">
@@ -392,7 +394,7 @@ export function MCPivotDataTable({
           </thead>
           <tbody className="[&_tr:last-child]:border-0">
             {table.getRowModel().rows.length === 0 ? (
-              <tr className="border-b">
+              <tr className="border-b border-border">
                 <td
                   colSpan={columns.length}
                   className="h-24 text-center text-[12px] text-muted-foreground p-2"
@@ -409,7 +411,7 @@ export function MCPivotDataTable({
                 return (
                   <tr 
                     key={row.id} 
-                    className={`group h-[40px] hover:bg-[#79D7BE] border-b transition-all duration-500 ease-in-out ${isNewPatient && rowIndex > 0 ? 'border-t-2 border-t-gray-400' : ''}`}
+                    className={`group h-[40px] border-b border-border transition-all duration-500 ease-in-out hover:bg-primary/10 dark:hover:bg-primary/15 ${isNewPatient && rowIndex > 0 ? "border-t-2 border-t-border" : ""}`}
                   >
                     {row.getVisibleCells().map((cell) => {
                       const value = cell.getValue() as string | undefined;
@@ -440,10 +442,12 @@ export function MCPivotDataTable({
                       
                       // Change status styling
                       let changeStatusClass = '';
-                      if (isChangeStatus && value === 'Yes') {
-                        changeStatusClass = 'bg-yellow-200 text-yellow-800 font-medium';
-                      } else if (isChangeStatus && value === 'No') {
-                        changeStatusClass = 'bg-green-100 text-green-700';
+                      if (isChangeStatus && value === "Yes") {
+                        changeStatusClass =
+                          "border border-yellow-600/35 bg-yellow-500/15 font-medium text-yellow-900 dark:border-yellow-500/40 dark:bg-yellow-500/20 dark:text-yellow-200";
+                      } else if (isChangeStatus && value === "No") {
+                        changeStatusClass =
+                          "border border-green-600/35 bg-green-500/15 text-green-800 dark:border-green-500/40 dark:bg-green-500/20 dark:text-green-300";
                       }
                       
                       const isTruncated = displayValue.length > 30;
@@ -467,11 +471,17 @@ export function MCPivotDataTable({
                                 <div className="space-y-1.5">
                                   {changedFields.map((change, idx) => (
                                     <div key={idx} className="flex flex-col">
-                                      <span className="font-medium text-yellow-700">{change.fieldLabel}:</span>
+                                      <span className="font-medium text-yellow-800 dark:text-yellow-300">
+                                        {change.fieldLabel}:
+                                      </span>
                                       <div className="ml-2 text-[11px]">
-                                        <span className="text-red-600 line-through">{change.previousValue}</span>
+                                        <span className="text-red-600 line-through dark:text-red-400">
+                                          {change.previousValue}
+                                        </span>
                                         <span className="mx-1">→</span>
-                                        <span className="text-green-600">{change.currentValue}</span>
+                                        <span className="text-green-600 dark:text-green-400">
+                                          {change.currentValue}
+                                        </span>
                                       </div>
                                     </div>
                                   ))}
@@ -535,7 +545,7 @@ export function MCPivotDataTable({
           </Button>
           
           <div className="flex items-center gap-1">
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-[11px] font-medium text-foreground">
               Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
             </p>
           </div>

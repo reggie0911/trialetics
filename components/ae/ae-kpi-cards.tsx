@@ -75,9 +75,11 @@ export function AEKPICards({ metrics, selectedFilter, onCardClick }: AEKPICardsP
         <Card 
           key={index} 
           className={cn(
-            "border cursor-pointer transition-all duration-500 ease-in-out",
-            item.filterKey !== null && "hover:bg-[#79D7BE]/20",
-            selectedFilter === item.filterKey && item.filterKey !== null && "bg-[#79D7BE]/20 ring-2 ring-[#79D7BE]",
+            "border border-border cursor-pointer transition-all duration-500 ease-in-out",
+            item.filterKey !== null && "hover:bg-primary/10 dark:hover:bg-primary/20",
+            selectedFilter === item.filterKey &&
+              item.filterKey !== null &&
+              "bg-primary/15 dark:bg-primary/25 ring-2 ring-primary",
             item.filterKey === null && "cursor-default"
           )}
           onClick={() => handleCardClick(item.filterKey)}
