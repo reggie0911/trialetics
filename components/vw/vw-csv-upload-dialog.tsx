@@ -308,8 +308,8 @@ export function VWCSVUploadDialog({ onUpload, companyId, profileId }: VWCSVUploa
 
           {previewData.length > 0 && !error && (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-xs text-green-600">
-                <CheckCircle2 className="w-4 h-4" />
+              <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
                 Successfully parsed {previewData.length} rows (showing preview)
               </div>
               
@@ -331,7 +331,7 @@ export function VWCSVUploadDialog({ onUpload, companyId, profileId }: VWCSVUploa
                     </thead>
                     <tbody>
                       {previewData.map((row, idx) => (
-                        <tr key={idx} className="border-t">
+                        <tr key={idx} className="border-t border-border">
                           {REQUIRED_COLUMNS.slice(0, 5).map((col) => (
                             <td
                               key={col}

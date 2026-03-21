@@ -100,14 +100,14 @@ export function SDVReportSelector({
   const getStatusBadge = (status: string) => {
     if (status === 'complete') {
       return (
-        <Badge variant="default" className="bg-green-100 text-green-700 text-[10px] gap-1">
+        <Badge variant="default" className="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 text-[10px] gap-1">
           <CheckCircle2 className="h-2.5 w-2.5" />
           Complete
         </Badge>
       );
     }
     return (
-      <Badge variant="default" className="bg-yellow-100 text-yellow-700 text-[10px] gap-1">
+      <Badge variant="default" className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 text-[10px] gap-1">
         <Clock className="h-2.5 w-2.5" />
         Draft
       </Badge>

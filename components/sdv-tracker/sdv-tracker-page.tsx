@@ -430,7 +430,9 @@ export function SDVTrackerPage({
               </Button>
             </div>
             {fixMessage && (
-              <p className={`text-sm mt-2 ${fixMessage.startsWith('Error') ? 'text-red-600' : 'text-green-600'}`}>
+              <p
+                className={`text-sm mt-2 ${fixMessage.startsWith('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}
+              >
                 {fixMessage}
               </p>
             )}

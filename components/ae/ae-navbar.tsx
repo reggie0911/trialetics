@@ -55,9 +55,9 @@ export function AENavbar() {
                 className={cn(
                   navigationMenuTriggerStyle(),
                   "text-[11px] h-auto py-2 px-3 transition-all",
-                  pathname === item.href 
-                    ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" 
-                    : "hover:bg-primary/10"
+                  pathname === item.href
+                    ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                    : "hover:bg-primary/10 dark:hover:bg-primary/20"
                 )}
               >
                 {item.label}

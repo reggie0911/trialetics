@@ -18,10 +18,10 @@ import { EditableTableHeader } from "./editable-table-header";
 import { GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// Alternating group colors - using Tailwind classes for better CSS specificity
+// Alternating group bands (theme-aware)
 const GROUP_COLORS = {
-  even: 'bg-white',           // White
-  odd: 'bg-gray-100',         // Light grey (more visible)
+  even: "bg-muted/25",
+  odd: "bg-muted/50",
 };
 
 interface MultiLevelTableHeaderProps {
@@ -61,7 +61,7 @@ export function MultiLevelTableHeader({
             <TableHead
               key={`visit-group-${idx}`}
               colSpan={span.columnCount}
-              className={`text-center font-bold border-r text-xs py-2 ${idx % 2 === 0 ? GROUP_COLORS.even : GROUP_COLORS.odd}`}
+              className={`border-r border-border py-2 text-center text-xs font-bold text-foreground ${idx % 2 === 0 ? GROUP_COLORS.even : GROUP_COLORS.odd}`}
             >
               {span.visitGroup}
             </TableHead>

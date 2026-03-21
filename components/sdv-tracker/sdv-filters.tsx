@@ -124,7 +124,7 @@ export function SDVFilters({
     value.replace(/\w\S*/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 
   return (
-    <div className="flex flex-wrap items-center gap-3 p-4 bg-white rounded-lg border">
+    <div className="flex flex-wrap items-center gap-3 p-4 bg-card rounded-lg border border-border">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Filter className="h-4 w-4" />
         <span className="font-medium">Filters:</span>

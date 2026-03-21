@@ -323,11 +323,11 @@ export function SDVUploadWizardV2({
 
     if (state.status === 'success') {
       return (
-        <div className="border-2 border-dashed border-green-200 rounded-lg p-8 bg-green-50">
+        <div className="border-2 border-dashed border-green-200 dark:border-green-800 rounded-lg p-8 bg-green-50 dark:bg-green-950/40">
           <div className="flex flex-col items-center justify-center text-center">
-            <CheckCircle2 className="h-12 w-12 text-green-500 mb-4" />
-            <h3 className="text-lg font-semibold text-green-700">Upload Complete</h3>
-            <p className="text-sm text-green-600 mt-1">
+            <CheckCircle2 className="h-12 w-12 text-green-500 dark:text-green-400 mb-4" />
+            <h3 className="text-lg font-semibold text-green-700 dark:text-green-300">Upload Complete</h3>
+            <p className="text-sm text-green-600 dark:text-green-400 mt-1">
               {state.recordCount.toLocaleString()} records uploaded successfully
             </p>
           </div>
@@ -337,11 +337,11 @@ export function SDVUploadWizardV2({
 
     if (state.status === 'error') {
       return (
-        <div className="border-2 border-dashed border-red-200 rounded-lg p-8 bg-red-50">
+        <div className="border-2 border-dashed border-red-200 dark:border-red-900 rounded-lg p-8 bg-red-50 dark:bg-red-950/40">
           <div className="flex flex-col items-center justify-center text-center">
-            <XCircle className="h-12 w-12 text-red-500 mb-4" />
-            <h3 className="text-lg font-semibold text-red-700">Upload Failed</h3>
-            <p className="text-sm text-red-600 mt-1">{state.error}</p>
+            <XCircle className="h-12 w-12 text-red-500 dark:text-red-400 mb-4" />
+            <h3 className="text-lg font-semibold text-red-700 dark:text-red-300">Upload Failed</h3>
+            <p className="text-sm text-red-600 dark:text-red-400 mt-1">{state.error}</p>
             <Button
               variant="outline"
               size="sm"
@@ -432,15 +432,15 @@ export function SDVUploadWizardV2({
 
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-4 py-4">
-          <div className={`flex items-center gap-2 ${currentStep === 'site_data' ? 'text-primary' : siteDataState.status === 'success' || hasSiteData ? 'text-green-600' : 'text-muted-foreground'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 ${currentStep === 'site_data' ? 'border-primary bg-primary text-white' : siteDataState.status === 'success' || hasSiteData ? 'border-green-600 bg-green-600 text-white' : 'border-muted-foreground'}`}>
+          <div className={`flex items-center gap-2 ${currentStep === 'site_data' ? 'text-primary' : siteDataState.status === 'success' || hasSiteData ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 ${currentStep === 'site_data' ? 'border-primary bg-primary text-primary-foreground' : siteDataState.status === 'success' || hasSiteData ? 'border-green-600 bg-green-600 dark:border-green-500 dark:bg-green-600 text-white' : 'border-muted-foreground'}`}>
               {siteDataState.status === 'success' || hasSiteData ? <CheckCircle2 className="h-4 w-4" /> : '1'}
             </div>
             <span className="text-sm font-medium">Site Data Entry</span>
           </div>
           <div className="w-8 h-px bg-muted-foreground/25" />
-          <div className={`flex items-center gap-2 ${currentStep === 'sdv_data' ? 'text-primary' : sdvDataState.status === 'success' || hasSDVData ? 'text-green-600' : 'text-muted-foreground'}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 ${currentStep === 'sdv_data' ? 'border-primary bg-primary text-white' : sdvDataState.status === 'success' || hasSDVData ? 'border-green-600 bg-green-600 text-white' : 'border-muted-foreground'}`}>
+          <div className={`flex items-center gap-2 ${currentStep === 'sdv_data' ? 'text-primary' : sdvDataState.status === 'success' || hasSDVData ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 ${currentStep === 'sdv_data' ? 'border-primary bg-primary text-primary-foreground' : sdvDataState.status === 'success' || hasSDVData ? 'border-green-600 bg-green-600 dark:border-green-500 dark:bg-green-600 text-white' : 'border-muted-foreground'}`}>
               {sdvDataState.status === 'success' || hasSDVData ? <CheckCircle2 className="h-4 w-4" /> : '2'}
             </div>
             <span className="text-sm font-medium">SDV Data</span>
@@ -493,8 +493,8 @@ export function SDVUploadWizardV2({
             <Card>
               <CardContent className="pt-6">
                 <div className="text-center">
-                  <CheckCircle2 className="mx-auto h-16 w-16 text-green-500 mb-4" />
-                  <h3 className="text-xl font-semibold text-green-700">All Files Uploaded</h3>
+                  <CheckCircle2 className="mx-auto h-16 w-16 text-green-500 dark:text-green-400 mb-4" />
+                  <h3 className="text-xl font-semibold text-green-700 dark:text-green-300">All Files Uploaded</h3>
                   <p className="text-muted-foreground mt-2">
                     Both CSV files have been processed successfully. The SDV report is now ready.
                   </p>

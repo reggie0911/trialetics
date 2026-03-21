@@ -135,7 +135,9 @@ export function SDVHierarchicalTable({
     });
   }, []);
 
-  // Load children for a node
+  // Load children for a node (callers that expand the row should rely on this
+  // to set isExpanded: true — avoid a separate isExpanded flip to prevent races
+  // when loadChildren runs twice or overlaps with another toggle).
   const loadChildren = useCallback(async (node: TreeNode) => {
     if (node.hasLoadedChildren) return;
 
@@ -311,6 +313,7 @@ export function SDVHierarchicalTable({
         isLoading: false,
         hasLoadedChildren: true,
         children,
+        isExpanded: true,
       }))
     );
   }, [reportId, sourceFilter, updateNode]);
@@ -318,16 +321,22 @@ export function SDVHierarchicalTable({
   // Toggle node expansion
   const toggleNode = useCallback(async (node: TreeNode) => {
     if (node.level === 'item') return; // Items can't be expanded
+    if (node.isLoading) return;
 
-    if (!node.isExpanded && !node.hasLoadedChildren) {
+    if (node.isExpanded) {
+      setNodes((prev) =>
+        updateNode(prev, node.id, (n) => ({ ...n, isExpanded: false }))
+      );
+      return;
+    }
+
+    if (!node.hasLoadedChildren) {
       await loadChildren(node);
+      return;
     }
 
     setNodes((prev) =>
-      updateNode(prev, node.id, (n) => ({
-        ...n,
-        isExpanded: !n.isExpanded,
-      }))
+      updateNode(prev, node.id, (n) => ({ ...n, isExpanded: true }))
     );
   }, [loadChildren, updateNode]);
 
@@ -335,23 +344,27 @@ export function SDVHierarchicalTable({
   const getLevelIcon = (level: NodeLevel) => {
     switch (level) {
       case 'site':
-        return <Building2 className="h-4 w-4 text-blue-500" />;
+        return <Building2 className="h-4 w-4 text-blue-500 dark:text-blue-400" />;
       case 'subject':
-        return <User className="h-4 w-4 text-purple-500" />;
+        return <User className="h-4 w-4 text-purple-500 dark:text-purple-400" />;
       case 'event':
-        return <Calendar className="h-4 w-4 text-green-500" />;
+        return <Calendar className="h-4 w-4 text-green-500 dark:text-green-400" />;
       case 'form':
-        return <FileText className="h-4 w-4 text-orange-500" />;
+        return <FileText className="h-4 w-4 text-orange-500 dark:text-orange-400" />;
       case 'item':
-        return <FileCheck className="h-4 w-4 text-gray-500" />;
+        return <FileCheck className="h-4 w-4 text-muted-foreground" />;
     }
   };
 
   // Get SDV percent color
   const getSDVPercentColor = (percent: number) => {
-    if (percent >= 80) return 'text-green-600 bg-green-50';
-    if (percent >= 50) return 'text-yellow-600 bg-yellow-50';
-    return 'text-red-600 bg-red-50';
+    if (percent >= 80) {
+      return 'text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40';
+    }
+    if (percent >= 50) {
+      return 'text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/40';
+    }
+    return 'text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40';
   };
 
   // Render a tree row
@@ -362,7 +375,14 @@ export function SDVHierarchicalTable({
     return (
       <React.Fragment key={node.id}>
         <TableRow
-          className={`hover:bg-muted/50 ${node.level === 'item' ? 'bg-muted/20' : ''}`}
+          className={`hover:bg-muted/50 ${node.level === 'item' ? 'bg-muted/20' : ''} ${canExpand && !node.isLoading ? 'cursor-pointer' : ''}`}
+          onClick={
+            canExpand && !node.isLoading
+              ? () => {
+                  void toggleNode(node);
+                }
+              : undefined
+          }
         >
           {/* Name with expand/collapse */}
           <TableCell className="font-medium">
@@ -374,8 +394,11 @@ export function SDVHierarchicalTable({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 w-6 p-0"
-                  onClick={() => toggleNode(node)}
+                  className="h-6 w-6 p-0 shrink-0"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void toggleNode(node);
+                  }}
                   disabled={node.isLoading}
                 >
                   {node.isLoading ? (
@@ -399,12 +422,12 @@ export function SDVHierarchicalTable({
           </TableCell>
 
           {/* Data Verified */}
-          <TableCell className="text-right text-black">
+          <TableCell className="text-right text-foreground">
             {node.verifiedItems.toLocaleString()}
           </TableCell>
 
           {/* Data Needing Review */}
-          <TableCell className="text-right text-black">
+          <TableCell className="text-right text-foreground">
             {node.needsReview.toLocaleString()}
           </TableCell>
 
@@ -427,7 +450,7 @@ export function SDVHierarchicalTable({
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-lg border p-8">
+      <div className="bg-card rounded-lg border border-border p-8">
         <div className="flex items-center justify-center gap-2 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
           <span>Loading data...</span>
@@ -438,7 +461,7 @@ export function SDVHierarchicalTable({
 
   if (nodes.length === 0) {
     return (
-      <div className="bg-white rounded-lg border p-8">
+      <div className="bg-card rounded-lg border border-border p-8">
         <div className="text-center text-muted-foreground">
           <FileCheck className="h-12 w-12 mx-auto mb-3 opacity-30" />
           <p className="text-lg font-medium">No Data Available</p>
@@ -449,7 +472,7 @@ export function SDVHierarchicalTable({
   }
 
   return (
-    <div className="bg-white rounded-lg border overflow-hidden">
+    <div className="bg-card rounded-lg border border-border overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
@@ -462,8 +485,8 @@ export function SDVHierarchicalTable({
               </div>
             </TableHead>
             <TableHead className="text-right w-[9%]">Site Data Entry</TableHead>
-            <TableHead className="text-right w-[9%] text-black">Data Verified</TableHead>
-            <TableHead className="text-right w-[9%] text-black">Needs Review</TableHead>
+            <TableHead className="text-right w-[9%] text-foreground">Data Verified</TableHead>
+            <TableHead className="text-right w-[9%] text-foreground">Needs Review</TableHead>
             <TableHead className="text-right w-[10%]">SDV %</TableHead>
           </TableRow>
         </TableHeader>
