@@ -1202,10 +1202,10 @@ export function PatientsPageClient({
         <div className="flex items-center gap-2 flex-wrap">
           {isAdmin && (
             <PasscodeGate
+              mode="account_password"
               storageKey="patients-mapping-passcode-verified"
-              envVarName="NEXT_PUBLIC_PATIENTS_MAPPING_PASSCODE"
-              title="Header Mapping & Columns Access"
-              description="This feature requires a passcode to access header mapping and column configuration."
+              title="Header mapping & columns"
+              description="Enter your Trialetics login password to use upload, header mapping, and column tools."
             >
               <>
                 <CSVUploadDialog onUpload={handleUpload} />
