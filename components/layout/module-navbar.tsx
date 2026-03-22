@@ -46,7 +46,7 @@ export function ModuleNavbar() {
               className={cn(
                 navigationMenuTriggerStyle(),
                 linkClasses,
-                isActive("/protected") && !trackerItems.some((i) => isActive(i.href))
+                isActive("/protected") && !trackerItems.some((i) => isActive(i.href)) && !isActive("/protected/docs")
                   ? activeLinkClasses
                   : inactiveLinkClasses
               )}
@@ -83,6 +83,22 @@ export function ModuleNavbar() {
               ))}
             </div>
           </NavigationMenuContent>
+        </NavigationMenuItem>
+        <NavigationMenuItem>
+          <NavigationMenuLink asChild>
+            <Link
+              href="/protected/docs"
+              className={cn(
+                navigationMenuTriggerStyle(),
+                linkClasses,
+                isActive("/protected/docs")
+                  ? activeLinkClasses
+                  : inactiveLinkClasses
+              )}
+            >
+              Docs
+            </Link>
+          </NavigationMenuLink>
         </NavigationMenuItem>
       </NavigationMenuList>
     </NavigationMenu>

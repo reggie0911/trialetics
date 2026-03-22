@@ -73,6 +73,32 @@ Normal authenticated users **cannot** set `is_platform_admin` on themselves; a t
 - `supabase/migrations/20260331200000_platform_create_custom_tracker_definition.sql` adds `platform_create_custom_tracker_definition` for cross-tenant tracker creation.
 - `supabase/migrations/20260332000000_platform_list_custom_tracker_definitions.sql` adds `platform_list_custom_tracker_definitions` for the platform admin definitions table.
 - `supabase/migrations/20260332100000_company_study_tracker_keys.sql` adds `companies.enabled_study_tracker_keys` and `set_company_study_tracker_keys`.
+- `supabase/migrations/20260334200000_platform_documentation.sql` adds `public.platform_documentation` (RLS, platform-admin writes) for **Documentation editor** overlays and DB-only pages. If this migration is not applied, `/protected/docs` still serves markdown from the repo; the editor and DB overrides will not work until you run it (e.g. `supabase db push` or paste the SQL in the Supabase SQL editor).
+- `supabase/migrations/20260334300000_documentation_screenshots_bucket.sql` adds the public Supabase Storage bucket **`documentation-screenshots`** (platform-admin upload only; public read for image URLs). Required for **Insert screenshot** in the documentation editor. Without it, uploads fail; you can still embed images by pasting markdown with any public `https://` image URL.
+
+## Documentation editor (platform admin)
+
+**Modules → Documentation editor** → `/protected/platform/docs`. Depends on the `platform_documentation` migration above.
+
+- **Storage:** The editor is **WYSIWYG** for authoring; the database still stores **`body_markdown`** (Markdown string). Optional YAML frontmatter at the top of the body is preserved but not edited in the rich-text surface.
+- **Repo vs database:** Docs listed in [`lib/docs/registry.ts`](../lib/docs/registry.ts) can include a **`filePath`** (Markdown on disk). For a given **slug**, if `platform_documentation.body_markdown` is **non-empty**, that **database content is shown** instead of the file until you remove the overlay or clear the body (see [`loadDocResolved`](../lib/docs/resolve-doc.ts)).
+- **New page:** Open **Documentation editor** → **New page** (`/protected/platform/docs/new`). Enter title, description, optional **Module route**, and body content manually.
+- **Start from repo manual (optional):** On **New page**, use the dropdown **Start from repo manual** to load allowlisted Markdown from the deployed repo (all `filePath` entries in [`lib/docs/registry.ts`](../lib/docs/registry.ts), plus a small extra list such as `SDV_TRACKER_USER_MANUAL.md` in [`lib/docs/repo-manual-templates.ts`](../lib/docs/repo-manual-templates.ts)). The server only reads paths on that allowlist. If you pick a file that backs a **built-in** doc, the form prefills from disk and shows a link to **Edit overlay** for that slug—you cannot **Create** a second page with the same reserved slug; use a new slug only if you intend a fork. Extra repo-only files (no registry slug) prefill title/body and sync a suggested slug from the title as usual.
+- **List actions:** The docs list shows **Module route** and, when a row has a DB overlay or is DB-only, **Remove overlay** / **Delete** with the same semantics as on the edit screen.
+
+### Screenshots in docs
+
+- **Upload:** On the **Write** tab, use **Insert screenshot** or the toolbar **image** control (PNG, JPEG, WebP, GIF; max 5 MB). The app uploads to **`documentation-screenshots`** and inserts `![alt](public-url)` into the document. Apply the `documentation_screenshots_bucket` migration first.
+- **External URLs:** No upload needed — add a link/image with a public `https://` image URL; **Preview** and published docs render it the same way.
+- **Privacy:** Uploaded files use unguessable paths but are served from a **public** bucket; anyone with the URL can view the image.
+
+## Troubleshooting: documentation screenshot upload shows “Bucket not found”
+
+The editor uploads to the Storage bucket **`documentation-screenshots`**. If that bucket was never created on your Supabase project, uploads fail with an error like **Bucket not found**.
+
+1. Apply [`supabase/migrations/20260334300000_documentation_screenshots_bucket.sql`](../supabase/migrations/20260334300000_documentation_screenshots_bucket.sql): e.g. `supabase db push`, or open **SQL** in the Supabase dashboard and run the file contents.
+2. Confirm **Storage** shows a bucket named `documentation-screenshots` and that your user is a **platform admin** (`profiles.is_platform_admin`), or inserts will be denied by RLS.
+3. **Workaround:** embed images with a public `https://` URL in markdown (no upload).
 
 ## Troubleshooting: “Company module access” missing from the menu
 

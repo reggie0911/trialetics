@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import React, { useState, useCallback, useEffect } from 'react';
 import { ChevronRight, ChevronDown, Loader2, Building2, User, Calendar, FileText, FileCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -466,6 +467,11 @@ export function SDVHierarchicalTable({
           <FileCheck className="h-12 w-12 mx-auto mb-3 opacity-30" />
           <p className="text-lg font-medium">No Data Available</p>
           <p className="text-sm mt-1">Upload CSV files to see the SDV report.</p>
+          <p className="text-sm mt-2">
+            <Link href="/protected/docs/sdv-tracker#2-getting-started" className="text-primary hover:underline">
+              Learn how to get started
+            </Link>
+          </p>
         </div>
       </div>
     );

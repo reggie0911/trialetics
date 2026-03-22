@@ -26,6 +26,8 @@ import {
   FileText,
   Shield,
   LineChart,
+  BookOpen,
+  FilePenLine,
 } from 'lucide-react';
 
 import Logo from '@/components/layout/logo';
@@ -325,6 +327,13 @@ export function TopNavbar({
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="cursor-pointer"
+                      onClick={() => router.push('/protected/platform/docs')}
+                    >
+                      <FilePenLine className="mr-2 h-4 w-4" />
+                      Documentation editor
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="cursor-pointer"
                       onClick={() => router.push('/protected/platform/analytics')}
                     >
                       <LineChart className="mr-2 h-4 w-4" />
@@ -336,6 +345,19 @@ export function TopNavbar({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Link
+              href="/protected/docs"
+              className={cn(
+                'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap border border-border',
+                pathname.startsWith('/protected/docs')
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+              )}
+            >
+              <BookOpen className="h-3 w-3" />
+              Docs
+            </Link>
           </div>
 
           {hasCtmsAccess && <AIAssistantInlineButton />}
@@ -359,13 +381,22 @@ export function TopNavbar({
                 Settings
               </DropdownMenuItem>
               {isPlatformAdmin && (
-                <DropdownMenuItem
-                  onClick={() => router.push('/protected/platform/companies')}
-                  className="cursor-pointer"
-                >
-                  <Shield className="mr-2 h-4 w-4" />
-                  Company module access
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuItem
+                    onClick={() => router.push('/protected/platform/companies')}
+                    className="cursor-pointer"
+                  >
+                    <Shield className="mr-2 h-4 w-4" />
+                    Company module access
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => router.push('/protected/platform/docs')}
+                    className="cursor-pointer"
+                  >
+                    <FilePenLine className="mr-2 h-4 w-4" />
+                    Documentation editor
+                  </DropdownMenuItem>
+                </>
               )}
               <DropdownMenuItem onClick={() => router.push('/protected/settings/billing')} className="cursor-pointer">
                 <CreditCard className="mr-2 h-4 w-4" />
@@ -510,6 +541,14 @@ export function TopNavbar({
                   Company module access
                 </Link>
                 <Link
+                  href="/protected/platform/docs"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
+                >
+                  <FilePenLine className="h-4 w-4" />
+                  Documentation editor
+                </Link>
+                <Link
                   href="/protected/platform/analytics"
                   onClick={() => setMobileOpen(false)}
                   className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
@@ -521,6 +560,22 @@ export function TopNavbar({
             ) : (
               <div className="px-4 py-2 text-sm text-muted-foreground">Coming soon</div>
             )}
+
+            <Separator className="my-2" />
+            <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Help</p>
+            <Link
+              href="/protected/docs"
+              onClick={() => setMobileOpen(false)}
+              className={cn(
+                'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                pathname.startsWith('/protected/docs')
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-muted-foreground hover:bg-muted',
+              )}
+            >
+              <BookOpen className="h-4 w-4" />
+              Documentation
+            </Link>
           </div>
         </SheetContent>
       </Sheet>

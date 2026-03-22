@@ -1,5 +1,6 @@
 "use client";
 
+import Link from 'next/link';
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CSVUploadDialog } from "./csv-upload-dialog";
@@ -1388,7 +1389,7 @@ export function PatientsPageClient({
               <div className="py-12 text-center text-sm text-muted-foreground">
                 {selectedUploadId 
                   ? "No patient data found for this upload"
-                  : "Upload a CSV file to get started"}
+                  : <>Upload a CSV file to get started. <Link href="/protected/docs/mrace-tracker#2-getting-started" className="text-primary hover:underline">Learn how</Link></>}
               </div>
             )}
           </CardContent>
