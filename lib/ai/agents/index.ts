@@ -47,6 +47,7 @@ const agentLoaders: Record<string, AgentLoader> = {
   'risk-mitigation': () => import('./risk-mitigation').then(m => m.riskMitigationAgent),
   'feasibility-site-selection': () => import('./feasibility-site-selection').then(m => m.feasibilitySiteSelectionAgent),
   'retention-engagement': () => import('./retention-engagement').then(m => m.retentionEngagementAgent),
+  'docs-assistant': () => import('./docs-assistant').then(m => m.docsAssistantAgent),
 };
 
 const agentCache: Record<string, AgentConfig> = {};
@@ -110,6 +111,7 @@ const moduleContextMap: Record<string, string[]> = {
   'risk-mitigation': ['/protected/risk-management'],
   'feasibility-site-selection': ['/protected/feasibility'],
   'retention-engagement': ['/protected/patient-engagement'],
+  'docs-assistant': ['/protected/docs'],
 };
 
 export function findAgentIdForPage(pagePath: string): string | null {

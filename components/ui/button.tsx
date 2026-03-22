@@ -1,6 +1,7 @@
 "use client"
 
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
+import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
@@ -42,14 +43,32 @@ const buttonVariants = cva(
   }
 )
 
+type ButtonProps = ButtonPrimitive.Props &
+  VariantProps<typeof buttonVariants> & {
+    /** Merge styles/props onto the single child (e.g. `Link`) — Radix pattern; Base UI button has no `asChild`. */
+    asChild?: boolean
+  }
+
 function Button({
   className,
   variant = "default",
   size = "default",
   nativeButton,
   render,
+  asChild = false,
+  children,
   ...props
-}: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+}: ButtonProps) {
+  const mergedClassName = cn(buttonVariants({ variant, size, className }))
+
+  if (asChild) {
+    return (
+      <Slot data-slot="button" className={mergedClassName} {...props}>
+        {children}
+      </Slot>
+    )
+  }
+
   const resolvedNativeButton =
     nativeButton !== undefined ? nativeButton : render === undefined
 
@@ -57,11 +76,13 @@ function Button({
     <ButtonPrimitive
       data-slot="button"
       suppressHydrationWarning
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={mergedClassName}
       nativeButton={resolvedNativeButton}
       render={render}
       {...props}
-    />
+    >
+      {children}
+    </ButtonPrimitive>
   )
 }
 

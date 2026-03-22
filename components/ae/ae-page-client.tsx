@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -591,11 +592,18 @@ export function AEPageClient({
       {data.length === 0 && !isLoading && (
         <Card>
           <CardContent className="py-12">
-            <div className="text-center text-[11px] text-muted-foreground">
-              {uploads.length === 0 
-                ? "Upload a CSV file to get started"
-                : "Select an upload from the history to view data"
-              }
+            <div className="text-center text-[11px] text-muted-foreground space-y-2">
+              <p>
+                {uploads.length === 0
+                  ? "Upload a CSV file to get started"
+                  : "Select an upload from the history to view data"
+                }
+              </p>
+              <p>
+                <Link href="/protected/docs/ae-metrics#2-getting-started" className="text-primary hover:underline">
+                  Learn how to get started
+                </Link>
+              </p>
             </div>
           </CardContent>
         </Card>

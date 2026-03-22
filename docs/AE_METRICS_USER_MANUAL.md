@@ -5,6 +5,8 @@ description: Beginner-friendly guide for the AE Metrics module
 
 # AE Metrics Module — User Manual
 
+> **Canonical copy for in-app Documentation:** [`docs/user-manuals/ae-metrics.md`](user-manuals/ae-metrics.md) (registry slug `ae-metrics`). Edit that file first, then mirror changes here.
+
 ## Table of Contents
 
 - [1. Introduction](#1-introduction)
@@ -26,51 +28,60 @@ The **AE Metrics Module** is a tool for uploading, viewing, and analyzing **Adve
 
 ### What It Helps You Do
 
-- Upload AE data from CSV files
-- View AE records in a table
+- Upload AE data from CSV files *(company administrators only)*
+- View AE records in a table, with filters, KPIs, and a category chart
 - Filter and search by site, patient, category, and other fields
-- See summary metrics (total AEs, serious AEs, resolved, deaths)
-- View AE categories in a chart
-- Print or download filtered data
-- Customize column labels to match your terminology
+- See summary metrics (total AEs, serious AEs, resolved, deaths, % resolved)
+- Print or download the current table view
+- Customize column labels to match your terminology *(company administrators only)*
 
 ### Who It Is For
 
-- Clinical trial staff
-- Safety monitors
-- Data managers
-- Anyone who needs to review and analyze adverse event data
+- Clinical trial staff, safety monitors, and data managers
+- **Company administrators** — can upload CSVs, relabel columns, and use the full toolbar
+- **Standard users** — can open **Upload History**, apply filters, use KPI/chart/table tools, **Print**, and **Download** when data exists (they do not see **Upload AE Data** or **Customize Headers**)
 
 ---
 
 ## 2. Getting Started
 
-### How to Access the Module
+### Access and permissions
 
-1. Log in to the application.
-2. In the top navigation, open the **Trackers** menu.
-3. Click **AE Metrics**.
-4. You will see the AE Metrics page with the title "AE Metrics" and the subtitle "Upload and manage adverse event data."
+1. Your **company** must have **Custom trackers** (study tracker) access enabled.
+2. **AE Metrics** must be turned on for your company in the **Study trackers** matrix (your administrator configures this).
+3. Log in, then in the top bar open **Custom** → under **Study trackers** choose **AE Metrics** (label may match your tenant). You can also open **`/protected/ae`** if you have a bookmark or link.
+
+You will see the heading **AE Metrics** and the subtitle **Upload and manage adverse event data.**
+
+### Who can upload and customize headers?
+
+| Action | Company admin | Standard user |
+|--------|---------------|---------------|
+| **Upload AE Data** | Yes | Not shown |
+| **Customize Headers** | Yes | Not shown |
+| **Upload History** | Yes | Yes |
+| **Print** / **Download** | Yes (when data loaded) | Yes (when data loaded) |
+| Filters, KPIs, chart, table | Yes | Yes |
 
 ### Overview of the Layout
 
-The page is organized into these areas:
+After at least one upload has data loaded, the page shows:
 
 | Area | Location | Purpose |
 |------|----------|---------|
-| **Top toolbar** | Top of the page | Upload, customize headers, view upload history, print, download |
-| **Filters** | Below the toolbar | Filter data by site, patient, category, and more |
-| **KPI cards** | Below filters | Summary numbers (Total AEs, SAEs, Resolved, Deaths, % Resolved) |
-| **AE Categories chart** | Below KPI cards | Bar chart of AE categories |
-| **Adverse Events table** | Bottom | Detailed list of AE records |
+| **Toolbar** | Top row | Left: upload / headers / history (per role). Right: **Print**, **Download** |
+| **Filters** | Collapsible card | Dropdown filters + **Reset All Filters** + line showing which upload date you are viewing |
+| **KPI cards** | Below filters | Totals; four cards are clickable filters; **% Resolved** is read-only |
+| **AE Categories chart** | Below KPIs | Horizontal bar chart by **AEDECOD**; click a bar to filter |
+| **Adverse Events** | Bottom | Table with sortable columns and per-column filters |
 
 ### Key Areas of the Screen
 
-- **Top toolbar:** Buttons for Upload AE Data, Customize Headers, Upload History, Print, and Download.
-- **Filters:** A collapsible card with dropdown filters. Click the up/down arrow to expand or collapse.
-- **KPI cards:** Five cards showing Total AEs, Total SAEs, Total Resolved, Death, and % Resolved.
-- **AE Categories chart:** Bar chart where each bar is an AE category (e.g., "Headache," "Nausea").
-- **Adverse Events table:** Table with columns such as Site Name, Patient ID, dates, and AE details.
+- **Toolbar:** **Upload AE Data** and **Customize Headers** appear only for **company administrators**. **Upload History** opens a side panel listing uploads (file name, row/column counts, date/time; the active upload shows a **Current** badge).
+- **Filters:** Expand or collapse with the chevron on the card header. Dropdowns use **Choose an option...** for “no filter” on that field. The footer shows **Viewing upload from [date and time]** when an upload is selected.
+- **KPI cards:** **Total AEs**, **Total SAEs**, **Total Resolved**, and **Death** can be clicked to narrow the table (toggle off by clicking again). **% Resolved** shows a percentage only — it does **not** apply a filter.
+- **AE Categories chart:** Bars reflect **AEDECOD** counts for the data currently feeding the chart (after toolbar filters). A **Filtered by:** chip appears when a category is selected; use **X** or click the bar again to clear.
+- **Adverse Events table:** Column headers support sort and a value dropdown under each header.
 
 ---
 
@@ -78,107 +89,88 @@ The page is organized into these areas:
 
 ### Workflow 1: Upload Your First AE Data File
 
+**Who:** Company administrator.
+
 **Goal:** Import AE data from a CSV file.
 
-1. Click the **Upload AE Data** button (blue button with upload icon).
+1. Click **Upload AE Data**.
 2. In the dialog:
-   - **Option A:** Drag and drop your CSV file onto the dashed area.
-   - **Option B:** Click the dashed area to browse and select a file.
-3. Wait while the file is parsed. A preview table will appear.
-4. Check the preview. If you see "Successfully parsed X rows," the file was read correctly.
-5. Click **Upload Data**.
-6. Wait for the "Upload Successful" message.
-7. The new upload is selected automatically and the data appears on the page.
+   - **Option A:** Drag and drop your CSV onto the dashed area.
+   - **Option B:** Click the area to browse and select a file.
+3. Wait while the file is parsed. A preview table appears when parsing succeeds.
+4. Click **Upload Data**.
+5. A success toast appears; the new upload is selected and the page loads that dataset.
 
-**Example:** You have `study_123_ae_data.csv`. Drag it onto the upload area, wait for the preview, then click **Upload Data**. The table and charts will update with the new data.
+**Required CSV columns** (headers are matched case-insensitively; spacing must match):
 
-**Required CSV columns:** The file must include columns that match these names (spelling and spacing can vary slightly):
+`SiteName`, `SubjectId`, `AESTDAT`, `RWOSDAT`, `AESER`, `AESERCAT1`, `AEEXP`, `AEDECOD`, `AEOUT`, `IM_AEREL`, `IS_AEREL`, `DS_AEREL`, `LT_AEREL`, `PR_AEREL`
 
-- SiteName, SubjectId, AESTDAT, RWOSDAT, AESER, AESERCAT1, AEEXP, AEDECOD, AEOUT, IM_AEREL, IS_AEREL, DS_AEREL, LT_AEREL, PR_AEREL
-
-If your CSV uses different headers, the system tries to match them. If you see "No matching columns found," check that your file has these columns.
+If mapping fails, you will see an error such as **No matching columns found** — align your export to these names.
 
 ---
 
 ### Workflow 2: Switch Between Different Uploads
 
-**Goal:** View data from a different upload.
+**Goal:** View a different upload.
 
-1. Click **Upload History** (History icon).
-2. A panel opens showing all past uploads.
-3. Each upload shows:
-   - File name
-   - Number of AE records
-   - Number of columns
-   - Date and time of upload
-4. Click the upload you want to view.
-5. The panel closes and the page updates with that upload's data.
-
-**Example:** You have uploads from January and February. Open Upload History, click the February upload, and the table and charts switch to that dataset.
+1. Click **Upload History**.
+2. In the panel, each row shows file name, **AE records** count, **columns** count, and upload date/time.
+3. Click an upload to select it. The panel closes and the page reloads that dataset (toolbar filters reset when switching uploads).
 
 ---
 
-### Workflow 3: Filter Data to Find Specific Records
+### Workflow 3: Filter Data (Filters card)
 
-**Goal:** Narrow down the table to specific sites, patients, or AE types.
+**Goal:** Narrow rows using the main filter dropdowns.
 
-1. Expand the **Filters** card if it is collapsed.
-2. Use the dropdowns:
-   - **Site Name:** Filter by study site.
-   - **Patient ID:** Filter by subject/patient.
-   - **Category:** Filter by AE category (e.g., "Headache").
-   - **Deaths:** Filter by death-related category.
-   - **SAE/AE Status:** Filter by serious vs non-serious.
-   - **Study Procedure - Causality:** Filter by relationship to study procedure.
-   - **Outcome:** Filter by outcome (e.g., "Resolved").
-3. Choose one or more filters. The table and charts update automatically.
-4. To clear all filters, click **Reset All Filters**.
+1. Open **Filters** if collapsed.
+2. Use any combination of:
+   - **Site Name** — `SiteName`
+   - **Patient ID** — `SubjectId`
+   - **Category** — `AEDECOD` (verbatim term / preferred term)
+   - **Deaths** — `AESERCAT1` values from the file
+   - **SAE/ AE Status** — `AESER` values
+   - **Study Procedure - Causality** — `AEEXP` values
+   - **Outcome** — `AEOUT` values
+3. Pick **Choose an option...** on a field to clear only that field.
+4. Click **Reset All Filters** to clear **every** filter in this card **and** KPI selection, chart category filter, and table header dropdown filters.
 
-**Example:** To see only serious AEs from Site A, set Site Name to "Site A" and SAE/AE Status to "Serious."
+**Note:** Filters combine with **AND** (each choice narrows the result further).
 
 ---
 
 ### Workflow 4: Use KPI Cards to Filter
 
-**Goal:** Quickly focus on serious AEs, resolved AEs, or deaths.
+**Goal:** Quickly focus on serious, resolved, or death-related rows.
 
-1. Look at the five KPI cards.
-2. Click one of these cards:
-   - **Total AEs:** Shows all records (no extra filter).
-   - **Total SAEs:** Shows only serious adverse events.
-   - **Total Resolved:** Shows only resolved AEs.
-   - **Death:** Shows only death-related AEs.
-3. The selected card is highlighted (green border).
-4. The table and chart update to match.
-5. Click the same card again to turn off that filter.
+1. Click **Total AEs** — shows all rows in the current filter context (no extra KPI filter).
+2. Click **Total SAEs** — keeps rows whose **AESER** contains “SERIOUS” (case-insensitive).
+3. Click **Total Resolved** — keeps rows whose **AEOUT** contains “RESOLVED”.
+4. Click **Death** — keeps rows whose **AESERCAT1** contains “DEATH”.
+5. Click the same card again to clear that KPI filter.
+6. **% Resolved** — informational only; clicking does nothing.
 
-**Example:** Click **Total SAEs** to see only serious adverse events. Click it again to return to all AEs.
+The active KPI card is shown with a **primary-colored ring** highlight.
 
 ---
 
 ### Workflow 5: Filter Using the AE Categories Chart
 
-**Goal:** Filter by AE category from the chart.
+**Goal:** Filter by **AEDECOD** from the chart.
 
-1. Look at the **AE Categories** bar chart.
-2. Click a bar (e.g., "Headache").
-3. The table shows only records for that category.
-4. The chart shows "Filtered by: [category name]."
-5. Click the **X** next to the filter text, or click the same bar again, to clear the filter.
-
-**Example:** Click the "Nausea" bar to see only nausea-related AEs.
+1. Click a bar for the category you want.
+2. The table limits to that category; a **Filtered by:** label appears on the chart.
+3. Clear with the **X** on the chip or by clicking the same bar again.
 
 ---
 
 ### Workflow 6: Filter Within the Table
 
-**Goal:** Filter by a specific value in a column.
+**Goal:** Filter by a single value in a column.
 
-1. In the table header, each column has a dropdown under the column name.
-2. Click the dropdown (it may say "All").
-3. Choose a value (e.g., a specific site or patient).
-4. The table updates to show only rows with that value.
-5. Choose "All" to remove that column's filter.
+1. Under the column name, open the dropdown (starts as **All** or similar).
+2. Choose a value; only matching rows remain.
+3. Choose the “all” option again to remove that column’s filter.
 
 ---
 
@@ -186,60 +178,40 @@ If your CSV uses different headers, the system tries to match them. If you see "
 
 **Goal:** Order rows by a column.
 
-1. Click a column header (e.g., "SubjectId" or "AEDECOD").
-2. First click: ascending (A→Z, 1→9).
-3. Second click: descending (Z→A, 9→1).
-4. An arrow (↑ or ↓) shows the current sort direction.
+1. Click the column header.
+2. First click: ascending. Second click: descending.
+3. A sort indicator shows the active column and direction.
 
 ---
 
-### Workflow 8: Navigate Pages in the Table
+### Workflow 8: Pagination
 
 **Goal:** Move through large datasets.
 
-1. At the bottom of the table, find the pagination controls.
-2. Use:
-   - **First page (<<):** Go to page 1.
-   - **Previous (<):** Go to previous page.
-   - **Next (>):** Go to next page.
-   - **Last page (>>):** Go to last page.
-3. The text shows "Showing X to Y of Z results" and "Page N of M."
+1. Use the controls at the bottom (**first / previous / next / last**).
+2. Text shows the current range and page numbers.
 
 ---
 
 ### Workflow 9: Customize Column Headers
 
-**Goal:** Change column labels to match your terminology.
+**Who:** Company administrator.
 
-1. Click **Customize Headers** (gear icon).
-2. In the dialog, each row has:
-   - **Original:** The system column name (e.g., "AEDECOD").
-   - **Custom label:** A text field for your preferred label.
-3. Type your labels (e.g., "AE Category" instead of "AEDECOD").
-4. Click **Save Changes**.
-5. The table and exports will use your labels for future uploads.
+**Goal:** Change display labels for exports and the table.
 
-**Reset:** Click **Reset to Default** to restore original names, then **Save Changes**.
+1. Click **Customize Headers**.
+2. For each row, edit **Custom label** next to **Original** (system column name).
+3. Click **Save Changes**. Labels apply company-wide for AE Metrics display and CSV download headers.
+4. **Reset to Default** restores built-in names; save to apply.
 
 ---
 
-### Workflow 10: Print or Download Data
+### Workflow 10: Print or Download
 
-**Goal:** Print or export the current view.
+**Goal:** Print or export the **current filtered** table.
 
-**Print:**
-
-1. Apply any filters you want.
-2. Click **Print**.
-3. Your browser's print dialog opens.
-4. Choose printer or "Save as PDF" and print.
-
-**Download as CSV:**
-
-1. Apply any filters you want.
-2. Click **Download**.
-3. A CSV file downloads (e.g., `ae_metrics_2025-02-13.csv`).
-4. The file includes only the currently filtered data.
+1. **Print** — enabled when data is loaded. Opens the browser print dialog (current view).
+2. **Download** — exports a CSV named like `ae_metrics_YYYY-MM-DD.csv` with the **standard** column order and **custom labels** in the header row. Only rows that pass all active filters are included.
 
 ---
 
@@ -247,18 +219,16 @@ If your CSV uses different headers, the system tries to match them. If you see "
 
 | Feature | What It Does | When to Use It |
 |---------|--------------|----------------|
-| **Upload AE Data** | Imports AE data from a CSV file | When you have new or updated AE data |
-| **Customize Headers** | Changes column labels in the table and exports | When you want friendlier or company-specific labels |
-| **Upload History** | Lists past uploads and lets you switch between them | When you need to compare or review different datasets |
-| **Filters** | Dropdown filters for site, patient, category, etc. | When you need to focus on a subset of data |
-| **Reset All Filters** | Clears all filters | When you want to see the full dataset again |
-| **KPI cards** | Shows totals and lets you filter by SAE, resolved, death | When you need quick safety summaries |
-| **AE Categories chart** | Bar chart of AE categories; clickable to filter | When you want to explore by AE type |
-| **Table column filters** | Dropdowns in each column header | When you need column-specific filtering |
-| **Table sorting** | Click column headers to sort | When you want to order rows by a column |
-| **Pagination** | Navigate through pages of rows | When the table has many rows |
-| **Print** | Opens the browser print dialog | When you need a paper or PDF report |
-| **Download** | Exports filtered data as CSV | When you need to share or analyze data in Excel |
+| **Upload AE Data** | Imports a CSV into a new upload | New or replacement dataset *(admins)* |
+| **Customize Headers** | Maps system column names to display labels | Align wording with your SOP *(admins)* |
+| **Upload History** | Lists uploads; select to switch dataset | Compare time periods or files |
+| **Filters** | Seven dropdown dimensions + reset + upload timestamp | Subset the table |
+| **Reset All Filters** | Clears Filters card, KPI filter, chart filter, table column filters | Return to full current upload view |
+| **KPI cards** | Counts + click filter on four cards | Quick safety slices |
+| **% Resolved** | Percentage only | Read-only summary |
+| **AE Categories chart** | Counts by **AEDECOD**; click to filter | Explore category mix |
+| **Table** | Sort, paginate, per-column filters | Detailed review |
+| **Print** / **Download** | Current filtered rows | Reports and Excel |
 
 ---
 
@@ -266,83 +236,50 @@ If your CSV uses different headers, the system tries to match them. If you see "
 
 ### Common Mistakes
 
-1. **Uploading a non-CSV file**  
-   Only `.csv` files are supported. Convert Excel files to CSV first (Save As → CSV).
-
-2. **CSV missing required columns**  
-   If you see "No matching columns found," check that your CSV has the required column names (e.g., SiteName, SubjectId, AEDECOD).
-
-3. **Headers in row 2**  
-   If your CSV has a title in row 1 and headers in row 2, the system will try to use row 2. If it fails, move headers to row 1.
-
-4. **Expecting filters to combine with "OR"**  
-   Filters work with "AND": each filter narrows the results further. Use fewer filters if you get no results.
-
-5. **Forgetting which upload is active**  
-   Check Upload History; the current upload has a "Current" badge.
+1. **Non-CSV files** — Only `.csv` is accepted; save Excel as CSV first.
+2. **Wrong or missing columns** — Use the exact required header names.
+3. **Expecting OR logic** — All active filters narrow together (**AND**).
+4. **% Resolved looks “broken”** — It is not a filter control.
+5. **Empty page as a standard user** — An admin must upload first; use **Upload History** after uploads exist.
 
 ### Tips
 
-- Start with **Upload AE Data**, then use **Upload History** to switch between datasets.
-- Use **Customize Headers** early so labels are consistent for all users.
-- Use **Reset All Filters** if the table is empty and you think filters are applied.
-- KPI cards and chart filters can be combined with the main Filters panel.
-- Long text in cells is truncated; hover to see the full value in a tooltip.
+- After switching uploads, confirm the **Viewing upload from …** line in **Filters**.
+- Use **Reset All Filters** if the table is unexpectedly empty.
+- Long cell text may truncate; hover for a tooltip where supported.
+- The empty state includes a link to this guide under **Learn how to get started**.
 
 ---
 
 ## 6. Troubleshooting
 
-### "Upload AE Data" is grayed out
+### I do not see Upload AE Data or Customize Headers
 
-- You must be logged in and have a valid company/profile.
-- If it stays disabled, log out and back in, or contact support.
+- Only **company administrators** (`admin` role in your organization) see these actions. Ask an admin to upload or change labels.
 
-### "No matching columns found" when uploading
+### “No matching columns found” (upload)
 
-- Ensure your CSV has the required columns (e.g., SiteName, SubjectId, AEDECOD).
-- Check spelling and spacing; the system is case-insensitive but expects similar names.
-- If your export uses different names, consider renaming columns in the CSV to match.
+- Compare your file headers to the required list in [Workflow 1](#workflow-1-upload-your-first-ae-data-file).
 
-### Table shows "No results found"
+### Table shows no rows
 
-- One or more filters may be too strict. Click **Reset All Filters**.
-- If a KPI card is selected, click it again to clear that filter.
-- If the chart shows "Filtered by: …," click the X to clear it.
-- Check table column filters and set them to "All" if needed.
+- Use **Reset All Filters**; clear KPI by clicking the active card again; clear chart filter via **X**.
+- Confirm **Upload History** has the correct **Current** upload.
 
-### Data looks wrong or incomplete
+### Print or Download is disabled
 
-- Confirm the correct upload is selected in Upload History.
-- Verify the source CSV has the expected data.
-- Check that required columns are present and correctly named.
+- **Print** and **Download** require loaded rows (`data.length > 0`). Select an upload with records.
 
-### Print or Download shows no data
+### Page redirects to home
 
-- Print and Download use the currently filtered data.
-- If the table is empty, clear filters first.
-- Ensure at least one upload exists and is selected.
-
-### Page is slow or unresponsive
-
-- Large uploads can take time to load.
-- Wait for the loading overlay to finish.
-- If it persists, try a different browser or contact support.
+- Your company may not have **tracker** access or **AE Metrics** enabled in study trackers. Contact your administrator.
 
 ### When to Contact Support
 
-- Repeated upload failures.
-- Data that should appear but does not.
-- Errors that persist after logging out and back in.
-- Questions about required CSV format or column names.
+- Repeated failed uploads, missing data after success, or persistent errors after re-login.
 
-**Tip:** When contacting support, include:
-
-- What you were doing (e.g., "Uploading CSV").
-- Any error messages.
-- A screenshot if possible.
-- File format and approximate size (e.g., "CSV, ~500 rows").
+**Include:** what you did, exact error text, approximate file size/row count, and role (admin vs user).
 
 ---
 
-*This manual is based on the AE Metrics Module as implemented in the Trialetics application. If you notice differences in your version, ask your administrator for an updated guide.*
+*In-app Documentation uses [`docs/user-manuals/ae-metrics.md`](user-manuals/ae-metrics.md). Keep this file aligned when you edit.*

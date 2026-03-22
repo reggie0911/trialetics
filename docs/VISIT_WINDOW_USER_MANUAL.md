@@ -5,6 +5,8 @@ description: Beginner-friendly guide for the Visit Window module
 
 # Visit Window Module — User Manual
 
+> **Canonical copy for in-app Documentation:** [`docs/user-manuals/visit-window.md`](user-manuals/visit-window.md) (registry slug `visit-window`). Edit that file first, then mirror changes here.
+
 ## Table of Contents
 
 - [1. Introduction](#1-introduction)
@@ -20,424 +22,232 @@ description: Beginner-friendly guide for the Visit Window module
 
 ### What This Module Is
 
-The **Visit Window** module is a tool for tracking **visit windows** and **compliance alerts** for clinical trial subjects. It helps you see which visits are on track, which need attention, and which require immediate action.
+The **Visit Window** module helps you track **visit windows** and **compliance alerts** (GREEN, YELLOW, RED) for clinical trial subjects—so you can see which visits are on track, which need attention, and which need action.
 
-> **Visit Window:** The allowed date range for a subject to complete a visit. For example, a "Month 3 Visit" might have a window from Day 85 to Day 95.  
-> **Alert Status:** A color-coded indicator (GREEN, YELLOW, or RED) showing whether a visit is on track, needs attention, or requires action.
+> **Visit window:** The allowed date range for completing a visit (from **Window Start Date** through **Window End Date**).  
+> **Alert status:** Computed by the system from event dates, window dates, and whether the visit has occurred—shown as **GREEN**, **YELLOW**, or **RED** in the table and chart.
 
 ### What It Helps You Do
 
-- Upload visit window data from CSV files exported from your clinical trial system
-- View all visit records in a sortable, filterable table
-- Filter by site, subject, event name, event status, and alert status
-- See summary metrics (total subjects, subjects needing follow-up, visit alert rate)
-- View a chart of visits by alert status (GREEN, YELLOW, RED)
-- Print or download filtered data
-- Customize column labels to match your organization's terminology
+- Upload visit-window CSV exports *(company administrators only for **Upload VW Data** and **Customize Headers**)*
+- Switch uploads with **Upload History**
+- Use the **Filters** card (collapsible) for Site Name, Subject ID, Event Name, Event Status, and Alert Status
+- See **KPI** metrics; two cards narrow the **table** (not the KPI numbers themselves)
+- Use the **Visit Window Alerts** bar chart; bar clicks filter the table by alert status
+- Work in the **Visit Window Records** table (grouped headers, sort/filter on columns, client-side pagination)
+- **Print** and **Download** CSV for the data that passes **all** current filters (full filtered set, not just one table page)
+- Relabel table columns *(admins)*
 
 ### Who It Is For
 
-- Clinical trial coordinators and monitors
-- Site managers
-- Study managers who need to track visit compliance
-- Anyone who needs to ensure subjects complete visits within the allowed windows
+- Coordinators, monitors, site and study managers tracking visit compliance  
+- **Company admins** — **Upload VW Data**, **Customize Headers**, **Upload History**, **Print**, **Download**, filters, KPIs, chart, table  
+- **Standard users** — same except no upload or customize; if there are no uploads, they need an admin to add data first
 
 ---
 
 ## 2. Getting Started
 
-### How to Access the Module
+### Access and permissions
 
-1. Log in to the application.
-2. In the top navigation, open the **Trackers** menu.
-3. Click **Visit Window**.
-4. You will see the Visit Window page with the title **Visit Window** and the subtitle *"Track subject visit windows and monitor compliance alerts."*
+1. Your **company** must have **tracker access** enabled.  
+2. **Visit Window** must be enabled under **Custom** → **Study trackers**.  
+3. Open **Custom** → **Study trackers** → **Visit Window**, or go to **`/protected/vw`**.
 
-### Overview of the Layout
+**Page title:** **Visit Window**  
+**Subtitle:** *Track subject visit windows and monitor compliance alerts*
 
-The page is organized into these areas:
+### Toolbar (left to right)
 
-| Area | Location | Purpose |
-|------|----------|---------|
-| **Top toolbar** | Top of the page | Upload VW Data, Customize Headers, Upload History, Print, Download |
-| **Filters** | Below the toolbar | Filter data by site, subject, event, event status, alert status |
-| **KPI cards** | Below filters | Total Enrolled Subjects, Subjects with Active Follow-Up Requirements, Visit Alert Rate |
-| **Visit Window Alerts chart** | Below KPI cards | Bar chart of visits by alert status (GREEN, YELLOW, RED) |
-| **Visit Window Records table** | Bottom | Detailed list of visit records with pagination |
+| Control | Admin | Standard user |
+|---------|--------|----------------|
+| **Upload VW Data** | Yes | Not shown |
+| **Customize Headers** | Yes | Not shown |
+| **Upload History** (with count badge when uploads exist) | Yes | Yes |
+| **Print** / **Download** | Yes, when data is loaded | Yes, when data is loaded |
 
-### Key Areas of the Screen
+### Layout (when data is loaded)
 
-- **Top toolbar:** Buttons for **Upload VW Data**, **Customize Headers**, **Upload History**, **Print**, and **Download**.
-- **Filters:** A collapsible card with dropdown filters. Click the up/down arrow to expand or collapse. Use **Reset All Filters** to clear everything.
-- **KPI cards:** Three cards. The first two are clickable to filter the table.
-- **Visit Window Alerts chart:** Bar chart where you can click a bar to filter the table by that alert status.
-- **Visit Window Records table:** Table with columns grouped by category (Patient Info, Visit Details, Dates & Baseline, Dates & Windows, Alert Status). Includes pagination controls.
+| Area | Purpose |
+|------|---------|
+| **Filters** | Collapsible card; **Reset All Filters** clears toolbar dropdowns **and** chart/KPI-driven filters on the table |
+| **KPI cards** | Total Enrolled Subjects; Subjects with Active Follow-Up Requirements; Visit Alert Rate |
+| **Visit Window Alerts** | Bar chart by GREEN / YELLOW / RED (counts follow the **same** filtered rows as the table—see below) |
+| **Visit Window Records** | Table with multi-level column groups and pagination (**10** rows per page by default) |
+
+### Important: what updates when you filter
+
+- **Toolbar filters** (Site Name, Subject ID, Event Name, Event Status, Alert Status) narrow the dataset used for **KPI counts** (Total Subjects, Active Follow-Ups, Visit Alert **Rate**).  
+- The **table**, **chart**, and **Download** use that same dataset **plus** any **KPI card** filter and **chart bar** selection (chart applies an **Alert Status** filter on the table).  
+- So: **KPI numbers** do **not** change when you only click a KPI card or chart bar; those clicks mainly refine the **table** (and chart bars, since the chart is built from the table’s filtered rows).
 
 ---
 
 ## 3. Step-by-Step Workflows
 
-### Workflow 1: Upload Your First Visit Window Data File
+### Workflow 1: Upload visit window data (admin)
 
-**Goal:** Import visit window data from a CSV file so you can view and analyze it.
+1. Click **Upload VW Data**.  
+2. Dialog **Upload Visit Window CSV** — description explains visit/window fields.  
+3. Drop a file or use **Drop CSV file here or click to browse** (`.csv` only).  
+4. Wait for **Parsing CSV file…**; fix any error (empty file, missing columns, etc.).  
+5. Review the preview table (first rows).  
+6. Click **Upload Data**.  
+7. A success notification appears; uploads reload and the new file is selected.
 
-**Steps:**
+**CSV expectations**
 
-1. Click the **Upload VW Data** button in the top toolbar.
-2. A dialog opens titled **Upload Visit Window CSV**.
-3. Either:
-   - **Drag and drop** your CSV file onto the dashed area, or
-   - **Click** the dashed area (or "Drop CSV file here or click to browse") to select a file.
-4. Wait while the file is parsed. You will see a preview of the first few rows.
-5. If you see an error message (e.g., missing columns or invalid format), fix your CSV and try again.
-6. If the preview looks correct, click **Upload Data**.
-7. A success message appears. The new upload becomes the active dataset, and the page refreshes with your data.
-
-**Example scenario:** Sarah exports a visit window report from her clinical trial system as a CSV. She opens the Visit Window module, clicks **Upload VW Data**, drops the file, reviews the preview, and clicks **Upload Data**. Within seconds, she sees the KPI cards, chart, and table populated with her visit data.
-
----
-
-### Workflow 2: Switch Between Different Uploads
-
-**Goal:** View data from a different upload (e.g., a newer export or a different study).
-
-**Steps:**
-
-1. Click the **Upload History** button in the top toolbar.
-2. A panel opens on the right showing all your previous uploads.
-3. Each upload shows:
-   - File name
-   - Number of visit records and columns
-   - Upload date and time
-4. Click the upload you want to view.
-5. The panel closes and the page loads that upload's data.
-6. The selected upload shows a **Current** badge.
-
-**Example scenario:** Mike has uploaded data from last week and from today. He clicks **Upload History**, selects today's file, and the page updates to show the latest data.
+- **Header row:** First row of the CSV should be column names. The parser uses **flexible** matching (spaces/case-insensitive) for required fields.  
+- **Required columns** in the file (mapped to internal fields):  
+  `SiteName`, `SubjectId`, `EventName`, `EventStatus`, `EventDate`, `PlannedDate`, `ProposedDate`, `WindowStartDate`, `WindowEndDate`  
+- **Excluded rows:** Rows whose **Event Name** matches certain built-in labels (e.g. *Add Subject*, *Screening*, *Unscheduled Visit*, and others) are **dropped** on import.  
+- **After upload:** The server adds **Procedure Date** and **Death Date** when it can match **Subject ID** + **Site Name** to **patient** records in the system, and it **computes** **Alert Status** from dates and event status. You do **not** upload Alert Status in the CSV.
 
 ---
 
-### Workflow 3: Filter Data by Site, Subject, or Alert Status
+### Workflow 2: Upload History
 
-**Goal:** Narrow down the data to a specific site, subject, event, or alert status.
+1. Click **Upload History** — sheet **VW Upload History**.  
+2. Each row shows file name, visit record count, column count, date/time, and relative time.  
+3. Click an upload to select it; the sheet closes.  
+4. The selected upload shows a **Current** badge.
 
-**Steps:**
-
-1. Make sure you have data loaded (an upload selected).
-2. In the **Filters** card, use the dropdowns:
-   - **Site Name** — Choose a specific site or leave as "Choose an option..." for all
-   - **Subject ID** — Choose a subject or leave blank for all
-   - **Event Name** — Choose an event (e.g., "Month 3 Visit") or leave blank for all
-   - **Event Status** — Choose a status or leave blank for all
-   - **Alert Status** — Choose GREEN, YELLOW, or RED, or leave blank for all
-3. The KPI cards, chart, and table update automatically.
-4. To remove all filters, click **Reset All Filters**.
-
-**Example scenario:** Lisa wants to see only RED (action required) visits at "Site 101". She selects "Site 101" in Site Name and "RED" in Alert Status. The table and chart show only those records.
+**Deleting an upload:** There is no trash/delete control in the history list in the current UI. To remove data, contact your **administrator** or **support**.
 
 ---
 
-### Workflow 4: Use the Chart to Filter by Alert Status
+### Workflow 3: Toolbar filters
 
-**Goal:** Click on a chart bar to filter the table by that alert status.
-
-**Steps:**
-
-1. Make sure you have data loaded.
-2. Look at the **Visit Window Alerts** chart. It shows bars for GREEN, YELLOW, and RED.
-3. **Click a bar** to filter the table to that alert status (e.g., click the RED bar to see only RED visits).
-4. When filtered, the chart header shows "Filtered by: [status]". Click the **X** next to it to clear the filter.
-5. Click the same bar again to remove the filter.
-
-**Example scenario:** Tom clicks the YELLOW bar in the Visit Window Alerts chart. The table updates to show only visits with YELLOW (attention required) status.
+1. Open the **Filters** card (chevron on the header to collapse/expand).  
+2. Each dropdown starts at **Choose an option…** for “no filter” on that field.  
+3. Pick values for **Site Name**, **Subject ID**, **Event Name**, **Event Status**, **Alert Status** as needed.  
+4. Footer shows **Viewing upload from [date and time]** when an upload is selected.  
+5. Click **Reset All Filters** (with rotate icon) to clear **all** toolbar selections **and** clear chart + KPI table filters.
 
 ---
 
-### Workflow 5: Use KPI Cards to Filter the Table
+### Workflow 4: Visit Window Alerts chart
 
-**Goal:** Click a KPI card to focus on specific subjects.
-
-**Steps:**
-
-1. Make sure you have data loaded.
-2. Look at the three KPI cards:
-   - **Total Enrolled Subjects** — Click to show all subjects (or clear the filter)
-   - **Subjects with Active Follow-Up Requirements** — Click to show only subjects who have at least one YELLOW or RED visit
-   - **Visit Alert Rate** — Not clickable; shows the percentage of visits with YELLOW or RED
-3. **Click** the first or second card to apply or toggle that filter.
-4. A selected card is highlighted. Click it again to clear the filter.
-
-**Example scenario:** Rachel clicks "Subjects with Active Follow-Up Requirements" to see only subjects who need follow-up. The table shows only those subjects' visits.
+1. Chart title: **Visit Window Alerts**.  
+2. Bars count rows in the **current table dataset** (after toolbar + KPI + any prior chart filter).  
+3. Click a bar to filter the table to that **Alert Status**; click again to clear.  
+4. When active, the header shows **Filtered by:** [status] and an **X** to clear.
 
 ---
 
-### Workflow 6: Understand the Alert Status
+### Workflow 5: KPI cards
 
-**Goal:** Know what GREEN, YELLOW, and RED mean so you can prioritize your work.
+| Card | Click behavior |
+|------|----------------|
+| **Total Enrolled Subjects** | Toggle: show all rows (for current toolbar filter) vs. no extra KPI filter |
+| **Subjects with Active Follow-Up Requirements** | Toggle: table limited to rows where Alert Status is **YELLOW** or **RED** |
+| **Visit Alert Rate** | **Not clickable** (display-only %) |
 
-**Steps:**
-
-1. In the **Visit Window Records** table, look at the **Alert Status** column.
-2. Each status has a colored badge. Hover over it to see a tooltip with details.
-3. **GREEN** — On track:
-   - Visit completed within the window, OR
-   - Window opens 8 or more days from now
-4. **YELLOW** — Attention required:
-   - Window opens in 7 days or less, OR
-   - More than 50% of the window duration has elapsed (for upcoming visits)
-5. **RED** — Action required:
-   - Visit occurred outside the window (early or late), OR
-   - Window was missed (overdue), OR
-   - 3 days or less remaining in the window
-
-**Example scenario:** Maria hovers over a RED badge. The tooltip says "This visit occurred 5 days late." She knows to contact the site to understand why and document the deviation.
+Selected KPI card is **highlighted**. Click again to turn off that KPI filter.
 
 ---
 
-### Workflow 7: Print or Download Data
+### Workflow 6: Alert badges and tooltips
 
-**Goal:** Create a printed report or a CSV file of the currently filtered data.
+In the table, **Alert Status** shows a colored badge. Hover for a tooltip, for example:
 
-**Steps:**
+- **GREEN:** *On Track: Visit completed within window OR window opens ≥8 days from now*  
+- **YELLOW:** *Attention Required: Window opens ≤7 days OR >50% of window duration elapsed (applies to upcoming visits only)*  
+- **RED:** *Action Required: Visit was outside window OR window missed (overdue) OR ≤3 days remaining*
 
-**To print:**
-1. Apply any filters you want (or leave them clear for all data).
-2. Click the **Print** button in the top toolbar.
-3. Your browser's print dialog opens. Choose your printer or "Save as PDF" if needed.
-4. Print or save.
-
-**To download:**
-1. Apply any filters you want.
-2. Click the **Download** button in the top toolbar.
-3. A CSV file downloads with a name like `visit_window_2025-02-13.csv`.
-4. Open the file in Excel or another spreadsheet tool.
-
-**Example scenario:** Before a meeting, David filters to "RED" alert status, then clicks **Download** to share a list of action-required visits with the team.
+If the visit **occurred outside** the window, the tooltip can add how many days **early** or **late**.
 
 ---
 
-### Workflow 8: Customize Column Headers
+### Workflow 7: Table, sort, and column filters
 
-**Goal:** Change the labels shown in the table to match your organization's terms.
-
-**Steps:**
-
-1. Click the **Customize Headers** button in the top toolbar.
-2. A dialog opens with a list of columns and their current labels.
-3. For each column, edit the text in the right-hand field (e.g., change "SubjectId" to "Patient ID").
-4. Click **Save Changes** to apply.
-5. Click **Reset to Default** to restore the original labels.
-6. Click **Cancel** to close without saving.
-
-**Example scenario:** The study uses "Participant ID" instead of "Subject ID". Jane opens **Customize Headers**, changes "Subject ID" to "Participant ID", and saves. The table now shows "Participant ID" as the column header.
+- Headers use groups: **Patient Info**, **Visit Details**, **Dates & Baseline**, **Dates & Windows** (and Alert Status under Visit Details in the default layout).  
+- Use header controls to **sort** or set **column filters** where provided; these work together with the Filters card, chart, and KPI filters.  
+- **Pagination:** Default **10** rows per page; controls for first / previous / next / last page and “Showing X to Y of Z results”.
 
 ---
 
-### Workflow 9: Navigate Through Pages of Data
+### Workflow 8: Print and Download
 
-**Goal:** Move through the table when you have many visit records.
-
-**Steps:**
-
-1. Below the table, you will see: *"Showing X to Y of Z results"*.
-2. Use the pagination buttons:
-   - **First page** (double chevron left)
-   - **Previous page** (single chevron left)
-   - **Next page** (single chevron right)
-   - **Last page** (double chevron right)
-3. The current page number is shown (e.g., "Page 2 of 5").
-
-**Example scenario:** With 200 records and 10 per page, Paul uses the Next button to move from page 1 to page 2 and beyond.
+- **Print:** Uses the browser print dialog (what you see on screen may depend on the browser).  
+- **Download:** Saves **`visit_window_YYYY-MM-DD.csv`** with **custom header labels** where you configured them. Includes **every row** that matches the **current combined filters** (toolbar + KPI + chart + column filters), **not** only the visible page.
 
 ---
 
-### Workflow 10: Sort and Filter Within the Table
+### Workflow 9: Customize Headers (admin)
 
-**Goal:** Sort by a column or filter using the table header dropdowns.
-
-**Steps:**
-
-1. In the **Visit Window Records** table, each column header may have a sort or filter control.
-2. **Sort:** Click the column header or its sort icon to sort ascending or descending.
-3. **Filter:** Some columns offer a filter dropdown in the header. Select a value to filter the table to rows with that value.
-4. These filters work together with the top Filters card and the chart.
-
-**Example scenario:** Emma clicks the Alert Status column header to sort by status, then uses the Site Name filter in the header to show only "Site 102".
+1. Click **Customize Headers**.  
+2. Dialog **Customize Column Headers**.  
+3. Edit labels; **Save Changes**, **Reset to Default**, or **Cancel**.
 
 ---
 
 ## 4. Feature Reference
 
-### Upload VW Data
+### Upload VW Data (admin)
 
-- **What it does:** Opens a dialog to upload a CSV file with visit window data.
-- **When to use it:** When you have a new export from your clinical trial system.
-- **Requirements:** CSV must have columns such as SiteName, SubjectId, EventName, EventStatus, EventDate, PlannedDate, ProposedDate, WindowStartDate, WindowEndDate. Column names can have different spacing/casing; the system matches them flexibly.
+Dialog **Upload Visit Window CSV**; **Upload Data** / **Cancel**; preview and validation messages as described above.
 
----
+### Customize Headers (admin)
 
-### Customize Headers
-
-- **What it does:** Lets you change the display labels for table columns.
-- **When to use it:** When your organization uses different terms (e.g., "Participant" instead of "Subject").
-- **Note:** Changes apply to the table display; the underlying data is unchanged.
-
----
+Company-level display labels for the standard VW columns (including Procedure Date, Death Date, Alert Status, etc.).
 
 ### Upload History
 
-- **What it does:** Opens a panel listing all your previous uploads. Click one to switch the active dataset.
-- **When to use it:** When you want to compare or switch between different exports or time periods.
-- **Badge:** Shows the number of uploads next to the button.
+**VW Upload History** — select upload; **Current** badge; optional upload count on the button.
 
----
+### Filters
 
-### Print
+Collapsible **Filters** card; five dropdowns; **Reset All Filters**; upload timestamp line.
 
-- **What it does:** Opens the browser print dialog to print the current view.
-- **When to use it:** For meetings or paper records.
-- **Tip:** Apply filters first so you print only the data you need.
+### KPI cards
 
----
+Metrics derived from **toolbar-filtered** data only. **Visit Alert Rate** = percentage of **visits** (rows) that are YELLOW or RED under that toolbar slice.
 
-### Download
+### Visit Window Alerts chart
 
-- **What it does:** Downloads the currently filtered data as a CSV file.
-- **When to use it:** To share data with colleagues or analyze it in Excel.
-- **Tip:** Filters apply; only visible/filtered records are included.
+Recharts bar chart; colors for GREEN, YELLOW, RED; click to toggle **Alert Status** table filter.
 
----
+### Visit Window Records
 
-### Filters (Site Name, Subject ID, etc.)
-
-- **What they do:** Narrow the data to specific sites, subjects, events, event statuses, or alert statuses.
-- **When to use them:** When you need to focus on a subset of visits.
-- **Reset All Filters:** Removes all filter selections (including chart and KPI filters).
-
----
-
-### KPI Cards
-
-- **Total Enrolled Subjects:** Number of unique subjects in the filtered data. Click to show all.
-- **Subjects with Active Follow-Up Requirements:** Subjects who have at least one YELLOW or RED visit. Click to filter the table to these subjects.
-- **Visit Alert Rate:** Percentage of visits with YELLOW or RED status. Not clickable.
-
----
-
-### Visit Window Alerts Chart
-
-- **What it does:** Shows a bar chart of visits by alert status (GREEN, YELLOW, RED).
-- **Clickable:** Click a bar to filter the table to that status. Click again to clear.
-
----
-
-### Alert Status (in Table)
-
-- **GREEN:** On track. Visit within window or window opens ≥8 days away.
-- **YELLOW:** Attention required. Window opens soon or >50% of window elapsed.
-- **RED:** Action required. Visit outside window, window missed, or ≤3 days remaining.
-- **Tooltip:** Hover over a badge to see details (e.g., "5 days late").
-
----
-
-### Pagination
-
-- **Default:** 10 rows per page.
-- **Navigation:** First, Previous, Next, Last page buttons.
+**Card title:** Visit Window Records. Date columns display as **dd-Mon-yyyy** where applicable.
 
 ---
 
 ## 5. Common Mistakes & Tips
 
-### Beginner Mistakes
-
-1. **Uploading the wrong file format** — Only CSV files are accepted. Save Excel files as CSV first.
-2. **Missing or wrong column names** — Your CSV must have the required columns. The system matches names flexibly (e.g., "Site Name" and "SiteName" both work), but spelling matters.
-3. **Excluded events** — The system automatically excludes certain events (e.g., "Screening", "Procedure", "Add Subject"). If you expect to see these, they will not appear. This is by design.
-4. **Expecting instant updates** — After changing filters, the data updates immediately, but large tables may take a moment to re-render.
-5. **Forgetting filters** — If the table looks empty, check whether filters are applied. Click **Reset All Filters** to clear.
-
-### Helpful Reminders
-
-- **Upload History** keeps all uploads; you can switch between them anytime.
-- **Chart, KPI cards, and filters work together** — A filter from the chart affects the table and KPIs.
-- **Download** includes only the currently filtered data, not the full dataset.
-- **Customize Headers** affects only how labels are displayed, not the data itself.
-
-### Best Practices
-
-1. **Name your exports clearly** — Use descriptive file names (e.g., `Study_X_VisitWindow_2025-02-13.csv`) so you can identify them in Upload History.
-2. **Filter before printing or downloading** — Reduces paper and file size.
-3. **Prioritize RED, then YELLOW** — Focus on action-required visits first, then attention-required.
-4. **Use the KPI card** — Click "Subjects with Active Follow-Up Requirements" to quickly see who needs follow-up.
+1. **Missing columns** — Import needs the eight core visit/window fields; fix the CSV header names.  
+2. **Fewer rows than expected** — Check whether events were filtered out as excluded event types.  
+3. **KPI vs table mismatch** — Remember KPIs ignore chart/KPI table filters; the table and chart reflect those extra filters.  
+4. **Reset everything** — Use **Reset All Filters** on the Filters card, not only clearing one dropdown.  
+5. **Download scope** — You get the full filtered dataset, not one page of the table.
 
 ---
 
 ## 6. Troubleshooting
 
-### "No data to download" or "Please upload data first"
+### “Upload a CSV file to get started” / “Select an upload from the history to view data”
 
-- **Cause:** No upload is selected or the table is empty.
-- **Fix:** Upload a CSV file or select an upload from Upload History.
+- Upload as admin, or open **Upload History** and select an upload. Link: **Learn how to get started** → in-app docs (`/protected/docs/visit-window`).
 
----
+### Parsing / “No matching columns found”
 
-### "No matching columns found. Please ensure the CSV contains the required columns."
+- Ensure required columns exist (flexible name matching). Check for a real header row and data rows.
 
-- **Cause:** The CSV does not have the expected column names.
-- **Fix:** Ensure your CSV has columns such as SiteName, SubjectId, EventName, EventStatus, EventDate, PlannedDate, ProposedDate, WindowStartDate, WindowEndDate. The system matches names flexibly (spaces and case may vary), but the words must match.
+### Print / Download disabled
 
----
+- No rows loaded (`data.length === 0`). Select an upload with records.
 
-### "CSV file is empty"
+### Cannot delete an upload from the UI
 
-- **Cause:** The CSV has no data rows.
-- **Fix:** Add at least one data row to your CSV. Ensure the file is not corrupted.
+- Contact administrator or support.
 
----
+### When to contact support
 
-### Table shows "No results found"
+- Upload or insert errors, KPIs/chart clearly wrong vs. source data, or access issues.
 
-- **Cause:** Filters may be too strict.
-- **Fix:** Click **Reset All Filters**. If it still shows nothing, try selecting a different upload from Upload History.
+**Include:** screenshots, error text, file name, upload date.
 
 ---
 
-### Some visits are missing from the upload
-
-- **Cause:** The system excludes certain event names (e.g., "Screening", "Procedure", "Add Subject", "Discharge / Day 7", "Year 5", "Additional Assessments", "Unscheduled Visit").
-- **Fix:** This is intentional. If you need these events, contact your administrator to discuss.
-
----
-
-### Alert status seems wrong
-
-- **Cause:** Alert logic depends on Event Date, Window Start, and Window End. Missing or incorrect dates can affect the result.
-- **Fix:** Check that your CSV has correct dates for EventDate, WindowStartDate, and WindowEndDate. Hover over the badge to see the tooltip explanation.
-
----
-
-### Print or Download buttons are disabled
-
-- **Cause:** No data is loaded.
-- **Fix:** Upload a CSV file or select an upload from Upload History.
-
----
-
-### When to Contact Support
-
-- You cannot log in or access the module.
-- Uploads fail repeatedly with the same file.
-- Data in the table does not match your CSV file.
-- You need to delete an upload and do not see the option.
-- Alert status logic does not match your study's visit window rules.
-
-**Tip:** When contacting support, include:
-- A screenshot of the error or unexpected behavior
-- The exact error message (if any)
-- The name of the file you tried to upload
-- What you were trying to do when the issue occurred
-
----
-
-*This manual was written for first-time users of the Visit Window module. If you have suggestions for improvements, please share them with your administrator.*
+*Suggestions welcome through your administrator.*

@@ -5,6 +5,10 @@ description: Beginner-friendly guide for the MRace Performance Tracker module
 
 # MRace Performance Tracker Module — User Manual
 
+> **Canonical copy for in-app Documentation:** [`docs/user-manuals/mrace-tracker.md`](user-manuals/mrace-tracker.md) (registry slug `mrace-tracker`). Edit that file first, then mirror changes here.
+>
+> **“Updated” date in Trialetics:** Bump `lastUpdated` (`YYYY-MM-DD`) for `mrace-tracker` in [`lib/docs/registry.ts`](../lib/docs/registry.ts) whenever you revise the manual so the Documentation index and doc page show the correct date.
+
 ## Table of Contents
 
 - [1. Introduction](#1-introduction)
@@ -27,14 +31,14 @@ The **MRace Performance Tracker** is a tool for uploading, viewing, and managing
 
 ### What It Helps You Do
 
-- Upload patient data from CSV files exported from your clinical trial system
-- Load a header mapping file to customize column labels and group columns by visit
-- View all patient records in a sortable, filterable table with multi-level headers
-- Filter by Patient ID, Site Name, or Ref#
-- Search across all columns
-- Show or hide columns to focus on what you need
-- Edit individual patient records by double-clicking a row
-- Print or download filtered data
+- **Company administrators:** Upload patient data, load header mappings, and change which columns are visible (after confirming your password once per browser session).
+- **All users with access:** Open **Upload History**, filter and search the table, edit rows, print, and download (when data is loaded).
+- View patient records in a sortable, filterable table (with multi-level headers when a header mapping is loaded).
+- Filter by Patient ID, Site Name, or Ref#.
+- Search across table columns.
+- Show or hide columns (admin only, after unlock).
+- Edit a patient record by double-clicking a row.
+- Print or download the current filtered view.
 
 ### Who It Is For
 
@@ -49,10 +53,17 @@ The **MRace Performance Tracker** is a tool for uploading, viewing, and managing
 
 ### How to Access the Module
 
-1. Log in to the application.
-2. In the top navigation, open the **Trackers** menu.
-3. Click **MRace Tracker - View**.
-4. You will see the MRace Performance Tracker page with the title **MRace Performance Tracker** and the subtitle *"Upload and manage patient data for your company."*
+1. Log in to Trialetics.
+2. In the top navigation, open **Custom**.
+3. Under **Study trackers**, click **MRace Tracker**.
+4. You will see the page title **MRace Performance Tracker** and the subtitle *Upload and manage patient data for your company*.
+
+> **Note:** Your company must have this tracker enabled. If you do not see **MRace Tracker** under **Study trackers**, contact your administrator.
+
+### Who Can Upload and Change Columns
+
+- **Company admins** see an **Unlock tools** control until they enter their **Trialetics login password**. After verification (for this browser session), they can use **Upload Patient Data**, **Load Header Map** / **Loaded (N)**, and **Columns**.
+- **Standard (non-admin) users** do not see those controls. They can still use **Upload History**, **Print**, **Download**, filters, search, and row editing when data is available.
 
 ### Overview of the Layout
 
@@ -60,96 +71,96 @@ The page is organized into these areas:
 
 | Area | Location | Purpose |
 |------|----------|---------|
-| **Top toolbar** | Top of the page | Upload Patient Data, Load Header Map, Columns, Upload History, Print, Download |
-| **Filters** | Below the toolbar | Patient ID, Site Name, Ref#, Search Table |
-| **Patient data table** | Main area | Table with columns grouped by visit (e.g., Patient Info, Screening, Baseline) |
+| **Top toolbar** | Top of the content | **Admins (unlocked):** Upload Patient Data, Load Header Map / Loaded (N), Columns. **Everyone:** Upload History, Print, Download |
+| **Table card header** | Above the table | **Viewing upload from:** date and time of the selected upload |
+| **Filters** | Top of the card | Patient ID, Site Name, Ref#, Search Table |
+| **Patient data table** | Main area | Data grid; double-click a row to edit |
 | **Pagination** | Below the table | First, Previous, page numbers, Next, Last |
 
 ### Key Areas of the Screen
 
-- **Top toolbar:** Buttons for **Upload Patient Data**, **Load Header Map** (or "Loaded (X)" when a mapping is active), **Columns**, **Upload History**, **Print**, and **Download**.
-- **Filters:** Dropdowns for Patient ID, Site Name, and Ref#, plus a Search box and Search button. Use **Clear Filters** to reset.
-- **Patient data table:** Multi-level headers (visit groups and column names). Double-click a row to edit. Rows with empty Ref# are not shown.
-- **Pagination:** Shows "Showing X to Y of Z patients" and navigation buttons.
+- **Top toolbar:** **Upload History** shows a badge with the number of saved uploads when there is at least one. **Print** and **Download** are disabled when there is no data loaded.
+- **Viewing upload from:** Confirms which monthly upload you are looking at (matches the selection in **Upload History**).
+- **Filters:** Dropdowns for **Patient ID**, **Site Name**, and **Ref#**, plus **Search Table** (type a term, then click **Search** or press Enter). **Clear Filters** appears when any filter or search is active.
+- **Patient data table:** With a header mapping loaded, headers are grouped by visit. Without a mapping, columns are grouped in the **Columns** dialog by category. Rows with no usable Ref# are hidden (see [Patient Data Table](#patient-data-table)).
+- **Pagination:** Shows *Showing X to Y of Z patients* and, when filters narrow the list, *(filtered from N total)*. Default page size is **10** rows.
 
 ---
 
 ## 3. Step-by-Step Workflows
 
-### Workflow 1: Upload Your First Patient Data File
+### Workflow 1: Upload Your First Patient Data File (Admins)
 
 **Goal:** Import patient data from a CSV file so you can view and manage it.
 
 **Steps:**
 
-1. Click the **Upload Patient Data** button in the top toolbar.
-2. A dialog opens for uploading a CSV file.
-3. Either:
-   - **Drag and drop** your CSV file onto the dashed area, or
-   - **Click** the dashed area to browse and select a file.
-4. Wait while the file is parsed. You will see a preview of the first 5 rows.
-5. If you see an error message (e.g., "CSV file has insufficient rows"), fix your file and try again.
-6. If the preview looks correct, click **Upload Data**.
-7. A success message appears. The new upload becomes the active dataset, and the table refreshes with your data.
+1. Click **Unlock tools** and enter your **Trialetics login password** if prompted.
+2. Click **Upload Patient Data**.
+3. The dialog **Upload Patient Data CSV** opens. The description explains that the upload is a monthly export and **replaces the current dataset** for the company.
+4. Either **drag and drop** your CSV onto the dashed area or **click** to browse (**.csv** only).
+5. Wait while the file is parsed. You will see *Successfully parsed N rows (showing preview)* and a preview of the first columns.
+6. If you see an error (e.g. *CSV file has insufficient rows*), fix the file and try again.
+7. Click **Upload Data** when the preview looks correct.
+8. A success message appears. The new upload becomes the active dataset, and the table refreshes.
 
-**Note:** The system skips the first row of your CSV (often a human-readable title row) and uses the second row as column headers.
+**Note:** The parser **skips the first row** of your CSV (often a title row) and uses the **second row** as column headers.
 
-**Example scenario:** Sarah exports a patient data report from her clinical trial system as a CSV. She opens the MRace Performance Tracker, clicks **Upload Patient Data**, drops the file, reviews the preview, and clicks **Upload Data**. Within seconds, she sees the table populated with her patient records.
+**Example scenario:** Sarah exports a patient data report as CSV. She unlocks admin tools, clicks **Upload Patient Data**, drops the file, reviews the preview, and clicks **Upload Data**. The table fills with her patient records.
 
 ---
 
-### Workflow 2: Load a Header Mapping File (Optional but Recommended)
+### Workflow 2: Load a Header Mapping File (Admins, Optional but Recommended)
 
 **Goal:** Use a header mapping CSV to customize column labels and group columns by visit.
 
 **Steps:**
 
-1. Click the **Load Header Map** button (or the button that shows "Loaded (X)" if you already have a mapping).
-2. A dialog opens. Drag and drop your header mapping CSV, or click to browse.
-3. The header mapping CSV must have **4 rows**:
-   - **Row 1:** Table Order (1, 2, 3, ...)
-   - **Row 2:** Visit Group (e.g., "Patient Info", "Screening", "Baseline")
+1. Ensure admin tools are unlocked (see Workflow 1).
+2. Click **Load Header Map**, or **Loaded (N)** if a mapping is already active (green styling).
+3. If the system asks **Confirm your identity**, enter your **Trialetics login password** (same session storage as **Unlock tools**).
+4. The dialog **Upload Header Mapping CSV** opens. Use **Drag and drop** or **Browse Files**.
+5. The header mapping CSV must have **4 rows**:
+   - **Row 1:** Table Order (1, 2, 3, …)
+   - **Row 2:** Visit Group (e.g. "Patient Info", "Screening", "Baseline")
    - **Row 3:** Original Header (column names from your data export)
-   - **Row 4:** Customized Header (labels you want to show in the table)
-4. If you already have a mapping, you may see an override warning. Confirm to replace it.
-5. When processing completes, the table updates with the new labels and column groups.
+   - **Row 4:** Customized Header (labels shown in the table)
+6. If a mapping already exists, you may see **Override Existing Mapping?** — choose **Yes, Override** or **Cancel**.
+7. When processing finishes, the table updates with new labels and visit groups.
 
-**Example scenario:** Tom has a header mapping file from his data team. He clicks **Header Mapping**, uploads the file, and the table columns are reorganized into visit groups (Patient Info, Screening, Procedure, etc.) with clearer labels.
+**Example scenario:** Tom has a Polares header mapping from his data team. He clicks **Load Header Map**, uploads the file, and columns reorganize into visit groups with clearer labels.
 
 ---
 
 ### Workflow 3: Switch Between Different Uploads
 
-**Goal:** View data from a different upload (e.g., a newer export or a different study).
+**Goal:** View data from a different upload (e.g. a newer export).
 
 **Steps:**
 
-1. Click the **Upload History** button in the top toolbar.
-2. A panel opens on the right showing all your previous uploads.
-3. Each upload shows the file name, number of patients, and upload date.
-4. Click the upload you want to view.
-5. The panel closes and the page loads that upload's data.
+1. Click **Upload History** (sheet opens from the right).
+2. Each row shows the **file name**, **N patients**, **N columns**, upload **date and time**, and a relative time (e.g. "2 hours ago"). The active upload has a **Current** badge.
+3. Click the upload you want. The sheet **closes** and the page loads that upload’s data.
 
-**Example scenario:** Mike has uploaded data from last month and from today. He clicks **Upload History**, selects today's file, and the page updates to show the latest data.
+**Example scenario:** Mike selects today’s file in **Upload History**; **Viewing upload from:** updates to today’s date and time.
 
 ---
 
 ### Workflow 4: Filter by Patient ID, Site Name, or Ref#
 
-**Goal:** Narrow down the table to a specific patient, site, or Ref#.
+**Goal:** Narrow the table to a specific patient, site, or Ref#.
 
 **Steps:**
 
-1. Make sure you have data loaded.
-2. In the **Filters** area, use the dropdowns:
-   - **Patient ID** — Choose a patient or "All Patients"
-   - **Site Name** — Choose a site or "All Sites"
-   - **Ref#** — Choose a Ref# or "All Ref#"
-3. The Patient ID and Site Name filters are linked: if you select a site first, Patient ID shows only patients at that site, and vice versa.
-4. The table updates automatically.
-5. To clear all filters, click **Clear Filters**.
+1. Ensure data is loaded.
+2. Use the dropdowns:
+   - **Patient ID** — **All Patients** or a specific ID (label may show *(at Site …)* when a site is selected).
+   - **Site Name** — **All Sites** or a site (label may show *(for Patient …)* when a patient is selected).
+   - **Ref#** — **All Ref#** or one value.
+3. **Patient ID** and **Site Name** cascade: options depend on the other when one is set.
+4. Click **Clear Filters** when it appears to reset Patient ID, Site Name, Ref#, and the active search.
 
-**Example scenario:** Lisa wants to see only data for "Site 101". She selects "Site 101" in the Site Name dropdown. The table shows only patients from that site.
+**Example scenario:** Lisa chooses **Site 101** under **Site Name**; the table shows only patients from that site.
 
 ---
 
@@ -159,30 +170,28 @@ The page is organized into these areas:
 
 **Steps:**
 
-1. In the **Filters** area, find the **Search Table** box.
-2. Type your search term (e.g., a patient ID, a value, or part of a value).
-3. Click the **Search** button (or press Enter).
-4. The table shows only rows where any cell contains your search term (case-insensitive).
-5. To clear the search, click the **X** in the search box or clear the text and search again.
+1. In **Search Table**, type your term.
+2. Click **Search** or press **Enter**.
+3. Matching is **case-insensitive** across cells.
+4. Use the **X** in the field to clear the text and applied search.
 
-**Example scenario:** Rachel needs to find all records mentioning "Aspirin". She types "Aspirin" in the Search Table box, clicks Search, and the table filters to matching rows.
+**Example scenario:** Rachel searches for `Aspirin` to see all rows mentioning it.
 
 ---
 
-### Workflow 6: Show or Hide Columns
+### Workflow 6: Show or Hide Columns (Admins)
 
-**Goal:** Focus on the columns you need by hiding others.
+**Goal:** Focus on the columns you need.
 
 **Steps:**
 
-1. Click the **Columns** button in the top toolbar.
-2. A dialog opens showing all columns, grouped by visit group (if you have a header mapping) or by category (Demographics, Visit Information, Clinical Measurements, Adverse Events, Other).
-3. Use the checkboxes to show or hide individual columns.
-4. You can also show or hide entire groups (e.g., all "Screening" columns).
-5. The dialog shows "X/Y" (visible/total columns). Click **Show All** or **Hide All** for quick changes.
-6. Close the dialog. The table updates with your column choices.
+1. Unlock admin tools if needed.
+2. Click **Columns**:
+   - **With a header mapping loaded:** The button shows **Columns** and a small badge **visible/total** (e.g. `112/113`). The dialog title is **Column Visibility (Grouped by Visit)**. Expand or collapse visit groups with the chevron. Use the **group checkbox** to show or hide an entire visit group, or toggle individual columns inside a group.
+   - **Without a header mapping:** The button shows **Columns (visible/total)** in one label. The dialog title is **Column Visibility**, with **Show All** and **Hide All** at the top, then categories (e.g. Demographics, Visit Information) with per-category controls.
+3. Close the dialog; the table updates immediately.
 
-**Example scenario:** David only needs Patient ID, Site, and key measurements. He opens **Columns**, hides the groups he doesn't need, and keeps only the relevant columns visible.
+**Example scenario:** David hides visit groups he does not need for his review.
 
 ---
 
@@ -192,156 +201,134 @@ The page is organized into these areas:
 
 **Steps:**
 
-1. Find the patient row in the table.
-2. **Double-click** the row.
-3. An edit modal opens with the patient's data, grouped by visit or category.
-4. Edit the fields you need to change.
-5. Click **Save** to apply your changes.
-6. The table refreshes with the updated data.
+1. Find the row in the table.
+2. **Double-click** the row (not the header).
+3. In the edit dialog, change the fields you need.
+4. Click **Save**. The table refreshes.
 
-**Example scenario:** Emma notices a typo in a patient's weight. She double-clicks the row, corrects the weight in the edit modal, and clicks Save.
+**Example scenario:** Emma corrects a typo in a measurement and saves.
 
 ---
 
 ### Workflow 8: Print or Download Data
 
-**Goal:** Create a printed report or a CSV file of the currently filtered data.
+**Goal:** Print or export the **currently filtered** rows.
 
 **Steps:**
 
-**To print:**
-1. Apply any filters you want (or leave them clear for all data).
-2. Click the **Print** button in the top toolbar.
-3. Your browser's print dialog opens. Choose your printer or "Save as PDF" if needed.
-4. Print or save.
+**Print**
 
-**To download:**
-1. Apply any filters you want.
-2. Click the **Download** button in the top toolbar.
-3. A CSV file downloads with a name like `patient_data_2025-02-13.csv`.
-4. The file includes visit group headers and customized column labels.
-5. Open the file in Excel or another spreadsheet tool.
+1. Set filters and search as needed.
+2. Click **Print**. Your browser’s print dialog opens.
 
-**Example scenario:** Before a meeting, James filters to "Site 102", then clicks **Download** to share a CSV with the site team.
+**Download**
+
+1. Set filters and search as needed.
+2. Click **Download**.
+3. A CSV file is saved (name like `patient_data_YYYY-MM-DD.csv`). The toast confirms how many **patient records** were exported and mentions visit groups.
+
+**Example scenario:** James filters to one site, then **Download** to share a CSV.
 
 ---
 
-### Workflow 9: Navigate Through Pages of Data
+### Workflow 9: Navigate Pages
 
-**Goal:** Move through the table when you have many patients.
+**Goal:** Move through many patients.
 
 **Steps:**
 
-1. Below the table, you will see: *"Showing X to Y of Z patients"*.
-2. Use the pagination buttons:
-   - **First** — Go to the first page
-   - **Previous** — Go to the previous page
-   - **Page numbers** — Click a number to jump to that page
-   - **Next** — Go to the next page
-   - **Last** — Go to the last page
-3. The default page size is 10 rows per page.
-
-**Example scenario:** With 200 patients and 10 per page, Paul uses the Next button to move from page 1 to page 2 and beyond.
+1. Read *Showing X to Y of Z patients* (and *(filtered from N total)* if applicable).
+2. Use **First**, **Previous**, numbered pages, **Next**, and **Last**.
+3. Page size is **10** rows.
 
 ---
 
-### Workflow 10: Change Column Labels (Inline Editing)
+### Workflow 10: Change Column Labels (Inline)
 
-**Goal:** Rename a column header directly in the table.
+**Goal:** Rename a column header in the grid.
 
 **Steps:**
 
-1. In the patient data table, find the column header you want to change.
-2. **Click** the column header to enter edit mode.
-3. Type the new label.
-4. Press **Enter** to save, or **Escape** to cancel.
-5. The new label is saved and shown in the table.
+1. **Click** the column header.
+2. Type the new label.
+3. Press **Enter** to save or **Escape** to cancel.
 
-**Example scenario:** The column shows "E01_V1[1].SCR_01.VS[1].HEIGHT_VSORRES". Jane clicks it, types "Height (cm)", and presses Enter. The column now displays "Height (cm)".
+**Example scenario:** Jane renames a long technical field to a short display name.
 
 ---
 
 ## 4. Feature Reference
 
-### Upload Patient Data
+### Unlock tools (admins only)
 
-- **What it does:** Opens a dialog to upload a CSV file with patient data.
-- **When to use it:** When you have a new export from your clinical trial system.
-- **Note:** The first row of the CSV is skipped (treated as a title row). The second row is used as column headers.
+- **What it does:** Replaces upload / mapping / column controls with a single **Unlock tools** button until you enter your **Trialetics login password**. Verification is stored for the **browser session** (session storage).
+- **Dialog:** Title **Header mapping & columns**; description explains password is required for upload, header mapping, and column tools.
 
 ---
 
-### Load Header Map / Header Mapping
+### Upload Patient Data
 
-- **What it does:** Loads a CSV file that maps original column names to customized labels and visit groups. The button shows "Load Header Map" when no mapping is loaded, and "Loaded (X)" (where X is the number of mapped columns) when a mapping is active.
-- **When to use it:** When you have a header mapping file from your data team, or when you want to organize columns by visit and use friendly labels.
-- **Format:** 4 rows — Table Order, Visit Group, Original Header, Customized Header. The first column can be row labels; data starts in the second column.
+- **What it does:** Opens **Upload Patient Data CSV**; data **replaces** the current dataset.
+- **When to use it:** New monthly (or periodic) export from your trial system.
+- **Parsing:** First row skipped; second row = headers.
+
+---
+
+### Load Header Map / Loaded (N)
+
+- **What it does:** Loads a transposed mapping CSV. Button shows **Load Header Map** or **Loaded (N)** when active.
+- **Dialog:** **Upload Header Mapping CSV**; description references organizing columns by visit (and existing mapping count when replacing).
+- **Override:** **Override Existing Mapping?** with **Yes, Override** / **Cancel**.
 
 ---
 
 ### Columns
 
-- **What it does:** Opens a dialog to show or hide columns. When a header mapping is loaded, columns are grouped by visit group.
-- **When to use it:** When you want to focus on specific columns or reduce clutter.
+- **With mapping:** Trigger **Columns** + badge `visible/total`; dialog **Column Visibility (Grouped by Visit)**.
+- **Without mapping:** Trigger **Columns (visible/total)**; dialog **Column Visibility** with **Show All** / **Hide All** and category groupings.
 
 ---
 
 ### Upload History
 
-- **What it does:** Opens a panel listing all your previous uploads. Click one to switch the active dataset.
-- **When to use it:** When you want to compare or switch between different exports or time periods.
-- **Badge:** Shows the number of uploads next to the button.
+- **What it does:** Opens a **sheet** listing uploads; selecting one loads it and **closes** the sheet.
+- **Badge:** Count on the trigger when there is at least one upload.
+- **Row details:** File name, patient count, column count, timestamps, **Current** for the active upload.
+- **Deleting uploads:** There is no delete control in the current UI; contact your administrator if an upload must be removed.
 
 ---
 
-### Print
+### Print / Download
 
-- **What it does:** Opens the browser print dialog to print the current view.
-- **When to use it:** For meetings or paper records.
-
----
-
-### Download
-
-- **What it does:** Downloads the currently filtered data as a CSV file, with visit group headers and customized column labels.
-- **When to use it:** To share data with colleagues or analyze it in Excel.
+- **Disabled** when there are no patient rows loaded in the table.
+- **Download** respects the current filters and produces a CSV with visit-related structure as implemented by the app.
 
 ---
 
 ### Filters (Patient ID, Site Name, Ref#)
 
-- **What they do:** Narrow the data to specific patients, sites, or Ref# values.
-- **Cascading:** Patient ID and Site Name options update based on each other (e.g., selecting a site limits Patient ID choices to patients at that site).
-- **Ref#:** Rows with empty or "-" Ref# are never shown in the table, but you can filter among rows that have a Ref#.
+- **Cascading:** Patient ID ↔ Site Name options narrow each other.
+- **Ref# exclusion:** Rows with empty, `-`, or `—` in the Ref# field (`Ref#` or `E01_V1[1].SCR_05.SE[1].SE_REFID`) are **dropped** before the table; they never appear and cannot be filtered in.
 
 ---
 
 ### Search Table
 
-- **What it does:** Searches across all columns for the text you enter.
-- **When to use it:** When you need to find rows containing a specific value and don't know which column it's in.
-
----
-
-### Clear Filters
-
-- **What it does:** Removes all filter selections (Patient ID, Site Name, Ref#, and Search).
-- **When to use it:** When you want to see the full dataset again.
+- **What it does:** Filters rows where **any cell** contains the search text (case-insensitive). Requires clicking **Search** or pressing **Enter** (not live on every keystroke).
 
 ---
 
 ### Patient Data Table
 
-- **What it does:** Displays patient records with multi-level headers (visit groups and column names).
-- **Double-click:** Opens the edit modal for that row.
-- **Excluded rows:** Rows with empty or "-" Ref# are not shown.
+- **Double-click row:** Opens the edit dialog.
+- **Sortable:** Use column headers as implemented in the grid.
 
 ---
 
 ### Pagination
 
 - **Default:** 10 rows per page.
-- **Navigation:** First, Previous, page numbers, Next, Last.
+- **Text:** *Showing X to Y of Z patients* plus optional *(filtered from N total)*.
 
 ---
 
@@ -349,109 +336,102 @@ The page is organized into these areas:
 
 ### Beginner Mistakes
 
-1. **Uploading the wrong file format** — Only CSV files are accepted. Save Excel files as CSV first.
-2. **Expecting the first row to be headers** — The system skips the first row. Ensure your second row contains the actual column names.
-3. **Missing header mapping** — Without a header mapping, column names may look technical (e.g., "E01_V1[1].SCR_01.VS[1].HEIGHT_VSORRES"). Load a header mapping for clearer labels.
-4. **Wrong header mapping format** — The header mapping CSV must have exactly 4 rows in the transposed format. Check with your data team for the correct template.
-5. **Rows not appearing** — Rows with empty or "-" Ref# are excluded. If you expect to see a patient, ensure they have a valid Ref#.
+1. **Forgetting to unlock (admins)** — You must use **Unlock tools** before **Upload Patient Data**, **Load Header Map**, or **Columns** appear.
+2. **Expecting upload as a non-admin** — Only **company admins** see upload and column tools.
+3. **Wrong file format** — Only **.csv** is accepted for patient data and header mapping.
+4. **Expecting row 1 to be headers** — Row 1 is skipped; row 2 must be the real header row.
+5. **Missing header mapping** — Without it, names stay technical; load a mapping for visit groups and friendly labels.
+6. **Rows “missing”** — Empty / `-` / `—` Ref# rows are excluded by design.
 
 ### Helpful Reminders
 
-- **Header mapping is optional** — You can upload data without it, but the table may be harder to read.
-- **Filters and search work together** — You can combine Patient ID, Site Name, Ref#, and Search.
-- **Download** includes only the currently filtered data and visible columns.
-- **Column visibility** is saved per upload.
+- **Upload History** is available to all users with tracker access (not behind **Unlock tools**).
+- Combine dropdown filters with **Search Table** for precise views.
+- **Download** reflects **filtered** rows (and the app’s export format).
+- Column visibility preferences are tied to the upload/configuration in the app’s data model (per upload behavior as implemented).
 
 ### Best Practices
 
-1. **Load header mapping before or right after first upload** — This organizes columns from the start.
-2. **Use Search for quick lookups** — When you don't know the column, Search scans all columns.
-3. **Filter by Site first when reviewing site-specific data** — Then narrow by Patient ID if needed.
-4. **Double-check before editing** — Ensure you have the correct row before saving changes.
+1. Load or update **header mapping** when your export schema changes.
+2. Confirm **Viewing upload from:** matches the month or file you intend to review.
+3. Use **Clear Filters** when results look unexpectedly empty.
 
 ---
 
 ## 6. Troubleshooting
 
-### "No data to download" or "Please upload data first"
+### "No data to download" or upload errors
 
-- **Cause:** No upload is selected or the table is empty.
-- **Fix:** Upload a CSV file or select an upload from Upload History.
+- **Cause:** No data loaded, or CSV parsing failed.
+- **Fix:** Select an upload in **Upload History** or upload a valid CSV.
 
 ---
 
 ### "CSV file has insufficient rows"
 
-- **Cause:** The CSV has fewer than 2 rows (the system needs at least a title row and a header row).
-- **Fix:** Ensure your CSV has at least 2 rows. The first is skipped; the second is used as headers.
+- **Cause:** Fewer than two rows (need a skipped title row plus a header row at minimum).
+- **Fix:** Add rows so row 2 contains headers.
 
 ---
 
 ### "CSV file is empty"
 
-- **Cause:** The CSV has no data rows after the header.
-- **Fix:** Add at least one data row to your CSV.
+- **Cause:** No data rows after the header row.
+- **Fix:** Include at least one data row.
 
 ---
 
 ### "No valid header mappings found in CSV"
 
-- **Cause:** The header mapping CSV does not have the expected format (4 rows: Table Order, Visit Group, Original Header, Customized Header).
-- **Fix:** Ensure your header mapping CSV has exactly 4 rows. The first column can be labels; the mapping data starts in the second column. Contact your data team for a template.
+- **Cause:** Mapping file does not match the expected 4-row transposed format.
+- **Fix:** Use the template from your data team.
 
 ---
 
-### Some patients are missing from the table
+### Some patients are missing
 
-- **Cause:** Rows with empty Ref# or "-" in the Ref# column are excluded.
-- **Fix:** Ensure your data has a valid Ref# for each patient you want to see. If Ref# is optional for your study, contact your administrator.
-
----
-
-### Column names look technical or confusing
-
-- **Cause:** No header mapping is loaded, or the mapping doesn't cover those columns.
-- **Fix:** Load a header mapping CSV that maps those columns to friendly labels. You can also use inline editing to rename individual column headers.
+- **Cause:** Ref# blank, `-`, or `—`.
+- **Fix:** Fix the source data or discuss with your administrator if Ref# should not gate visibility.
 
 ---
 
-### Table shows "No patient data found for this upload"
+### I do not see Upload Patient Data or Columns
 
-- **Cause:** The upload may have no rows with valid Ref#, or a filter may be too strict.
-- **Fix:** Click **Clear Filters**. If it still shows nothing, check that your CSV has Ref# values and that the upload completed successfully.
-
----
-
-### Edit modal does not open when double-clicking
-
-- **Cause:** Double-click may not have registered, or the row might not be clickable.
-- **Fix:** Double-click directly on the row (not on the header). Ensure you have an upload selected and data loaded.
+- **Cause:** Your account is not a **company admin**, or you have not clicked **Unlock tools** yet.
+- **Fix:** Ask an admin to grant the role or unlock tools with your password.
 
 ---
 
-### Print or Download buttons are disabled
+### Table shows no patient data for this upload
 
-- **Cause:** No data is loaded.
-- **Fix:** Upload a CSV file or select an upload from Upload History.
+- **Cause:** No rows with valid Ref#, or filters/search are too narrow.
+- **Fix:** Click **Clear Filters**; verify the CSV and Ref# column.
+
+---
+
+### Edit modal does not open
+
+- **Cause:** Click was on the header, or no data loaded.
+- **Fix:** Double-click the **row** body.
+
+---
+
+### Print or Download disabled
+
+- **Cause:** No patient rows are loaded in the table.
+- **Fix:** Upload or select an upload with data.
 
 ---
 
 ### When to Contact Support
 
-- You cannot log in or access the module.
-- Uploads fail repeatedly with the same file.
-- Header mapping upload fails with a valid file.
-- Data in the table does not match your CSV file.
-- You need to delete an upload and do not see the option.
-- Ref# exclusion is not appropriate for your study.
+- You cannot access **Custom → Study trackers → MRace Tracker**.
+- Uploads or mapping uploads fail with valid files.
+- Exported or on-screen data does not match expectations after filters are cleared.
+- Ref# filtering is not appropriate for your protocol.
 
-**Tip:** When contacting support, include:
-- A screenshot of the error or unexpected behavior
-- The exact error message (if any)
-- The names of the files you tried to upload
-- A sample of your CSV structure (first few rows)
-- What you were trying to do when the issue occurred
+**Tip:** When contacting support, include a screenshot, exact error text, file names, a redacted sample of the first rows of the CSV, and what you were trying to do.
 
 ---
 
-*This manual was written for first-time users of the MRace Performance Tracker module. If you have suggestions for improvements, please share them with your administrator.*
+*This manual is for users of the MRace Performance Tracker. Suggestions welcome through your administrator.*

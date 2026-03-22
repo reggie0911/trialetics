@@ -5,6 +5,8 @@ description: Beginner-friendly guide for the eCRF Query Tracker module
 
 # eCRF Query Tracker Module — User Manual
 
+> **Canonical copy for in-app Documentation:** [`docs/user-manuals/ecrf-query-tracker.md`](user-manuals/ecrf-query-tracker.md) (registry slug `ecrf-query-tracker`). Edit that file first, then mirror changes here.
+
 ## Table of Contents
 
 - [1. Introduction](#1-introduction)
@@ -20,408 +22,318 @@ description: Beginner-friendly guide for the eCRF Query Tracker module
 
 ### What This Module Is
 
-The **eCRF Query Tracker** is a tool for uploading, viewing, and analyzing **electronic Case Report Form (eCRF) query data** from clinical trials. It helps you monitor how many queries exist, how long they take to resolve, and where they come from.
+The **eCRF Query Tracker** is a tool for uploading, viewing, and analyzing **electronic Case Report Form (eCRF) query data** from clinical trials. It helps you monitor query volume, status, aging, and resolution trends.
 
 > **eCRF (electronic Case Report Form):** The digital form used to collect patient data during a clinical trial.  
-> **Query:** A question or request for clarification about data entered in the eCRF. For example, "Please clarify the date of the last visit."
+> **Query:** A question or request for clarification about data entered in the eCRF (for example, “Please clarify the date of the last visit.”).
 
 ### What It Helps You Do
 
-- Upload query data from CSV files exported from your eCRF system
-- View all query records in a searchable, sortable table
-- Filter by site, subject, event, form, query type, query state, and user role
-- See summary metrics (total queries, open, closed, resolved, overdue)
-- View charts showing query aging, distribution by site, type, state, and form
-- Print or download filtered data
-- Customize column labels to match your organization's terminology
+- Upload query data from CSV files *(company administrators only)*
+- Switch between past uploads with **Upload History**
+- Filter by site, subject, event, form, query type, query state, user role, and who raised the query
+- See **KPI cards** (summary metrics for the data matching your filters)
+- Use **charts**; most charts apply filters when you click a bar or pie slice
+- Browse **Query Records** in a paginated table with an **Alert** column for open queries
+- **Print** or **Download** CSV for the **current table page** (after your filters)
+- Customize table column labels *(company administrators only)*
 
 ### Who It Is For
 
-- Clinical trial data managers
-- Site monitors and coordinators
-- Study managers who need to track query resolution
-- Anyone who needs to review and analyze eCRF query data
+- Clinical trial data managers, monitors, and study managers
+- **Company administrators** — see **Upload CSV** and **Customize Headers**; same filters, KPIs, charts, history, print, and download as other users when data is loaded
+- **Standard users** — do **not** see **Upload CSV** or **Customize Headers**; they can use **Upload History**, filters, KPIs, charts, the table, **Print**, and **Download** when data is on the current page
 
 ---
 
 ## 2. Getting Started
 
-### How to Access the Module
+### Access and permissions
 
-1. Log in to the application.
-2. In the top navigation, open the **Trackers** menu.
-3. Click **eCRF Query Tracker**.
-4. You will see the eCRF Query Tracker page with the title **eCRF Query Tracker** and the subtitle *"Track and monitor eCRF query volume, status, aging, and resolution trends."*
+1. Your **company** must have **tracker access** enabled (your administrator configures this).
+2. **eCRF Query Tracker** must be turned on for your company in the **Study trackers** list under **Custom** (administrator configuration).
+3. Log in, then open **Custom** → under **Study trackers** choose **eCRF Query Tracker**. You can also use the route **`/protected/ecrf-query-tracker`** if you have a bookmark or link.
 
-### Overview of the Layout
+You will see the title **eCRF Query Tracker** and the subtitle: *Track and monitor eCRF query volume, status, aging, and resolution trends.*
 
-The page is organized into these areas:
+### Who can upload and customize headers?
+
+| Action | Company admin | Standard user |
+|--------|---------------|----------------|
+| **Upload CSV** | Yes | Not shown |
+| **Customize Headers** | Yes | Not shown |
+| **Upload History** | Yes | Yes |
+| **Print** / **Download** | Yes (when the current page has rows) | Yes (when the current page has rows) |
+| Filters, KPIs, charts, table | Yes | Yes |
+
+### Overview of the layout
+
+When an upload is selected and the current page has data, the page shows:
 
 | Area | Location | Purpose |
 |------|----------|---------|
-| **Top toolbar** | Top of the page | Upload CSV, Customize Headers, Upload History, Print, Download |
-| **Filters** | Below the toolbar | Filter data by site, subject, event, form, query type, state, and role |
-| **KPI cards** | Below filters | Summary numbers (Total Queries, Open, Closed, Resolved, Overdue, etc.) |
-| **Charts** | Below KPI cards | Bar and pie charts for aging, sites, types, states, forms |
-| **Query Records table** | Bottom | Detailed list of query records with pagination |
+| **Toolbar** | Top row | Left: **Upload CSV** / **Customize Headers** (admins), **Upload History**. Right: **Print**, **Download** |
+| **Filters** | Below toolbar | Dropdown filters, **Clear All**, and “Viewing upload from …” |
+| **KPI cards** | Below filters | Nine summary metrics (read-only; not clickable) |
+| **Charts** | Below KPIs | Visual breakdowns; all but **Query Aging** support click-to-filter |
+| **Query Records** | Bottom | Paginated table with **Alert** plus data columns |
 
-### Key Areas of the Screen
+### Key areas of the screen
 
-- **Top toolbar:** Buttons for **Upload CSV**, **Customize Headers**, **Upload History**, **Print**, and **Download**.
-- **Filters:** A card with dropdown filters. Use **Clear All** to remove all filters.
-- **KPI cards:** Nine cards showing Total Queries, Open Queries, Closed Queries, Resolved Queries, Overdue (>30 days), Queries per Subject, Queries per Visit, Missing Data, and Avg Resolution Time.
-- **Charts:** Six charts that you can click to filter the data.
-- **Query Records table:** Table with an Alert column plus Site Name, Subject ID, Event Name, Event Date, Form Name, Query Type, Query Text, Query State, Query Resolution, User Name, Date/Time, User Role, and Query Raised By Role.
+- **Toolbar:** Admins see **Upload CSV** and **Customize Headers**. **Upload History** opens a side sheet listing uploads (file name, relative time, record count). The selected upload shows an **Active** badge. The **Upload History** button can show a **count badge** for how many uploads exist.
+- **Filters:** Labels include **Site Name**, **Subject ID**, **Event Name**, **Form Name**, **Query Type**, **Query State**, **User Role**, and **Query Raised By**. Values like **All Sites** mean no filter on that field. **Clear All** appears when any dropdown filter is set and clears those filters (and any internal column filter state the app may use).
+- **Footer line:** *Viewing upload from [date and time]* for the selected upload, or *Select an upload to view data* if none is selected.
+- **KPI cards:** Display-only. They update when you change filters (and reflect the filtered dataset loaded for metrics).
+- **Charts:** See [Workflow 4](#workflow-4-use-charts-to-filter-data). **Query Aging (Days Open)** is for viewing only (not clickable).
+- **Query Records:** Table title **Query Records**; columns follow your header mappings (defaults: Site Name, Subject ID, Event Name, Event Date, Form Name, Query Type, Query Text, Query State, Query Resolution, User Name, Date/Time, User Role, Query Raised By Role), plus **Alert**.
 
 ---
 
 ## 3. Step-by-Step Workflows
 
-### Workflow 1: Upload Your First Query Data File
+### Workflow 1: Upload your first query data file
 
-**Goal:** Import query data from a CSV file so you can view and analyze it.
+**Who:** Company administrator.
 
-**Steps:**
+**Goal:** Import query data from a CSV file.
 
-1. Click the **Upload CSV** button in the top toolbar.
-2. A dialog opens titled **Upload eCRF Query Tracker CSV**.
-3. Either:
-   - **Drag and drop** your CSV file onto the dashed area, or
-   - **Click** the dashed area to browse and select a file.
-4. Wait while the file is parsed. You will see a preview of the first 5 records.
-5. If you see an error message (e.g., missing columns or invalid format), fix your CSV and try again.
-6. If the preview looks correct, click **Upload Data**.
-7. A success message appears. The new upload becomes the active dataset, and the page refreshes with your data.
+1. Click **Upload CSV**.
+2. In the dialog **Upload eCRF Query Tracker CSV**, either drag and drop a `.csv` file onto the dashed area or click to browse.
+3. Wait for parsing. On success you see a short preview (first **5** records) and the total parsed count.
+4. Click **Upload Data**.
+5. A success notification appears; the list reloads and the new upload is selected.
 
-**Example scenario:** Sarah exports a query report from her eCRF system as a CSV. She opens the eCRF Query Tracker, clicks **Upload CSV**, drops the file, reviews the preview, and clicks **Upload Data**. Within seconds, she sees the KPI cards, charts, and table populated with her query data.
+**CSV structure (required by the app):**
 
----
-
-### Workflow 2: Switch Between Different Uploads
-
-**Goal:** View data from a different upload (e.g., a newer export or a different study).
-
-**Steps:**
-
-1. Click the **Upload History** button in the top toolbar.
-2. A panel opens on the right showing all your previous uploads.
-3. Each upload shows:
-   - File name
-   - When it was uploaded (e.g., "2 hours ago")
-   - Number of records
-4. Click the upload you want to view.
-5. The panel closes and the page loads that upload's data.
-6. The selected upload shows an **Active** badge.
-
-**Example scenario:** Mike has uploaded data from last week and from today. He clicks **Upload History**, selects today's file, and the page updates to show the latest data.
+- **At least three rows:** Row **1** = human-readable headers (ignored for mapping). Row **2** = **technical** headers used to map columns. Row **3+** = data.
+- Row **2** must allow the app to find at least **SiteName** and **SubjectId**. The full expected technical set is:  
+  `SiteName`, `SubjectId`, `EventName`, `EventDate`, `FormName`, `QueryType`, `QueryText`, `QueryState`, `QueryResolution`, `UserName`, `DateTime`, `UserRole`, `QueryRaisedByRole`.
+- Each data row must have non-empty **SiteName** and **SubjectId**, and a **QueryState** in this list (exact spelling):  
+  **Query Approved**, **Query Closed**, **Query Resolved**, **Query Raised**, **Query Removed**, **Query Rejected**.  
+  Rows that fail these rules are skipped during import.
 
 ---
 
-### Workflow 3: Filter Data by Site, Subject, or Query State
+### Workflow 2: Switch between uploads
 
-**Goal:** Narrow down the data to a specific site, subject, or query state.
+**Goal:** View a different export or time point.
 
-**Steps:**
-
-1. Make sure you have data loaded (an upload selected).
-2. In the **Filters** card, use the dropdowns:
-   - **Site Name** — Choose a specific site or "All Sites"
-   - **Subject ID** — Choose a subject or "All Subjects"
-   - **Event Name** — Choose an event or "All Events"
-   - **Form Name** — Choose a form or "All Forms"
-   - **Query Type** — Choose a type or "All Types"
-   - **Query State** — Choose a state (e.g., "Query Raised", "Query Resolved") or "All States"
-   - **User Role** — Choose a role or "All User Roles"
-   - **Query Raised By** — Choose who raised the query or "All Roles"
-3. The KPI cards, charts, and table update automatically.
-4. To remove all filters, click **Clear All** (appears when any filter is active).
-
-**Example scenario:** Lisa wants to see only open queries at "Site 101". She selects "Site 101" in Site Name and "Query Raised" in Query State. The table and charts show only those records.
+1. Click **Upload History**.
+2. In **eCRF Query Upload History**, click an upload (file name, time ago, record count).
+3. The sheet closes and that upload becomes **Active**; filters reset for the new selection.
 
 ---
 
-### Workflow 4: Use Charts to Filter Data
+### Workflow 3: Filter data
 
-**Goal:** Click on a chart element to filter the data by that value.
+**Goal:** Narrow KPIs, charts, and the table.
 
-**Steps:**
-
-1. Make sure you have data loaded.
-2. Look at the charts:
-   - **Query Aging (Days Open)** — Bar chart of how long queries have been open
-   - **Queries Raised by Role** — Bar chart of queries by role
-   - **Queries per Site (Top 10)** — Horizontal bar chart
-   - **Queries by State** — Pie chart (Query Raised, Resolved, etc.)
-   - **Queries by Type** — Bar chart of query types
-   - **Average Resolution Time by Site (Top 10)** — Horizontal bar chart
-   - **Queries by Form (Top 10)** — Bar chart of forms
-3. **Click a bar or pie slice** to filter by that value (e.g., click "Site 101" to filter by that site).
-4. Click the same element again to remove that filter.
-
-**Example scenario:** Tom clicks the "Query Raised" slice in the Queries by State pie chart. The table and other charts update to show only queries in the "Query Raised" state.
+1. Use the **Filters** card dropdowns (each can stay at “All …” for no filter).
+2. KPIs and charts refresh for the filtered dataset (there is a short delay while data reloads).
+3. The **Query Records** table loads **one page at a time** from the server using the same filter set.
+4. Click **Clear All** (with the **X** icon) to reset every dropdown filter.
 
 ---
 
-### Workflow 5: Understand the Alert Column
+### Workflow 4: Use charts to filter data
 
-**Goal:** Know which queries need attention based on how long they have been open.
+**Goal:** Click chart elements to set filters (same as choosing values in the filter row, for supported fields).
 
-**Steps:**
+1. **Query Aging (Days Open)** — histogram of how long records sit between **Event Date** and **Date/Time** (bucketed). **This chart is not clickable.**
+2. **Queries Raised by Role** — click a bar to filter **Query Raised By** (toggle off by clicking the same bar again).
+3. **Queries per Site (Top 10)** — click a bar to filter **Site Name** (toggle off by clicking again).
+4. **Queries by State** — click a slice to filter **Query State** (toggle off by clicking again).
+5. **Queries by Type** — click a bar to filter **Query Type** (toggle off by clicking again).
+6. **Average Resolution Time by Site (Top 10)** — click a bar to filter **Site Name** (toggle off by clicking again).
+7. **Queries by Form (Top 10)** — click a bar to filter **Form Name** (toggle off by clicking again).
 
-1. In the **Query Records** table, look at the **Alert** column.
-2. For queries in **Query Raised** state, the Alert column shows:
-   - **Green** — 7 days or less (on track)
-   - **Yellow** — 8–30 days (needs attention)
-   - **Red** — More than 30 days (overdue)
-3. For queries in other states (e.g., Resolved, Closed), the Alert column shows "—" (no alert).
-
-**Example scenario:** Maria sorts or filters to "Query Raised" and scans the Alert column. She focuses on red badges first to prioritize overdue queries.
-
----
-
-### Workflow 6: Print or Download Data
-
-**Goal:** Create a printed report or a CSV file of the currently filtered data.
-
-**Steps:**
-
-**To print:**
-1. Apply any filters you want (or leave them clear for all data).
-2. Click the **Print** button in the top toolbar.
-3. Your browser's print dialog opens. Choose your printer or "Save as PDF" if needed.
-4. Print or save.
-
-**To download:**
-1. Apply any filters you want.
-2. Click the **Download** button in the top toolbar.
-3. A CSV file downloads with a name like `ecrf_query_tracker_2025-02-13.csv`.
-4. Open the file in Excel or another spreadsheet tool.
-
-**Example scenario:** Before a meeting, David filters to "Query Raised" and "Site 102", then clicks **Download** to share a CSV with the site team.
+Clicking a chart filter resets the table to **page 1**. Other series in the same chart may appear dimmed while a chart-driven filter is active.
 
 ---
 
-### Workflow 7: Customize Column Headers
+### Workflow 5: Understand the Alert column
 
-**Goal:** Change the labels shown in the table to match your organization's terms.
+**Goal:** Spot **Query Raised** items that may need attention.
 
-**Steps:**
+1. In **Query Records**, the **Alert** column only applies when **Query State** is **Query Raised**.
+2. The app computes **days** as the difference between **Event Date** and **Date/Time** on that row (invalid or missing dates show no alert).
+3. Badge rules: **green** = 0–7 days, **yellow** = 8–30 days, **red** = 31+ days.
+4. For other states, the cell shows **—**.
 
-1. Click the **Customize Headers** button in the top toolbar.
-2. A dialog opens with a list of columns and their current labels.
-3. For each column, edit the text in the right-hand field (e.g., change "SubjectId" to "Patient ID").
-4. Click **Save Changes** to apply.
-5. Click **Reset to Defaults** to restore the original labels.
-6. Click **Cancel** to close without saving.
-
-**Example scenario:** The study uses "Participant ID" instead of "Subject ID". Jane opens **Customize Headers**, changes "Subject ID" to "Participant ID", and saves. The table now shows "Participant ID" as the column header.
+> **Note:** The **Overdue (>30 days)** KPI uses a **different** rule: it counts **Query Raised** rows whose **Date/Time** is more than **30 days before today** (calendar aging from “now”), not the Event Date → Date/Time span. Use both **Alert** and **Overdue** for context.
 
 ---
 
-### Workflow 8: Navigate Through Pages of Data
+### Workflow 6: Print or download
 
-**Goal:** Move through large datasets using pagination.
+**Goal:** Capture what you see on the **current table page**.
 
-**Steps:**
+**Print**
 
-1. Below the table, you will see: *"Showing X to Y of Z records"*.
-2. Use **Rows per page** to choose 25, 50, 100, 250, or 500 rows.
-3. Use the pagination buttons:
-   - **First page** (double chevron left)
-   - **Previous page** (single chevron left)
-   - **Next page** (single chevron right)
-   - **Last page** (double chevron right)
-4. The current page number is shown (e.g., "Page 2 of 5").
+1. Optionally set filters (and go to the page you care about).
+2. Click **Print**. Your browser print dialog opens (you can choose “Save as PDF”).
 
-**Example scenario:** With 500 records and 50 rows per page, Paul uses the Next button to move from page 1 to page 2 and beyond.
+**Download**
+
+1. Optionally set filters and navigate to the page you need.
+2. Click **Download**.
+3. A file named like **`ecrf_query_tracker_YYYY-MM-DD.csv`** downloads. Column headers in the file use your **Customize Headers** labels where configured.
+
+**Important:** **Print** and **Download** operate on the **rows currently loaded in the table for this page** (after toolbar filters). They do **not** export every row in the upload across all pages. To share a large filtered set, repeat **Download** on each page or ask your administrator about other reporting options.
+
+---
+
+### Workflow 7: Customize column headers
+
+**Who:** Company administrator.
+
+1. Click **Customize Headers**.
+2. Edit the display label for each technical column.
+3. Click **Save Changes**, or **Reset to Defaults** to restore built-in labels, or **Cancel** to close without saving.
+
+---
+
+### Workflow 8: Paginate
+
+1. Below the table: *Showing X to Y of Z records*.
+2. **Rows per page:** the selector offers **25**, **50**, **100**, **250**, and **500**. The first load may use a smaller default until you change this.
+3. Use **first / previous / next / last** page controls and the *Page N of M* label.
 
 ---
 
 ## 4. Feature Reference
 
-### Upload CSV
+### Upload CSV (admin)
 
-- **What it does:** Opens a dialog to upload a CSV file with eCRF query data.
-- **When to use it:** When you have a new export from your eCRF system or want to add another dataset.
-- **Requirements:** CSV must have at least 3 rows (2 header rows + data). Row 2 must contain technical column names such as SiteName, SubjectId, EventName, EventDate, FormName, QueryType, QueryText, QueryState, QueryResolution, UserName, DateTime, UserRole, QueryRaisedByRole.
+Opens **Upload eCRF Query Tracker CSV**. Accepts `.csv` only. Validates structure, required columns, and **QueryState** values; shows errors such as missing **SiteName**/**SubjectId**, too few rows, or **No valid query records found in CSV**.
 
----
+### Customize Headers (admin)
 
-### Customize Headers
-
-- **What it does:** Lets you change the display labels for table columns.
-- **When to use it:** When your organization uses different terms (e.g., "Participant" instead of "Subject").
-- **Note:** Changes apply to the table only; the underlying data is unchanged.
-
----
+Per-company display labels for table columns; does not change stored query text.
 
 ### Upload History
 
-- **What it does:** Opens a panel listing all your previous uploads. Click one to switch the active dataset.
-- **When to use it:** When you want to compare or switch between different exports or time periods.
-- **Badge:** Shows the number of uploads next to the button.
+Side sheet **eCRF Query Upload History** to pick an upload; **Active** marks the current one.
 
----
+### Print / Download
 
-### Print
+Enabled when the current page has at least one row after loading. **Download** uses today’s date in the filename. Scope = **current page** only (see Workflow 6).
 
-- **What it does:** Opens the browser print dialog to print the current view.
-- **When to use it:** For meetings or paper records.
-- **Tip:** Apply filters first so you print only the data you need.
+### Filters
 
----
+Dropdowns map to server queries; **Clear All** clears them. Footer shows upload timestamp when available.
 
-### Download
+### KPI cards (read-only)
 
-- **What it does:** Downloads the currently filtered data as a CSV file.
-- **When to use it:** To share data with colleagues or analyze it in Excel.
-- **Tip:** Filters apply; only visible/filtered records are included.
+| Card | Meaning (typical) |
+|------|-------------------|
+| **Total Queries** | Count of records in the metrics dataset (respects filters where applied). |
+| **Open Queries** | **Query State** = **Query Raised**. |
+| **Closed Queries** | **Query State** = **Query Closed**. |
+| **Resolved Queries** | **Query State** = **Query Resolved**. |
+| **Overdue (>30 days)** | **Query Raised** rows whose **Date/Time** is more than 30 days ago (see Workflow 5). |
+| **Queries per Subject** | Average queries per distinct subject in the filtered set. |
+| **Queries per Visit** | Average queries per distinct event (visit) in the filtered set. |
+| **Missing Data** | Rows whose **Query Type** is exactly **Missing data**. |
+| **Avg Resolution Time** | For **Query Resolved** rows with valid dates: average days from **Event Date** to **Date/Time**. |
 
----
+### Charts
 
-### Filters (Site Name, Subject ID, etc.)
+- **Query Aging (Days Open):** Distribution of days from **Event Date** to **Date/Time** (buckets: 0–7, 8–14, 15–30, >30). Not clickable.
+- **Queries Raised by Role:** Counts by **Query Raised By Role**; clickable.
+- **Queries per Site (Top 10)** / **Average Resolution Time by Site (Top 10):** Top sites; bars clickable for **Site Name**.
+- **Queries by State:** Pie; slices clickable for **Query State**.
+- **Queries by Type:** Clickable for **Query Type**.
+- **Queries by Form (Top 10):** Clickable for **Form Name**.
 
-- **What they do:** Narrow the data to specific sites, subjects, events, forms, query types, states, or roles.
-- **When to use them:** When you need to focus on a subset of queries.
-- **Clear All:** Removes all filter selections.
+### Query Records table
 
----
-
-### KPI Cards
-
-- **Total Queries:** Total number of query records.
-- **Open Queries:** Queries still open (e.g., Query Raised).
-- **Closed Queries:** Queries that have been closed.
-- **Resolved Queries:** Queries that have been resolved.
-- **Overdue (>30 days):** Queries open more than 30 days (needs attention).
-- **Queries per Subject:** Average queries per subject.
-- **Queries per Visit:** Average queries per visit.
-- **Missing Data:** Count of records with missing key data.
-- **Avg Resolution Time:** Average days to resolve queries.
-
----
-
-### Charts (Clickable)
-
-- **Query Aging:** How long queries have been open (e.g., 0–7 days, 8–30 days, 31+ days).
-- **Queries Raised by Role:** Who raised the queries.
-- **Queries per Site:** Top 10 sites by query count.
-- **Queries by State:** Distribution by state (e.g., Raised, Resolved).
-- **Queries by Type:** Distribution by query type.
-- **Average Resolution Time by Site:** Top 10 sites by average resolution time.
-- **Queries by Form:** Top 10 forms by query count.
-
-**Tip:** Clicking a bar or pie slice applies a filter. Click again to remove it.
-
----
-
-### Alert Column (in Table)
-
-- **What it does:** Shows how long a "Query Raised" query has been open.
-- **Green:** 7 days or less.
-- **Yellow:** 8–30 days.
-- **Red:** More than 30 days.
-- **"—"** for non–Query Raised states.
-
----
+Paginated server-side data with **Alert** plus the mapped data columns. Long text is truncated with a hover title when supported.
 
 ### Pagination
 
-- **Rows per page:** 25, 50, 100, 250, or 500.
-- **Navigation:** First, Previous, Next, Last page buttons.
+**Rows per page** options: 25, 50, 100, 250, 500; first-load default may differ until you change the selector.
 
 ---
 
 ## 5. Common Mistakes & Tips
 
-### Beginner Mistakes
+### Beginner mistakes
 
-1. **Uploading the wrong file format** — Only CSV files are accepted. If you have an Excel file, save it as CSV first.
-2. **CSV format issues** — The CSV must have at least 3 rows: Row 1 (human-readable headers), Row 2 (technical headers like SiteName, SubjectId), and Row 3+ (data). Missing Row 2 or wrong column names will cause errors.
-3. **Expecting instant updates** — After changing filters, wait a moment for the data to reload, especially with large datasets.
-4. **Forgetting filters** — If the table looks empty, check whether filters are applied. Click **Clear All** to reset.
+1. **Wrong file type** — Only `.csv` is accepted; save Excel files as CSV first.
+2. **Wrong header row** — Technical names must be on the **second** row of the file (row 2); the first row is for people only.
+3. **Unexpected row counts** — Rows without **SiteName**, **SubjectId**, or with an unrecognized **QueryState** are dropped.
+4. **Assuming Download is the full study** — It is only the **current page** of the table.
+5. **Stale filters** — If results look wrong, use **Clear All** and reapply.
 
-### Helpful Reminders
+### Helpful reminders
 
-- **Upload History** keeps all uploads; you can switch between them anytime.
-- **Charts and filters work together** — A filter from a chart affects the table and other charts.
-- **Download** includes only the currently filtered data, not the full dataset.
-- **Customize Headers** affects only how labels are displayed, not the data itself.
+- Chart filters and dropdown filters work together; chart clicks reset you to page **1**.
+- **KPI** numbers are not buttons; use filters or charts to narrow data.
+- **Upload History** keeps prior uploads; select one to switch the dataset.
 
-### Best Practices
+### Best practices
 
-1. **Name your exports clearly** — Use descriptive file names (e.g., `Study_X_Queries_2025-02-13.csv`) so you can identify them in Upload History.
-2. **Filter before printing or downloading** — Reduces paper and file size.
-3. **Review the Alert column** — Prioritize red and yellow alerts for follow-up.
-4. **Use Query State filters** — Focus on "Query Raised" when tracking open items.
+1. Use clear export file names so history entries are easy to recognize.
+2. For meetings, filter first, then print or download the relevant **pages**.
+3. For open-query follow-up, combine **Query State** = **Query Raised** with the **Alert** column.
 
 ---
 
 ## 6. Troubleshooting
 
-### "No data to download" or "Please upload data first"
+### “Upload a CSV file to get started” / empty page
 
-- **Cause:** No upload is selected or the table is empty.
-- **Fix:** Upload a CSV file or select an upload from Upload History.
+- **Cause:** No uploads yet (or none selected).
+- **Fix:** An admin uploads a CSV, or open **Upload History** and select an upload. You can also use **Learn how to get started** (links to in-app docs for this module).
 
----
+### “Select an upload from the history to view data”
 
-### "CSV missing required columns: SiteName, SubjectId"
+- **Cause:** Uploads exist but nothing is selected.
+- **Fix:** Open **Upload History** and click an upload.
 
-- **Cause:** The CSV does not have the expected column names in Row 2.
-- **Fix:** Ensure Row 2 of your CSV contains technical headers such as SiteName, SubjectId, EventName, EventDate, FormName, QueryType, QueryText, QueryState, QueryResolution, UserName, DateTime, UserRole, QueryRaisedByRole. Check spelling and capitalization.
+### “CSV missing required columns: SiteName, SubjectId”
 
----
+- **Cause:** Row 2 does not contain those technical headers (spelling/case).
+- **Fix:** Adjust row 2 to include **SiteName** and **SubjectId** among the expected columns.
 
-### "CSV file must have at least 3 rows (2 header rows + data)"
+### “CSV file must have at least 3 rows (2 header rows + data)”
 
-- **Cause:** The CSV has only 1 or 2 rows.
-- **Fix:** Add a header row (Row 2) with column names and at least one data row (Row 3).
+- **Cause:** File is too short.
+- **Fix:** Add a second header row and at least one data row.
 
----
+### “No valid query records found in CSV”
 
-### "No valid query records found in CSV"
+- **Cause:** Every row failed validation (empty site/subject or bad **QueryState**).
+- **Fix:** Check **QueryState** values match the allowed list exactly.
 
-- **Cause:** All rows were filtered out. Valid records must have SiteName, SubjectId, and a valid QueryState (e.g., Query Raised, Query Resolved, Query Closed).
-- **Fix:** Check that your data has non-empty SiteName and SubjectId, and that QueryState values match the expected list.
+### Table shows “No query records found”
 
----
+- **Cause:** Filters exclude everything, or the page is empty.
+- **Fix:** Click **Clear All**; widen filters; try another page or upload.
 
-### Table shows "No query records found"
+### Charts or KPIs are empty
 
-- **Cause:** Filters may be too strict, or the selected upload has no data.
-- **Fix:** Click **Clear All** in the Filters section. If it still shows nothing, try selecting a different upload from Upload History.
+- **Cause:** No data for the selected upload, or filters exclude all rows.
+- **Fix:** Select another upload or clear filters.
 
----
+### Print or Download disabled
 
-### Charts or KPI cards are empty
+- **Cause:** No rows on the **current** page (`data` empty).
+- **Fix:** Select an upload, clear filters, or move to a page that has rows.
 
-- **Cause:** No upload selected, or the upload has no data.
-- **Fix:** Upload a CSV or select an upload from Upload History that contains data.
+### Removing a bad upload
 
----
+- There is **no delete control** in the current **Upload History** UI. Contact your **company administrator** or support if data must be removed.
 
-### Print or Download buttons are disabled
+### When to contact support
 
-- **Cause:** No data is loaded.
-- **Fix:** Upload a CSV file or select an upload from Upload History.
+- You cannot access the module after login.
+- Uploads succeed but nothing appears.
+- Errors persist after the steps above.
 
----
-
-### When to Contact Support
-
-- You cannot log in or access the module.
-- Uploads succeed but data does not appear.
-- Errors persist after following the fixes above.
-- You need to delete an upload or correct data that was uploaded by mistake.
-- You need help with CSV format or column mapping.
-
-**Tip:** When contacting support, include:
-- A screenshot of the error or unexpected behavior
-- The exact error message (if any)
-- The name of the file you tried to upload (if relevant)
-- What you were trying to do when the issue occurred
+**Include:** screenshot, exact error text, file name you uploaded (if relevant), and what you were doing.
 
 ---
 
-*This manual was written for first-time users of the eCRF Query Tracker module. If you have suggestions for improvements, please share them with your administrator.*
+*This manual is written for first-time users of the eCRF Query Tracker. Suggestions welcome through your administrator.*

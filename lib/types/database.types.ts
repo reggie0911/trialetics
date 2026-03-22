@@ -4623,6 +4623,56 @@ export type Database = {
           },
         ]
       }
+      platform_documentation: {
+        Row: {
+          slug: string
+          body_markdown: string
+          title: string | null
+          description: string | null
+          category: string | null
+          icon_key: string | null
+          roles: string[]
+          module_route: string | null
+          sort_order: number | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          slug: string
+          body_markdown?: string
+          title?: string | null
+          description?: string | null
+          category?: string | null
+          icon_key?: string | null
+          roles?: string[]
+          module_route?: string | null
+          sort_order?: number | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          slug?: string
+          body_markdown?: string
+          title?: string | null
+          description?: string | null
+          category?: string | null
+          icon_key?: string | null
+          roles?: string[]
+          module_route?: string | null
+          sort_order?: number | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_documentation_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
