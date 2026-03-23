@@ -4,12 +4,12 @@ import { stripe } from '@/lib/stripe';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { PLAN_CONFIGS, type SubscriptionPlan } from '@/lib/types/ctms';
 
-const supabaseAdmin = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function POST(request: NextRequest) {
+  const supabaseAdmin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
