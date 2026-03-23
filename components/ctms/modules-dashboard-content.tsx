@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { FileText, LayoutGrid } from 'lucide-react';
+import { FileText, FolderOpen, LayoutGrid } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { studyTrackerNavItems } from '@/lib/nav/study-trackers';
@@ -19,11 +19,13 @@ function getGreeting(): string {
 export function ModulesDashboardContent({
   firstName,
   hasEtmfAccess,
+  hasEisfAccess,
   studyTrackerMenuKeys,
   customTrackers,
 }: {
   firstName: string | null;
   hasEtmfAccess: boolean;
+  hasEisfAccess: boolean;
   studyTrackerMenuKeys: string[];
   customTrackers: ModulesDashboardCustomItem[];
 }) {
@@ -51,7 +53,7 @@ export function ModulesDashboardContent({
           <CardHeader>
             <CardTitle>No modules visible</CardTitle>
             <CardDescription>
-              Your organization does not have eTMF or study trackers enabled. Contact your Trialetics
+              Your organization does not have eTMF, eISF, or study trackers enabled. Contact your Trialetics
               administrator if you need access.
             </CardDescription>
           </CardHeader>
@@ -67,6 +69,20 @@ export function ModulesDashboardContent({
                     <CardTitle className="text-base">eTMF</CardTitle>
                   </div>
                   <CardDescription>Electronic trial master file</CardDescription>
+                </CardHeader>
+              </Card>
+            </Link>
+          )}
+
+          {hasEisfAccess && (
+            <Link href="/protected/eisf" className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Card className="h-full transition-colors hover:bg-muted/40">
+                <CardHeader>
+                  <div className="flex items-center gap-2">
+                    <FolderOpen className="h-5 w-5 text-muted-foreground" />
+                    <CardTitle className="text-base">eISF</CardTitle>
+                  </div>
+                  <CardDescription>Investigator site folders and site documents</CardDescription>
                 </CardHeader>
               </Card>
             </Link>

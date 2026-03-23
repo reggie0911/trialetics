@@ -27,13 +27,14 @@ export default async function ProtectedPage() {
 
   const { data: company } = await supabase
     .from('companies')
-    .select('has_ctms_access, has_tracker_access, has_etmf_access, enabled_study_tracker_keys')
+    .select('has_ctms_access, has_tracker_access, has_etmf_access, has_eisf_access, enabled_study_tracker_keys')
     .eq('id', profile.company_id)
     .maybeSingle();
 
   const hasCtmsAccess = company?.has_ctms_access !== false;
   const hasTrackerAccess = company?.has_tracker_access === true;
   const hasEtmfAccess = company?.has_etmf_access === true;
+  const hasEisfAccess = company?.has_eisf_access === true;
   const studyTrackerMenuKeys =
     hasTrackerAccess
       ? ((company?.enabled_study_tracker_keys as string[] | null | undefined) ?? [])
@@ -55,6 +56,7 @@ export default async function ProtectedPage() {
       <ModulesDashboardContent
         firstName={profile.first_name}
         hasEtmfAccess={hasEtmfAccess}
+        hasEisfAccess={hasEisfAccess}
         studyTrackerMenuKeys={studyTrackerMenuKeys}
         customTrackers={customTrackers}
       />

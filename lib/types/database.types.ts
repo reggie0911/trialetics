@@ -517,6 +517,7 @@ export type Database = {
           creator_email: string | null
           enabled_study_tracker_keys: string[]
           has_ctms_access: boolean
+          has_eisf_access: boolean
           has_etmf_access: boolean
           has_tracker_access: boolean
           id: string
@@ -531,6 +532,7 @@ export type Database = {
           creator_email?: string | null
           enabled_study_tracker_keys?: string[]
           has_ctms_access?: boolean
+          has_eisf_access?: boolean
           has_etmf_access?: boolean
           has_tracker_access?: boolean
           id?: string
@@ -545,6 +547,7 @@ export type Database = {
           creator_email?: string | null
           enabled_study_tracker_keys?: string[]
           has_ctms_access?: boolean
+          has_eisf_access?: boolean
           has_etmf_access?: boolean
           has_tracker_access?: boolean
           id?: string
@@ -6548,8 +6551,13 @@ export type Database = {
           p_has_ctms_access: boolean
           p_has_etmf_access: boolean
           p_has_tracker_access: boolean
+          p_has_eisf_access: boolean
         }
         Returns: undefined
+      }
+      eisf_get_dashboard_stats: {
+        Args: { p_study_id?: string | null }
+        Returns: Json
       }
       set_company_study_tracker_keys: {
         Args: { p_company_id: string; p_keys: string[] }
