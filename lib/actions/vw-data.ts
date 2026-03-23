@@ -312,17 +312,17 @@ export async function uploadVWData(
           const key = `${patient.subject_id}|${patient.site_name}`;
           
           // Extract procedure date from visits JSONB
-          const visits = patient.visits as Record<string, any> | null;
+          const visits = patient.visits as Record<string, unknown> | null;
           const procedureDate = visits?.['E02_V2[1].PRO_01.PEP[1].PEPDAT'];
-          if (procedureDate) {
+          if (typeof procedureDate === 'string' && procedureDate) {
             procedureDateMap.set(key, procedureDate);
           }
 
           // Extract death date from demographics JSONB
-          const demographics = patient.demographics as Record<string, any> | null;
+          const demographics = patient.demographics as Record<string, unknown> | null;
           const deathDate = demographics?.['death_date'] || demographics?.['DeathDate'];
           if (deathDate) {
-            deathDateMap.set(key, deathDate);
+            deathDateMap.set(key, typeof deathDate === 'string' ? deathDate : String(deathDate));
           }
         });
       }
@@ -455,7 +455,7 @@ export async function deleteVWUpload(
  */
 export async function updateVWFilterPreferences(
   uploadId: string,
-  filterPreferences: Record<string, any>
+  filterPreferences: Record<string, unknown>
 ): Promise<ActionResponse<void>> {
   try {
     const supabase = await createClient();

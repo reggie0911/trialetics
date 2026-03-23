@@ -59,6 +59,53 @@ import {
 } from '@/lib/types/visit-reports';
 import { formatSignatureDisplayDateTime } from '@/lib/utils/visit-report-signature';
 import { SITE_ATTENDEE_ROLE_OPTIONS, SPONSOR_ATTENDEE_ROLE_OPTIONS, SECTION_HEADER_STYLE } from '@/lib/constants/visit-reports';
+
+/** Visit row from trip report details (monitoring_visits + study/site joins). */
+type VisitReportAuthoringVisit = {
+  visit_type?: string | null;
+  visit_name?: string | null;
+  site_id?: string | null;
+  study_id?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  planned_date?: string | null;
+  studies?: { id?: string; title?: string; protocol_number?: string } | null;
+  study_sites?: {
+    name?: string;
+    site_number?: string;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postal_code?: string | null;
+    pi_name?: string | null;
+    pi_email?: string | null;
+    study_countries?: { country_name?: string } | null;
+  } | null;
+};
+
+/** Trip report row passed from getTripReportWithDetails (fields used in this UI). */
+type VisitReportAuthoringReport = {
+  id: string;
+  narrative?: string | null;
+  report_status?: string | null;
+  status?: string | null;
+  reviewer_id?: string | null;
+  created_by?: string | null;
+  created_at?: string | null;
+  template_id?: string | null;
+  author_submission_signature_data?: string | null;
+  author_submission_signed_at?: string | null;
+  submitted_date?: string | null;
+  approval_signature_data?: string | null;
+  approval_signed_at?: string | null;
+  approved_date?: string | null;
+  reviewer_comments_site_attendees?: string | null;
+  reviewer_comments_sponsor_attendees?: string | null;
+  reviewer_comments_monitored_crfs?: string | null;
+  reviewer_comments_narrative?: string | null;
+  reviewer_comments_open_actions?: string | null;
+  reviewer_comments_attachments?: string | null;
+};
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -164,8 +211,10 @@ function daysOpen(createdAt: string | null): string {
 
 interface VisitReportAuthoringProps {
   visitId: string;
-  visit: any;
-  report: any;
+  /** Matches `TripReportWithDetailsResult['visit']` from the server loader. */
+  visit: Record<string, unknown>;
+  /** Matches `TripReportWithDetailsResult['report']` from the server loader. */
+  report: Record<string, unknown> | null;
   template: VisitReportTemplate | null;
   questions: VisitReportTemplateQuestion[];
   initialResponses: Record<string, { response: string | null; comments: string | null; reviewer_comments: string | null }>;
@@ -198,8 +247,8 @@ const VOID_APPROVAL_REASON_MAX_LEN = 2000;
 
 export function VisitReportAuthoring({
   visitId,
-  visit,
-  report,
+  visit: visitProp,
+  report: reportProp,
   template,
   questions,
   initialResponses,
@@ -221,6 +270,9 @@ export function VisitReportAuthoring({
   reportSignerNames = { author: null, approver: null },
   claimReviewError = null,
 }: VisitReportAuthoringProps) {
+  const visit = visitProp as VisitReportAuthoringVisit;
+  const report = reportProp as VisitReportAuthoringReport | null;
+
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<string>('study');
   const [responses, setResponses] = useState(initialResponses);

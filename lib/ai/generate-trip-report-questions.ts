@@ -181,10 +181,10 @@ Example format: {"questions": [{"activity": "Verify...", "report_order": 1, "rep
 
   const questions: GeneratedQuestion[] = parsed.questions;
 
-  const maxExistingOrder = (existingDetails || []).reduce(
-    (max, d) => Math.max(max, (d as any).report_order ?? 0),
-    0
-  );
+  const maxExistingOrder = (existingDetails || []).reduce((max, d) => {
+    const row = d as { report_order?: number | null };
+    return Math.max(max, row.report_order ?? 0);
+  }, 0);
 
   const offsetQuestions = questions.map((q, i) => ({
     activity: q.activity,

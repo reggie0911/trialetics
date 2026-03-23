@@ -8,6 +8,27 @@ import type { VisitReportPdfData } from '@/components/ctms/trip-reports/visit-re
 import type { VisitReportTemplateQuestion } from '@/lib/types/visit-reports';
 import { VISIT_REPORT_TYPE_LABELS } from '@/lib/types/visit-reports';
 
+/** Normalized visit row for PDF field extraction (Supabase joins vary by query). */
+type VisitPdfRow = {
+  visit_type?: string | null;
+  visit_name?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  planned_date?: string | null;
+  studies?: { title?: string | null; protocol_number?: string | null } | null;
+  study_sites?: {
+    name?: string | null;
+    site_number?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postal_code?: string | null;
+    pi_name?: string | null;
+    pi_email?: string | null;
+    study_countries?: { country_name?: string | null } | null;
+  } | null;
+};
+
 export type SectionReviewerCommentsState = {
   reviewer_comments_site_attendees: string;
   reviewer_comments_sponsor_attendees: string;
@@ -58,7 +79,8 @@ export function groupQuestionsIntoOrderedSections(questions: VisitReportTemplate
 
 export interface BuildVisitReportPdfDataInput {
   visitId: string;
-  visit: any;
+  /** Raw visit payload from server; normalized inside the builder. */
+  visit: unknown;
   report: Record<string, unknown> | null | undefined;
   questions: VisitReportTemplateQuestion[];
   responses: Record<string, { response: string | null; comments: string | null; reviewer_comments: string | null }>;
@@ -96,30 +118,31 @@ export function buildVisitReportPdfData(input: BuildVisitReportPdfDataInput): Vi
     sectionReviewerComments: sectionCommentsInput,
   } = input;
 
-  const visitTypeRaw = visit?.visit_type ?? '—';
+  const v = visit as VisitPdfRow;
+  const visitTypeRaw = v?.visit_type ?? '—';
   const visitTypeLabel =
     VISIT_REPORT_TYPE_LABELS[visitTypeRaw as keyof typeof VISIT_REPORT_TYPE_LABELS] ?? visitTypeRaw;
-  const studyTitle = visit?.studies?.title ?? '—';
-  const protocolNumber = visit?.studies?.protocol_number ?? '—';
-  const siteName = visit?.study_sites?.name ?? '—';
-  const siteNumber = visit?.study_sites?.site_number ?? '—';
-  const visitName = visit?.visit_name ?? null;
-  const startDate = visit?.start_date ?? visit?.planned_date ?? null;
-  const endDate = visit?.end_date ?? visit?.planned_date ?? null;
+  const studyTitle = v?.studies?.title ?? '—';
+  const protocolNumber = v?.studies?.protocol_number ?? '—';
+  const siteName = v?.study_sites?.name ?? '—';
+  const siteNumber = v?.study_sites?.site_number ?? '—';
+  const visitName = v?.visit_name ?? null;
+  const startDate = v?.start_date ?? v?.planned_date ?? null;
+  const endDate = v?.end_date ?? v?.planned_date ?? null;
   const rawReportStatus = (report?.report_status as string | undefined) ?? (report?.status as string | undefined) ?? 'report_pending';
   const reportStatus = rawReportStatus === 'draft' ? 'report_pending' : rawReportStatus;
 
   const visitNumber =
     visitSequenceNumber != null ? String(visitSequenceNumber) : (visitName || visitTypeLabel || '—');
   const streetParts = [
-    visit?.study_sites?.address,
-    [visit?.study_sites?.city, visit?.study_sites?.state].filter(Boolean).join(', '),
-    visit?.study_sites?.postal_code,
+    v?.study_sites?.address,
+    [v?.study_sites?.city, v?.study_sites?.state].filter(Boolean).join(', '),
+    v?.study_sites?.postal_code,
   ].filter(Boolean);
   const streetAddress = streetParts.length ? streetParts.join(', ') : '—';
-  const country = visit?.study_sites?.study_countries?.country_name ?? '—';
-  const piName = visit?.study_sites?.pi_name ?? '—';
-  const piEmail = visit?.study_sites?.pi_email ?? '—';
+  const country = v?.study_sites?.study_countries?.country_name ?? '—';
+  const piName = v?.study_sites?.pi_name ?? '—';
+  const piEmail = v?.study_sites?.pi_email ?? '—';
 
   const siteAttendees = attendees.filter((a) => a.attendee_type === 'site');
   const sponsorAttendees = attendees.filter((a) => a.attendee_type === 'sponsor');

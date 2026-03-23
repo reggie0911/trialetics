@@ -1,3 +1,4 @@
+import type { SiteStatus } from '@/lib/types/ctms';
 import type { ToolDefinition, UserContext } from './types';
 
 function requireCompany(ctx: UserContext): string {
@@ -78,7 +79,7 @@ export const ctmsReadTools: Record<string, ToolDefinition> = {
     handler: async (args) => {
       const { getAllSites } = await import('@/lib/actions/sites');
       return getAllSites({
-        status: args.status as any,
+        status: args.status as SiteStatus | undefined,
         studyId: args.studyId as string | undefined,
       });
     },
@@ -166,8 +167,8 @@ export const ctmsReadTools: Record<string, ToolDefinition> = {
     handler: async (args) => {
       const { getAllTasks } = await import('@/lib/actions/tasks');
       return getAllTasks({
-        status: args.status as any,
-        priority: args.priority as any,
+        status: args.status as string | undefined,
+        priority: args.priority as string | undefined,
         study_id: args.studyId as string | undefined,
       });
     },
@@ -437,7 +438,7 @@ export const ctmsWriteTools: Record<string, ToolDefinition> = {
         study_id: args.study_id as string,
         title: args.title as string,
         description: args.description as string | undefined,
-        priority: (args.priority as any) || 'medium',
+        priority: (args.priority as string | undefined) || 'medium',
         due_date: args.due_date as string | undefined,
         milestone_id: args.milestone_id as string | undefined,
       });

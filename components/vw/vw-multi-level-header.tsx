@@ -1,9 +1,9 @@
 "use client";
 
-import { CSSProperties } from "react";
-import {
+import type {
+  ColumnFiltersState,
   Header,
-  flexRender,
+  HeaderGroup,
 } from "@tanstack/react-table";
 import {
   Select,
@@ -29,11 +29,11 @@ export interface VisitGroupSpan {
 }
 
 interface MultiLevelVWHeaderProps {
-  headerGroups: any[];
+  headerGroups: HeaderGroup<VWRecord>[];
   visitGroupSpans: VisitGroupSpan[];
   columnIds: string[];
   columnUniqueValues: Record<string, string[]>;
-  columnFilters: any[];
+  columnFilters: ColumnFiltersState;
   onColumnFilterChange: (columnId: string, value: string | undefined) => void;
   onSortingChange: (columnId: string) => void;
   getSortingState: (columnId: string) => false | "asc" | "desc";
@@ -83,11 +83,13 @@ export function MultiLevelVWHeader({
       {/* Column Name Row */}
       {headerGroups.map((headerGroup) => (
         <tr key={headerGroup.id} className="bg-background border-b">
-          {headerGroup.headers.map((header: any) => {
+          {headerGroup.headers.map((header: Header<VWRecord, unknown>) => {
             const column = header.column;
             const columnId = column.id;
             const uniqueValues = columnUniqueValues[columnId] || [];
-            const currentValue = columnFilters.find((f: any) => f.id === columnId)?.value as string | undefined;
+            const currentValue = columnFilters.find((f) => f.id === columnId)?.value as
+              | string
+              | undefined;
             const groupIndex = columnToGroupIndex.get(columnId) ?? 0;
             const bgColorClass = groupIndex % 2 === 0 ? GROUP_COLORS.even : GROUP_COLORS.odd;
 

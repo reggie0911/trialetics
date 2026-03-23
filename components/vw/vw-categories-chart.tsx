@@ -70,7 +70,9 @@ export function VWCategoriesChart({ data, selectedCategory, onCategoryClick }: V
     );
   }
 
-  const handleBarClick = (data: { category: string; count: number } | null) => {
+  type BarCategoryPayload = { category: string; count: number };
+
+  const handleBarClick = (data: BarCategoryPayload | null) => {
     if (!data || !onCategoryClick) return;
     
     // Toggle selection: if clicking the same category, clear it
@@ -112,10 +114,10 @@ export function VWCategoriesChart({ data, selectedCategory, onCategoryClick }: V
             <BarChart
               data={chartData}
               margin={{ top: 20, right: 20, left: 20, bottom: 60 }}
-              onClick={(e: any) => {
-                if (e && e.activePayload && e.activePayload[0]) {
-                  handleBarClick(e.activePayload[0].payload);
-                }
+              onClick={(e) => {
+                const payload = (e as { activePayload?: Array<{ payload?: BarCategoryPayload }> })
+                  .activePayload?.[0]?.payload;
+                if (payload) handleBarClick(payload);
               }}
               style={{ cursor: 'pointer' }}
             >

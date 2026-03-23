@@ -8,7 +8,7 @@ export interface ActivityLogData {
   entityId: string;
   activityType: 'created' | 'updated' | 'deleted' | 'status_changed' | 'type_changed';
   description: string;
-  changedFields?: Record<string, { old: any; new: any }>;
+  changedFields?: Record<string, { old: unknown; new: unknown }>;
   performedById?: string;
   performerEmail?: string;
 }
@@ -120,7 +120,7 @@ export async function getContactActivity(contactId: string) {
 /**
  * Helper to generate description for organization updates
  */
-export function generateOrganizationUpdateDescription(changedFields: Record<string, { old: any; new: any }>) {
+export function generateOrganizationUpdateDescription(changedFields: Record<string, { old: unknown; new: unknown }>) {
   const fieldNames = Object.keys(changedFields);
   if (fieldNames.length === 1) {
     return `Updated ${fieldNames[0]}`;
@@ -131,7 +131,7 @@ export function generateOrganizationUpdateDescription(changedFields: Record<stri
 /**
  * Helper to generate description for contact updates
  */
-export function generateContactUpdateDescription(changedFields: Record<string, { old: any; new: any }>) {
+export function generateContactUpdateDescription(changedFields: Record<string, { old: unknown; new: unknown }>) {
   const fieldNames = Object.keys(changedFields);
   if (fieldNames.length === 1) {
     return `Updated ${fieldNames[0]}`;

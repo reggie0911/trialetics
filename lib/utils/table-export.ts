@@ -7,7 +7,7 @@
  */
 export function exportToCSV<T>(
   data: T[],
-  columns: Array<{ id?: string; accessorKey?: string; header: string; cell?: (row: { original: T }) => any }>,
+  columns: Array<{ id?: string; accessorKey?: string; header: string; cell?: (row: { original: T }) => unknown }>,
   filename: string
 ): void {
   // Extract headers (excluding actions column)
@@ -21,12 +21,12 @@ export function exportToCSV<T>(
       .filter(col => col.id !== 'actions')
       .map(col => {
         if (col.accessorKey) {
-          const value = (item as any)[col.accessorKey];
+          const value = (item as Record<string, unknown>)[col.accessorKey];
           return value ?? '';
         } else if (col.id) {
           // Handle custom columns
           if (col.cell) {
-            const cellValue = col.cell({ original: item } as any);
+            const cellValue = col.cell({ original: item });
             // Extract text from React elements or return string
             if (typeof cellValue === 'string') {
               return cellValue;
@@ -67,41 +67,42 @@ export function exportToCSV<T>(
 /**
  * Extracts text content from table cells for CSV export
  */
-function extractTextFromCell(cell: any): string {
+function extractTextFromCell(cell: unknown): string {
   if (typeof cell === 'string' || typeof cell === 'number') {
     return String(cell);
   }
   if (cell === null || cell === undefined) {
     return '';
   }
-  
+
   // Handle arrays (like React children)
   if (Array.isArray(cell)) {
     return cell.map(c => extractTextFromCell(c)).filter(Boolean).join(' ');
   }
-  
+
   // For React elements or complex objects, try to extract meaningful text
   if (typeof cell === 'object') {
-    // Check for common React element patterns
-    if (cell.props) {
-      const children = cell.props.children;
+    const o = cell as {
+      props?: { children?: unknown };
+      original?: unknown;
+      textContent?: string;
+    };
+    if (o.props) {
+      const children = o.props.children;
       if (children !== undefined) {
         return extractTextFromCell(children);
       }
     }
-    
-    // Check for specific data structures
-    if (cell.original) {
-      // This might be a row object, try to get meaningful data
+
+    if (o.original) {
       return '';
     }
-    
-    // Try to find text in object properties
-    if (cell.textContent) {
-      return cell.textContent;
+
+    if (o.textContent) {
+      return o.textContent;
     }
   }
-  
+
   return '';
 }
 
@@ -131,7 +132,7 @@ export function printTable<T>(
       .filter(col => col.id !== 'actions')
       .map(col => {
         if (col.accessorKey) {
-          const value = (item as any)[col.accessorKey];
+          const value = (item as Record<string, unknown>)[col.accessorKey];
           return value ?? '';
         }
         return '';

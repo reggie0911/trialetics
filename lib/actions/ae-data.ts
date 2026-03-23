@@ -270,7 +270,7 @@ export async function deleteAEUpload(
  */
 export async function updateAEFilterPreferences(
   uploadId: string,
-  filterPreferences: Record<string, any>
+  filterPreferences: Record<string, unknown>
 ): Promise<ActionResponse<void>> {
   try {
     const supabase = await createClient();

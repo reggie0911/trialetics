@@ -317,7 +317,7 @@ export async function deleteECRFUpload(
  */
 export async function updateECRFFilterPreferences(
   uploadId: string,
-  filterPreferences: Record<string, any>
+  filterPreferences: Record<string, unknown>
 ): Promise<ActionResponse<void>> {
   try {
     const supabase = await createClient();
@@ -580,7 +580,7 @@ export async function getECRFAggregations(
     // Supabase has a hard limit of 1000 per query, so we need to paginate
     // NOTE: If changes don't appear, restart Next.js dev server and hard refresh browser
     
-    let allRecords: any[] = [];
+    let allRecords: Tables<'ecrf_records'>[] = [];
     let page = 0;
     const pageSize = 1000;
     let hasMore = true;

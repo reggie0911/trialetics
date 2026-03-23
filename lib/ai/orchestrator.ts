@@ -105,7 +105,7 @@ async function* runAgent(
   const emitEvent = (event: StreamEvent) => eventQueue.push(event);
 
   // Build AI SDK tools from agent's tool definitions
-  const tools: Record<string, Tool<any, any>> = {};
+  const tools: Record<string, Tool<Record<string, unknown>, unknown>> = {};
   for (const toolDef of agent.tools) {
     const capturedDef = toolDef;
     tools[capturedDef.name] = tool({

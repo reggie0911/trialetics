@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useTransition } from 'react';
+import { useState, useCallback, useTransition, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -173,9 +173,10 @@ export function SiteDetailTabs({
     ? Math.min(100, Math.round((enrolledCount / site.target_enrollment) * 100))
     : 0;
 
-  const daysSinceActivation = site.activation_date
-    ? Math.floor((Date.now() - new Date(site.activation_date).getTime()) / (1000 * 60 * 60 * 24))
-    : null;
+  const daysSinceActivation = useMemo(() => {
+    if (!site.activation_date) return null;
+    return Math.floor((Date.now() - new Date(site.activation_date).getTime()) / (1000 * 60 * 60 * 24));
+  }, [site.activation_date]);
 
   const piInitials = site.pi_name
     ? site.pi_name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)

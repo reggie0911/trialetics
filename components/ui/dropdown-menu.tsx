@@ -17,8 +17,14 @@ function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
 
 function DropdownMenuTrigger({ asChild, className, ...props }: MenuPrimitive.Trigger.Props & { asChild?: boolean; className?: string }) {
   if (asChild) {
-    const { asChild: _, ...restProps } = props as any;
-    return <MenuPrimitive.Trigger asChild={<Slot />} data-slot="dropdown-menu-trigger" suppressHydrationWarning className={className} {...restProps} />
+    const triggerProps = {
+      asChild: <Slot />,
+      "data-slot": "dropdown-menu-trigger",
+      suppressHydrationWarning: true,
+      className,
+      ...props,
+    } as unknown as React.ComponentProps<typeof MenuPrimitive.Trigger>;
+    return <MenuPrimitive.Trigger {...triggerProps} />
   }
   return <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" suppressHydrationWarning className={className} {...props} />
 }

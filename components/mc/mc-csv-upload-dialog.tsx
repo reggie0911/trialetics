@@ -93,7 +93,7 @@ export function MCCSVUploadDialog({ onUpload, companyId, profileId }: MCCSVUploa
   };
 
   // Filter CSV data to only include required columns and rows with study visit
-  const filterCSVData = (csvData: any[], csvHeaders: string[]): MCRecord[] => {
+  const filterCSVData = (csvData: Record<string, string>[], csvHeaders: string[]): MCRecord[] => {
     // Create a map of required column names to their indices in the CSV
     const columnMap = new Map<string, number>();
     
@@ -148,7 +148,7 @@ export function MCCSVUploadDialog({ onUpload, companyId, profileId }: MCCSVUploa
         }
 
         // Get headers from the CSV
-        const firstRow = results.data[0] as any;
+        const firstRow = results.data[0] as Record<string, string>;
         const csvHeaders = Object.keys(firstRow);
         
         // Check if we need to read row 2 for headers
@@ -182,10 +182,10 @@ export function MCCSVUploadDialog({ onUpload, companyId, profileId }: MCCSVUploa
                   complete: (reparseResults) => {
                     if (reparseResults.data && reparseResults.data.length > 2) {
                       // Skip first 2 rows (row 1 is title row, row 2 is header row)
-                      const dataRows = reparseResults.data.slice(2);
+                      const dataRows = reparseResults.data.slice(2) as string[][];
                       // Convert array rows to objects using row 2 headers
-                      const objectData = dataRows.map((row: any) => {
-                        const obj: any = {};
+                      const objectData = dataRows.map((row) => {
+                        const obj: Record<string, string> = {};
                         row2.forEach((header: string, index: number) => {
                           obj[header] = row[index] || "";
                         });
@@ -201,7 +201,7 @@ export function MCCSVUploadDialog({ onUpload, companyId, profileId }: MCCSVUploa
             }
             
             // Use row 1 headers
-            const filteredData = filterCSVData(results.data as any[], actualHeaders);
+            const filteredData = filterCSVData(results.data as Record<string, string>[], actualHeaders);
             
             if (filteredData.length === 0) {
               setError("No matching columns found. Please ensure the CSV contains the required columns.");
@@ -231,7 +231,7 @@ export function MCCSVUploadDialog({ onUpload, companyId, profileId }: MCCSVUploa
           return;
         }
 
-        const firstRow = results.data[0] as any;
+        const firstRow = results.data[0] as Record<string, string>;
         const csvHeaders = Object.keys(firstRow);
         
         // Check row 2 for headers
@@ -259,10 +259,10 @@ export function MCCSVUploadDialog({ onUpload, companyId, profileId }: MCCSVUploa
                   complete: async (reparseResults) => {
                     if (reparseResults.data && reparseResults.data.length > 2) {
                       // Skip first 2 rows
-                      const dataRows = reparseResults.data.slice(2);
+                      const dataRows = reparseResults.data.slice(2) as string[][];
                       // Convert array rows to objects using row 2 headers
-                      const objectData = dataRows.map((row: any) => {
-                        const obj: any = {};
+                      const objectData = dataRows.map((row) => {
+                        const obj: Record<string, string> = {};
                         row2.forEach((header: string, index: number) => {
                           obj[header] = row[index] || "";
                         });
@@ -279,7 +279,7 @@ export function MCCSVUploadDialog({ onUpload, companyId, profileId }: MCCSVUploa
               }
             }
             
-            const filteredData = filterCSVData(results.data as any[], actualHeaders);
+            const filteredData = filterCSVData(results.data as Record<string, string>[], actualHeaders);
             await onUpload(filteredData, file.name);
             setOpen(false);
             resetDialog();

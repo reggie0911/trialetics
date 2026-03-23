@@ -21,7 +21,7 @@ export async function splitCsvFileToChunks(
   totalRows: number;
   totalChunks: number;
 }> {
-  let headerRows: string[][] = [];
+  const headerRows: string[][] = [];
   const chunkData: string[][][] = []; // Store chunks as arrays
   let currentChunk: string[][] = [];
   let currentChunkNumber = 1;

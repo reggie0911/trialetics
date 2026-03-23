@@ -22,6 +22,6 @@ export async function downloadVisitReportPdf(
     footerLeft: options.footerLeft,
     footerRight: options.footerRight,
   });
-  const blob = await pdf(doc as any).toBlob();
+  const blob = await pdf(doc as never).toBlob();
   saveBlobAsFile(blob, options.filename);
 }

@@ -102,7 +102,7 @@ export function VWCSVUploadDialog({ onUpload, companyId, profileId }: VWCSVUploa
   ];
 
   // Filter CSV data to only include required columns and exclude certain event names
-  const filterCSVData = (csvData: any[], csvHeaders: string[]): VWRecord[] => {
+  const filterCSVData = (csvData: Record<string, string>[], csvHeaders: string[]): VWRecord[] => {
     // Create a map of required column names to their indices in the CSV
     const columnMap = new Map<string, number>();
     
@@ -157,10 +157,10 @@ export function VWCSVUploadDialog({ onUpload, companyId, profileId }: VWCSVUploa
         }
 
         // Get headers from the CSV
-        const firstRow = results.data[0] as any;
+        const firstRow = results.data[0] as Record<string, string>;
         const csvHeaders = Object.keys(firstRow);
         
-        const filteredData = filterCSVData(results.data as any[], csvHeaders);
+        const filteredData = filterCSVData(results.data as Record<string, string>[], csvHeaders);
         
         if (filteredData.length === 0) {
           setError("No matching columns found. Please ensure the CSV contains the required columns.");
@@ -188,10 +188,10 @@ export function VWCSVUploadDialog({ onUpload, companyId, profileId }: VWCSVUploa
           return;
         }
 
-        const firstRow = results.data[0] as any;
+        const firstRow = results.data[0] as Record<string, string>;
         const csvHeaders = Object.keys(firstRow);
         
-        const filteredData = filterCSVData(results.data as any[], csvHeaders);
+        const filteredData = filterCSVData(results.data as Record<string, string>[], csvHeaders);
         await onUpload(filteredData, file.name);
         setOpen(false);
         resetDialog();

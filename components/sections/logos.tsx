@@ -68,7 +68,7 @@ export default function Logos() {
             Why the Change?
           </h2>
           <p className="text-muted-foreground mt-4 text-base md:text-lg max-w-2xl mx-auto">
-            If any of these sound familiar, it's time to move beyond spreadsheets.
+            If any of these sound familiar, it&apos;s time to move beyond spreadsheets.
           </p>
         </div>
 

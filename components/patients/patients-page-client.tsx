@@ -1006,7 +1006,8 @@ export function PatientsPageClient({
 
     // ALWAYS exclude rows with empty or "-" in Ref# column
     result = result.filter((row) => {
-      const refId = (row as any)['E01_V1[1].SCR_05.SE[1].SE_REFID'] || (row as any)['Ref#'];
+      const r = row as Record<string, string>;
+      const refId = r['E01_V1[1].SCR_05.SE[1].SE_REFID'] || r['Ref#'];
       // Keep only rows with non-empty Ref# (exclude empty, "-", and "—")
       return refId && refId !== '' && refId !== '—' && refId !== '-';
     });
@@ -1014,7 +1015,8 @@ export function PatientsPageClient({
     // Filter by Patient ID
     if (selectedPatientId && selectedPatientId !== '') {
       result = result.filter((row) => {
-        const patientId = (row as any).SubjectId || (row as any)['Subject ID'];
+        const r = row as Record<string, string>;
+        const patientId = r.SubjectId || r['Subject ID'];
         return patientId === selectedPatientId;
       });
     }
@@ -1022,7 +1024,8 @@ export function PatientsPageClient({
     // Filter by Site Name
     if (selectedSiteName && selectedSiteName !== '') {
       result = result.filter((row) => {
-        const siteName = (row as any).SiteName || (row as any)['Site Name'];
+        const r = row as Record<string, string>;
+        const siteName = r.SiteName || r['Site Name'];
         return siteName === selectedSiteName;
       });
     }
@@ -1030,7 +1033,8 @@ export function PatientsPageClient({
     // Filter by Ref# (now only filters among non-empty values)
     if (selectedRefId && selectedRefId !== '') {
       result = result.filter((row) => {
-        const refId = (row as any)['E01_V1[1].SCR_05.SE[1].SE_REFID'] || (row as any)['Ref#'];
+        const r = row as Record<string, string>;
+        const refId = r['E01_V1[1].SCR_05.SE[1].SE_REFID'] || r['Ref#'];
         return refId === selectedRefId;
       });
     }
@@ -1059,7 +1063,7 @@ export function PatientsPageClient({
     Object.entries(filters.columnFilters).forEach(([columnId, filterValue]) => {
       if (filterValue) {
         result = result.filter((row) => {
-          const cellValue = (row as any)[columnId];
+          const cellValue = (row as Record<string, string>)[columnId];
           return String(cellValue || "") === String(filterValue);
         });
       }
@@ -1152,7 +1156,7 @@ export function PatientsPageClient({
         // Data rows
         ...filteredData.map(row => 
           visibleColumns.map(col => {
-            const value = (row as any)[col.id] || '';
+            const value = (row as Record<string, string>)[col.id] || '';
             // Escape commas and quotes
             return `"${String(value).replace(/"/g, '""')}"`;
           }).join(',')

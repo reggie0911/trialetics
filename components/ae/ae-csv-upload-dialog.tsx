@@ -94,7 +94,7 @@ export function AECSVUploadDialog({ onUpload, companyId, profileId }: AECSVUploa
   };
 
   // Filter CSV data to only include required columns
-  const filterCSVData = (csvData: any[], csvHeaders: string[]): AERecord[] => {
+  const filterCSVData = (csvData: Record<string, string>[], csvHeaders: string[]): AERecord[] => {
     // Create a map of required column names to their indices in the CSV
     const columnMap = new Map<string, number>();
     
@@ -106,14 +106,14 @@ export function AECSVUploadDialog({ onUpload, companyId, profileId }: AECSVUploa
     });
 
     // Filter data to only include required columns
-    return csvData.map((row) => {
+    return csvData.map((row: Record<string, string>) => {
       const filteredRow: AERecord = {};
       REQUIRED_COLUMNS.forEach((col) => {
         const csvIndex = columnMap.get(col);
         if (csvIndex !== undefined && csvIndex !== -1) {
           // Get the actual CSV header name (preserve original case/spacing)
           const csvHeader = csvHeaders[csvIndex];
-          filteredRow[col] = row[csvHeader] || row[csvIndex] || "";
+          filteredRow[col] = row[csvHeader] || row[String(csvIndex)] || "";
         } else {
           filteredRow[col] = "";
         }
@@ -129,7 +129,7 @@ export function AECSVUploadDialog({ onUpload, companyId, profileId }: AECSVUploa
     Papa.parse(csvFile, {
       header: true,
       skipEmptyLines: true,
-      complete: (results) => {
+      complete: (results: Papa.ParseResult<Record<string, string>>) => {
         setParsing(false);
         
         if (results.errors.length > 0) {
@@ -145,7 +145,7 @@ export function AECSVUploadDialog({ onUpload, companyId, profileId }: AECSVUploa
         // Get headers from the CSV (row 2 if available, otherwise row 1)
         // Papa.parse with header: true uses the first row as headers
         // But we need to check if row 2 has the actual headers
-        const firstRow = results.data[0] as any;
+        const firstRow = results.data[0];
         const csvHeaders = Object.keys(firstRow);
         
         // Check if we need to read row 2 for headers
@@ -153,7 +153,7 @@ export function AECSVUploadDialog({ onUpload, companyId, profileId }: AECSVUploa
         Papa.parse(csvFile, {
           header: false,
           skipEmptyLines: false,
-          complete: (headerResults) => {
+          complete: (headerResults: Papa.ParseResult<(string | undefined)[]>) => {
             let actualHeaders = csvHeaders;
             
             // If we have at least 2 rows, check if row 2 matches our required columns better
@@ -177,13 +177,13 @@ export function AECSVUploadDialog({ onUpload, companyId, profileId }: AECSVUploa
                 Papa.parse(csvFile, {
                   header: false,
                   skipEmptyLines: true,
-                  complete: (reparseResults) => {
+                  complete: (reparseResults: Papa.ParseResult<(string | undefined)[]>) => {
                     if (reparseResults.data && reparseResults.data.length > 2) {
                       // Skip first 2 rows (row 1 is title row, row 2 is header row)
                       const dataRows = reparseResults.data.slice(2);
                       // Convert array rows to objects using row 2 headers
-                      const objectData = dataRows.map((row: any) => {
-                        const obj: any = {};
+                      const objectData = dataRows.map((row: (string | undefined)[]) => {
+                        const obj: Record<string, string> = {};
                         row2.forEach((header: string, index: number) => {
                           obj[header] = row[index] || "";
                         });
@@ -199,7 +199,7 @@ export function AECSVUploadDialog({ onUpload, companyId, profileId }: AECSVUploa
             }
             
             // Use row 1 headers
-            const filteredData = filterCSVData(results.data as any[], actualHeaders);
+            const filteredData = filterCSVData(results.data, actualHeaders);
             
             if (filteredData.length === 0) {
               setError("No matching columns found. Please ensure the CSV contains the required columns.");
@@ -223,20 +223,20 @@ export function AECSVUploadDialog({ onUpload, companyId, profileId }: AECSVUploa
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: async (results) => {
+      complete: async (results: Papa.ParseResult<Record<string, string>>) => {
         if (!results.data || results.data.length === 0) {
           setError("CSV file is empty");
           return;
         }
 
-        const firstRow = results.data[0] as any;
+        const firstRow = results.data[0];
         const csvHeaders = Object.keys(firstRow);
         
         // Check row 2 for headers
         Papa.parse(file, {
           header: false,
           skipEmptyLines: false,
-          complete: async (headerResults) => {
+          complete: async (headerResults: Papa.ParseResult<(string | undefined)[]>) => {
             let actualHeaders = csvHeaders;
             
             if (headerResults.data && headerResults.data.length >= 2) {
@@ -254,13 +254,13 @@ export function AECSVUploadDialog({ onUpload, companyId, profileId }: AECSVUploa
                 Papa.parse(file, {
                   header: false,
                   skipEmptyLines: true,
-                  complete: async (reparseResults) => {
+                  complete: async (reparseResults: Papa.ParseResult<(string | undefined)[]>) => {
                     if (reparseResults.data && reparseResults.data.length > 2) {
                       // Skip first 2 rows (row 1 is title row, row 2 is header row)
                       const dataRows = reparseResults.data.slice(2);
                       // Convert array rows to objects using row 2 headers
-                      const objectData = dataRows.map((row: any) => {
-                        const obj: any = {};
+                      const objectData = dataRows.map((row: (string | undefined)[]) => {
+                        const obj: Record<string, string> = {};
                         row2.forEach((header: string, index: number) => {
                           obj[header] = row[index] || "";
                         });
@@ -277,7 +277,7 @@ export function AECSVUploadDialog({ onUpload, companyId, profileId }: AECSVUploa
               }
             }
             
-            const filteredData = filterCSVData(results.data as any[], actualHeaders);
+            const filteredData = filterCSVData(results.data, actualHeaders);
             await onUpload(filteredData, file.name);
             setOpen(false);
             resetDialog();

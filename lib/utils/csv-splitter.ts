@@ -57,7 +57,7 @@ export async function splitCsvFile(
 
   const originalFilename = path.basename(options.originalFilename, path.extname(options.originalFilename));
   const chunks: ChunkMetadata[] = [];
-  let headerRows: string[][] = [];
+  const headerRows: string[][] = [];
   const chunkData: string[][][] = []; // Store chunks to write later
   let currentChunk: string[][] = [];
   let currentChunkNumber = 1;
@@ -180,7 +180,7 @@ export async function splitCsvFileToChunks(
   totalRows: number;
   totalChunks: number;
 }> {
-  let headerRows: string[][] = [];
+  const headerRows: string[][] = [];
   const chunkData: string[][][] = []; // Store chunks as arrays
   let currentChunk: string[][] = [];
   let currentChunkNumber = 1;

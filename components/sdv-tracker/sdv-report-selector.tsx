@@ -255,7 +255,7 @@ export function SDVReportSelector({
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Report?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete "{reportToDelete?.name}" and all associated data (uploads, records).
+              This will permanently delete &ldquo;{reportToDelete?.name}&rdquo; and all associated data (uploads, records).
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
