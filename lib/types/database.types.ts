@@ -675,6 +675,41 @@ export type Database = {
           },
         ]
       }
+      company_time_expense_settings: {
+        Row: {
+          company_id: string
+          created_at: string
+          daily_regular_hours: number
+          overtime_multiplier: number | null
+          updated_at: string
+          weekly_regular_hours: number
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          daily_regular_hours?: number
+          overtime_multiplier?: number | null
+          updated_at?: string
+          weekly_regular_hours?: number
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          daily_regular_hours?: number
+          overtime_multiplier?: number | null
+          updated_at?: string
+          weekly_regular_hours?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_time_expense_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_field_values: {
         Row: {
           company_id: string
@@ -1527,6 +1562,297 @@ export type Database = {
             columns: ["uploaded_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expense_approval_decisions: {
+        Row: {
+          comment: string | null
+          created_at: string
+          decision: string
+          id: string
+          profile_id: string
+          report_id: string
+          step_index: number
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          decision: string
+          id?: string
+          profile_id: string
+          report_id: string
+          step_index: number
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          decision?: string
+          id?: string
+          profile_id?: string
+          report_id?: string
+          step_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_approval_decisions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_approval_decisions_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "expense_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expense_categories: {
+        Row: {
+          code: string
+          company_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          company_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_categories_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expense_lines: {
+        Row: {
+          ai_suggestions: Json | null
+          amount: number
+          category_id: string
+          created_at: string
+          currency: string
+          description: string | null
+          expense_date: string
+          id: string
+          merchant: string | null
+          report_id: string
+          site_id: string | null
+          study_id: string
+          updated_at: string
+        }
+        Insert: {
+          ai_suggestions?: Json | null
+          amount: number
+          category_id: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          expense_date: string
+          id?: string
+          merchant?: string | null
+          report_id: string
+          site_id?: string | null
+          study_id: string
+          updated_at?: string
+        }
+        Update: {
+          ai_suggestions?: Json | null
+          amount?: number
+          category_id?: string
+          created_at?: string
+          currency?: string
+          description?: string | null
+          expense_date?: string
+          id?: string
+          merchant?: string | null
+          report_id?: string
+          site_id?: string | null
+          study_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_lines_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "expense_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_lines_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "expense_reports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_lines_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "study_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_lines_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expense_receipt_files: {
+        Row: {
+          created_at: string
+          file_name: string
+          id: string
+          line_id: string
+          mime_type: string | null
+          storage_object_path: string
+          uploaded_by_profile_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          id?: string
+          line_id: string
+          mime_type?: string | null
+          storage_object_path: string
+          uploaded_by_profile_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          id?: string
+          line_id?: string
+          mime_type?: string | null
+          storage_object_path?: string
+          uploaded_by_profile_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_receipt_files_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: false
+            referencedRelation: "expense_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_receipt_files_uploaded_by_profile_id_fkey"
+            columns: ["uploaded_by_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expense_reports: {
+        Row: {
+          approval_step: number
+          approved_snapshot: Json | null
+          company_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          profile_id: string
+          status: string
+          study_id: string
+          submitted_at: string | null
+          template_id: string | null
+          title: string
+          total_amount: number | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          approval_step?: number
+          approved_snapshot?: Json | null
+          company_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          profile_id: string
+          status?: string
+          study_id: string
+          submitted_at?: string | null
+          template_id?: string | null
+          title?: string
+          total_amount?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          approval_step?: number
+          approved_snapshot?: Json | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          profile_id?: string
+          status?: string
+          study_id?: string
+          submitted_at?: string | null
+          template_id?: string | null
+          title?: string
+          total_amount?: number | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_reports_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_reports_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_reports_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expense_reports_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "time_expense_approval_templates"
             referencedColumns: ["id"]
           },
         ]
@@ -4652,6 +4978,302 @@ export type Database = {
           },
         ]
       }
+      time_activity_types: {
+        Row: {
+          code: string
+          company_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          company_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_activity_types_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      time_expense_approval_templates: {
+        Row: {
+          applies_to: string
+          company_id: string
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          steps: Json
+          updated_at: string
+        }
+        Insert: {
+          applies_to: string
+          company_id: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          steps?: Json
+          updated_at?: string
+        }
+        Update: {
+          applies_to?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          steps?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_expense_approval_templates_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      timesheet_approval_decisions: {
+        Row: {
+          comment: string | null
+          created_at: string
+          decision: string
+          id: string
+          period_id: string
+          profile_id: string
+          step_index: number
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          decision: string
+          id?: string
+          period_id: string
+          profile_id: string
+          step_index: number
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          decision?: string
+          id?: string
+          period_id?: string
+          profile_id?: string
+          step_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timesheet_approval_decisions_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "timesheet_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheet_approval_decisions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      timesheet_entries: {
+        Row: {
+          activity_type_id: string
+          ai_suggestions: Json | null
+          created_at: string
+          hours: number
+          id: string
+          is_billable: boolean
+          notes: string | null
+          period_id: string
+          sort_index: number
+          site_id: string | null
+          study_id: string
+          updated_at: string
+          work_date: string
+        }
+        Insert: {
+          activity_type_id: string
+          ai_suggestions?: Json | null
+          created_at?: string
+          hours?: number
+          id?: string
+          is_billable?: boolean
+          notes?: string | null
+          period_id: string
+          sort_index?: number
+          site_id?: string | null
+          study_id: string
+          updated_at?: string
+          work_date: string
+        }
+        Update: {
+          activity_type_id?: string
+          ai_suggestions?: Json | null
+          created_at?: string
+          hours?: number
+          id?: string
+          is_billable?: boolean
+          notes?: string | null
+          period_id?: string
+          sort_index?: number
+          site_id?: string | null
+          study_id?: string
+          updated_at?: string
+          work_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timesheet_entries_activity_type_id_fkey"
+            columns: ["activity_type_id"]
+            isOneToOne: false
+            referencedRelation: "time_activity_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheet_entries_period_id_fkey"
+            columns: ["period_id"]
+            isOneToOne: false
+            referencedRelation: "timesheet_periods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheet_entries_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "study_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheet_entries_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      timesheet_periods: {
+        Row: {
+          approval_step: number
+          approved_snapshot: Json | null
+          billable_hours: number | null
+          company_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          overtime_hours: number | null
+          profile_id: string
+          status: string
+          study_id: string
+          submitted_at: string | null
+          template_id: string | null
+          total_hours: number | null
+          updated_at: string
+          version: number
+          week_end_date: string
+          week_start_date: string
+        }
+        Insert: {
+          approval_step?: number
+          approved_snapshot?: Json | null
+          billable_hours?: number | null
+          company_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          overtime_hours?: number | null
+          profile_id: string
+          status?: string
+          study_id: string
+          submitted_at?: string | null
+          template_id?: string | null
+          total_hours?: number | null
+          updated_at?: string
+          version?: number
+          week_end_date: string
+          week_start_date: string
+        }
+        Update: {
+          approval_step?: number
+          approved_snapshot?: Json | null
+          billable_hours?: number | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          overtime_hours?: number | null
+          profile_id?: string
+          status?: string
+          study_id?: string
+          submitted_at?: string | null
+          template_id?: string | null
+          total_hours?: number | null
+          updated_at?: string
+          version?: number
+          week_end_date?: string
+          week_start_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timesheet_periods_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheet_periods_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheet_periods_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheet_periods_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "time_expense_approval_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trip_report_action_items: {
         Row: {
           created_at: string
@@ -5549,8 +6171,16 @@ export type Database = {
     }
     Functions: {
       ensure_user_profile: { Args: never; Returns: Json }
+      expense_report_record_decision: {
+        Args: { p_comment: string; p_decision: string; p_report_id: string }
+        Returns: Json
+      }
       finance_invoice_record_decision: {
         Args: { p_comment: string; p_decision: string; p_invoice_id: string }
+        Returns: Json
+      }
+      timesheet_period_record_decision: {
+        Args: { p_comment: string; p_decision: string; p_period_id: string }
         Returns: Json
       }
       generate_company_id: { Args: never; Returns: string }

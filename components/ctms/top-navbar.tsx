@@ -27,6 +27,7 @@ import {
   Shield,
   LineChart,
   BookOpen,
+  Clock,
   FilePenLine,
   ContactRound,
   Package,
@@ -86,7 +87,12 @@ const ctmsNavItems = [
   },
 ];
 
-const proFeatureRoutes = ['/protected/financials', '/protected/financials/approvals', '/protected/reports'];
+const proFeatureRoutes = [
+  '/protected/financials',
+  '/protected/financials/approvals',
+  '/protected/reports',
+  '/protected/time-expenses',
+];
 const enterpriseFeatureRoutes: string[] = [];
 
 export type CustomTrackerNavItem = {
@@ -163,8 +169,8 @@ export function TopNavbar({
   };
 
   const isLocked = (href: string) => {
-    const requiresPro = proFeatureRoutes.includes(href);
-    const requiresEnterprise = enterpriseFeatureRoutes.includes(href);
+    const requiresPro = proFeatureRoutes.some((r) => href === r || href.startsWith(`${r}/`));
+    const requiresEnterprise = enterpriseFeatureRoutes.some((r) => href === r || href.startsWith(`${r}/`));
     return (requiresPro && currentPlan === 'basic') || (requiresEnterprise && currentPlan !== 'enterprise');
   };
 
@@ -346,9 +352,39 @@ export function TopNavbar({
                 Modules
                 <ChevronDown className="h-3 w-3" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={8} className="min-w-48">
-                {isPlatformAdmin ? (
+              <DropdownMenuContent align="end" sideOffset={8} className="min-w-52 max-h-[min(24rem,70vh)] overflow-y-auto">
+                {hasCtmsAccess && (
                   <>
+                    <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                      Clinical operations
+                    </div>
+                    {[
+                      { href: '/protected/time-expenses', label: 'Time & expenses overview' },
+                      { href: '/protected/time-expenses/timesheets', label: 'Timesheets' },
+                      { href: '/protected/time-expenses/expenses', label: 'Expense reports' },
+                      { href: '/protected/time-expenses/approvals', label: 'Time & expense approvals' },
+                    ].map((item) => {
+                      const locked = isLocked(item.href);
+                      return (
+                        <DropdownMenuItem
+                          key={item.href}
+                          className={cn('cursor-pointer', locked && 'opacity-50')}
+                          onClick={() => router.push(locked ? '/protected/settings/billing' : item.href)}
+                        >
+                          <Clock className="mr-2 h-4 w-4" />
+                          {item.label}
+                          {locked && <Lock className="h-2.5 w-2.5 ml-auto" />}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </>
+                )}
+                {isPlatformAdmin && (
+                  <>
+                    {hasCtmsAccess && <DropdownMenuSeparator />}
+                    <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                      Platform
+                    </div>
                     <DropdownMenuItem
                       className="cursor-pointer"
                       onClick={() => router.push('/protected/platform/companies')}
@@ -371,7 +407,8 @@ export function TopNavbar({
                       Platform analytics
                     </DropdownMenuItem>
                   </>
-                ) : (
+                )}
+                {!hasCtmsAccess && !isPlatformAdmin && (
                   <div className="px-2 py-2 text-xs text-muted-foreground">Coming soon</div>
                 )}
               </DropdownMenuContent>
@@ -607,8 +644,37 @@ export function TopNavbar({
 
             <Separator className="my-2" />
             <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Modules</p>
-            {isPlatformAdmin ? (
+            {hasCtmsAccess && (
               <>
+                <p className="px-4 py-1 text-[10px] text-muted-foreground">Clinical operations</p>
+                {[
+                  { href: '/protected/time-expenses', label: 'Time & expenses overview' },
+                  { href: '/protected/time-expenses/timesheets', label: 'Timesheets' },
+                  { href: '/protected/time-expenses/expenses', label: 'Expense reports' },
+                  { href: '/protected/time-expenses/approvals', label: 'Time & expense approvals' },
+                ].map((item) => {
+                  const locked = isLocked(item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={locked ? '/protected/settings/billing' : item.href}
+                      onClick={() => setMobileOpen(false)}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted',
+                        locked && 'opacity-50',
+                      )}
+                    >
+                      <Clock className="h-4 w-4" />
+                      {item.label}
+                      {locked && <Lock className="h-3 w-3 ml-auto" />}
+                    </Link>
+                  );
+                })}
+              </>
+            )}
+            {isPlatformAdmin && (
+              <>
+                {hasCtmsAccess && <p className="px-4 py-1 text-[10px] text-muted-foreground">Platform</p>}
                 <Link
                   href="/protected/platform/companies"
                   onClick={() => setMobileOpen(false)}
@@ -634,7 +700,8 @@ export function TopNavbar({
                   Platform analytics
                 </Link>
               </>
-            ) : (
+            )}
+            {!hasCtmsAccess && !isPlatformAdmin && (
               <div className="px-4 py-2 text-sm text-muted-foreground">Coming soon</div>
             )}
 

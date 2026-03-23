@@ -10,6 +10,7 @@ interface SelectProps extends Omit<React.ComponentProps<typeof SelectPrimitive.R
   onValueChange?: (value: string) => void;
 }
 
+/** For Base UI Select, pass `items` (value + label) so the trigger shows labels while the list portal is closed. */
 function Select({ onValueChange, ...props }: SelectProps) {
   return (
     <SelectPrimitive.Root
@@ -37,18 +38,21 @@ interface SelectValueProps extends SelectPrimitive.Value.Props {
 }
 
 function SelectValue({ className, placeholder, getDisplayLabel, children, ...props }: SelectValueProps) {
+  const content =
+    children != null
+      ? children
+      : getDisplayLabel != null
+        ? (value: unknown) =>
+            getDisplayLabel(value == null ? null : String(value)) ?? placeholder ?? null
+        : undefined;
+
   return (
     <SelectPrimitive.Value
       data-slot="select-value"
       className={cn("flex flex-1 text-left", className)}
       {...props}
     >
-      {children || ((value) => {
-        if (getDisplayLabel) {
-          return getDisplayLabel(value) ?? placeholder ?? null;
-        }
-        return value ?? placeholder ?? null;
-      })}
+      {content}
     </SelectPrimitive.Value>
   )
 }
