@@ -357,9 +357,23 @@ export async function getStudyFinancialSummary(studyId: string): Promise<Financi
   };
 }
 
+export type PortfolioStudyFinancialRow = {
+  id: string;
+  title: string;
+  totalBudget: number;
+  totalPaid: number;
+  totalPending: number;
+  currency: string;
+  /** Open finance invoices (not paid, not rejected). */
+  invoiceOpenAmount: number;
+};
+
+export type PortfolioMonthlySpendPoint = { month: string; amount: number };
+
 export async function getPortfolioFinancials(): Promise<{
-  studies: { id: string; title: string; totalBudget: number; totalPaid: number; totalPending: number; currency: string }[];
-  totals: FinancialSummary;
+  studies: PortfolioStudyFinancialRow[];
+  totals: FinancialSummary & { invoiceOpenAmount: number };
+  monthlySpend: PortfolioMonthlySpendPoint[];
 }> {
   const supabase = await createClient();
 
@@ -372,35 +386,93 @@ export async function getPortfolioFinancials(): Promise<{
     .from('site_payments')
     .select('study_id, amount, status');
 
-  const studyMap = new Map<string, { title: string; totalBudget: number; totalPaid: number; totalPending: number; currency: string }>();
+  const { data: finInv, error: finInvErr } = await supabase
+    .from('finance_invoices')
+    .select('study_id, amount, status');
+
+  const { data: finPay, error: finPayErr } = await supabase
+    .from('finance_payments')
+    .select('paid_at, amount, status')
+    .eq('status', 'paid');
+
+  const openStatuses = new Set(['draft', 'submitted', 'under_review', 'approved']);
+  const invoiceOpenByStudy = new Map<string, number>();
+  if (!finInvErr && finInv) {
+    for (const row of finInv) {
+      if (!openStatuses.has(row.status as string)) continue;
+      const sid = row.study_id as string;
+      invoiceOpenByStudy.set(sid, (invoiceOpenByStudy.get(sid) ?? 0) + Number(row.amount));
+    }
+  }
+
+  const studyMap = new Map<string, PortfolioStudyFinancialRow>();
 
   for (const b of budgets ?? []) {
     const existing = studyMap.get(b.study_id) ?? {
+      id: b.study_id,
       title: (b.studies as unknown as Record<string, unknown>)?.title as string ?? '—',
       totalBudget: 0,
       totalPaid: 0,
       totalPending: 0,
       currency: b.currency,
+      invoiceOpenAmount: 0,
     };
     existing.totalBudget += Number(b.total_amount);
     studyMap.set(b.study_id, existing);
   }
 
   for (const p of payments ?? []) {
-    const existing = studyMap.get(p.study_id) ?? { title: '—', totalBudget: 0, totalPaid: 0, totalPending: 0, currency: 'USD' };
+    const existing = studyMap.get(p.study_id) ?? {
+      id: p.study_id,
+      title: '—',
+      totalBudget: 0,
+      totalPaid: 0,
+      totalPending: 0,
+      currency: 'USD',
+      invoiceOpenAmount: 0,
+    };
     if (p.status === 'paid') existing.totalPaid += Number(p.amount);
     else if (p.status === 'pending') existing.totalPending += Number(p.amount);
     studyMap.set(p.study_id, existing);
   }
 
-  const studies = Array.from(studyMap.entries()).map(([id, data]) => ({ id, ...data }));
-  const totals: FinancialSummary = {
+  for (const [sid, amt] of invoiceOpenByStudy) {
+    const existing = studyMap.get(sid) ?? {
+      id: sid,
+      title: '—',
+      totalBudget: 0,
+      totalPaid: 0,
+      totalPending: 0,
+      currency: 'USD',
+      invoiceOpenAmount: 0,
+    };
+    existing.invoiceOpenAmount = amt;
+    studyMap.set(sid, existing);
+  }
+
+  const studies = Array.from(studyMap.values());
+  const invoiceOpenAmount = studies.reduce((s, st) => s + st.invoiceOpenAmount, 0);
+  const totals: FinancialSummary & { invoiceOpenAmount: number } = {
     totalBudget: studies.reduce((s, st) => s + st.totalBudget, 0),
     totalPaid: studies.reduce((s, st) => s + st.totalPaid, 0),
     totalPending: studies.reduce((s, st) => s + st.totalPending, 0),
     totalApproved: 0,
     currency: studies[0]?.currency ?? 'USD',
+    invoiceOpenAmount,
   };
 
-  return { studies, totals };
+  const monthlyMap = new Map<string, number>();
+  if (!finPayErr && finPay) {
+    for (const row of finPay) {
+      const d = row.paid_at as string | null;
+      if (!d) continue;
+      const key = d.slice(0, 7);
+      monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + Number(row.amount));
+    }
+  }
+  const monthlySpend: PortfolioMonthlySpendPoint[] = Array.from(monthlyMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, amount]) => ({ month, amount }));
+
+  return { studies, totals, monthlySpend };
 }

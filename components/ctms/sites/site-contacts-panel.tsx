@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useTransition } from 'react';
+import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -41,6 +42,13 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 import type { SiteContact } from '@/lib/types/ctms';
 import {
@@ -50,12 +58,15 @@ import {
   getSiteById,
 } from '@/lib/actions/sites';
 
+const DIRECTORY_LINK_NONE = '__none__';
+
 const contactSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   role: z.string().min(1, 'Role is required'),
   email: z.string().optional(),
   phone: z.string().optional(),
   is_primary: z.boolean().optional(),
+  directory_contact_id: z.string().optional(),
 });
 
 type ContactFormValues = z.infer<typeof contactSchema>;
@@ -64,12 +75,14 @@ interface SiteContactsPanelProps {
   siteId: string;
   studyId: string;
   initialContacts: SiteContact[];
+  directoryContactOptions?: { id: string; label: string }[];
 }
 
 export function SiteContactsPanel({
   siteId,
   studyId,
   initialContacts,
+  directoryContactOptions = [],
 }: SiteContactsPanelProps) {
   const [contacts, setContacts] = useState(initialContacts);
   const [, startTransition] = useTransition();
@@ -108,6 +121,7 @@ export function SiteContactsPanel({
           siteId={siteId}
           studyId={studyId}
           onSuccess={refreshContacts}
+          directoryContactOptions={directoryContactOptions}
         />
       </div>
 
@@ -144,6 +158,18 @@ export function SiteContactsPanel({
                   <TableCell className="text-xs text-muted-foreground">
                     {contact.phone || '—'}
                   </TableCell>
+                  <TableCell className="text-xs">
+                    {contact.directory_contact_id ? (
+                      <Link
+                        href={`/protected/directory/contacts/${contact.directory_contact_id}`}
+                        className="text-primary underline-offset-4 hover:underline"
+                      >
+                        View profile
+                      </Link>
+                    ) : (
+                      '—'
+                    )}
+                  </TableCell>
                   <TableCell>
                     {contact.is_primary && (
                       <Badge variant="default" className="text-xs">
@@ -159,6 +185,7 @@ export function SiteContactsPanel({
                         studyId={studyId}
                         contact={contact}
                         onSuccess={refreshContacts}
+                        directoryContactOptions={directoryContactOptions}
                       />
                       <AlertDialog>
                         <AlertDialogTrigger
@@ -201,11 +228,13 @@ function ContactFormDialog({
   studyId,
   contact,
   onSuccess,
+  directoryContactOptions,
 }: {
   siteId: string;
   studyId: string;
   contact?: SiteContact;
   onSuccess: () => void;
+  directoryContactOptions: { id: string; label: string }[];
 }) {
   const [open, setOpen] = useState(false);
   const isEdit = !!contact;
@@ -219,6 +248,10 @@ function ContactFormDialog({
           email: contact.email ?? '',
           phone: contact.phone ?? '',
           is_primary: contact.is_primary,
+          directory_contact_id:
+            contact.directory_contact_id && contact.directory_contact_id.length > 0
+              ? contact.directory_contact_id
+              : DIRECTORY_LINK_NONE,
         }
       : {
           name: '',
@@ -226,12 +259,21 @@ function ContactFormDialog({
           email: '',
           phone: '',
           is_primary: false,
+          directory_contact_id: DIRECTORY_LINK_NONE,
         },
   });
 
   const onSubmit = async (values: ContactFormValues) => {
+    const directoryContactId =
+      values.directory_contact_id === DIRECTORY_LINK_NONE
+        ? null
+        : values.directory_contact_id || null;
+
     if (isEdit) {
-      const { error } = await updateSiteContact(contact.id, siteId, values);
+      const { error } = await updateSiteContact(contact.id, siteId, {
+        ...values,
+        directory_contact_id: directoryContactId,
+      });
       if (error) {
         toast.error(error);
         return;
@@ -239,7 +281,7 @@ function ContactFormDialog({
       toast.success('Contact updated');
     } else {
       const { error } = await addSiteContact(
-        { site_id: siteId, ...values },
+        { site_id: siteId, ...values, directory_contact_id: directoryContactId },
         studyId
       );
       if (error) {
@@ -286,7 +328,11 @@ function ContactFormDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Name</Label>
-              <Input placeholder="Full name" {...form.register('name')} />
+              <Input
+                placeholder="Full name"
+                className="text-xs"
+                {...form.register('name')}
+              />
               {form.formState.errors.name && (
                 <p className="text-xs text-destructive">
                   {form.formState.errors.name.message}
@@ -295,7 +341,11 @@ function ContactFormDialog({
             </div>
             <div className="space-y-2">
               <Label>Role</Label>
-              <Input placeholder="e.g., Study Coordinator" {...form.register('role')} />
+              <Input
+                placeholder="e.g., Study Coordinator"
+                className="text-xs"
+                {...form.register('role')}
+              />
               {form.formState.errors.role && (
                 <p className="text-xs text-destructive">
                   {form.formState.errors.role.message}
@@ -306,12 +356,52 @@ function ContactFormDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Email</Label>
-              <Input type="email" placeholder="email@example.com" {...form.register('email')} />
+              <Input
+                type="email"
+                placeholder="email@example.com"
+                className="text-xs"
+                {...form.register('email')}
+              />
             </div>
             <div className="space-y-2">
               <Label>Phone</Label>
-              <Input placeholder="+1 (555) 123-4567" {...form.register('phone')} />
+              <Input
+                placeholder="+1 (555) 123-4567"
+                className="text-xs"
+                {...form.register('phone')}
+              />
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label>Link to directory contact</Label>
+            <Select
+              value={form.watch('directory_contact_id') ?? DIRECTORY_LINK_NONE}
+              onValueChange={(v) => form.setValue('directory_contact_id', v)}
+            >
+              <SelectTrigger className="text-xs w-full">
+                <SelectValue
+                  placeholder="Optional"
+                  getDisplayLabel={(v) =>
+                    v === DIRECTORY_LINK_NONE
+                      ? 'None'
+                      : directoryContactOptions.find((o) => o.id === v)?.label ?? v
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={DIRECTORY_LINK_NONE} className="text-xs">
+                  None
+                </SelectItem>
+                {directoryContactOptions.map((o) => (
+                  <SelectItem key={o.id} value={o.id} className="text-xs">
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Optional link to a person in the company directory; site fields stay editable separately.
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <Checkbox

@@ -7,7 +7,6 @@ import { DocsSidebar } from '@/components/docs/docs-sidebar';
 import { DocsViewer } from '@/components/docs/docs-viewer';
 import { DocsToc } from '@/components/docs/docs-toc';
 import { DocsFeedback } from '@/components/docs/docs-feedback';
-import { DocsPdfButton } from '@/components/docs/docs-pdf-button';
 
 interface DocsSlugPageProps {
   params: Promise<{ slug: string }>;
@@ -20,26 +19,14 @@ export default async function DocsSlugPage({ params }: DocsSlugPageProps) {
   const { data: { user } } = await supabase.auth.getUser();
 
   let role = 'user';
-  let companyLogo: string | null = null;
-  let companyName = 'Trialetics';
 
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, company_id')
+      .select('role')
       .eq('user_id', user.id)
       .maybeSingle();
     role = profile?.role ?? 'user';
-
-    if (profile?.company_id) {
-      const { data: company } = await supabase
-        .from('companies')
-        .select('name, logo_url')
-        .eq('id', profile.company_id)
-        .single();
-      companyLogo = (company as { logo_url?: string | null })?.logo_url ?? null;
-      companyName = company?.name ?? 'Trialetics';
-    }
   }
 
   const dbRows = await fetchAllPlatformDocumentation(supabase);
@@ -59,14 +46,8 @@ export default async function DocsSlugPage({ params }: DocsSlugPageProps) {
       <div className="flex flex-1 min-w-0">
         <div className="flex-1 min-w-0 overflow-y-auto">
           <div className="max-w-3xl mx-auto">
-            <div className="flex items-center justify-between px-4 lg:px-8 pt-6">
+            <div className="px-4 lg:px-8 pt-6">
               <h1 className="text-xl font-bold">{entry.title}</h1>
-              <DocsPdfButton
-                title={entry.title}
-                parsedDoc={parsedDoc}
-                companyLogo={companyLogo}
-                companyName={companyName}
-              />
             </div>
             <DocsViewer
               content={parsedDoc.content}

@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { getStudyById } from '@/lib/actions/studies';
+import { listInstitutions } from '@/lib/actions/directory-institutions';
 import { StudyForm } from '@/components/ctms/studies/study-form';
 
 interface EditStudyPageProps {
@@ -15,6 +16,9 @@ export default async function EditStudyPage({ params }: EditStudyPageProps) {
   const study = await getStudyById(id);
 
   if (!study) notFound();
+
+  const { data: institutions } = await listInstitutions({ limit: 100 });
+  const institutionOptions = (institutions ?? []).map((i) => ({ id: i.id, name: i.name }));
 
   return (
     <div className="p-6 space-y-6 max-w-4xl">
@@ -29,7 +33,7 @@ export default async function EditStudyPage({ params }: EditStudyPageProps) {
         </p>
       </div>
 
-      <StudyForm study={study} mode="edit" />
+      <StudyForm study={study} mode="edit" institutionOptions={institutionOptions} />
     </div>
   );
 }

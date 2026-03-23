@@ -7,6 +7,7 @@ import { getStudySubjects, getEnrollmentFunnel } from '@/lib/actions/subjects';
 import { getStudyTeamMembers, getTeamRoles } from '@/lib/actions/team';
 import { getStudyVisits } from '@/lib/actions/visits';
 import { getStudyBudgets, getStudyPayments, getStudyFinancialSummary } from '@/lib/actions/financials';
+import { listFinanceInvoicesForStudy } from '@/lib/actions/finance-invoices';
 import { getStudyKriValues, getEnrollmentCurve } from '@/lib/actions/reports';
 import { StudyDetailTabs } from '@/components/ctms/studies/study-detail-tabs';
 
@@ -27,7 +28,23 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     .eq('user_id', user.id)
     .single();
 
-  const [study, counts, countries, sites, subjects, funnel, teamMembers, teamRoles, monitoringVisits, budgets, studyPayments, financialSummary, kriValues, enrollmentCurve] = await Promise.all([
+  const [
+    study,
+    counts,
+    countries,
+    sites,
+    subjects,
+    funnel,
+    teamMembers,
+    teamRoles,
+    monitoringVisits,
+    budgets,
+    studyPayments,
+    financialSummary,
+    financeInvoices,
+    kriValues,
+    enrollmentCurve,
+  ] = await Promise.all([
     getStudyById(id),
     getStudyCounts(id),
     getStudyCountries(id),
@@ -40,6 +57,7 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     getStudyBudgets(id),
     getStudyPayments(id),
     getStudyFinancialSummary(id),
+    listFinanceInvoicesForStudy(id).catch(() => []),
     getStudyKriValues(id),
     getEnrollmentCurve(id),
   ]);
@@ -61,6 +79,7 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
         budgets={budgets}
         payments={studyPayments}
         financialSummary={financialSummary}
+        financeInvoices={financeInvoices}
         kriValues={kriValues}
         enrollmentCurve={enrollmentCurve}
         isAdmin={profile?.role === 'admin'}

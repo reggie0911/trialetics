@@ -98,6 +98,7 @@ export interface CreateSiteInput {
   postal_code?: string;
   pi_name?: string;
   pi_email?: string;
+  pi_directory_contact_id?: string | null;
   status?: SiteStatus;
   activation_date?: string;
   target_enrollment?: number;
@@ -123,6 +124,7 @@ export async function createSite(
         postal_code: input.postal_code || null,
         pi_name: input.pi_name || null,
         pi_email: input.pi_email || null,
+        pi_directory_contact_id: input.pi_directory_contact_id || null,
         status: input.status || 'identified',
         activation_date: input.activation_date || null,
         target_enrollment: input.target_enrollment ?? 0,
@@ -158,6 +160,7 @@ export interface UpdateSiteInput {
   postal_code?: string;
   pi_name?: string;
   pi_email?: string;
+  pi_directory_contact_id?: string | null;
   status?: SiteStatus;
   activation_date?: string;
   target_enrollment?: number;
@@ -239,6 +242,7 @@ export interface AddContactInput {
   email?: string;
   phone?: string;
   is_primary?: boolean;
+  directory_contact_id?: string | null;
 }
 
 export async function addSiteContact(
@@ -256,6 +260,7 @@ export async function addSiteContact(
         email: input.email || null,
         phone: input.phone || null,
         is_primary: input.is_primary ?? false,
+        directory_contact_id: input.directory_contact_id || null,
       })
       .select()
       .single();

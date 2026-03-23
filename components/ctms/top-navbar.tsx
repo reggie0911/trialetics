@@ -28,6 +28,8 @@ import {
   LineChart,
   BookOpen,
   FilePenLine,
+  ContactRound,
+  Package,
 } from 'lucide-react';
 
 import Logo from '@/components/layout/logo';
@@ -65,15 +67,26 @@ const ctmsNavItems = [
   { label: 'Subjects', href: '/protected/subjects', icon: Users },
   { label: 'Countries', href: '/protected/countries', icon: Globe },
   { label: 'Team', href: '/protected/team', icon: UsersRound },
+  {
+    label: 'Contacts & organizations',
+    href: '/protected/directory',
+    icon: ContactRound,
+  },
   { label: 'Visits', href: '/protected/visits', icon: ClipboardCheck },
   { label: 'Trip Reports', href: '/protected/trip-reports', icon: FileText },
   { label: 'My Tasks', href: '/protected/my-tasks', icon: CheckSquare },
   { label: 'Project Team Tasks', href: '/protected/tasks', icon: ListTodo },
   { label: 'Financials', href: '/protected/financials', icon: DollarSign },
+  { label: 'Invoice approvals', href: '/protected/financials/approvals', icon: FilePenLine },
   { label: 'Reports', href: '/protected/reports', icon: BarChart3 },
+  {
+    label: 'Investigational product',
+    href: '/protected/investigational-product',
+    icon: Package,
+  },
 ];
 
-const proFeatureRoutes = ['/protected/financials', '/protected/reports'];
+const proFeatureRoutes = ['/protected/financials', '/protected/financials/approvals', '/protected/reports'];
 const enterpriseFeatureRoutes: string[] = [];
 
 export type CustomTrackerNavItem = {

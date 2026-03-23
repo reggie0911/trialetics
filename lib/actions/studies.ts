@@ -12,6 +12,7 @@ export interface CreateStudyInput {
   indication?: string;
   status?: StudyStatus;
   sponsor?: string;
+  sponsor_institution_id?: string | null;
   start_date?: string;
   end_date?: string;
   description?: string;
@@ -113,6 +114,7 @@ export async function createStudy(input: CreateStudyInput): Promise<{ data: Stud
         indication: input.indication || null,
         status: input.status || 'draft',
         sponsor: input.sponsor || null,
+        sponsor_institution_id: input.sponsor_institution_id || null,
         start_date: input.start_date || null,
         end_date: input.end_date || null,
         description: input.description || null,

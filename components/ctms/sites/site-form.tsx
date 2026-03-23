@@ -31,6 +31,8 @@ import { createSite, updateSite } from '@/lib/actions/sites';
 import { SITE_STATUS_OPTIONS } from '@/lib/types/ctms';
 import type { StudySite, StudyCountry } from '@/lib/types/ctms';
 
+const DIRECTORY_LINK_NONE = '__none__';
+
 const siteFormSchema = z.object({
   site_number: z.string().min(1, 'Site number is required'),
   name: z.string().min(1, 'Site name is required'),
@@ -41,6 +43,7 @@ const siteFormSchema = z.object({
   postal_code: z.string().optional(),
   pi_name: z.string().optional(),
   pi_email: z.string().optional(),
+  pi_directory_contact_id: z.string().optional(),
   status: z.enum(['identified', 'selected', 'initiated', 'activated', 'enrolling', 'closed']).optional(),
   activation_date: z.string().optional(),
   target_enrollment: z.coerce.number().min(0).optional(),
@@ -54,9 +57,17 @@ interface SiteFormProps {
   countries: Pick<StudyCountry, 'id' | 'country_name' | 'country_code'>[];
   mode: 'create' | 'edit';
   onSuccess?: () => void;
+  directoryContactOptions?: { id: string; label: string }[];
 }
 
-export function SiteForm({ studyId, site, countries, mode, onSuccess }: SiteFormProps) {
+export function SiteForm({
+  studyId,
+  site,
+  countries,
+  mode,
+  onSuccess,
+  directoryContactOptions = [],
+}: SiteFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -72,6 +83,10 @@ export function SiteForm({ studyId, site, countries, mode, onSuccess }: SiteForm
       postal_code: site?.postal_code ?? '',
       pi_name: site?.pi_name ?? '',
       pi_email: site?.pi_email ?? '',
+      pi_directory_contact_id:
+        site?.pi_directory_contact_id && site.pi_directory_contact_id.length > 0
+          ? site.pi_directory_contact_id
+          : DIRECTORY_LINK_NONE,
       status: site?.status ?? 'identified',
       activation_date: site?.activation_date ?? '',
       target_enrollment: site?.target_enrollment ?? 0,
@@ -81,10 +96,16 @@ export function SiteForm({ studyId, site, countries, mode, onSuccess }: SiteForm
   async function onSubmit(values: SiteFormValues) {
     setIsSubmitting(true);
     try {
+      const piDirectoryContactId =
+        values.pi_directory_contact_id === DIRECTORY_LINK_NONE
+          ? null
+          : values.pi_directory_contact_id || null;
+
       if (mode === 'create') {
         const { data, error } = await createSite({
           study_id: studyId,
           ...values,
+          pi_directory_contact_id: piDirectoryContactId,
         });
         if (error) {
           toast.error(error);
@@ -97,6 +118,7 @@ export function SiteForm({ studyId, site, countries, mode, onSuccess }: SiteForm
           id: site!.id,
           study_id: studyId,
           ...values,
+          pi_directory_contact_id: piDirectoryContactId,
         });
         if (error) {
           toast.error(error);
@@ -289,7 +311,7 @@ export function SiteForm({ studyId, site, countries, mode, onSuccess }: SiteForm
                 <FormItem>
                   <FormLabel>PI Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="Dr. Jane Smith" {...field} />
+                    <Input placeholder="Dr. Jane Smith" className="text-xs" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -303,8 +325,51 @@ export function SiteForm({ studyId, site, countries, mode, onSuccess }: SiteForm
                 <FormItem>
                   <FormLabel>PI Email</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="pi@hospital.org" {...field} />
+                    <Input
+                      type="email"
+                      placeholder="pi@hospital.org"
+                      className="text-xs"
+                      {...field}
+                    />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="pi_directory_contact_id"
+              render={({ field }) => (
+                <FormItem className="md:col-span-2">
+                  <FormLabel>Principal investigator (directory)</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value ?? DIRECTORY_LINK_NONE}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="text-xs w-full">
+                        <SelectValue
+                          placeholder="Link to a directory contact"
+                          getDisplayLabel={(v) =>
+                            v === DIRECTORY_LINK_NONE
+                              ? 'Not linked'
+                              : directoryContactOptions.find((o) => o.id === v)?.label ?? v
+                          }
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={DIRECTORY_LINK_NONE} className="text-xs">
+                        Not linked
+                      </SelectItem>
+                      {directoryContactOptions.map((o) => (
+                        <SelectItem key={o.id} value={o.id} className="text-xs">
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}

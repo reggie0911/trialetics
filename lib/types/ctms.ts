@@ -18,6 +18,7 @@ export interface Study {
   indication: string | null;
   status: StudyStatus;
   sponsor: string | null;
+  sponsor_institution_id: string | null;
   start_date: string | null;
   end_date: string | null;
   description: string | null;
@@ -48,6 +49,7 @@ export interface StudySite {
   postal_code: string | null;
   pi_name: string | null;
   pi_email: string | null;
+  pi_directory_contact_id: string | null;
   status: SiteStatus;
   activation_date: string | null;
   target_enrollment: number;
@@ -143,6 +145,7 @@ export interface SiteContact {
   email: string | null;
   phone: string | null;
   is_primary: boolean;
+  directory_contact_id: string | null;
   created_at: string;
 }
 
@@ -245,6 +248,8 @@ export type TeamMemberRole =
   | 'contracts_manager'
   | 'cra_manager'
   | 'executive_director'
+  | 'finance_director'
+  | 'finance_reviewer'
   | 'inventory_specialist'
   | 'medical_writer'
   | 'regulatory_specialist'
@@ -281,7 +286,7 @@ export interface StudyTeamMemberWithProfile extends StudyTeamMember {
     last_name: string | null;
     email: string | null;
     avatar_url: string | null;
-  };
+  } | null;
   team_roles: Pick<TeamRole, 'role_name'> | null;
   study_sites: Pick<StudySite, 'site_number' | 'name'> | null;
 }
@@ -315,6 +320,8 @@ export const TEAM_ROLE_OPTIONS: { value: TeamMemberRole; label: string }[] = [
   { value: 'contracts_manager', label: 'Contracts Manager' },
   { value: 'cra_manager', label: 'CRA Manager' },
   { value: 'executive_director', label: 'Executive Director' },
+  { value: 'finance_director', label: 'Finance Director' },
+  { value: 'finance_reviewer', label: 'Finance Reviewer' },
   { value: 'inventory_specialist', label: 'Inventory Specialist' },
   { value: 'medical_writer', label: 'Medical Writer' },
   { value: 'regulatory_specialist', label: 'Regulatory Specialist' },
@@ -336,6 +343,8 @@ export const TEAM_ROLE_LABEL: Record<TeamMemberRole, string> = {
   contracts_manager: 'Contracts Manager',
   cra_manager: 'CRA Manager',
   executive_director: 'Executive Director',
+  finance_director: 'Finance Director',
+  finance_reviewer: 'Finance Reviewer',
   inventory_specialist: 'Inventory Specialist',
   medical_writer: 'Medical Writer',
   regulatory_specialist: 'Regulatory Specialist',
@@ -601,6 +610,92 @@ export interface FinancialSummary {
   totalPending: number;
   totalApproved: number;
   currency: string;
+}
+
+export type FinanceInvoiceEntityType = 'site' | 'vendor' | 'irb';
+
+export type FinanceInvoiceStatus =
+  | 'draft'
+  | 'submitted'
+  | 'under_review'
+  | 'approved'
+  | 'rejected'
+  | 'paid';
+
+export interface FinanceInvoiceRow {
+  id: string;
+  study_id: string;
+  company_id: string;
+  entity_type: FinanceInvoiceEntityType;
+  site_id: string | null;
+  institution_id: string | null;
+  external_invoice_id: string;
+  amount: number;
+  currency: string;
+  received_at: string;
+  due_at: string | null;
+  status: FinanceInvoiceStatus;
+  approval_step: number;
+  template_id: string | null;
+  legacy_site_payment_id: string | null;
+  notes: string | null;
+  created_by_profile_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FinanceInvoiceWithRelations extends FinanceInvoiceRow {
+  studies?: { title: string } | null;
+  study_sites?: Pick<StudySite, 'site_number' | 'name'> | null;
+  institutions?: { name: string } | null;
+}
+
+export type FinancePaymentMethod = 'ach' | 'wire' | 'check';
+
+export type FinancePaymentStatus = 'pending' | 'scheduled' | 'paid' | 'failed';
+
+export interface FinancePaymentRow {
+  id: string;
+  study_id: string;
+  company_id: string;
+  amount: number;
+  currency: string;
+  method: FinancePaymentMethod;
+  status: FinancePaymentStatus;
+  paid_at: string | null;
+  reference: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const FINANCE_INVOICE_STATUS_LABEL: Record<FinanceInvoiceStatus, string> = {
+  draft: 'Draft',
+  submitted: 'Submitted',
+  under_review: 'Under review',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  paid: 'Paid',
+};
+
+export type SiteNegotiationStatus = 'draft' | 'in_review' | 'approved' | 'rejected';
+
+export type SitePaymentTermsType = 'per_visit' | 'milestone' | 'invoice';
+
+export interface SiteBudgetRow {
+  id: string;
+  study_id: string;
+  site_id: string;
+  study_budget_id: string | null;
+  proposed_amount: number;
+  approved_amount: number | null;
+  currency: string;
+  negotiation_status: SiteNegotiationStatus;
+  payment_terms_type: SitePaymentTermsType;
+  terms: Record<string, unknown> | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export type KriCategory = 'enrollment' | 'data_quality' | 'safety' | 'site_performance' | 'regulatory' | 'financial';

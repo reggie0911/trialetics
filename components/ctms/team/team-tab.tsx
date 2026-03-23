@@ -126,14 +126,21 @@ export function TeamTab({ studyId, initialMembers, teamRoles, sites }: TeamTabPr
   };
 
   const memberName = (member: StudyTeamMemberWithProfile) => {
-    const parts = [member.profiles.first_name, member.profiles.last_name].filter(Boolean);
-    return parts.length > 0 ? parts.join(' ') : member.profiles.email ?? 'Unknown';
+    const p = member.profiles;
+    if (!p) return 'Unknown';
+    const parts = [p.first_name, p.last_name].filter(Boolean);
+    return parts.length > 0 ? parts.join(' ') : p.email ?? 'Unknown';
   };
 
   const initials = (member: StudyTeamMemberWithProfile) => {
-    const f = member.profiles.first_name?.[0] ?? '';
-    const l = member.profiles.last_name?.[0] ?? '';
-    return (f + l).toUpperCase() || '?';
+    const p = member.profiles;
+    if (!p) return '?';
+    const f = p.first_name?.[0] ?? '';
+    const l = p.last_name?.[0] ?? '';
+    const fromName = (f + l).toUpperCase();
+    if (fromName) return fromName;
+    const fromEmail = p.email?.[0];
+    return fromEmail ? fromEmail.toUpperCase() : '?';
   };
 
   const activeCount = members.filter((m) => m.is_active).length;
@@ -190,7 +197,9 @@ export function TeamTab({ studyId, initialMembers, teamRoles, sites }: TeamTabPr
                       </Avatar>
                       <div className="min-w-0">
                         <p className="text-xs font-medium truncate">{memberName(member)}</p>
-                        <p className="text-xs text-muted-foreground truncate">{member.profiles.email}</p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {member.profiles?.email ?? '—'}
+                        </p>
                       </div>
                     </div>
                   </TableCell>
@@ -531,7 +540,12 @@ function EditTeamMemberDialog({
     onSuccess();
   };
 
-  const memberName = [member.profiles.first_name, member.profiles.last_name].filter(Boolean).join(' ') || member.profiles.email || 'Unknown';
+  const memberName =
+    member.profiles == null
+      ? 'Unknown'
+      : [member.profiles.first_name, member.profiles.last_name].filter(Boolean).join(' ') ||
+        member.profiles.email ||
+        'Unknown';
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
