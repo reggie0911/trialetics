@@ -23,6 +23,7 @@ import {
   getECRFAggregations,
   getECRFFilterOptions,
   ECRFAggregations,
+  type ECRFFilters as ECRFQueryServerFilters,
 } from "@/lib/actions/ecrf-query-tracker-data";
 import { ColumnFiltersState } from "@tanstack/react-table";
 import { Tables } from "@/lib/types/database.types";
@@ -193,8 +194,8 @@ export function ECRFQueryTrackerPageClient({
     setLoadingMessage(`Loading page ${currentPage} of ${totalPages}...`);
     
     // Prepare active filters (only non-empty values)
-    const activeFilters: any = {};
-    Object.entries(filters).forEach(([key, value]) => {
+    const activeFilters: ECRFQueryServerFilters = {};
+    (Object.entries(filters) as [keyof typeof filters, string][]).forEach(([key, value]) => {
       if (value && value.trim() !== '' && value.toLowerCase() !== 'all') {
         activeFilters[key] = value;
       }
@@ -228,10 +229,10 @@ export function ECRFQueryTrackerPageClient({
 
   const loadAggregations = async (uploadId: string) => {
     // Check if any filters are actually selected (not empty and not "all")
-    const activeFilters: any = {};
+    const activeFilters: ECRFQueryServerFilters = {};
     let hasActiveFilters = false;
     
-    Object.entries(filters).forEach(([key, value]) => {
+    (Object.entries(filters) as [keyof typeof filters, string][]).forEach(([key, value]) => {
       if (value && value.trim() !== '' && value.toLowerCase() !== 'all') {
         activeFilters[key] = value;
         hasActiveFilters = true;

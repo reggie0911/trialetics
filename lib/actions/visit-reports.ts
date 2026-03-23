@@ -128,6 +128,28 @@ export interface TripReportReviewQueueRow {
   reviewer_id: string | null;
 }
 
+/** Supabase join shape for monitoring_visits + study_sites + studies (client row may be array-nested) */
+type VisitRow = {
+  id: string;
+  study_id: string;
+  visit_type: string;
+  planned_date?: string | null;
+  actual_date?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  visit_name?: string | null;
+  study_sites?: { name: string; study_countries?: { country_name: string } | null } | null;
+  studies?: { title: string; protocol_number?: string | null } | null;
+};
+
+type ReportRow = {
+  id: string;
+  report_status?: string;
+  status?: string;
+  created_by?: string | null;
+  reviewer_id?: string | null;
+};
+
 export interface TrackerComplianceMetrics {
   submissionCompleted: number;
   submissionOverdue: number;
@@ -211,7 +233,7 @@ export async function getStudyCpmsForReviewerAssignment(
     .from('profiles')
     .select('id, first_name, last_name')
     .in('id', idQuery);
-  let rows = (profiles ?? []).map((p: { id: string; first_name: string | null; last_name: string | null }) => ({
+  const rows = (profiles ?? []).map((p: { id: string; first_name: string | null; last_name: string | null }) => ({
     id: p.id,
     displayName: [p.first_name, p.last_name].filter(Boolean).join(' ') || '—',
   }));
@@ -279,7 +301,7 @@ export async function getTripReportSummaryList(): Promise<TripReportSummaryRow[]
     .map((r) => r.created_by as string | undefined)
     .filter(Boolean) as string[];
 
-  let authorByProfileId: Record<string, string> = {};
+  const authorByProfileId: Record<string, string> = {};
   if (createdByIds.length > 0) {
     const { data: profiles } = await admin
       .from('profiles')
@@ -294,9 +316,10 @@ export async function getTripReportSummaryList(): Promise<TripReportSummaryRow[]
   const rows: TripReportSummaryRow[] = [];
 
   for (const v of visits ?? []) {
-    const site = (v as any).study_sites;
+    const vr = v as unknown as VisitRow;
+    const site = vr.study_sites;
     const countryName = site?.study_countries?.country_name ?? '—';
-    const studyId = (v as any).study_id as string;
+    const studyId = vr.study_id;
     const report = reportByVisit.get(v.id) ?? null;
     const rawStatus = (report?.report_status as string | undefined) ?? (report?.status as string | undefined) ?? 'report_pending';
     const status = rawStatus === 'draft' ? 'report_pending' : rawStatus;
@@ -326,10 +349,10 @@ export async function getTripReportSummaryList(): Promise<TripReportSummaryRow[]
       visit_id: v.id,
       study_id: studyId ?? '',
       site_name: site?.name ?? '—',
-      visit_name: (v as any).visit_name ?? `${(v as any).studies?.title ?? 'Visit'} – ${v.id.slice(0, 8)}`,
+      visit_name: vr.visit_name ?? `${vr.studies?.title ?? 'Visit'} – ${v.id.slice(0, 8)}`,
       visit_type: v.visit_type ?? '—',
       country_name: countryName,
-      visit_start_date: (v as any).start_date ?? v.planned_date ?? null,
+      visit_start_date: vr.start_date ?? v.planned_date ?? null,
       report_status: status,
       report_id: (report?.id as string | undefined) ?? null,
       report_author: author ?? '—',
@@ -421,7 +444,7 @@ export async function getTripReportTrackerList(): Promise<{
   }
 
   const allProfileIds = [...createdByIds, ...reviewerIds, ...approverIds];
-  let profileNames: Record<string, string> = {};
+  const profileNames: Record<string, string> = {};
   if (allProfileIds.length > 0) {
     const { data: profiles } = await admin
       .from('profiles')
@@ -442,11 +465,12 @@ export async function getTripReportTrackerList(): Promise<{
   const preSubmissionStatuses = new Set(['report_pending', 'authoring', 'returned']);
 
   for (const v of visits ?? []) {
+    const vr = v as unknown as VisitRow;
     const report = reportByVisit.get(v.id) ?? null;
     const rawStatus = (report?.report_status as string | undefined) ?? (report?.status as string | undefined) ?? 'report_pending';
     const status = rawStatus === 'draft' ? 'report_pending' : rawStatus;
-    const endDate = (v as any).end_date ?? v.actual_date ?? v.planned_date ?? null;
-    const anchor = ((v as any).start_date as string | null | undefined) ?? v.planned_date ?? null;
+    const endDate = vr.end_date ?? v.actual_date ?? v.planned_date ?? null;
+    const anchor = vr.start_date ?? v.planned_date ?? null;
     const storedSubDue = (report?.submission_due_date as string | null | undefined) ?? null;
     const storedAppDue = (report?.approval_due_date as string | null | undefined) ?? null;
     const templateId = (report?.template_id as string | null | undefined) ?? null;
@@ -511,7 +535,7 @@ export async function getTripReportTrackerList(): Promise<{
     if (vrReviewedDate && approvedDate) approvalDays = calendarDaysBetweenIso(vrReviewedDate, approvedDate);
     else if (submittedDate && approvedDate) approvalDays = calendarDaysBetweenIso(submittedDate, approvedDate);
 
-    const studyId = (v as any).study_id as string;
+    const studyId = vr.study_id;
     let isCra = false;
     let isCpm = false;
     if (currentProfileId && studyId) {
@@ -531,8 +555,8 @@ export async function getTripReportTrackerList(): Promise<{
     rows.push({
       visit_id: v.id,
       study_id: studyId ?? '',
-      study_name: (v as any).studies?.title ?? '—',
-      site_name: (v as any).study_sites?.name ?? '—',
+      study_name: vr.studies?.title ?? '—',
+      site_name: vr.study_sites?.name ?? '—',
       visit_type: v.visit_type,
       visit_id_display: `V-${v.id.slice(0, 12).toUpperCase()}`,
       visit_end_date: endDate,
@@ -621,7 +645,7 @@ export async function getTripReportReviewQueue(): Promise<TripReportReviewQueueR
   const createdByIds = [...latestByVisit.values()]
     .map((r) => r.created_by as string | undefined)
     .filter(Boolean) as string[];
-  let authorNames: Record<string, string> = {};
+  const authorNames: Record<string, string> = {};
   if (createdByIds.length > 0) {
     const { data: profiles } = await admin
       .from('profiles')
@@ -636,19 +660,21 @@ export async function getTripReportReviewQueue(): Promise<TripReportReviewQueueR
   for (const v of visitList) {
     const r = latestByVisit.get(v.id);
     if (!r) continue;
-    const st = ((r as any).report_status as string | undefined) ?? ((r as any).status as string | undefined) ?? '';
+    const report = r as unknown as ReportRow;
+    const vr = v as unknown as VisitRow;
+    const st = report.report_status ?? report.status ?? '';
     const norm = st === 'draft' ? 'report_pending' : st;
     if (norm !== 'submitted' && norm !== 'under_review') continue;
     out.push({
       visit_id: v.id,
-      study_id: (v as any).study_id,
-      study_name: (v as any).studies?.title ?? '—',
-      site_name: (v as any).study_sites?.name ?? '—',
+      study_id: vr.study_id,
+      study_name: vr.studies?.title ?? '—',
+      site_name: vr.study_sites?.name ?? '—',
       visit_type: v.visit_type,
-      report_id: (r as any).id,
+      report_id: report.id,
       report_status: norm,
-      report_author: (r as any).created_by ? authorNames[(r as any).created_by] ?? null : null,
-      reviewer_id: ((r as any).reviewer_id as string | null) ?? null,
+      report_author: report.created_by ? authorNames[report.created_by] ?? null : null,
+      reviewer_id: report.reviewer_id ?? null,
     });
   }
   return out;
@@ -686,7 +712,7 @@ export async function getTemplatesWithQuestionCount(): Promise<TemplateWithQuest
   const supabase = await createClient();
   let templates: Record<string, unknown>[] | null = null;
   let te: { message: string } | null = null;
-  let selectCols = TEMPLATE_SELECT_WITH_STUDY;
+  const selectCols = TEMPLATE_SELECT_WITH_STUDY;
   const result = await supabase.from('visit_report_templates').select(selectCols).order('name');
   te = result.error;
   templates = (result.data as Record<string, unknown>[] | null) ?? null;
@@ -721,7 +747,7 @@ export async function getTemplatesWithQuestionCount(): Promise<TemplateWithQuest
   });
 
   const studyIds = [...new Set((templates as Record<string, unknown>[]).map((t) => t.study_id).filter(Boolean) as string[])];
-  let studyNameById: Record<string, string> = {};
+  const studyNameById: Record<string, string> = {};
   if (studyIds.length > 0) {
     const { data: studies } = await supabase
       .from('studies')
@@ -1129,8 +1155,8 @@ export async function getLastApprovedVisitDate(
 }
 
 export type TripReportWithDetailsResult = {
-  visit: any;
-  report: any | null;
+  visit: Record<string, unknown>;
+  report: Record<string, unknown> | null;
   template: VisitReportTemplate | null;
   questions: VisitReportTemplateQuestion[];
   responses: Record<string, { response: string | null; comments: string | null; reviewer_comments: string | null }>;
@@ -1218,8 +1244,8 @@ export async function getTripReportWithDetails(visitId: string): Promise<TripRep
   const defaultSignerNames = { author: null as string | null, approver: null as string | null };
 
   const emptyBase = {
-    visit,
-    report: null as any,
+    visit: visit as Record<string, unknown>,
+    report: null as Record<string, unknown> | null,
     template: null as VisitReportTemplate | null,
     questions: [] as VisitReportTemplateQuestion[],
     responses: {} as Record<string, { response: string | null; comments: string | null; reviewer_comments: string | null }>,
@@ -1306,7 +1332,12 @@ export async function getTripReportWithDetails(visitId: string): Promise<TripRep
     .select('template_question_id, response, comments, reviewer_comments')
     .eq('trip_report_id', report.id);
   const responses: Record<string, { response: string | null; comments: string | null; reviewer_comments: string | null }> = {};
-  (resRows ?? []).forEach((r: any) => {
+  (resRows ?? []).forEach((r: {
+    template_question_id: string;
+    response: string | null;
+    comments: string | null;
+    reviewer_comments: string | null;
+  }) => {
     responses[r.template_question_id] = {
       response: r.response ?? null,
       comments: r.comments ?? null,
@@ -1341,7 +1372,7 @@ export async function getTripReportWithDetails(visitId: string): Promise<TripRep
     // Table may not exist yet; keep empty array
   }
 
-  let profileNamesById: Record<string, string> = {};
+  const profileNamesById: Record<string, string> = {};
   let auditEvents: TripReportStatusEventRow[] = [];
   try {
     const { data: evRows } = await supabase

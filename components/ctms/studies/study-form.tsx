@@ -32,6 +32,9 @@ import { createStudy, updateStudy, getCompanyName } from '@/lib/actions/studies'
 import { STUDY_PHASE_OPTIONS, STUDY_STATUS_OPTIONS } from '@/lib/types/ctms';
 import type { Study } from '@/lib/types/ctms';
 
+/** Sentinel for optional directory / institution selects (Radix Select disallows empty string values). */
+const DIRECTORY_LINK_NONE = '__none__';
+
 const studyFormSchema = z.object({
   protocol_number: z.string().min(1, 'Protocol number is required'),
   title: z.string().min(1, 'Study title is required'),
@@ -42,6 +45,7 @@ const studyFormSchema = z.object({
   indication: z.string().optional(),
   status: z.enum(['draft', 'active', 'completed', 'closed', 'on_hold']).optional(),
   sponsor: z.string().optional(),
+  sponsor_institution_id: z.string().optional(),
   start_date: z.string().optional(),
   end_date: z.string().optional(),
   description: z.string().optional(),
@@ -53,9 +57,15 @@ interface StudyFormProps {
   study?: Study;
   mode: 'create' | 'edit';
   onSuccess?: () => void;
+  institutionOptions?: { id: string; name: string }[];
 }
 
-export function StudyForm({ study, mode, onSuccess }: StudyFormProps) {
+export function StudyForm({
+  study,
+  mode,
+  onSuccess,
+  institutionOptions = [],
+}: StudyFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -69,6 +79,10 @@ export function StudyForm({ study, mode, onSuccess }: StudyFormProps) {
       indication: study?.indication ?? '',
       status: study?.status ?? 'draft',
       sponsor: study?.sponsor ?? '',
+      sponsor_institution_id:
+        study?.sponsor_institution_id && study.sponsor_institution_id.length > 0
+          ? study.sponsor_institution_id
+          : DIRECTORY_LINK_NONE,
       start_date: study?.start_date ?? '',
       end_date: study?.end_date ?? '',
       description: study?.description ?? '',
@@ -87,8 +101,16 @@ export function StudyForm({ study, mode, onSuccess }: StudyFormProps) {
     setIsSubmitting(true);
 
     try {
+      const sponsorInstitutionId =
+        values.sponsor_institution_id === DIRECTORY_LINK_NONE
+          ? null
+          : values.sponsor_institution_id || null;
+
       if (mode === 'create') {
-        const { data, error } = await createStudy(values);
+        const { data, error } = await createStudy({
+          ...values,
+          sponsor_institution_id: sponsorInstitutionId,
+        });
         if (error) {
           toast.error(error);
           return;
@@ -100,7 +122,11 @@ export function StudyForm({ study, mode, onSuccess }: StudyFormProps) {
           router.push(`/protected/studies/${data!.id}`);
         }
       } else {
-        const { error } = await updateStudy({ id: study!.id, ...values });
+        const { error } = await updateStudy({
+          id: study!.id,
+          ...values,
+          sponsor_institution_id: sponsorInstitutionId,
+        });
         if (error) {
           toast.error(error);
           return;
@@ -234,16 +260,56 @@ export function StudyForm({ study, mode, onSuccess }: StudyFormProps) {
               name="sponsor"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Sponsor</FormLabel>
+                  <FormLabel>Sponsor (display name)</FormLabel>
                   <FormControl>
-                    <Input placeholder="Sponsoring organization" disabled {...field} />
+                    <Input
+                      placeholder="e.g., company or protocol sponsor label"
+                      className="text-xs"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <div />
+            <FormField
+              control={form.control}
+              name="sponsor_institution_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Sponsor organization (directory)</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value ?? DIRECTORY_LINK_NONE}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="text-xs">
+                        <SelectValue
+                          placeholder="Link to an organization"
+                          getDisplayLabel={(v) =>
+                            v === DIRECTORY_LINK_NONE
+                              ? 'Not linked'
+                              : institutionOptions.find((o) => o.id === v)?.name ?? v
+                          }
+                        />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={DIRECTORY_LINK_NONE} className="text-xs">
+                        Not linked
+                      </SelectItem>
+                      {institutionOptions.map((o) => (
+                        <SelectItem key={o.id} value={o.id} className="text-xs">
+                          {o.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

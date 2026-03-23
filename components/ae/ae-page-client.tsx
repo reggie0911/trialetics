@@ -19,6 +19,7 @@ import {
   uploadAEData,
   getAERecords,
   deleteAEUpload,
+  type AEHeaderMapping,
 } from "@/lib/actions/ae-data";
 import { ColumnFiltersState } from "@tanstack/react-table";
 import { Tables } from "@/lib/types/database.types";
@@ -82,7 +83,7 @@ export function AEPageClient({
     const result = await getAEHeaderMappings(companyId);
     if (result.success && result.data) {
       const mappings: Record<string, string> = {};
-      result.data.forEach((mapping: any) => {
+      result.data.forEach((mapping: AEHeaderMapping) => {
         mappings[mapping.original_header] = mapping.customized_header;
       });
       setHeaderMappings(mappings);

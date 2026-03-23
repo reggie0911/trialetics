@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { SiteForm } from '@/components/ctms/sites/site-form';
 import { getStudyById } from '@/lib/actions/studies';
 import { getStudyCountries } from '@/lib/actions/countries';
+import { listDirectoryContacts } from '@/lib/actions/directory-contacts';
 
 interface NewSitePageProps {
   searchParams: Promise<{ studyId?: string }>;
@@ -24,6 +25,15 @@ export default async function NewSitePage({ searchParams }: NewSitePageProps) {
     id: c.id,
     country_name: c.country_name,
     country_code: c.country_code,
+  }));
+
+  const { data: dirContacts } = await listDirectoryContacts({ limit: 100 });
+  const directoryContactOptions = (dirContacts ?? []).map((c) => ({
+    id: c.id,
+    label:
+      [c.first_name, c.last_name].filter(Boolean).join(' ').trim() ||
+      c.email ||
+      'Unnamed contact',
   }));
 
   return (
@@ -45,7 +55,12 @@ export default async function NewSitePage({ searchParams }: NewSitePageProps) {
         </p>
       </div>
 
-      <SiteForm studyId={studyId} countries={countryOptions} mode="create" />
+      <SiteForm
+        studyId={studyId}
+        countries={countryOptions}
+        mode="create"
+        directoryContactOptions={directoryContactOptions}
+      />
     </div>
   );
 }

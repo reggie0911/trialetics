@@ -331,8 +331,12 @@ export async function executeReport(
     }
 
     if (filters && filters.length > 0) {
+      const filterable = query as unknown as Record<
+        string,
+        (field: string, value: unknown) => typeof query
+      >;
       for (const f of filters) {
-        query = (query as any)[f.operator](f.field, f.value);
+        query = filterable[f.operator](f.field, f.value);
       }
     }
 

@@ -24,10 +24,6 @@ export function ProtectedNavbar() {
   const [showCompleteSetup, setShowCompleteSetup] = useState(false);
   const [companyName, setCompanyName] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadUserProfile();
-  }, [pathname]);
-
   const loadUserProfile = async () => {
     try {
       const supabase = createClient();
@@ -95,6 +91,11 @@ export function ProtectedNavbar() {
       console.error('Unexpected error in loadUserProfile:', error);
     }
   };
+
+  useEffect(() => {
+    loadUserProfile();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   const handleLogout = async () => {
     const supabase = createClient();

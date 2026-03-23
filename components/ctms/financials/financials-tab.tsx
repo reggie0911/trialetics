@@ -71,6 +71,7 @@ import type {
   BudgetStatus,
   FinancialSummary,
   StudySite,
+  FinanceInvoiceWithRelations,
 } from '@/lib/types/ctms';
 import {
   BUDGET_STATUS_OPTIONS,
@@ -91,6 +92,9 @@ import {
   updatePayment,
   deletePayment,
 } from '@/lib/actions/financials';
+import { listFinanceInvoicesForStudy } from '@/lib/actions/finance-invoices';
+import { FinanceInvoicesSection } from '@/components/ctms/financials/finance-invoices-section';
+import { FinancialsStudyCharts } from '@/components/ctms/financials/financials-study-charts';
 
 function formatCurrency(amount: number, currency: string = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
@@ -101,26 +105,37 @@ interface FinancialsTabProps {
   initialBudgets: StudyBudgetWithItems[];
   initialPayments: SitePaymentWithSite[];
   initialSummary: FinancialSummary;
+  initialFinanceInvoices: FinanceInvoiceWithRelations[];
   sites: Pick<StudySite, 'id' | 'site_number' | 'name'>[];
 }
 
-export function FinancialsTab({ studyId, initialBudgets, initialPayments, initialSummary, sites }: FinancialsTabProps) {
+export function FinancialsTab({
+  studyId,
+  initialBudgets,
+  initialPayments,
+  initialSummary,
+  initialFinanceInvoices,
+  sites,
+}: FinancialsTabProps) {
   const [budgets, setBudgets] = useState(initialBudgets);
   const [payments, setPayments] = useState(initialPayments);
   const [summary, setSummary] = useState(initialSummary);
+  const [financeInvoices, setFinanceInvoices] = useState(initialFinanceInvoices);
   const [, startTransition] = useTransition();
 
   const refreshData = useCallback(() => {
     startTransition(async () => {
       try {
-        const [b, p, s] = await Promise.all([
+        const [b, p, s, inv] = await Promise.all([
           getStudyBudgets(studyId),
           getStudyPayments(studyId),
           getStudyFinancialSummary(studyId),
+          listFinanceInvoicesForStudy(studyId),
         ]);
         setBudgets(b);
         setPayments(p);
         setSummary(s);
+        setFinanceInvoices(inv);
       } catch {
         toast.error('Failed to refresh financial data');
       }
@@ -158,6 +173,9 @@ export function FinancialsTab({ studyId, initialBudgets, initialPayments, initia
 
   return (
     <div className="space-y-6">
+      <FinanceInvoicesSection studyId={studyId} invoices={financeInvoices} sites={sites} onChanged={refreshData} />
+      <FinancialsStudyCharts summary={summary} financeInvoices={financeInvoices} currency={summary.currency} />
+
       {/* Financial Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Card>

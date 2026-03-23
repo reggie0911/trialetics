@@ -13,7 +13,7 @@ interface SelectProps extends Omit<React.ComponentProps<typeof SelectPrimitive.R
 function Select({ onValueChange, ...props }: SelectProps) {
   return (
     <SelectPrimitive.Root
-      onValueChange={onValueChange ? (value: any) => {
+      onValueChange={onValueChange ? (value: unknown) => {
         if (value != null) onValueChange(String(value));
       } : undefined}
       {...props}

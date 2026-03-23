@@ -172,7 +172,12 @@ export async function getStartupProgress(
     const rows = data ?? [];
     const total = rows.length;
     const avgPct = total > 0
-      ? Math.round(rows.reduce((sum, r) => sum + ((r as any).completion_percentage ?? 0), 0) / total)
+      ? Math.round(
+          rows.reduce(
+            (sum, r) => sum + (typeof r.completion_percentage === 'number' ? r.completion_percentage : 0),
+            0
+          ) / total
+        )
       : 0;
 
     return {

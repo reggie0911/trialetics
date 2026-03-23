@@ -5,6 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { cn } from "@/lib/utils";
 import {
+  type BarRectangleItem,
+  type PieLabelRenderProps,
+  type PieSectorDataItem,
   BarChart,
   Bar,
   PieChart,
@@ -149,14 +152,21 @@ function YAxisTickMultiline(props: Record<string, unknown>) {
   );
 }
 
-function PieLabelWrapped(props: Record<string, unknown>) {
+function PieLabelWrapped(props: PieLabelRenderProps) {
   const cx = Number(props.cx ?? 0);
   const cy = Number(props.cy ?? 0);
   const midAngle = Number(props.midAngle ?? 0);
   const outerRadius = Number(props.outerRadius ?? 0);
-  const p = props as { state?: string; name?: string; count?: number; value?: number };
-  const label = String(p.state ?? p.name ?? "");
-  const count = Number(p.count ?? p.value ?? 0);
+  const row = props.payload as
+    | { state?: string; name?: string; count?: number; value?: number }
+    | undefined;
+  const merged = props as PieLabelRenderProps & {
+    state?: string;
+    name?: string;
+    count?: number;
+  };
+  const label = String(merged.state ?? merged.name ?? row?.state ?? row?.name ?? "");
+  const count = Number(merged.count ?? row?.count ?? row?.value ?? merged.value ?? 0);
   const RADIAN = Math.PI / 180;
   const x = cx + (outerRadius + 12) * Math.cos(-midAngle * RADIAN);
   const y = cy + (outerRadius + 12) * Math.sin(-midAngle * RADIAN);
@@ -349,8 +359,10 @@ export function ECRFCharts({ chartData, filters, onFilterChange }: ECRFChartsPro
                 <Bar
                   dataKey="count"
                   radius={[4, 4, 0, 0]}
-                  onClick={(data: any) => {
-                    const role = data?.role ?? "";
+                  onClick={(data: BarRectangleItem) => {
+                    const merged = data as BarRectangleItem & { role?: string };
+                    const row = data.payload as { role?: string } | undefined;
+                    const role = merged.role ?? row?.role ?? "";
                     onFilterChange(
                       "queryRaisedByRole",
                       role === filters.queryRaisedByRole ? "" : role
@@ -409,8 +421,10 @@ export function ECRFCharts({ chartData, filters, onFilterChange }: ECRFChartsPro
                 <Bar
                   dataKey="count"
                   radius={[0, 4, 4, 0]}
-                  onClick={(data: any) => {
-                    const site = data?.site ?? "";
+                  onClick={(data: BarRectangleItem) => {
+                    const merged = data as BarRectangleItem & { site?: string };
+                    const row = data.payload as { site?: string } | undefined;
+                    const site = merged.site ?? row?.site ?? "";
                     onFilterChange("siteName", site === filters.siteName ? "" : site);
                   }}
                   cursor="pointer"
@@ -446,10 +460,12 @@ export function ECRFCharts({ chartData, filters, onFilterChange }: ECRFChartsPro
                   cx="50%"
                   cy="50%"
                   outerRadius={72}
-                  label={(p: any) => <PieLabelWrapped {...p} />}
+                  label={(p: PieLabelRenderProps) => <PieLabelWrapped {...p} />}
                   labelLine={{ stroke: "hsl(var(--border))", strokeWidth: 1 }}
-                  onClick={(data: any) => {
-                    const st = data?.state ?? "";
+                  onClick={(data: PieSectorDataItem) => {
+                    const merged = data as PieSectorDataItem & { state?: string };
+                    const row = data.payload as { state?: string } | undefined;
+                    const st = merged.state ?? row?.state ?? "";
                     onFilterChange("queryState", st === filters.queryState ? "" : st);
                   }}
                   cursor="pointer"
@@ -498,8 +514,10 @@ export function ECRFCharts({ chartData, filters, onFilterChange }: ECRFChartsPro
                 <Bar
                   dataKey="count"
                   radius={[4, 4, 0, 0]}
-                  onClick={(data: any) => {
-                    const ty = data?.type ?? "";
+                  onClick={(data: BarRectangleItem) => {
+                    const merged = data as BarRectangleItem & { type?: string };
+                    const row = data.payload as { type?: string } | undefined;
+                    const ty = merged.type ?? row?.type ?? "";
                     onFilterChange("queryType", ty === filters.queryType ? "" : ty);
                   }}
                   cursor="pointer"
@@ -561,8 +579,10 @@ export function ECRFCharts({ chartData, filters, onFilterChange }: ECRFChartsPro
                 <Bar
                   dataKey="avgDays"
                   radius={[0, 4, 4, 0]}
-                  onClick={(data: any) => {
-                    const site = data?.site ?? "";
+                  onClick={(data: BarRectangleItem) => {
+                    const merged = data as BarRectangleItem & { site?: string };
+                    const row = data.payload as { site?: string } | undefined;
+                    const site = merged.site ?? row?.site ?? "";
                     onFilterChange("siteName", site === filters.siteName ? "" : site);
                   }}
                   cursor="pointer"
@@ -614,8 +634,10 @@ export function ECRFCharts({ chartData, filters, onFilterChange }: ECRFChartsPro
                 <Bar
                   dataKey="count"
                   radius={[0, 4, 4, 0]}
-                  onClick={(data: any) => {
-                    const form = data?.form ?? "";
+                  onClick={(data: BarRectangleItem) => {
+                    const merged = data as BarRectangleItem & { form?: string };
+                    const row = data.payload as { form?: string } | undefined;
+                    const form = merged.form ?? row?.form ?? "";
                     onFilterChange("formName", form === filters.formName ? "" : form);
                   }}
                   cursor="pointer"

@@ -3,6 +3,7 @@
 import { CSSProperties } from "react";
 import {
   Header,
+  HeaderGroup,
   flexRender,
 } from "@tanstack/react-table";
 import {
@@ -25,7 +26,7 @@ const GROUP_COLORS = {
 };
 
 interface MultiLevelTableHeaderProps {
-  headerGroups: any[];
+  headerGroups: HeaderGroup<PatientRecord>[];
   visitGroupSpans: VisitGroupSpan[];
   columnConfigs: ColumnConfig[];
   onColumnLabelChange: (columnId: string, newLabel: string) => void;
@@ -72,7 +73,7 @@ export function MultiLevelTableHeader({
       {/* Column Name Row */}
       {headerGroups.map((headerGroup) => (
         <TableRow key={headerGroup.id}>
-          {headerGroup.headers.map((header: any, idx: number) => {
+          {headerGroup.headers.map((header: Header<PatientRecord, unknown>, idx: number) => {
             const groupIndex = columnToGroupIndex.get(header.column.id) ?? 0;
             return (
               <DraggableTableHeader

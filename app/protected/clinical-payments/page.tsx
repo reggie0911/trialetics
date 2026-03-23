@@ -33,8 +33,14 @@ export default async function ClinicalPaymentsPage() {
             <h1 className="text-[32px] font-semibold mb-1 tracking-[-1px]">
               Clinical Payments
             </h1>
-            <p className="text-xs text-muted-foreground">
-              Manage site payments, payment exceptions, and generate payment records for clinical trials
+            <p className="text-xs text-muted-foreground max-w-xl">
+              Operational payment tools and demos. For <strong className="font-medium text-foreground">trial budgets</strong>,{' '}
+              <strong className="font-medium text-foreground">invoices</strong>, and{' '}
+              <strong className="font-medium text-foreground">approval-to-payment</strong> traceability, use CTMS{' '}
+              <Link href="/protected/financials" className="underline font-medium text-primary hover:text-primary/90">
+                Financials
+              </Link>{' '}
+              (canonical system — no automatic sync between these modules).
             </p>
           </div>
           <div className="flex items-center gap-4">

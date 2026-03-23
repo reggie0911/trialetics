@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/server';
 import { PatientRecord, ColumnConfig, FilterState } from '@/lib/types/patient-data';
-import { Tables, TablesInsert } from '@/lib/types/database.types';
+import { Tables, TablesInsert, type Json } from '@/lib/types/database.types';
 import { revalidatePath } from 'next/cache';
 
 // Types for our responses
@@ -703,7 +703,7 @@ export async function updateFilterPreferences(
 
     const { error } = await supabase
       .from('patient_uploads')
-      .update({ filter_preferences: filters as any })
+      .update({ filter_preferences: filters as unknown as Json })
       .eq('id', uploadId);
 
     if (error) {

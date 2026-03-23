@@ -3,12 +3,15 @@ import { stripe } from '@/lib/stripe';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import type Stripe from 'stripe';
 
-const supabaseAdmin = createAdminClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getSupabaseAdmin() {
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
 
 async function upsertSubscription(stripeSubscription: Stripe.Subscription) {
+  const supabaseAdmin = getSupabaseAdmin();
   const customerId = typeof stripeSubscription.customer === 'string'
     ? stripeSubscription.customer
     : stripeSubscription.customer.id;
@@ -104,7 +107,7 @@ export async function POST(request: NextRequest) {
         ? invoice.customer
         : invoice.customer?.id;
       if (customerId) {
-        await supabaseAdmin
+        await getSupabaseAdmin()
           .from('subscriptions')
           .update({ status: 'past_due' })
           .eq('stripe_customer_id', customerId);

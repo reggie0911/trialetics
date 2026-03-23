@@ -21,6 +21,11 @@ create index if not exists platform_documentation_category_idx on public.platfor
 
 alter table public.platform_documentation enable row level security;
 
+drop policy if exists "platform_documentation_select_authenticated" on public.platform_documentation;
+drop policy if exists "platform_documentation_insert_platform_admin" on public.platform_documentation;
+drop policy if exists "platform_documentation_update_platform_admin" on public.platform_documentation;
+drop policy if exists "platform_documentation_delete_platform_admin" on public.platform_documentation;
+
 -- Read: company admins, platform admins, or users when doc is marked for users
 create policy "platform_documentation_select_authenticated"
   on public.platform_documentation for select

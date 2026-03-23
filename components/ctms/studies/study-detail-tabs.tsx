@@ -34,7 +34,7 @@ import {
 import { toast } from 'sonner';
 
 import { closeStudy } from '@/lib/actions/studies';
-import type { Study, StudyCountryWithSubmissions, StudySite, SubjectWithSite, EnrollmentFunnelData, StudyTeamMemberWithProfile, TeamRole, MonitoringVisitWithRelations, StudyBudgetWithItems, SitePaymentWithSite, FinancialSummary, KriValueWithDefinition, EnrollmentDataPoint } from '@/lib/types/ctms';
+import type { Study, StudyCountryWithSubmissions, StudySite, SubjectWithSite, EnrollmentFunnelData, StudyTeamMemberWithProfile, TeamRole, MonitoringVisitWithRelations, StudyBudgetWithItems, SitePaymentWithSite, FinancialSummary, FinanceInvoiceWithRelations, KriValueWithDefinition, EnrollmentDataPoint } from '@/lib/types/ctms';
 import { CountriesTab } from '@/components/ctms/countries/countries-tab';
 import { SitesTab } from '@/components/ctms/sites/sites-tab';
 import { SubjectsTab } from '@/components/ctms/subjects/subjects-tab';
@@ -57,6 +57,7 @@ interface StudyDetailTabsProps {
   budgets: StudyBudgetWithItems[];
   payments: SitePaymentWithSite[];
   financialSummary: FinancialSummary;
+  financeInvoices: FinanceInvoiceWithRelations[];
   kriValues: KriValueWithDefinition[];
   enrollmentCurve: EnrollmentDataPoint[];
   isAdmin: boolean;
@@ -72,7 +73,7 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
 }
 
 
-export function StudyDetailTabs({ study, counts, countries, sites, subjects, funnel, teamMembers, teamRoles, monitoringVisits, budgets, payments, financialSummary, kriValues, enrollmentCurve, isAdmin }: StudyDetailTabsProps) {
+export function StudyDetailTabs({ study, counts, countries, sites, subjects, funnel, teamMembers, teamRoles, monitoringVisits, budgets, payments, financialSummary, financeInvoices, kriValues, enrollmentCurve, isAdmin }: StudyDetailTabsProps) {
   const router = useRouter();
   const [isClosing, setIsClosing] = useState(false);
 
@@ -292,6 +293,7 @@ export function StudyDetailTabs({ study, counts, countries, sites, subjects, fun
             initialBudgets={budgets}
             initialPayments={payments}
             initialSummary={financialSummary}
+            initialFinanceInvoices={financeInvoices}
             sites={sites.map((s) => ({ id: s.id, site_number: s.site_number, name: s.name }))}
           />
         </TabsContent>

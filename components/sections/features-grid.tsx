@@ -86,7 +86,7 @@ export default function FeaturesGrid() {
             What Sets Trialetics Apart?
           </h2>
           <p className="text-muted-foreground text-lg leading-snug lg:text-balance">
-            In the intricate world of clinical trial management, the right technology partner can make all the difference. We're more than just a software provider — we're an integral part of your team, deeply committed to the success of each project.
+            In the intricate world of clinical trial management, the right technology partner can make all the difference. We&apos;re more than just a software provider — we&apos;re an integral part of your team, deeply committed to the success of each project.
           </p>
         </div>
 

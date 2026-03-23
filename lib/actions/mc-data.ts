@@ -261,7 +261,7 @@ export async function deleteMCUpload(
  */
 export async function updateMCFilterPreferences(
   uploadId: string,
-  filterPreferences: Record<string, any>
+  filterPreferences: Record<string, unknown>
 ): Promise<ActionResponse<void>> {
   try {
     const supabase = await createClient();
@@ -348,9 +348,9 @@ export async function getMCRecords(
         patients.forEach(patient => {
           const key = `${patient.subject_id}|${patient.site_name}`;
           // Extract procedure date from JSONB visits field
-          const visits = patient.visits as Record<string, any>;
+          const visits = patient.visits as Record<string, unknown> | null;
           const procedureDate = visits?.['E02_V2[1].PRO_01.PEP[1].PEPDAT'];
-          if (procedureDate) {
+          if (typeof procedureDate === 'string' && procedureDate) {
             procedureDateMap.set(key, procedureDate);
           }
         });

@@ -12,7 +12,7 @@ export function getStripe(): Stripe {
 }
 
 export const stripe = new Proxy({} as Stripe, {
-  get(_target, prop) {
-    return (getStripe() as any)[prop];
+  get(_target, prop: string | symbol) {
+    return Reflect.get(getStripe(), prop);
   },
 });

@@ -134,7 +134,7 @@ export default function Hero() {
           variants={itemVariants}
           className="text-white/80 my-2 text-sm md:my-4 md:text-lg lg:my-6 lg:text-lg"
         >
-          Spreadsheets break under the weight of growing studies, Trialetics doesn't. Whether you're running one trial or a full portfolio, our platform gives you the speed, compliance, and oversight to scale without adding complexity.
+          Spreadsheets break under the weight of growing studies, Trialetics doesn&apos;t. Whether you&apos;re running one trial or a full portfolio, our platform gives you the speed, compliance, and oversight to scale without adding complexity.
         </motion.p>
 
         <motion.div variants={itemVariants} className="flex flex-col gap-3 sm:flex-row sm:justify-center">

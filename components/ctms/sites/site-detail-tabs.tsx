@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useTransition } from 'react';
+import { useState, useCallback, useTransition, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -16,6 +16,7 @@ import {
   NotebookPen,
   Loader2,
   ListTodo,
+  DollarSign,
 } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -23,8 +24,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import type { StudySiteWithDetails } from '@/lib/types/ctms';
-import type { Study } from '@/lib/types/ctms';
+import type {
+  StudySiteWithDetails,
+  Study,
+  FinanceInvoiceWithRelations,
+  SiteBudgetRow,
+  PaymentScheduleWithSite,
+} from '@/lib/types/ctms';
 import { updateSite } from '@/lib/actions/sites';
 
 import { SiteActivationStepper } from './site-activation-stepper';
@@ -32,6 +38,7 @@ import { SiteContactsPanel } from './site-contacts-panel';
 import { SiteMap, type DirectionsInfo } from './site-map';
 import { SiteWeather } from './site-weather';
 import { SiteTasksTable } from './site-tasks-table';
+import { SiteFinancialsPanel } from './site-financials-panel';
 import type { TaskWithRelations } from '@/lib/types/tasks';
 
 function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
@@ -126,9 +133,23 @@ interface SiteDetailTabsProps {
   isAdmin: boolean;
   enrolledCount: number;
   siteTasks: TaskWithRelations[];
+  directoryContactOptions?: { id: string; label: string }[];
+  siteBudget: SiteBudgetRow | null;
+  siteFinanceInvoices: FinanceInvoiceWithRelations[];
+  sitePaymentSchedules: PaymentScheduleWithSite[];
 }
 
-export function SiteDetailTabs({ site, study, isAdmin, enrolledCount, siteTasks }: SiteDetailTabsProps) {
+export function SiteDetailTabs({
+  site,
+  study,
+  isAdmin,
+  enrolledCount,
+  siteTasks,
+  directoryContactOptions = [],
+  siteBudget,
+  siteFinanceInvoices,
+  sitePaymentSchedules,
+}: SiteDetailTabsProps) {
   const [emailCopied, setEmailCopied] = useState(false);
   const [siteCoords, setSiteCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [airportDirections, setAirportDirections] = useState<DirectionsInfo | null>(null);
@@ -152,9 +173,10 @@ export function SiteDetailTabs({ site, study, isAdmin, enrolledCount, siteTasks 
     ? Math.min(100, Math.round((enrolledCount / site.target_enrollment) * 100))
     : 0;
 
-  const daysSinceActivation = site.activation_date
-    ? Math.floor((Date.now() - new Date(site.activation_date).getTime()) / (1000 * 60 * 60 * 24))
-    : null;
+  const daysSinceActivation = useMemo(() => {
+    if (!site.activation_date) return null;
+    return Math.floor((Date.now() - new Date(site.activation_date).getTime()) / (1000 * 60 * 60 * 24));
+  }, [site.activation_date]);
 
   const piInitials = site.pi_name
     ? site.pi_name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
@@ -225,6 +247,10 @@ export function SiteDetailTabs({ site, study, isAdmin, enrolledCount, siteTasks 
           <TabsTrigger value="tasks">
             <ListTodo className="mr-1 h-3.5 w-3.5" />
             Tasks ({siteTasks.length})
+          </TabsTrigger>
+          <TabsTrigger value="financials">
+            <DollarSign className="mr-1 h-3.5 w-3.5" />
+            Financials
           </TabsTrigger>
         </TabsList>
 
@@ -392,11 +418,22 @@ export function SiteDetailTabs({ site, study, isAdmin, enrolledCount, siteTasks 
             siteId={site.id}
             studyId={site.study_id}
             initialContacts={site.site_contacts ?? []}
+            directoryContactOptions={directoryContactOptions}
           />
         </TabsContent>
 
         <TabsContent value="tasks">
           <SiteTasksTable tasks={siteTasks} onRefresh={() => router.refresh()} isAdmin={isAdmin} />
+        </TabsContent>
+
+        <TabsContent value="financials">
+          <SiteFinancialsPanel
+            studyId={study.id}
+            siteId={site.id}
+            siteBudget={siteBudget}
+            invoices={siteFinanceInvoices}
+            schedules={sitePaymentSchedules}
+          />
         </TabsContent>
       </Tabs>
     </div>

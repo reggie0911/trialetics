@@ -86,7 +86,9 @@ export function MCCategoriesChart({ data, selectedCategory, onCategoryClick }: M
     );
   }
 
-  const handleBarClick = (data: { category: string; count: number } | null) => {
+  type BarCategoryPayload = { category: string; count: number };
+
+  const handleBarClick = (data: BarCategoryPayload | null) => {
     if (!data || !onCategoryClick) return;
     
     // Toggle selection: if clicking the same category, clear it
@@ -130,10 +132,10 @@ export function MCCategoriesChart({ data, selectedCategory, onCategoryClick }: M
               layout="vertical"
               data={chartData}
               margin={{ top: 12, right: 36, left: 8, bottom: 12 }}
-              onClick={(e: any) => {
-                if (e && e.activePayload && e.activePayload[0]) {
-                  handleBarClick(e.activePayload[0].payload);
-                }
+              onClick={(e) => {
+                const payload = (e as { activePayload?: Array<{ payload?: BarCategoryPayload }> })
+                  .activePayload?.[0]?.payload;
+                if (payload) handleBarClick(payload);
               }}
               style={{ cursor: "pointer" }}
             >
