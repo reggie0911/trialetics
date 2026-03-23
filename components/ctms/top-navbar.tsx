@@ -31,6 +31,7 @@ import {
   FilePenLine,
   ContactRound,
   Package,
+  FolderOpen,
 } from 'lucide-react';
 
 import Logo from '@/components/layout/logo';
@@ -106,6 +107,7 @@ interface TopNavbarProps {
   hasCtmsAccess: boolean;
   hasTrackerAccess: boolean;
   hasEtmfAccess: boolean;
+  hasEisfAccess: boolean;
   isPlatformAdmin: boolean;
   /** Keys from `companies.enabled_study_tracker_keys` to show under Custom → Study trackers (serializable). */
   studyTrackerMenuKeys: string[];
@@ -118,6 +120,7 @@ interface TopNavbarProps {
 }
 
 function getPageName(pathname: string, customNames: CustomTrackerNavItem[]): string {
+  if (pathname.startsWith('/protected/eisf')) return 'eISF';
   if (pathname.startsWith('/protected/etmf')) return 'eTMF';
   if (pathname.startsWith('/protected/platform/')) return 'Platform admin';
   for (const t of customNames) {
@@ -142,6 +145,7 @@ export function TopNavbar({
   hasCtmsAccess,
   hasTrackerAccess,
   hasEtmfAccess,
+  hasEisfAccess,
   isPlatformAdmin,
   studyTrackerMenuKeys,
   customTrackerNavItems,
@@ -177,6 +181,7 @@ export function TopNavbar({
   const isCtmsActive =
     hasCtmsAccess && ctmsNavItems.some((item) => isActive(item.href, item.exact));
   const isEtmfActive = pathname === '/protected/etmf' || pathname.startsWith('/protected/etmf/');
+  const isEisfActive = pathname === '/protected/eisf' || pathname.startsWith('/protected/eisf/');
   const isCustomActive =
     studyTrackerNavItems.some((item) => isActive(item.href)) ||
     pathname.startsWith('/protected/custom-trackers');
@@ -292,6 +297,47 @@ export function TopNavbar({
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {/* eISF */}
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={cn(
+                  'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
+                  hasEisfAccess
+                    ? isEisfActive
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                )}
+              >
+                eISF
+                <ChevronDown className="h-3 w-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={8} className="min-w-52">
+                {hasEisfAccess ? (
+                  <>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/eisf')}>
+                      <FolderOpen className="mr-2 h-4 w-4" />
+                      Overview
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/eisf/folders')}>
+                      <FolderOpen className="mr-2 h-4 w-4" />
+                      Site folders
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/eisf/requests')}>
+                      <FileText className="mr-2 h-4 w-4" />
+                      Document requests
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/eisf/rules')}>
+                      <Shield className="mr-2 h-4 w-4" />
+                      Required documents
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <div className="px-2 py-2 text-xs text-muted-foreground">Not enabled for your organization</div>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             {/* Custom (study trackers + custom definitions) */}
             {hasTrackerAccess && (
               <DropdownMenu>
@@ -358,12 +404,7 @@ export function TopNavbar({
                     <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
                       Clinical operations
                     </div>
-                    {[
-                      { href: '/protected/time-expenses', label: 'Time & expenses overview' },
-                      { href: '/protected/time-expenses/timesheets', label: 'Timesheets' },
-                      { href: '/protected/time-expenses/expenses', label: 'Expense reports' },
-                      { href: '/protected/time-expenses/approvals', label: 'Time & expense approvals' },
-                    ].map((item) => {
+                    {[{ href: '/protected/time-expenses', label: 'Time & Expenses' }].map((item) => {
                       const locked = isLocked(item.href);
                       return (
                         <DropdownMenuItem
@@ -524,6 +565,58 @@ export function TopNavbar({
               <div className="px-4 py-2 text-sm text-muted-foreground">Not enabled for your organization</div>
             )}
             <Separator className="my-2" />
+            <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">eISF</p>
+            {hasEisfAccess ? (
+              <>
+                <Link
+                  href="/protected/eisf"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                    pathname === '/protected/eisf' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  Overview
+                </Link>
+                <Link
+                  href="/protected/eisf/folders"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                    pathname.startsWith('/protected/eisf/folders') ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  Site folders
+                </Link>
+                <Link
+                  href="/protected/eisf/requests"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                    pathname.startsWith('/protected/eisf/requests') ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  <FileText className="h-4 w-4" />
+                  Document requests
+                </Link>
+                <Link
+                  href="/protected/eisf/rules"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                    pathname.startsWith('/protected/eisf/rules') ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  <Shield className="h-4 w-4" />
+                  Required documents
+                </Link>
+              </>
+            ) : (
+              <div className="px-4 py-2 text-sm text-muted-foreground">Not enabled for your organization</div>
+            )}
+            <Separator className="my-2" />
             <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">eTMF</p>
             {hasEtmfAccess ? (
               <>
@@ -647,12 +740,7 @@ export function TopNavbar({
             {hasCtmsAccess && (
               <>
                 <p className="px-4 py-1 text-[10px] text-muted-foreground">Clinical operations</p>
-                {[
-                  { href: '/protected/time-expenses', label: 'Time & expenses overview' },
-                  { href: '/protected/time-expenses/timesheets', label: 'Timesheets' },
-                  { href: '/protected/time-expenses/expenses', label: 'Expense reports' },
-                  { href: '/protected/time-expenses/approvals', label: 'Time & expense approvals' },
-                ].map((item) => {
+                {[{ href: '/protected/time-expenses', label: 'Time & Expenses' }].map((item) => {
                   const locked = isLocked(item.href);
                   return (
                     <Link

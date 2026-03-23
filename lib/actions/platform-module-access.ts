@@ -8,6 +8,7 @@ export type PlatformCompanyRow = {
   id: string;
   name: string;
   has_ctms_access: boolean;
+  has_eisf_access: boolean;
   has_etmf_access: boolean;
   has_tracker_access: boolean;
   enabled_study_tracker_keys: string[];
@@ -64,7 +65,7 @@ export async function listCompaniesForPlatformAdmin(): Promise<{
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('companies')
-    .select('id, name, has_ctms_access, has_etmf_access, has_tracker_access, enabled_study_tracker_keys')
+    .select('id, name, has_ctms_access, has_eisf_access, has_etmf_access, has_tracker_access, enabled_study_tracker_keys')
     .order('name');
 
   if (error) return { success: false, error: error.message };
@@ -72,6 +73,7 @@ export async function listCompaniesForPlatformAdmin(): Promise<{
     success: true,
     data: (data as PlatformCompanyRow[] | null)?.map((c) => ({
       ...c,
+      has_eisf_access: c.has_eisf_access === true,
       enabled_study_tracker_keys: c.enabled_study_tracker_keys ?? [],
     })) ?? [],
   };
@@ -80,6 +82,7 @@ export async function listCompaniesForPlatformAdmin(): Promise<{
 export async function updateCompanyModuleAccess(input: {
   companyId: string;
   hasCtmsAccess: boolean;
+  hasEisfAccess: boolean;
   hasEtmfAccess: boolean;
   hasTrackerAccess: boolean;
 }): Promise<{ success: boolean; error?: string }> {
@@ -92,6 +95,7 @@ export async function updateCompanyModuleAccess(input: {
     p_has_ctms_access: input.hasCtmsAccess,
     p_has_etmf_access: input.hasEtmfAccess,
     p_has_tracker_access: input.hasTrackerAccess,
+    p_has_eisf_access: input.hasEisfAccess,
   });
 
   if (error) return { success: false, error: error.message };

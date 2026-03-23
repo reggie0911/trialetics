@@ -114,13 +114,16 @@ export async function getEtmfStaffMembers(studyId: string, siteId?: string): Pro
   const { data, error } = await query.order('role');
   if (error) return { success: false, error: error.message };
 
-  const mapped = (data ?? []).map((m: any) => ({
-    id: m.id,
-    profile_id: m.profile_id,
-    role: m.role,
-    site_id: m.site_id,
-    name: [m.profiles?.first_name, m.profiles?.last_name].filter(Boolean).join(' ') || m.profiles?.email || 'Unknown',
-  }));
+  const mapped = (data ?? []).map((m) => {
+    const p = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles;
+    return {
+      id: m.id,
+      profile_id: m.profile_id,
+      role: m.role,
+      site_id: m.site_id,
+      name: [p?.first_name, p?.last_name].filter(Boolean).join(' ') || p?.email || 'Unknown',
+    };
+  });
 
   return { success: true, data: mapped };
 }
@@ -294,7 +297,7 @@ export async function getStaffEdlMatrix(siteId: string): Promise<{ success: bool
     edlMap[s.tmf_ref_id][s.role_name] = s.required;
   });
 
-  const rows: EtmfStaffEdlMatrixRow[] = (tmfRefs ?? []).map((ref: any) => ({
+  const rows: EtmfStaffEdlMatrixRow[] = (tmfRefs ?? []).map((ref: { id: string; artifact_name: string; recommended_sub_artifact: string | null }) => ({
     tmf_ref_id: ref.id,
     artifact_name: ref.artifact_name,
     recommended_sub_artifact: ref.recommended_sub_artifact,
@@ -731,12 +734,13 @@ export async function addEtmfStaffMember(input: { study_id: string; site_id: str
     p_staff_member_id: data.id,
   });
 
+  const dp = Array.isArray(data.profiles) ? data.profiles[0] : data.profiles;
   const mapped: EtmfStaffMemberOption = {
     id: data.id,
     profile_id: data.profile_id,
     role: data.role,
     site_id: data.site_id,
-    name: [(data as any).profiles?.first_name, (data as any).profiles?.last_name].filter(Boolean).join(' ') || (data as any).profiles?.email || 'Unknown',
+    name: [dp?.first_name, dp?.last_name].filter(Boolean).join(' ') || dp?.email || 'Unknown',
   };
 
   revalidatePath('/protected/etmf');
@@ -787,15 +791,18 @@ export async function getBulkUploadDocuments(studyId: string): Promise<{ success
   if (error) return { success: false, error: error.message };
 
   const now = new Date();
-  const mapped: BulkUploadDocument[] = (data ?? []).map((d: any) => ({
-    id: d.id,
-    document_name: d.document_name,
-    file_name: d.file_name || '',
-    document_status: d.document_status,
-    creator_name: [d.submitter?.first_name, d.submitter?.last_name].filter(Boolean).join(' ') || 'Unknown',
-    upload_date: d.created_at,
-    days_since_upload: Math.floor((now.getTime() - new Date(d.created_at).getTime()) / (1000 * 60 * 60 * 24)),
-  }));
+  const mapped: BulkUploadDocument[] = (data ?? []).map((d) => {
+    const sub = Array.isArray(d.submitter) ? d.submitter[0] : d.submitter;
+    return {
+      id: d.id,
+      document_name: d.document_name,
+      file_name: d.file_name || '',
+      document_status: d.document_status,
+      creator_name: [sub?.first_name, sub?.last_name].filter(Boolean).join(' ') || 'Unknown',
+      upload_date: d.created_at,
+      days_since_upload: Math.floor((now.getTime() - new Date(d.created_at).getTime()) / (1000 * 60 * 60 * 24)),
+    };
+  });
 
   return { success: true, data: mapped };
 }
@@ -815,7 +822,7 @@ export async function getCompanyProfiles(): Promise<{ success: boolean; data?: {
 
   if (error) return { success: false, error: error.message };
 
-  const mapped = (data ?? []).map((p: any) => ({
+  const mapped = (data ?? []).map((p: { id: string; first_name: string | null; last_name: string | null; email: string | null }) => ({
     id: p.id,
     name: [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email || 'Unknown',
     email: p.email || '',
