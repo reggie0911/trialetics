@@ -146,7 +146,7 @@ function QualityControlTab({ auditLog }: { auditLog: EtmfAuditLog[] }) {
                 <p className="mt-1">
                   Status changed to:{' '}
                   <span className="font-medium capitalize">
-                    {String((entry.new_values as any).document_status || '').replace('_', ' ')}
+                    {String((entry.new_values as Record<string, unknown>)?.document_status || '').replace('_', ' ')}
                   </span>
                 </p>
               )}

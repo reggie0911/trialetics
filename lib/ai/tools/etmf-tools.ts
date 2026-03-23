@@ -86,8 +86,8 @@ export const qcReviewDocument = tool({
     if (!doc.language) issues.push('Language not specified');
 
     if (doc.tmf_reference) {
-      const tmf = doc.tmf_reference as any;
-      if (tmf.core_or_recommended?.trim() === 'Core' && !doc.storage_path) {
+      const tmf = doc.tmf_reference as { core_or_recommended?: string } | null;
+      if (tmf?.core_or_recommended?.trim() === 'Core' && !doc.storage_path) {
         issues.push('Core document requires uploaded file');
       }
     }
@@ -145,7 +145,7 @@ export const predictMissingDocuments = tool({
     const atRisk: Array<{ artifactName: string; subArtifact: string | null; reason: string }> = [];
 
     (edl || []).forEach((e) => {
-      const tmf = e.tmf_reference as any;
+      const tmf = e.tmf_reference as { artifact_name?: string; recommended_sub_artifact?: string | null; core_or_recommended?: string } | null;
       if (!tmf) return;
 
       const docInfo = docsByRef.get(e.tmf_ref_id);
@@ -153,14 +153,14 @@ export const predictMissingDocuments = tool({
 
       if (!docInfo || docInfo.count === 0) {
         missing.push({
-          artifactName: tmf.artifact_name,
-          subArtifact: tmf.recommended_sub_artifact,
+          artifactName: tmf.artifact_name ?? '',
+          subArtifact: tmf.recommended_sub_artifact ?? null,
           core: isCore,
         });
       } else if (docInfo.approved === 0) {
         atRisk.push({
-          artifactName: tmf.artifact_name,
-          subArtifact: tmf.recommended_sub_artifact,
+          artifactName: tmf.artifact_name ?? '',
+          subArtifact: tmf.recommended_sub_artifact ?? null,
           reason: 'Document exists but not approved',
         });
       }
