@@ -258,10 +258,28 @@ export function TopNavbar({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={8} className="min-w-48">
                 {hasEtmfAccess ? (
-                  <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/etmf')}>
-                    <FileText className="mr-2 h-4 w-4" />
-                    eTMF home
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/etmf')}>
+                      <FileText className="mr-2 h-4 w-4" />
+                      Overview
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/etmf/library')}>
+                      <FileText className="mr-2 h-4 w-4" />
+                      Document Library
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/etmf/expected-documents')}>
+                      <FileText className="mr-2 h-4 w-4" />
+                      Expected Document List
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/etmf/staff-expected-documents')}>
+                      <FileText className="mr-2 h-4 w-4" />
+                      Site Staff EDL
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/etmf/bulk-upload')}>
+                      <FileText className="mr-2 h-4 w-4" />
+                      Bulk Uploader
+                    </DropdownMenuItem>
+                  </>
                 ) : (
                   <div className="px-2 py-2 text-xs text-muted-foreground">Not enabled for your organization</div>
                 )}
@@ -471,17 +489,63 @@ export function TopNavbar({
             <Separator className="my-2" />
             <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">eTMF</p>
             {hasEtmfAccess ? (
-              <Link
-                href="/protected/etmf"
-                onClick={() => setMobileOpen(false)}
-                className={cn(
-                  'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
-                  isEtmfActive ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
-                )}
-              >
-                <FileText className="h-4 w-4" />
-                eTMF home
-              </Link>
+              <>
+                <Link
+                  href="/protected/etmf"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                    pathname === '/protected/etmf' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  <FileText className="h-4 w-4" />
+                  Overview
+                </Link>
+                <Link
+                  href="/protected/etmf/library"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                    pathname.startsWith('/protected/etmf/library') ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  <FileText className="h-4 w-4" />
+                  Document Library
+                </Link>
+                <Link
+                  href="/protected/etmf/expected-documents"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                    pathname === '/protected/etmf/expected-documents' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  <FileText className="h-4 w-4" />
+                  Expected Document List
+                </Link>
+                <Link
+                  href="/protected/etmf/staff-expected-documents"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                    pathname === '/protected/etmf/staff-expected-documents' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  <FileText className="h-4 w-4" />
+                  Site Staff EDL
+                </Link>
+                <Link
+                  href="/protected/etmf/bulk-upload"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                    pathname === '/protected/etmf/bulk-upload' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  <FileText className="h-4 w-4" />
+                  Bulk Uploader
+                </Link>
+              </>
             ) : (
               <div className="px-4 py-2 text-sm text-muted-foreground">Not enabled for your organization</div>
             )}
