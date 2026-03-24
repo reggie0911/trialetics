@@ -9,11 +9,12 @@ import { getStudyCountries } from '@/lib/actions/countries';
 import { listDirectoryContacts } from '@/lib/actions/directory-contacts';
 
 interface NewSitePageProps {
-  searchParams: Promise<{ studyId?: string }>;
+  searchParams: Promise<{ studyId?: string; demo?: string }>;
 }
 
 export default async function NewSitePage({ searchParams }: NewSitePageProps) {
-  const { studyId } = await searchParams;
+  const { studyId, demo } = await searchParams;
+  const demoPrefill = demo === '1' || demo === 'true';
 
   if (!studyId) redirect('/protected/sites');
 
@@ -60,6 +61,7 @@ export default async function NewSitePage({ searchParams }: NewSitePageProps) {
         countries={countryOptions}
         mode="create"
         directoryContactOptions={directoryContactOptions}
+        demoPrefill={demoPrefill}
       />
     </div>
   );

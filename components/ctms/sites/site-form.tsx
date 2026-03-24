@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -58,6 +58,8 @@ interface SiteFormProps {
   mode: 'create' | 'edit';
   onSuccess?: () => void;
   directoryContactOptions?: { id: string; label: string }[];
+  /** When true (create mode only), prefill fields with sample demo values for walkthroughs. */
+  demoPrefill?: boolean;
 }
 
 export function SiteForm({
@@ -67,6 +69,7 @@ export function SiteForm({
   mode,
   onSuccess,
   directoryContactOptions = [],
+  demoPrefill = false,
 }: SiteFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -92,6 +95,25 @@ export function SiteForm({
       target_enrollment: site?.target_enrollment ?? 0,
     },
   });
+
+  useEffect(() => {
+    if (!demoPrefill || mode !== 'create') return;
+    form.reset({
+      site_number: 'DEMO-501',
+      name: '[DEMO] Riverside Clinical Research Center',
+      study_country_id: countries[0]?.id ?? '',
+      address: '100 Sample Street',
+      city: 'Boston',
+      state: 'Massachusetts',
+      postal_code: '02115',
+      pi_name: 'Dr. Alex Rivera',
+      pi_email: 'alex.rivera@example-clinic.org',
+      pi_directory_contact_id: DIRECTORY_LINK_NONE,
+      status: 'identified',
+      activation_date: '',
+      target_enrollment: 12,
+    });
+  }, [demoPrefill, mode, countries, form]);
 
   async function onSubmit(values: SiteFormValues) {
     setIsSubmitting(true);
