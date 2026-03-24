@@ -39,9 +39,10 @@ import { StudyFormDialog } from '@/components/ctms/studies/study-form-dialog';
 
 interface StudyListProps {
   studies: Study[];
+  institutionOptions?: { id: string; name: string }[];
 }
 
-export function StudyList({ studies }: StudyListProps) {
+export function StudyList({ studies, institutionOptions = [] }: StudyListProps) {
   const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -236,7 +237,10 @@ export function StudyList({ studies }: StudyListProps) {
             </Button>
           )}
         </div>
-        <StudyFormDialog onSuccess={() => router.refresh()} />
+        <StudyFormDialog
+          onSuccess={() => router.refresh()}
+          institutionOptions={institutionOptions}
+        />
       </div>
 
       <div className="rounded-md border">

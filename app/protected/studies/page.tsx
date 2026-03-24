@@ -1,8 +1,11 @@
 import { getStudies } from '@/lib/actions/studies';
+import { listInstitutions } from '@/lib/actions/directory-institutions';
 import { StudyList } from '@/components/ctms/studies/study-list';
 
 export default async function StudiesPage() {
   const studies = await getStudies();
+  const { data: institutions } = await listInstitutions({ limit: 100 });
+  const institutionOptions = (institutions ?? []).map((i) => ({ id: i.id, name: i.name }));
 
   return (
     <div className="p-6 space-y-6">
@@ -13,7 +16,7 @@ export default async function StudiesPage() {
         </p>
       </div>
 
-      <StudyList studies={studies} />
+      <StudyList studies={studies} institutionOptions={institutionOptions} />
     </div>
   );
 }

@@ -35,21 +35,33 @@ import type { Study } from '@/lib/types/ctms';
 /** Sentinel for optional directory / institution selects (Radix Select disallows empty string values). */
 const DIRECTORY_LINK_NONE = '__none__';
 
-const studyFormSchema = z.object({
-  protocol_number: z.string().min(1, 'Protocol number is required'),
-  title: z.string().min(1, 'Study title is required'),
-  phase: z.enum(['Phase I', 'Phase II', 'Phase III', 'Phase IV', 'Phase I/II', 'Phase II/III'], {
-    required_error: 'Phase is required',
-  }),
-  therapeutic_area: z.string().optional(),
-  indication: z.string().optional(),
-  status: z.enum(['draft', 'active', 'completed', 'closed', 'on_hold']).optional(),
-  sponsor: z.string().optional(),
-  sponsor_institution_id: z.string().optional(),
-  start_date: z.string().optional(),
-  end_date: z.string().optional(),
-  description: z.string().optional(),
-});
+const studyFormSchema = z
+  .object({
+    protocol_number: z.string().min(1, 'Protocol number is required'),
+    title: z.string().min(1, 'Study title is required'),
+    phase: z.enum(['Phase I', 'Phase II', 'Phase III', 'Phase IV', 'Phase I/II', 'Phase II/III'], {
+      required_error: 'Phase is required',
+    }),
+    therapeutic_area: z.string().optional(),
+    indication: z.string().optional(),
+    status: z.enum(['draft', 'active', 'completed', 'closed', 'on_hold']).optional(),
+    sponsor: z.string().optional(),
+    sponsor_institution_id: z.string().optional(),
+    start_date: z.string().optional(),
+    end_date: z.string().optional(),
+    description: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const start = data.start_date?.trim();
+    const end = data.end_date?.trim();
+    if (start && end && end < start) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'End date must be on or after start date',
+        path: ['end_date'],
+      });
+    }
+  });
 
 type StudyFormValues = z.infer<typeof studyFormSchema>;
 
@@ -260,13 +272,9 @@ export function StudyForm({
               name="sponsor"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Sponsor (display name)</FormLabel>
+                  <FormLabel>Sponsor</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="e.g., company or protocol sponsor label"
-                      className="text-xs"
-                      {...field}
-                    />
+                    <Input placeholder="e.g., company or protocol sponsor" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

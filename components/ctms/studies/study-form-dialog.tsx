@@ -16,9 +16,11 @@ import { StudyForm } from '@/components/ctms/studies/study-form';
 
 interface StudyFormDialogProps {
   onSuccess: () => void;
+  /** Same directory organizations as full-page create (`/protected/studies/new`) for consistent sponsor linking. */
+  institutionOptions?: { id: string; name: string }[];
 }
 
-export function StudyFormDialog({ onSuccess }: StudyFormDialogProps) {
+export function StudyFormDialog({ onSuccess, institutionOptions = [] }: StudyFormDialogProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -40,6 +42,7 @@ export function StudyFormDialog({ onSuccess }: StudyFormDialogProps) {
         </DialogHeader>
         <StudyForm
           mode="create"
+          institutionOptions={institutionOptions}
           onSuccess={() => {
             setOpen(false);
             onSuccess();
