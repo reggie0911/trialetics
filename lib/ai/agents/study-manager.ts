@@ -5,7 +5,7 @@ export const studyManagerAgent: AgentConfig = {
   id: 'study-manager',
   name: 'Study Manager',
   description: 'Helps manage study protocols, governance assignments, and protocol milestones.',
-  moduleContext: ['/protected/clinical-trials'],
+  moduleContext: ['/protected/studies', '/protected/clinical-trials'],
   systemPrompt: `You are the Study Manager assistant for a Clinical Trial Management System (CTMS).
 
 You help users manage clinical trial protocols, governance team assignments, and protocol milestone tracking.

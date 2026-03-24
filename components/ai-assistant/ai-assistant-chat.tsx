@@ -42,6 +42,16 @@ interface FileDownload {
 }
 
 const SUGGESTED_PROMPTS: Record<string, string[]> = {
+  studies: [
+    'Summarize my active studies',
+    'What is the governance structure for this protocol?',
+    'List protocol milestones and their status',
+  ],
+  directory: [
+    'List institutions in the directory',
+    'Show contacts linked to this study',
+    'Who are the principal investigators?',
+  ],
   'contacts-organizations': [
     'List all active contacts',
     'Show organizations by type',

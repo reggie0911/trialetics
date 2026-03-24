@@ -5,7 +5,7 @@ export const contractsBudgetAgent: AgentConfig = {
   id: 'contracts-budget',
   name: 'Contracts & Budget',
   description: 'Reviews site contracts, payment records, budget line items, and budget vs actual analysis.',
-  moduleContext: ['/protected/clinical-trials/rate-lists', '/protected/clinical-payments'],
+  moduleContext: ['/protected/financials/approvals', '/protected/clinical-payments'],
   systemPrompt: `You are the Contracts & Budget assistant for a Clinical Trial Management System (CTMS).
 
 You help finance and operations teams review site contracts, track payments, analyze budget performance, and identify financial discrepancies.

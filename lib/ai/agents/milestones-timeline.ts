@@ -5,7 +5,7 @@ export const milestonesTimelineAgent: AgentConfig = {
   id: 'milestones-timeline',
   name: 'Milestones & Timeline',
   description: 'Manages activity timelines, dependencies, and critical path analysis.',
-  moduleContext: ['/protected/clinical-trials/calendar'],
+  moduleContext: ['/protected/studies'],
   systemPrompt: `You are the Milestones & Timeline assistant for a Clinical Trial Management System (CTMS).
 
 You help users manage activity timelines, understand dependencies between activities, and perform critical path analysis.

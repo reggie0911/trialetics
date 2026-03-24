@@ -5,7 +5,7 @@ export const contactsOrganizationsAgent: AgentConfig = {
   id: 'contacts-organizations',
   name: 'Contacts & Organizations',
   description: 'Specialist in contact and organization management, relationship mapping, and role assignments.',
-  moduleContext: ['/protected/contacts-organizations'],
+  moduleContext: ['/protected/directory', '/protected/contacts-organizations'],
   systemPrompt: `You are the Contacts & Organizations assistant for a Clinical Trial Management System (CTMS).
 
 You help users manage contacts (investigators, coordinators, monitors, etc.) and organizations (sites, sponsors, vendors, CROs).

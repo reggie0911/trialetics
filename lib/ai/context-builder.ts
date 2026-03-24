@@ -10,8 +10,10 @@ const MODULE_MAP: Record<string, string> = {
   '/protected/team': 'team',
   '/protected/visits': 'visits',
   '/protected/financials': 'financials',
+  '/protected/financials/approvals': 'financials',
   '/protected/reports': 'reports',
   '/protected/settings/billing': 'billing',
+  '/protected/directory': 'contacts-organizations',
   '/protected/contacts-organizations': 'contacts-organizations',
   '/protected/document-management': 'document-management',
   '/protected/patients': 'subjects',
@@ -26,7 +28,7 @@ const MODULE_MAP: Record<string, string> = {
   '/protected/ae': 'ae-metrics',
   '/protected/ecrf-query-tracker': 'ecrf-query-tracker',
   '/protected/mc': 'med-compliance',
-  '/protected/clinical-trials': 'clinical-trials',
+  '/protected/clinical-trials': 'studies',
   '/protected/admin': 'admin',
 };
 
