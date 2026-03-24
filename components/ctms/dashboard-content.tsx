@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { FlaskConical, Building2, Users, TrendingUp, ArrowRight, Plus } from 'lucide-react';
+import { FlaskConical, Building2, TrendingUp, ArrowRight, Plus, MapPinned } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardAction } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -180,6 +180,18 @@ export function DashboardContent({ firstName, stats, recentStudies }: DashboardC
               <div>
                 <p className="text-sm font-medium">Create New Study</p>
                 <p className="text-xs text-muted-foreground">Set up a new clinical trial</p>
+              </div>
+            </Link>
+            <Link
+              href="/protected/sites/demo"
+              className="flex items-center gap-3 rounded-[5px] border p-3 transition-colors hover:bg-gray-200 dark:hover:bg-gray-700"
+            >
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-teal-500/10 text-teal-600 dark:text-teal-400">
+                <MapPinned className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Add Site (Demo)</p>
+                <p className="text-xs text-muted-foreground">Walk through creating a new investigator site</p>
               </div>
             </Link>
             <Link
