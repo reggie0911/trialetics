@@ -23,6 +23,10 @@
 
 All secrets are injected as environment variables by the Cloud Agent platform. A `.env.local` must be created from these env vars before starting the dev server. Required secrets: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. See `README.md` for the full list.
 
+### Test login
+
+Test credentials are available as secrets `TEST_LOGIN_USERNAME` and `TEST_LOGIN_PASSWORD`. Use these to log in at `/auth/login` for manual end-to-end testing.
+
 ### Non-obvious caveats
 
 - The `pnpm.onlyBuiltDependencies` field in `package.json` must include `msw`, `sharp`, `supabase`, and `unrs-resolver` to avoid the interactive `pnpm approve-builds` prompt.
