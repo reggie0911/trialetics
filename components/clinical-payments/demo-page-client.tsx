@@ -238,9 +238,9 @@ export function DemoPageClient({ companyId, profileId }: DemoPageClientProps) {
                 Open Clinical Payments
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
-              <Button variant="outline" className="w-full text-xs h-auto py-3 flex-1" render={<Link href="/protected/clinical-trials" />}>
+              <Button variant="outline" className="w-full text-xs h-auto py-3 flex-1" render={<Link href="/protected/studies" />}>
                 <Building2 className="mr-2 h-4 w-4" />
-                View Clinical Trials
+                View Studies
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
               <Button variant="outline" className="w-full text-xs h-auto py-3 flex-1" render={<Link href="/protected/contacts-organizations" />}>
