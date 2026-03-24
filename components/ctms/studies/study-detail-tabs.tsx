@@ -35,6 +35,7 @@ import { toast } from 'sonner';
 
 import { closeStudy } from '@/lib/actions/studies';
 import type { Study, StudyCountryWithSubmissions, StudySite, SubjectWithSite, EnrollmentFunnelData, StudyTeamMemberWithProfile, TeamRole, MonitoringVisitWithRelations, StudyBudgetWithItems, SitePaymentWithSite, FinancialSummary, FinanceInvoiceWithRelations, KriValueWithDefinition, EnrollmentDataPoint } from '@/lib/types/ctms';
+import { STUDY_STATUS_OPTIONS } from '@/lib/types/ctms';
 import { CountriesTab } from '@/components/ctms/countries/countries-tab';
 import { SitesTab } from '@/components/ctms/sites/sites-tab';
 import { SubjectsTab } from '@/components/ctms/subjects/subjects-tab';
@@ -98,6 +99,9 @@ export function StudyDetailTabs({ study, counts, countries, sites, subjects, fun
     });
   };
 
+  const studyStatusLabel =
+    STUDY_STATUS_OPTIONS.find((o) => o.value === study.status)?.label ?? study.status;
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -121,7 +125,7 @@ export function StudyDetailTabs({ study, counts, countries, sites, subjects, fun
             <Pencil className="mr-2 h-4 w-4" />
             Edit
           </Button>
-          {isAdmin && (
+          {isAdmin && study.status !== 'closed' && (
             <AlertDialog>
               <AlertDialogTrigger render={<Button variant="outline" size="sm" disabled={isClosing} />}>
                 <Archive className="mr-2 h-4 w-4" />
@@ -187,7 +191,7 @@ export function StudyDetailTabs({ study, counts, countries, sites, subjects, fun
                   <DetailRow label="Protocol Number" value={study.protocol_number} />
                   <DetailRow label="Study Title" value={study.title} />
                   <DetailRow label="Phase" value={study.phase} />
-                  <DetailRow label="Status" value={study.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} />
+                  <DetailRow label="Status" value={studyStatusLabel} />
                   <DetailRow label="Therapeutic Area" value={study.therapeutic_area} />
                   <DetailRow label="Indication" value={study.indication} />
                   <DetailRow label="Sponsor" value={study.sponsor} />
