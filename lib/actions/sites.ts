@@ -2,12 +2,14 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/server';
-import type {
-  StudySite,
-  SiteStatus,
-  SiteContact,
-  StudySiteWithStudy,
-  StudySiteWithDetails,
+import { syncInstitutionForStudySite, syncSiteContactToDirectory } from '@/lib/actions/site-directory-sync';
+import {
+  SITE_CONTACT_ROLE_PRINCIPAL_INVESTIGATOR,
+  type StudySite,
+  type SiteStatus,
+  type SiteContact,
+  type StudySiteWithStudy,
+  type StudySiteWithDetails,
 } from '@/lib/types/ctms';
 
 // --------------- helpers ---------------
@@ -23,6 +25,66 @@ async function getCompanyId(): Promise<string> {
     .single();
   if (!profile?.company_id) throw new Error('No company found');
   return profile.company_id;
+}
+
+/**
+ * Ensures a `site_contacts` row exists for the PI when `pi_name` is set on the site.
+ * Does not remove or update contacts when PI name is cleared (avoids wiping user edits).
+ */
+async function syncPrincipalInvestigatorContact(params: {
+  siteId: string;
+  studyId: string;
+  pi_name: string | null | undefined;
+  pi_email: string | null | undefined;
+  pi_directory_contact_id: string | null | undefined;
+}): Promise<void> {
+  const name = params.pi_name?.trim() ?? '';
+  if (!name) return;
+
+  const supabase = await createClient();
+  const { data: existing, error: findError } = await supabase
+    .from('site_contacts')
+    .select('id')
+    .eq('site_id', params.siteId)
+    .eq('role', SITE_CONTACT_ROLE_PRINCIPAL_INVESTIGATOR)
+    .maybeSingle();
+
+  if (findError) {
+    console.error('syncPrincipalInvestigatorContact lookup', findError.message);
+    return;
+  }
+
+  const email = params.pi_email?.trim() || null;
+  const directoryId = params.pi_directory_contact_id || null;
+
+  if (existing?.id) {
+    const { error } = await updateSiteContact(
+      existing.id,
+      params.siteId,
+      {
+        name,
+        role: SITE_CONTACT_ROLE_PRINCIPAL_INVESTIGATOR,
+        email: email ?? '',
+        directory_contact_id: directoryId,
+        is_primary: true,
+      },
+      params.studyId
+    );
+    if (error) console.error('syncPrincipalInvestigatorContact update', error);
+  } else {
+    const { error } = await addSiteContact(
+      {
+        site_id: params.siteId,
+        name,
+        role: SITE_CONTACT_ROLE_PRINCIPAL_INVESTIGATOR,
+        email: email ?? undefined,
+        is_primary: true,
+        directory_contact_id: directoryId,
+      },
+      params.studyId
+    );
+    if (error) console.error('syncPrincipalInvestigatorContact insert', error);
+  }
 }
 
 // --------------- Sites ---------------
@@ -109,7 +171,7 @@ export async function createSite(
 ): Promise<{ data: StudySite | null; error: string | null }> {
   const supabase = await createClient();
   try {
-    await getCompanyId();
+    const companyId = await getCompanyId();
 
     const { data, error } = await supabase
       .from('study_sites')
@@ -139,10 +201,21 @@ export async function createSite(
       return { data: null, error: error.message };
     }
 
+    const row = data as unknown as StudySite;
+    await syncInstitutionForStudySite(supabase, companyId, row, input.study_id);
+    await syncPrincipalInvestigatorContact({
+      siteId: row.id,
+      studyId: input.study_id,
+      pi_name: input.pi_name,
+      pi_email: input.pi_email,
+      pi_directory_contact_id: input.pi_directory_contact_id ?? null,
+    });
+
     revalidatePath('/protected');
     revalidatePath('/protected/sites');
     revalidatePath(`/protected/studies/${input.study_id}`);
-    return { data: data as unknown as StudySite, error: null };
+    revalidatePath(`/protected/sites/${row.id}`);
+    return { data: row, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }
@@ -178,6 +251,7 @@ export async function updateSite(
 ): Promise<{ data: StudySite | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const companyId = await getCompanyId();
     const { id, study_id, ...updates } = input;
     const cleanUpdates: Record<string, unknown> = {};
 
@@ -201,11 +275,20 @@ export async function updateSite(
       return { data: null, error: error.message };
     }
 
+    const row = data as unknown as StudySite;
+    await syncPrincipalInvestigatorContact({
+      siteId: id,
+      studyId: study_id,
+      pi_name: row.pi_name,
+      pi_email: row.pi_email,
+      pi_directory_contact_id: row.pi_directory_contact_id,
+    });
+
     revalidatePath('/protected');
     revalidatePath('/protected/sites');
     revalidatePath(`/protected/sites/${id}`);
     revalidatePath(`/protected/studies/${study_id}`);
-    return { data: data as unknown as StudySite, error: null };
+    return { data: row, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }
@@ -251,6 +334,7 @@ export async function addSiteContact(
 ): Promise<{ data: SiteContact | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const companyId = await getCompanyId();
     const { data, error } = await supabase
       .from('site_contacts')
       .insert({
@@ -267,8 +351,11 @@ export async function addSiteContact(
 
     if (error) return { data: null, error: error.message };
 
+    const row = data as unknown as SiteContact;
+    await syncSiteContactToDirectory(supabase, companyId, row, studyId);
+
     revalidatePath(`/protected/sites/${input.site_id}`);
-    return { data: data as unknown as SiteContact, error: null };
+    return { data: row, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }
@@ -277,10 +364,12 @@ export async function addSiteContact(
 export async function updateSiteContact(
   id: string,
   siteId: string,
-  updates: Partial<Omit<AddContactInput, 'site_id'>>
+  updates: Partial<Omit<AddContactInput, 'site_id'>>,
+  studyId?: string
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const companyId = await getCompanyId();
     const cleanUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (value !== undefined) {
@@ -294,6 +383,19 @@ export async function updateSiteContact(
       .eq('id', id);
 
     if (error) return { error: error.message };
+
+    let resolvedStudyId = studyId;
+    if (!resolvedStudyId) {
+      const { data: ss } = await supabase.from('study_sites').select('study_id').eq('id', siteId).maybeSingle();
+      resolvedStudyId = ss?.study_id;
+    }
+
+    if (resolvedStudyId) {
+      const { data: row } = await supabase.from('site_contacts').select('*').eq('id', id).single();
+      if (row) {
+        await syncSiteContactToDirectory(supabase, companyId, row as unknown as SiteContact, resolvedStudyId);
+      }
+    }
 
     revalidatePath(`/protected/sites/${siteId}`);
     return { error: null };

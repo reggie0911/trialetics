@@ -4,7 +4,12 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/server';
 import { canEditDirectory, getDirectoryPermissionContext } from '@/lib/directory-permissions';
 import { appendDirectoryAssignmentHistory, appendDirectoryAuditLog } from '@/lib/actions/directory-audit';
-import type { DirectoryContactListItem, DirectoryContactWithRelations } from '@/lib/types/directory';
+import type {
+  DirectoryContactListItem,
+  DirectoryContactWithRelations,
+  SaveDirectoryContactInput,
+} from '@/lib/types/directory';
+import { insertDirectoryContactRecord, updateDirectoryContactRecord } from '@/lib/actions/directory-writers-internal';
 
 async function requireReader() {
   const supabase = await createClient();
@@ -194,59 +199,22 @@ export async function checkDuplicateDirectoryEmail(
   return { duplicate: (data?.length ?? 0) > 0 };
 }
 
-export interface SaveDirectoryContactInput {
-  first_name: string;
-  last_name: string;
-  title?: string;
-  email?: string;
-  phone?: string;
-  department?: string;
-  country_code?: string;
-  region?: string;
-  status?: 'active' | 'inactive';
-  notes?: string;
-  primary_directory_role_id?: string | null;
-  primary_institution_id?: string | null;
-  profile_id?: string | null;
-  secondary_role_ids?: string[];
-}
-
 export async function createDirectoryContact(
   input: SaveDirectoryContactInput
 ): Promise<{ data: { id: string } | null; error: string | null; duplicateEmailWarning?: boolean }> {
   const { supabase, companyId } = await requireEditor();
 
-  const { data, error } = await supabase
-    .from('directory_contacts')
-    .insert({
-      company_id: companyId,
-      first_name: input.first_name.trim(),
-      last_name: input.last_name.trim(),
-      title: input.title?.trim() || null,
-      email: input.email?.trim() || null,
-      phone: input.phone?.trim() || null,
-      department: input.department?.trim() || null,
-      country_code: input.country_code?.trim() || null,
-      region: input.region?.trim() || null,
-      status: input.status ?? 'active',
-      notes: input.notes?.trim() || null,
-      primary_directory_role_id: input.primary_directory_role_id ?? null,
-      primary_institution_id: input.primary_institution_id ?? null,
-      profile_id: input.profile_id ?? null,
-    })
-    .select('id')
-    .single();
-
-  if (error) return { data: null, error: error.message };
+  const inserted = await insertDirectoryContactRecord(supabase, companyId, input);
+  if ('error' in inserted) return { data: null, error: inserted.error };
 
   const dup =
     input.email?.trim() &&
-    (await checkDuplicateDirectoryEmail(input.email, data!.id)).duplicate;
+    (await checkDuplicateDirectoryEmail(input.email, inserted.id)).duplicate;
 
   if (input.secondary_role_ids?.length) {
     await supabase.from('directory_contact_secondary_roles').insert(
       input.secondary_role_ids.map((directory_role_id) => ({
-        directory_contact_id: data!.id,
+        directory_contact_id: inserted.id,
         directory_role_id,
       }))
     );
@@ -255,7 +223,7 @@ export async function createDirectoryContact(
   await appendDirectoryAuditLog({
     companyId,
     entityType: 'directory_contact',
-    entityId: data!.id,
+    entityId: inserted.id,
     action: 'insert',
     oldPayload: {},
     newPayload: input as unknown as Record<string, unknown>,
@@ -263,7 +231,7 @@ export async function createDirectoryContact(
 
   revalidatePath('/protected/directory');
   return {
-    data: { id: data!.id },
+    data: { id: inserted.id },
     error: null,
     duplicateEmailWarning: !!dup,
   };
@@ -283,27 +251,8 @@ export async function updateDirectoryContact(
     .single();
   if (!existing) return { error: 'Contact not found' };
 
-  const { error } = await supabase
-    .from('directory_contacts')
-    .update({
-      first_name: input.first_name.trim(),
-      last_name: input.last_name.trim(),
-      title: input.title?.trim() || null,
-      email: input.email?.trim() || null,
-      phone: input.phone?.trim() || null,
-      department: input.department?.trim() || null,
-      country_code: input.country_code?.trim() || null,
-      region: input.region?.trim() || null,
-      status: input.status ?? 'active',
-      notes: input.notes?.trim() || null,
-      primary_directory_role_id: input.primary_directory_role_id ?? null,
-      primary_institution_id: input.primary_institution_id ?? null,
-      profile_id: input.profile_id ?? null,
-    })
-    .eq('id', id)
-    .eq('company_id', companyId);
-
-  if (error) return { error: error.message };
+  const upd = await updateDirectoryContactRecord(supabase, companyId, id, input);
+  if (upd.error) return { error: upd.error };
 
   await supabase.from('directory_contact_secondary_roles').delete().eq('directory_contact_id', id);
   if (input.secondary_role_ids?.length) {

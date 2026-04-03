@@ -26,7 +26,11 @@ import {
 
 import { createTemplate, updateTemplate } from '@/lib/actions/visit-reports';
 import type { VisitReportTemplate } from '@/lib/types/visit-reports';
-import { VISIT_REPORT_TYPE_OPTIONS, VISIT_REPORT_TYPE_LABELS } from '@/lib/types/visit-reports';
+import {
+  VISIT_REPORT_TYPE_OPTIONS,
+  VISIT_REPORT_TYPE_LABELS,
+  TRIP_REPORT_DAYS_BASIS_LABELS,
+} from '@/lib/types/visit-reports';
 
 const schema = z.object({
   name: z.string().min(1, 'Template name is required'),
@@ -34,6 +38,7 @@ const schema = z.object({
   visit_report_type: z.enum(['sqv', 'siv', 'monitoring', 'close_out']),
   days_submission: z.coerce.number().int().min(1, 'Must be at least 1'),
   days_approval: z.coerce.number().int().min(1, 'Must be at least 1'),
+  days_basis: z.enum(['calendar', 'business']),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -79,6 +84,7 @@ export function AddEditTemplateModal({
       visit_report_type: (template?.visit_report_type as FormValues['visit_report_type']) ?? 'monitoring',
       days_submission: template?.days_submission ?? 14,
       days_approval: template?.days_approval ?? 7,
+      days_basis: template?.days_basis === 'business' ? 'business' : 'calendar',
     },
   });
 
@@ -104,6 +110,7 @@ export function AddEditTemplateModal({
           visit_report_type: values.visit_report_type,
           days_submission: values.days_submission,
           days_approval: values.days_approval,
+          days_basis: values.days_basis,
         });
         if (error) {
           toast.error(error);
@@ -120,6 +127,7 @@ export function AddEditTemplateModal({
           visit_report_type: values.visit_report_type,
           days_submission: values.days_submission,
           days_approval: values.days_approval,
+          days_basis: values.days_basis,
         });
         if (error) {
           toast.error(error);
@@ -230,6 +238,33 @@ export function AddEditTemplateModal({
             />
             {errors.days_approval && (
               <p className="text-xs text-destructive">{errors.days_approval.message}</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="days_basis">Day count</Label>
+            <Select
+              value={watch('days_basis')}
+              onValueChange={(v) => setValue('days_basis', v as FormValues['days_basis'])}
+            >
+              <SelectTrigger id="days_basis" className="text-[12px]">
+                <SelectValue
+                  placeholder="Select basis"
+                  getDisplayLabel={(v) =>
+                    v ? (TRIP_REPORT_DAYS_BASIS_LABELS[v as keyof typeof TRIP_REPORT_DAYS_BASIS_LABELS] ?? v) : null
+                  }
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="calendar">{TRIP_REPORT_DAYS_BASIS_LABELS.calendar}</SelectItem>
+                <SelectItem value="business">{TRIP_REPORT_DAYS_BASIS_LABELS.business}</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Business days exclude weekends (Sat–Sun) when computing submission and approval due dates. Holidays are not excluded in this version.
+            </p>
+            {errors.days_basis && (
+              <p className="text-xs text-destructive">{errors.days_basis.message}</p>
             )}
           </div>
 

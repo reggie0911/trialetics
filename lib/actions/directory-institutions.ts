@@ -4,7 +4,13 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/server';
 import { canEditDirectory, getDirectoryPermissionContext } from '@/lib/directory-permissions';
 import { appendDirectoryAssignmentHistory, appendDirectoryAuditLog } from '@/lib/actions/directory-audit';
-import type { InstitutionOrganizationType, InstitutionRow, InstitutionStudyRelationshipType } from '@/lib/types/directory';
+import type {
+  InstitutionOrganizationType,
+  InstitutionRow,
+  InstitutionStudyRelationshipType,
+  SaveInstitutionInput,
+} from '@/lib/types/directory';
+import { insertInstitutionRecord, updateInstitutionRecord } from '@/lib/actions/directory-writers-internal';
 
 async function requireReader() {
   const supabase = await createClient();
@@ -133,56 +139,22 @@ export async function getInstitutionById(id: string): Promise<{
   };
 }
 
-export interface SaveInstitutionInput {
-  name: string;
-  organization_type: InstitutionOrganizationType;
-  address_line1?: string;
-  address_line2?: string;
-  city?: string;
-  state_region?: string;
-  postal_code?: string;
-  country_code?: string;
-  region?: string;
-  status?: 'active' | 'inactive';
-  notes?: string;
-  parent_institution_id?: string | null;
-}
-
 export async function createInstitution(
   input: SaveInstitutionInput
 ): Promise<{ data: { id: string } | null; error: string | null }> {
   const { supabase, companyId } = await requireEditor();
-  const { data, error } = await supabase
-    .from('institutions')
-    .insert({
-      company_id: companyId,
-      name: input.name.trim(),
-      organization_type: input.organization_type,
-      address_line1: input.address_line1?.trim() || null,
-      address_line2: input.address_line2?.trim() || null,
-      city: input.city?.trim() || null,
-      state_region: input.state_region?.trim() || null,
-      postal_code: input.postal_code?.trim() || null,
-      country_code: input.country_code?.trim() || null,
-      region: input.region?.trim() || null,
-      status: input.status ?? 'active',
-      notes: input.notes?.trim() || null,
-      parent_institution_id: input.parent_institution_id ?? null,
-    })
-    .select('id')
-    .single();
-
-  if (error) return { data: null, error: error.message };
+  const result = await insertInstitutionRecord(supabase, companyId, input);
+  if ('error' in result) return { data: null, error: result.error };
   await appendDirectoryAuditLog({
     companyId,
     entityType: 'institution',
-    entityId: data!.id,
+    entityId: result.id,
     action: 'insert',
     oldPayload: {},
     newPayload: input as unknown as Record<string, unknown>,
   });
   revalidatePath('/protected/directory');
-  return { data: { id: data!.id }, error: null };
+  return { data: { id: result.id }, error: null };
 }
 
 export async function updateInstitution(
@@ -198,26 +170,8 @@ export async function updateInstitution(
     .single();
   if (!existing) return { error: 'Institution not found' };
 
-  const { error } = await supabase
-    .from('institutions')
-    .update({
-      name: input.name.trim(),
-      organization_type: input.organization_type,
-      address_line1: input.address_line1?.trim() || null,
-      address_line2: input.address_line2?.trim() || null,
-      city: input.city?.trim() || null,
-      state_region: input.state_region?.trim() || null,
-      postal_code: input.postal_code?.trim() || null,
-      country_code: input.country_code?.trim() || null,
-      region: input.region?.trim() || null,
-      status: input.status ?? 'active',
-      notes: input.notes?.trim() || null,
-      parent_institution_id: input.parent_institution_id ?? null,
-    })
-    .eq('id', id)
-    .eq('company_id', companyId);
-
-  if (error) return { error: error.message };
+  const upd = await updateInstitutionRecord(supabase, companyId, id, input);
+  if (upd.error) return { error: upd.error };
   await appendDirectoryAuditLog({
     companyId,
     entityType: 'institution',

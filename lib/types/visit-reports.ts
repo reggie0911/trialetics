@@ -76,6 +76,13 @@ export const VISIT_LOCATION_LABELS: Record<VisitLocation, string> = {
   remote: 'Remote',
 };
 
+export type TripReportDaysBasis = 'calendar' | 'business';
+
+export const TRIP_REPORT_DAYS_BASIS_LABELS: Record<TripReportDaysBasis, string> = {
+  calendar: 'Calendar days',
+  business: 'Business days',
+};
+
 export type TemplateStatus = 'active' | 'inactive';
 
 export const TEMPLATE_STATUS_LABELS: Record<TemplateStatus, string> = {
@@ -100,6 +107,7 @@ export interface VisitReportTemplate {
   visit_report_type: VisitReportType;
   days_submission: number;
   days_approval: number;
+  days_basis: TripReportDaysBasis;
   template_status: TemplateStatus;
   created_by: string | null;
   created_at: string;

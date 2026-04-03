@@ -1,3 +1,5 @@
+import type { StudyOverview } from '@/lib/validation/study-overview';
+
 export type StudyPhase = 'Phase I' | 'Phase II' | 'Phase III' | 'Phase IV' | 'Phase I/II' | 'Phase II/III';
 
 export type StudyStatus = 'draft' | 'active' | 'completed' | 'closed' | 'on_hold';
@@ -22,8 +24,30 @@ export interface Study {
   start_date: string | null;
   end_date: string | null;
   description: string | null;
+  /** Protocol summary JSON; validated as StudyOverview when editing. */
+  overview: StudyOverview | null;
+  /** Default finance invoice approval template for this study (drafts may override). */
+  finance_approval_template_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Company-scoped finance invoice approval workflow definition. */
+export interface FinanceApprovalTemplateRow {
+  id: string;
+  company_id: string;
+  name: string;
+  is_default: boolean;
+  steps: unknown;
+  escalation_threshold_cents: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FinanceApprovalTemplateOption {
+  id: string;
+  name: string;
+  is_default: boolean;
 }
 
 export interface StudyCountry {
@@ -136,6 +160,9 @@ export const REGULATORY_STATUS_OPTIONS: { value: RegulatoryStatus; label: string
   { value: 'approved', label: 'Approved' },
   { value: 'rejected', label: 'Rejected' },
 ];
+
+/** Role string for the site contact row synced from study_sites PI fields — keep in sync with contacts UI. */
+export const SITE_CONTACT_ROLE_PRINCIPAL_INVESTIGATOR = 'Principal Investigator';
 
 export interface SiteContact {
   id: string;
@@ -503,11 +530,124 @@ export const MONITORING_VISIT_STATUS_LABEL: Record<MonitoringVisitStatus, string
 
 export type BudgetStatus = 'draft' | 'approved' | 'active';
 
+export type BudgetSectionType =
+  | 'invoiceable'           // A: Startup / Pass-Through items
+  | 'per_patient_procedure' // B: Study Procedures Per Patient (visit grid)
+  | 'staff_effort'          // C: Staff / Effort-Based Costs
+  | 'per_visit_expense'     // D: Per Visit Expenses
+  | 'subject_travel'        // E: Subject Travel & Stipends
+  | 'enrollment_scaling'    // F: Enrollment Scaling
+  | 'other';                // Catch-all for legacy or ungrouped lines
+
+export type BudgetCostBasis = 'one_time' | 'per_visit' | 'per_patient' | 'per_month';
+
+export interface StudyBudgetSection {
+  id: string;
+  budget_id: string;
+  section_type: BudgetSectionType;
+  name: string;
+  indirect_rate: number | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export const BUDGET_SECTION_TYPE_LABEL: Record<BudgetSectionType, string> = {
+  invoiceable: 'Invoiceable Items (Startup / Pass-Through)',
+  per_patient_procedure: 'Study Procedures Per Patient',
+  staff_effort: 'Staff / Effort-Based Costs',
+  per_visit_expense: 'Per Visit Expenses',
+  subject_travel: 'Subject Travel & Stipends',
+  enrollment_scaling: 'Enrollment Scaling',
+  other: 'Other',
+};
+
+export const BUDGET_SECTION_TYPE_OPTIONS: { value: BudgetSectionType; label: string }[] = [
+  { value: 'invoiceable', label: 'Invoiceable Items (Startup / Pass-Through)' },
+  { value: 'per_patient_procedure', label: 'Study Procedures Per Patient' },
+  { value: 'staff_effort', label: 'Staff / Effort-Based Costs' },
+  { value: 'per_visit_expense', label: 'Per Visit Expenses' },
+  { value: 'subject_travel', label: 'Subject Travel & Stipends' },
+  { value: 'enrollment_scaling', label: 'Enrollment Scaling' },
+  { value: 'other', label: 'Other' },
+];
+
+// ─── Phase 2: Visit Definitions & Procedure Grid ─────────────────────────────
+
+export interface StudyVisitDefinition {
+  id: string;
+  study_id: string;
+  visit_name: string;
+  timepoint_label: string | null;
+  timepoint_days: number | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface ProcedureVisitCost {
+  id: string;
+  section_id: string;
+  procedure_name: string;
+  visit_definition_id: string;
+  is_applicable: boolean;
+  unit_cost: number;
+  sort_order: number;
+  created_at: string;
+}
+
+/** Full procedure grid for a section: visits + all cost cells */
+export interface ProcedureGrid {
+  visits: StudyVisitDefinition[];
+  /** Unique procedure names ordered by sort_order */
+  procedures: string[];
+  /** Map of `${procedureName}__${visitId}` -> ProcedureVisitCost */
+  cells: Record<string, ProcedureVisitCost>;
+}
+
+export interface StudyEnrollmentActuals {
+  total: number;
+  bySite: Array<{ site_id: string; site_name: string; count: number }>;
+}
+
 export type PaymentType = 'startup' | 'milestone' | 'per_subject' | 'pass_through';
 
 export type PaymentStatus = 'pending' | 'approved' | 'paid';
 
 export type ScheduleStatus = 'pending' | 'due' | 'paid';
+
+// ─── Phase 3: Budget Templates ───────────────────────────────────────────────
+
+export interface TemplateSectionDefinition {
+  section_type: BudgetSectionType;
+  name: string;
+  indirect_rate?: number | null;
+  default_lines: Array<{
+    category: string;
+    description: string;
+    unit_cost: number;
+    quantity: number;
+    cost_basis?: BudgetCostBasis | null;
+  }>;
+}
+
+export interface TemplateVisitScheduleEntry {
+  visit_name: string;
+  timepoint_days?: number | null;
+}
+
+export interface StudyBudgetTemplate {
+  id: string;
+  company_id: string;
+  name: string;
+  description: string | null;
+  section_definitions: TemplateSectionDefinition[];
+  visit_schedule: TemplateVisitScheduleEntry[] | null;
+  default_indirect_rate: number | null;
+  version: number;
+  cloned_from_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface StudyBudget {
   id: string;
@@ -516,6 +656,12 @@ export interface StudyBudget {
   total_amount: number;
   currency: string;
   status: BudgetStatus;
+  template_id: string | null;
+  indirect_rate: number | null;
+  planned_enrollment: number | null;
+  study_duration_months: number | null;
+  /** Full Budget Wizard snapshot JSON when created or saved from the wizard. */
+  wizard_inputs?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -523,11 +669,15 @@ export interface StudyBudget {
 export interface BudgetLineItem {
   id: string;
   budget_id: string;
+  section_id: string | null;
   category: string;
   description: string;
   unit_cost: number;
   quantity: number;
   total_cost: number;
+  direct_cost: number | null;
+  indirect_cost: number | null;
+  cost_basis: BudgetCostBasis | null;
   notes: string | null;
   sort_order: number;
   created_at: string;
@@ -535,6 +685,7 @@ export interface BudgetLineItem {
 
 export interface StudyBudgetWithItems extends StudyBudget {
   budget_line_items: BudgetLineItem[];
+  study_budget_sections: StudyBudgetSection[];
 }
 
 export interface SitePayment {
@@ -638,6 +789,9 @@ export interface FinanceInvoiceRow {
   approval_step: number;
   template_id: string | null;
   legacy_site_payment_id: string | null;
+  document_path: string | null;
+  extracted_data: Record<string, unknown> | null;
+  extracted_at: string | null;
   notes: string | null;
   created_by_profile_id: string | null;
   created_at: string;
@@ -682,6 +836,25 @@ export type SiteNegotiationStatus = 'draft' | 'in_review' | 'approved' | 'reject
 
 export type SitePaymentTermsType = 'per_visit' | 'milestone' | 'invoice';
 
+export interface SiteBudgetPaymentInfo {
+  invoice_submission_email?: string;
+  invoice_submission_email_cc?: string;
+  payee_name?: string;
+  tax_id?: string;
+  /** Bank routing (e.g. US ABA). */
+  routing_number?: string;
+  account_number?: string;
+  /** SWIFT or BIC code. */
+  swift_bic?: string;
+  /** Free-form wire notes when structured fields are not enough. */
+  bank_wire_info?: string;
+  mail_to?: string;
+  institution?: string;
+  department?: string;
+  address?: string;
+  city_state_zip?: string;
+}
+
 export interface SiteBudgetRow {
   id: string;
   study_id: string;
@@ -693,10 +866,116 @@ export interface SiteBudgetRow {
   negotiation_status: SiteNegotiationStatus;
   payment_terms_type: SitePaymentTermsType;
   terms: Record<string, unknown> | null;
+  document_path: string | null;
+  overhead_rate: number | null;
+  payment_info: SiteBudgetPaymentInfo | null;
+  version: number;
+  supersedes_budget_id: string | null;
+  effective_from: string;
   notes: string | null;
   created_at: string;
   updated_at: string;
 }
+
+export type SiteBudgetLineItemPaidTo = 'site' | 'irb' | 'vendor';
+
+export interface SiteBudgetLineItem {
+  id: string;
+  site_budget_id: string;
+  section: string;
+  description: string;
+  cost_basis: string | null;
+  unit_cost: number;
+  quantity: number;
+  total_cost: number;
+  overhead_rate: number | null;
+  overhead_amount: number;
+  cost_with_overhead: number;
+  paid_to: SiteBudgetLineItemPaidTo;
+  notes: string | null;
+  sort_order: number;
+  created_at: string;
+  /** When false, line is kept for history but excluded from budget totals. */
+  is_active: boolean;
+}
+
+export interface SiteBudgetWithLineItems extends SiteBudgetRow {
+  site_budget_line_items: SiteBudgetLineItem[];
+}
+
+export interface InvoiceBudgetAllocation {
+  id: string;
+  invoice_id: string;
+  site_budget_line_item_id: string | null;
+  amount: number;
+  created_at: string;
+}
+
+/** Server bundle for mapping invoices to site budget line items (UI + validation). */
+export type InvoiceBudgetAllocationContextLineItem = Pick<
+  SiteBudgetLineItem,
+  'id' | 'description' | 'section' | 'cost_with_overhead' | 'is_active'
+>;
+
+export interface InvoiceBudgetAllocationContext {
+  siteId: string;
+  siteBudgetId: string;
+  lineItems: InvoiceBudgetAllocationContextLineItem[];
+  invoicedByLineId: Record<string, number>;
+}
+
+export type InvoiceBudgetAllocationListRow = {
+  id: string;
+  site_budget_line_item_id: string;
+  amount: number;
+  description: string | null;
+  section: string | null;
+};
+
+export type InvoiceBudgetLineAllocationRef = {
+  invoice_id: string;
+  external_invoice_id: string;
+  amount: number;
+};
+
+export interface InvoiceDecisionRecord {
+  id: string;
+  invoice_id: string;
+  step_index: number;
+  profile_id: string;
+  decision: 'approved' | 'rejected';
+  comment: string | null;
+  created_at: string;
+  profiles?: {
+    display_name: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+  } | null;
+}
+
+/** Merged invoice activity: decisions plus transaction log rows excluding approve_step/reject (those duplicate decisions). */
+export type InvoiceTimelineEntry =
+  | {
+      source: 'decision';
+      id: string;
+      created_at: string;
+      step_index: number;
+      decision: 'approved' | 'rejected';
+      comment: string | null;
+      profiles?: InvoiceDecisionRecord['profiles'];
+    }
+  | {
+      source: 'audit';
+      id: string;
+      created_at: string;
+      action: string;
+      summary: string;
+      from_state: string | null;
+      to_state: string | null;
+      profiles?: InvoiceDecisionRecord['profiles'];
+      payload: Record<string, unknown>;
+    };
 
 export type KriCategory = 'enrollment' | 'data_quality' | 'safety' | 'site_performance' | 'regulatory' | 'financial';
 

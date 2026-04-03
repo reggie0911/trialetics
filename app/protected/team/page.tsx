@@ -22,7 +22,7 @@ export default async function TeamPage() {
 
   return (
     <div className="p-6 space-y-6" suppressHydrationWarning>
-      <div>
+      <div data-onboarding="page-team">
         <h1 className="text-2xl font-semibold tracking-tight">Team</h1>
         <p className="text-sm text-muted-foreground">
           Company-wide team directory and study assignments.

@@ -20,80 +20,54 @@ export function ProtectedNavbar() {
   const pathname = usePathname();
   const [showSettings, setShowSettings] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
-  const [showCompleteSetup, setShowCompleteSetup] = useState(false);
   const [companyName, setCompanyName] = useState<string | null>(null);
 
   const loadUserProfile = async () => {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
-        console.log('No user found');
         return;
       }
 
-      console.log('Loading profile for user:', user.id);
-      
-      // Simplified query - just get profile data without nested company join
-      // Use maybeSingle() to handle 0 rows without PGRST116 error (e.g. profile not created yet)
       const { data: profile, error } = await supabase
         .from('profiles')
-        .select('avatar_url, role, onboarding_completed_at, company_id')
+        .select('avatar_url, company_id')
         .eq('user_id', user.id)
         .maybeSingle();
-      
-      if (error) {
-        console.error('Profile query error - code:', error.code, 'message:', error.message);
+
+      if (error || !profile) {
         return;
       }
-      
-      if (!profile) {
-        console.log('No profile found for user');
-        return;
-      }
-      
-      console.log('Profile loaded, company_id:', profile.company_id);
-      
+
       if (profile.avatar_url) {
         setAvatarUrl(`${profile.avatar_url}?t=${Date.now()}`);
       }
-      if (profile.role) {
-        setUserRole(profile.role);
-      }
-      
-      // Fetch company name separately if company_id exists
+
       let companyNameValue: string | null = null;
-      
+
       if (profile.company_id) {
-        console.log('Fetching company name for ID:', profile.company_id);
         const { data: company, error: companyError } = await supabase
           .from('companies')
           .select('name')
           .eq('id', profile.company_id)
           .single();
-        
-        if (companyError) {
-          console.error('Company query error - code:', companyError.code, 'message:', companyError.message);
-        } else if (company) {
+
+        if (!companyError && company) {
           companyNameValue = company.name ?? null;
-          console.log('Company name loaded:', companyNameValue);
         }
       }
-      
-      // Treat auto-generated "{email}'s Organization" as unset - keep empty until user populates
+
       const isDefaultName = companyNameValue?.trim().endsWith("'s Organization");
       setCompanyName(isDefaultName ? null : companyNameValue);
-      
-      setShowCompleteSetup(false);
-    } catch (error) {
-      console.error('Unexpected error in loadUserProfile:', error);
+    } catch {
+      /* ignore */
     }
   };
 
   useEffect(() => {
-    loadUserProfile();
+    void loadUserProfile();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
@@ -105,9 +79,8 @@ export function ProtectedNavbar() {
 
   const handleSettingsClose = (open: boolean) => {
     setShowSettings(open);
-    // Reload profile when modal closes in case it was updated
     if (!open) {
-      loadUserProfile();
+      void loadUserProfile();
     }
   };
 
@@ -133,8 +106,8 @@ export function ProtectedNavbar() {
                 </Avatar>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem 
-                  onClick={() => setShowSettings(true)} 
+                <DropdownMenuItem
+                  onClick={() => setShowSettings(true)}
                   className="cursor-pointer"
                 >
                   <Settings className="mr-2 h-4 w-4" />
@@ -150,8 +123,8 @@ export function ProtectedNavbar() {
         </div>
       </header>
 
-      <ProfileSettingsModal 
-        open={showSettings} 
+      <ProfileSettingsModal
+        open={showSettings}
         onOpenChange={handleSettingsClose}
         onDataSaved={loadUserProfile}
       />

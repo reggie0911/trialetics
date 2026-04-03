@@ -1181,6 +1181,7 @@ export type Database = {
       directory_contacts: {
         Row: {
           archived_at: string | null
+          avatar_url: string | null
           company_id: string
           country_code: string | null
           created_at: string
@@ -1201,6 +1202,7 @@ export type Database = {
         }
         Insert: {
           archived_at?: string | null
+          avatar_url?: string | null
           company_id: string
           country_code?: string | null
           created_at?: string
@@ -1221,6 +1223,7 @@ export type Database = {
         }
         Update: {
           archived_at?: string | null
+          avatar_url?: string | null
           company_id?: string
           country_code?: string | null
           created_at?: string
@@ -1901,6 +1904,45 @@ export type Database = {
           },
         ]
       }
+      invoice_budget_allocations: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          invoice_id: string
+          site_budget_line_item_id: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          invoice_id: string
+          site_budget_line_item_id?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          site_budget_line_item_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_budget_allocations_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "finance_invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_budget_allocations_site_budget_line_item_id_fkey"
+            columns: ["site_budget_line_item_id"]
+            isOneToOne: false
+            referencedRelation: "site_budget_line_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance_invoice_decisions: {
         Row: {
           comment: string | null
@@ -1954,8 +1996,11 @@ export type Database = {
           created_at: string
           created_by_profile_id: string | null
           currency: string
+          document_path: string | null
           due_at: string | null
           entity_type: string
+          extracted_at: string | null
+          extracted_data: Record<string, unknown> | null
           external_invoice_id: string
           id: string
           institution_id: string | null
@@ -1975,8 +2020,11 @@ export type Database = {
           created_at?: string
           created_by_profile_id?: string | null
           currency?: string
+          document_path?: string | null
           due_at?: string | null
           entity_type: string
+          extracted_at?: string | null
+          extracted_data?: Record<string, unknown> | null
           external_invoice_id: string
           id?: string
           institution_id?: string | null
@@ -1996,8 +2044,11 @@ export type Database = {
           created_at?: string
           created_by_profile_id?: string | null
           currency?: string
+          document_path?: string | null
           due_at?: string | null
           entity_type?: string
+          extracted_at?: string | null
+          extracted_data?: Record<string, unknown> | null
           external_invoice_id?: string
           id?: string
           institution_id?: string | null
@@ -3560,6 +3611,7 @@ export type Database = {
           language: string | null
           last_name: string | null
           onboarding_completed_at: string | null
+          onboarding_state: Json
           phone: string | null
           role: string
           timezone: string | null
@@ -3582,6 +3634,7 @@ export type Database = {
           language?: string | null
           last_name?: string | null
           onboarding_completed_at?: string | null
+          onboarding_state?: Json
           phone?: string | null
           role?: string
           timezone?: string | null
@@ -3604,6 +3657,7 @@ export type Database = {
           language?: string | null
           last_name?: string | null
           onboarding_completed_at?: string | null
+          onboarding_state?: Json
           phone?: string | null
           role?: string
           timezone?: string | null
@@ -4026,46 +4080,64 @@ export type Database = {
           approved_amount: number | null
           created_at: string
           currency: string
+          document_path: string | null
+          effective_from: string
           id: string
           negotiation_status: string
           notes: string | null
+          overhead_rate: number | null
+          payment_info: Json | null
           payment_terms_type: string
           proposed_amount: number
           site_id: string
           study_budget_id: string | null
           study_id: string
+          supersedes_budget_id: string | null
           terms: Json | null
           updated_at: string
+          version: number
         }
         Insert: {
           approved_amount?: number | null
           created_at?: string
           currency?: string
+          document_path?: string | null
+          effective_from?: string
           id?: string
           negotiation_status?: string
           notes?: string | null
+          overhead_rate?: number | null
+          payment_info?: Json | null
           payment_terms_type?: string
           proposed_amount?: number
           site_id: string
           study_budget_id?: string | null
           study_id: string
+          supersedes_budget_id?: string | null
           terms?: Json | null
           updated_at?: string
+          version?: number
         }
         Update: {
           approved_amount?: number | null
           created_at?: string
           currency?: string
+          document_path?: string | null
+          effective_from?: string
           id?: string
           negotiation_status?: string
           notes?: string | null
+          overhead_rate?: number | null
+          payment_info?: Json | null
           payment_terms_type?: string
           proposed_amount?: number
           site_id?: string
           study_budget_id?: string | null
           study_id?: string
+          supersedes_budget_id?: string | null
           terms?: Json | null
           updated_at?: string
+          version?: number
         }
         Relationships: [
           {
@@ -4087,6 +4159,63 @@ export type Database = {
             columns: ["study_id"]
             isOneToOne: false
             referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_budget_line_items: {
+        Row: {
+          cost_basis: string | null
+          cost_with_overhead: number
+          created_at: string
+          description: string
+          id: string
+          is_active: boolean
+          notes: string | null
+          overhead_amount: number
+          overhead_rate: number | null
+          paid_to: string
+          quantity: number
+          section: string
+          site_budget_id: string
+          sort_order: number
+          total_cost: number
+          unit_cost: number
+        }
+        Insert: {
+          cost_basis?: string | null
+          description: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          overhead_rate?: number | null
+          paid_to?: string
+          quantity?: number
+          section: string
+          site_budget_id: string
+          sort_order?: number
+          unit_cost?: number
+        }
+        Update: {
+          cost_basis?: string | null
+          description?: string
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          overhead_rate?: number | null
+          paid_to?: string
+          quantity?: number
+          section?: string
+          site_budget_id?: string
+          sort_order?: number
+          unit_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_budget_line_items_site_budget_id_fkey"
+            columns: ["site_budget_id"]
+            isOneToOne: false
+            referencedRelation: "site_budgets"
             referencedColumns: ["id"]
           },
         ]
@@ -4208,8 +4337,10 @@ export type Database = {
           created_at: string
           description: string | null
           end_date: string | null
+          finance_approval_template_id: string | null
           id: string
           indication: string | null
+          overview: Json | null
           phase: string
           protocol_number: string
           sponsor: string | null
@@ -4225,8 +4356,10 @@ export type Database = {
           created_at?: string
           description?: string | null
           end_date?: string | null
+          finance_approval_template_id?: string | null
           id?: string
           indication?: string | null
+          overview?: Json | null
           phase: string
           protocol_number: string
           sponsor?: string | null
@@ -4242,8 +4375,10 @@ export type Database = {
           created_at?: string
           description?: string | null
           end_date?: string | null
+          finance_approval_template_id?: string | null
           id?: string
           indication?: string | null
+          overview?: Json | null
           phase?: string
           protocol_number?: string
           sponsor?: string | null
@@ -4260,6 +4395,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "studies_finance_approval_template_id_fkey"
+            columns: ["finance_approval_template_id"]
+            isOneToOne: false
+            referencedRelation: "finance_approval_templates"
             referencedColumns: ["id"]
           },
           {
@@ -4284,6 +4426,7 @@ export type Database = {
           total_amount: number
           updated_at: string
           version: number
+          wizard_inputs: Json | null
         }
         Insert: {
           created_at?: string
@@ -4297,6 +4440,7 @@ export type Database = {
           total_amount?: number
           updated_at?: string
           version?: number
+          wizard_inputs?: Json | null
         }
         Update: {
           created_at?: string
@@ -4310,6 +4454,7 @@ export type Database = {
           total_amount?: number
           updated_at?: string
           version?: number
+          wizard_inputs?: Json | null
         }
         Relationships: [
           {
@@ -5842,6 +5987,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           days_approval: number
+          days_basis: string
           days_submission: number
           id: string
           name: string
@@ -5855,6 +6001,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           days_approval?: number
+          days_basis?: string
           days_submission?: number
           id?: string
           name: string
@@ -5868,6 +6015,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           days_approval?: number
+          days_basis?: string
           days_submission?: number
           id?: string
           name?: string

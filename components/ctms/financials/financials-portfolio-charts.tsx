@@ -19,6 +19,37 @@ function formatCurrency(amount: number, currency: string = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(amount);
 }
 
+type BarChartRow = {
+  name: string;
+  fullTitle: string;
+  budget: number;
+  paid: number;
+  open: number;
+};
+
+/**
+ * Short X-axis label: leading ALL-CAPS words (e.g. NEUROLIGHT, ONCOGUARD from "NEUROLIGHT Phase II …"),
+ * else the segment before " Phase …" as a single uppercased token, else a compact fallback.
+ */
+function shortStudyChartLabel(title: string): string {
+  const t = title.trim();
+  if (!t) return '—';
+  const words = t.split(/\s+/);
+  const capsRun: string[] = [];
+  for (const w of words) {
+    if (/^[A-Z][A-Z0-9_-]*$/.test(w)) capsRun.push(w);
+    else break;
+  }
+  if (capsRun.length > 0) return capsRun.join(' ');
+  const head = t.split(/\s+Phase\s/i)[0]?.trim();
+  if (head) {
+    const first = head.split(/\s+/)[0] ?? head;
+    return first.toUpperCase();
+  }
+  const w0 = words[0] ?? t;
+  return w0.length > 14 ? `${w0.slice(0, 12)}…` : w0;
+}
+
 interface FinancialsPortfolioChartsProps {
   studies: PortfolioStudyFinancialRow[];
   monthlySpend: PortfolioMonthlySpendPoint[];
@@ -26,8 +57,9 @@ interface FinancialsPortfolioChartsProps {
 }
 
 export function FinancialsPortfolioCharts({ studies, monthlySpend, currency }: FinancialsPortfolioChartsProps) {
-  const byStudy = studies.map((s) => ({
-    name: s.title.length > 24 ? `${s.title.slice(0, 22)}…` : s.title,
+  const byStudy: BarChartRow[] = studies.map((s) => ({
+    name: shortStudyChartLabel(s.title),
+    fullTitle: s.title,
     budget: s.totalBudget,
     paid: s.totalPaid,
     open: s.invoiceOpenAmount,
@@ -52,11 +84,15 @@ export function FinancialsPortfolioCharts({ studies, monthlySpend, currency }: F
             <p className="text-sm text-muted-foreground py-12 text-center">No study rows to chart yet.</p>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={byStudy} margin={{ top: 8, right: 8, left: 8, bottom: 48 }}>
+              <BarChart data={byStudy} margin={{ top: 8, right: 8, left: 8, bottom: 28 }}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} angle={-28} textAnchor="end" height={70} />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={0} textAnchor="middle" height={36} />
                 <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => formatCurrency(Number(v), currency)} width={72} />
                 <Tooltip
+                  labelFormatter={(_label, payload) => {
+                    const row = payload?.[0]?.payload as BarChartRow | undefined;
+                    return row?.fullTitle ?? '';
+                  }}
                   formatter={(value) => formatCurrency(Number(value ?? 0), currency)}
                   contentStyle={{ fontSize: 12 }}
                 />

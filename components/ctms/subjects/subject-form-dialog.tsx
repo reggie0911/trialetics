@@ -48,6 +48,10 @@ interface SubjectFormDialogProps {
   sites: Pick<StudySite, 'id' | 'site_number' | 'name'>[];
   subject?: Subject;
   onSuccess: () => void;
+  /** When creating from a site-scoped view, pre-fill and optionally lock site */
+  defaultSiteIdWhenCreate?: string;
+  /** Hide site selector; site is fixed (uses subject site when editing, default when creating) */
+  lockSiteSelection?: boolean;
 }
 
 export function SubjectFormDialog({
@@ -55,6 +59,8 @@ export function SubjectFormDialog({
   sites,
   subject,
   onSuccess,
+  defaultSiteIdWhenCreate,
+  lockSiteSelection = false,
 }: SubjectFormDialogProps) {
   const [open, setOpen] = useState(false);
   const isEdit = !!subject;
@@ -64,7 +70,7 @@ export function SubjectFormDialog({
     defaultValues: isEdit
       ? {
           subject_number: subject.subject_number,
-          site_id: subject.site_id,
+          site_id: subject.site_id ?? '',
           screening_number: subject.screening_number ?? '',
           randomization_number: subject.randomization_number ?? '',
           status: subject.status,
@@ -73,7 +79,7 @@ export function SubjectFormDialog({
         }
       : {
           subject_number: '',
-          site_id: '',
+          site_id: defaultSiteIdWhenCreate ?? '',
           screening_number: '',
           randomization_number: '',
           status: 'pre_screening',
@@ -82,6 +88,41 @@ export function SubjectFormDialog({
         },
   });
 
+  const resetFormForDialog = () => {
+    if (subject) {
+      form.reset({
+        subject_number: subject.subject_number,
+        site_id: subject.site_id ?? '',
+        screening_number: subject.screening_number ?? '',
+        randomization_number: subject.randomization_number ?? '',
+        status: subject.status,
+        screening_date: subject.screening_date ?? '',
+        randomization_date: subject.randomization_date ?? '',
+      });
+    } else {
+      const initialSite =
+        lockSiteSelection && defaultSiteIdWhenCreate
+          ? defaultSiteIdWhenCreate
+          : (defaultSiteIdWhenCreate ?? '');
+      form.reset({
+        subject_number: '',
+        site_id: initialSite,
+        screening_number: '',
+        randomization_number: '',
+        status: 'pre_screening',
+        screening_date: '',
+        randomization_date: '',
+      });
+    }
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next) {
+      resetFormForDialog();
+    }
+  };
+
   const onSubmit = async (values: SubjectFormValues) => {
     if (isEdit) {
       const { error } = await updateSubject({
@@ -89,6 +130,8 @@ export function SubjectFormDialog({
         study_id: studyId,
         ...values,
         status: values.status as SubjectStatus,
+        revalidateSiteId:
+          typeof subject.site_id === 'string' ? subject.site_id : undefined,
       });
       if (error) {
         toast.error(error);
@@ -109,12 +152,21 @@ export function SubjectFormDialog({
     }
 
     setOpen(false);
-    form.reset();
+    resetFormForDialog();
     onSuccess();
   };
 
+  const lockedSiteId = lockSiteSelection
+    ? (isEdit ? subject?.site_id : defaultSiteIdWhenCreate)
+    : undefined;
+  const lockedSite =
+    typeof lockedSiteId === 'string'
+      ? sites.find((s) => s.id === lockedSiteId)
+      : undefined;
+  const showSiteSelect = !lockSiteSelection;
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger
         render={
           isEdit ? (
@@ -139,7 +191,9 @@ export function SubjectFormDialog({
           <DialogDescription>
             {isEdit
               ? 'Update subject details and status.'
-              : 'Enroll a new subject in this study.'}
+              : lockSiteSelection
+                ? 'Enroll a new subject at this site.'
+                : 'Enroll a new subject in this study.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -149,6 +203,7 @@ export function SubjectFormDialog({
               <Label>Subject Number</Label>
               <Input
                 placeholder="e.g., SUBJ-001"
+                className="text-xs"
                 {...form.register('subject_number')}
               />
               {form.formState.errors.subject_number && (
@@ -160,27 +215,38 @@ export function SubjectFormDialog({
 
             <div className="space-y-2">
               <Label>Site</Label>
-              <Select
-                value={form.watch('site_id')}
-                onValueChange={(val) => form.setValue('site_id', val)}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue
-                    placeholder="Select Site"
-                    getDisplayLabel={(v) => {
-                      const site = sites.find((s) => s.id === v);
-                      return site ? `${site.site_number} — ${site.name}` : v;
-                    }}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {sites.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.site_number} — {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {showSiteSelect ? (
+                <Select
+                  value={form.watch('site_id')}
+                  onValueChange={(val) => form.setValue('site_id', val)}
+                >
+                  <SelectTrigger className="w-full text-xs">
+                    <SelectValue
+                      placeholder="Select Site"
+                      getDisplayLabel={(v) => {
+                        const site = sites.find((s) => s.id === v);
+                        return site ? `${site.site_number} — ${site.name}` : v;
+                      }}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sites.map((s) => (
+                      <SelectItem key={s.id} value={s.id} className="text-xs">
+                        {s.site_number} — {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div
+                  className="flex min-h-9 w-full items-center rounded-md border border-input bg-muted/30 px-3 py-2 text-xs text-foreground"
+                  aria-readonly="true"
+                >
+                  {lockedSite
+                    ? `${lockedSite.site_number} — ${lockedSite.name}`
+                    : '—'}
+                </div>
+              )}
               {form.formState.errors.site_id && (
                 <p className="text-xs text-destructive">
                   {form.formState.errors.site_id.message}
@@ -194,6 +260,7 @@ export function SubjectFormDialog({
               <Label>Screening Number</Label>
               <Input
                 placeholder="Optional"
+                className="text-xs"
                 {...form.register('screening_number')}
               />
             </div>
@@ -201,6 +268,7 @@ export function SubjectFormDialog({
               <Label>Randomization Number</Label>
               <Input
                 placeholder="Optional"
+                className="text-xs"
                 {...form.register('randomization_number')}
               />
             </div>
@@ -212,7 +280,7 @@ export function SubjectFormDialog({
               value={form.watch('status')}
               onValueChange={(val) => form.setValue('status', val)}
             >
-              <SelectTrigger className="w-full">
+              <SelectTrigger className="w-full text-xs">
                 <SelectValue
                   placeholder="Select Status"
                   getDisplayLabel={(v) => SUBJECT_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? v}
@@ -220,7 +288,7 @@ export function SubjectFormDialog({
               </SelectTrigger>
               <SelectContent>
                 {SUBJECT_STATUS_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
+                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
                     {opt.label}
                   </SelectItem>
                 ))}
@@ -231,11 +299,11 @@ export function SubjectFormDialog({
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>Screening Date</Label>
-              <Input type="date" {...form.register('screening_date')} />
+              <Input type="date" className="text-xs" {...form.register('screening_date')} />
             </div>
             <div className="space-y-2">
               <Label>Randomization Date</Label>
-              <Input type="date" {...form.register('randomization_date')} />
+              <Input type="date" className="text-xs" {...form.register('randomization_date')} />
             </div>
           </div>
 

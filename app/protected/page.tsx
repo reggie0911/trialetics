@@ -53,13 +53,15 @@ export default async function ProtectedPage() {
 
   if (!hasCtmsAccess) {
     return (
-      <ModulesDashboardContent
-        firstName={profile.first_name}
-        hasEtmfAccess={hasEtmfAccess}
-        hasEisfAccess={hasEisfAccess}
-        studyTrackerMenuKeys={studyTrackerMenuKeys}
-        customTrackers={customTrackers}
-      />
+      <div data-onboarding="page-dashboard" className="contents">
+        <ModulesDashboardContent
+          firstName={profile.first_name}
+          hasEtmfAccess={hasEtmfAccess}
+          hasEisfAccess={hasEisfAccess}
+          studyTrackerMenuKeys={studyTrackerMenuKeys}
+          customTrackers={customTrackers}
+        />
+      </div>
     );
   }
 
@@ -72,10 +74,12 @@ export default async function ProtectedPage() {
     .limit(5);
 
   return (
-    <DashboardContent
-      firstName={profile.first_name}
-      stats={stats}
-      recentStudies={recentStudies ?? []}
-    />
+    <div data-onboarding="page-dashboard" className="contents">
+      <DashboardContent
+        firstName={profile.first_name}
+        stats={stats}
+        recentStudies={recentStudies ?? []}
+      />
+    </div>
   );
 }

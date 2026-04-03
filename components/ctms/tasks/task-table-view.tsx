@@ -45,8 +45,8 @@ function formatDate(dateStr: string | null) {
 
 function assigneeDisplay(task: TaskWithRelations): string {
   const p = task.profiles;
-  if (!p) return 'Missing Name';
-  return [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email || 'Missing Name';
+  if (!p) return 'Team member';
+  return [p.first_name, p.last_name].filter(Boolean).join(' ') || p.email || 'Team member';
 }
 
 function siteDisplay(task: TaskWithRelations): string {

@@ -4,8 +4,6 @@ import { ChevronLeft } from 'lucide-react';
 import { getInstitutionById } from '@/lib/actions/directory-institutions';
 import { getDirectoryAccess } from '@/lib/actions/directory-context';
 import { getStudies } from '@/lib/actions/studies';
-import { getAllSites } from '@/lib/actions/sites';
-import { listInstitutions } from '@/lib/actions/directory-institutions';
 import { Button } from '@/components/ui/button';
 import { DirectoryInstitutionDetailClient } from '@/components/ctms/directory/directory-institution-detail-client';
 import type { InstitutionRow } from '@/lib/types/directory';
@@ -40,12 +38,7 @@ export default async function DirectoryInstitutionPage({ params }: PageProps) {
   const access = await getDirectoryAccess();
   if (!access.ok) notFound();
 
-  const [inst, studies, sites, allInst] = await Promise.all([
-    getInstitutionById(id),
-    getStudies(),
-    getAllSites(),
-    listInstitutions({ limit: 400, offset: 0 }),
-  ]);
+  const [inst, studies] = await Promise.all([getInstitutionById(id), getStudies()]);
 
   if (!inst.data) notFound();
 
@@ -54,15 +47,13 @@ export default async function DirectoryInstitutionPage({ params }: PageProps) {
       <Button variant="ghost" size="sm" className="text-xs -ml-2 h-8" asChild>
         <Link href="/protected/directory">
           <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-          Contacts & organizations
+          Contacts & Organizations
         </Link>
       </Button>
       <DirectoryInstitutionDetailClient
         institution={inst.data as InstitutionDetailProps}
         canEdit={access.canEdit}
         studies={studies}
-        sites={sites}
-        allInstitutions={allInst.data}
       />
     </div>
   );

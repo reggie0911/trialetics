@@ -6,7 +6,7 @@ export default async function StudiesPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
+      <div data-onboarding="page-studies">
         <h1 className="text-2xl font-semibold tracking-tight">Studies</h1>
         <p className="text-muted-foreground mt-1">
           Manage your clinical trials and study protocols.

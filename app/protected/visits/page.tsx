@@ -10,7 +10,7 @@ export default async function VisitsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div>
+      <div data-onboarding="page-visits">
         <h1 className="text-2xl font-semibold tracking-tight">Monitoring Visits</h1>
         <p className="text-sm text-muted-foreground">
           View and track monitoring visits across all studies.

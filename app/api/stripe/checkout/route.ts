@@ -4,6 +4,8 @@ import { stripe } from '@/lib/stripe';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { PLAN_CONFIGS, type SubscriptionPlan } from '@/lib/types/ctms';
 
+const PLAN_RANK: SubscriptionPlan[] = ['basic', 'pro', 'enterprise'];
+
 export async function POST(request: NextRequest) {
   const supabaseAdmin = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -35,11 +37,47 @@ export async function POST(request: NextRequest) {
 
     const { data: subscription } = await supabase
       .from('subscriptions')
-      .select('stripe_customer_id')
+      .select('stripe_customer_id, stripe_subscription_id, status, plan')
       .eq('company_id', profile.company_id)
       .single();
 
     let customerId = subscription?.stripe_customer_id;
+
+    const subStatus = subscription?.status ?? '';
+    const hasActiveStripeSub =
+      subscription?.stripe_subscription_id &&
+      (subStatus === 'active' || subStatus === 'trialing');
+    if (hasActiveStripeSub) {
+      try {
+        const stripeSub = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id!);
+        if (stripeSub.status === 'active' || stripeSub.status === 'trialing') {
+          const currentPlan = (subscription.plan as SubscriptionPlan) ?? 'basic';
+          const fromIdx = PLAN_RANK.indexOf(currentPlan);
+          const toIdx = PLAN_RANK.indexOf(plan);
+          if (toIdx <= fromIdx) {
+            return NextResponse.json(
+              {
+                error:
+                  'To change or downgrade your plan, open Manage Plan on your billing page to use the customer portal.',
+              },
+              { status: 400 },
+            );
+          }
+          const itemId = stripeSub.items.data[0]?.id;
+          if (!itemId) {
+            return NextResponse.json({ error: 'Could not update subscription' }, { status: 400 });
+          }
+          await stripe.subscriptions.update(subscription.stripe_subscription_id!, {
+            items: [{ id: itemId, price: planConfig.stripePriceId }],
+            proration_behavior: 'create_prorations',
+          });
+          return NextResponse.json({ upgraded: true });
+        }
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Subscription update failed';
+        return NextResponse.json({ error: message }, { status: 400 });
+      }
+    }
 
     if (!customerId) {
       const { data: company } = await supabase

@@ -1,5 +1,6 @@
 "use client"
 
+import type * as React from "react"
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { Slot } from "@radix-ui/react-slot"
 import { cva, type VariantProps } from "class-variance-authority"
@@ -47,6 +48,8 @@ type ButtonProps = ButtonPrimitive.Props &
   VariantProps<typeof buttonVariants> & {
     /** Merge styles/props onto the single child (e.g. `Link`) — Radix pattern; Base UI button has no `asChild`. */
     asChild?: boolean
+    /** Forwarded for native `<button>` / Slot (submit/reset/forms). */
+    type?: React.ButtonHTMLAttributes<HTMLButtonElement>["type"]
   }
 
 function Button({
@@ -56,6 +59,7 @@ function Button({
   nativeButton,
   render,
   asChild = false,
+  type,
   children,
   ...props
 }: ButtonProps) {
@@ -66,6 +70,22 @@ function Button({
       <Slot data-slot="button" className={mergedClassName} {...props}>
         {children}
       </Slot>
+    )
+  }
+
+  // Base UI's useButton always sets type="button" on native <button>, which overrides
+  // type="submit" / "reset" and breaks HTML form submission (e.g. login).
+  if (type === "submit" || type === "reset") {
+    return (
+      <button
+        type={type}
+        data-slot="button"
+        suppressHydrationWarning
+        className={mergedClassName}
+        {...props}
+      >
+        {children}
+      </button>
     )
   }
 

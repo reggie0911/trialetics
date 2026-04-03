@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Trash2, Plus } from 'lucide-react';
+import { Trash2, Plus, User } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,17 +29,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import {
   updateDirectoryContact,
   removeContactStudyLink,
   upsertContactStudyLink,
@@ -47,7 +36,6 @@ import {
   upsertContactSiteLink,
   removeContactInstitutionLink,
   upsertContactInstitutionLink,
-  deleteDirectoryContact,
   setDirectoryContactStatus,
 } from '@/lib/actions/directory-contacts';
 import { directoryContactFormSchema } from '@/lib/validation/directory';
@@ -62,8 +50,12 @@ import type { InstitutionRow } from '@/lib/types/directory';
 import {
   DirectoryPrimaryRoleFields,
   getCategoryIdForRoleId,
+  getRoleOptionsForCategoryFilter,
 } from '@/components/ctms/directory/directory-primary-role-fields';
 import { DirectoryCountryRegionFields } from '@/components/ctms/directory/directory-country-region-fields';
+import { DirectoryContactPhotoField } from '@/components/ctms/directory/directory-contact-photo-field';
+import { formatPhoneNumber } from '@/lib/utils';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 type CatalogCat = {
   id: string;
@@ -73,6 +65,7 @@ type CatalogCat = {
 };
 
 interface Props {
+  companyId: string;
   contact: DirectoryContactWithRelations;
   canEdit: boolean;
   catalog: CatalogCat[];
@@ -82,6 +75,7 @@ interface Props {
 }
 
 export function DirectoryContactDetailClient({
+  companyId,
   contact: initial,
   canEdit,
   catalog,
@@ -93,6 +87,7 @@ export function DirectoryContactDetailClient({
   const [, startTransition] = useTransition();
   const [contact, setContact] = useState(initial);
 
+  /** Full catalog list (study/site link dialogs). */
   const flatRoles = catalog.flatMap((c) => c.roles);
 
   const form = useForm<ContactDetailFormInput, unknown, ContactDetailFormOutput>({
@@ -102,7 +97,8 @@ export function DirectoryContactDetailClient({
       last_name: initial.last_name,
       title: initial.title ?? '',
       email: initial.email ?? '',
-      phone: initial.phone ?? '',
+      avatar_url: initial.avatar_url ?? '',
+      phone: formatPhoneNumber(initial.phone ?? ''),
       department: initial.department ?? '',
       country_code: initial.country_code ?? '',
       region: initial.region ?? '',
@@ -125,6 +121,16 @@ export function DirectoryContactDetailClient({
     setRoleCategoryFilter(getCategoryIdForRoleId(catalog, initial.primary_directory_role_id));
   }, [initial.primary_directory_role_id, catalog]);
 
+  useEffect(() => {
+    setContact(initial);
+  }, [initial.id, initial.updated_at]);
+
+  const secondaryRoleOptions = getRoleOptionsForCategoryFilter(catalog, roleCategoryFilter);
+  const visibleSecondaryIds = new Set(secondaryRoleOptions.map((r) => r.id));
+  const secondaryHiddenCount = (form.watch('secondary_role_ids') ?? []).filter(
+    (id) => !visibleSecondaryIds.has(id)
+  ).length;
+
   const onSave = form.handleSubmit(async (values) => {
     startTransition(async () => {
       const res = await updateDirectoryContact(contact.id, {
@@ -132,6 +138,7 @@ export function DirectoryContactDetailClient({
         profile_id: contact.profile_id,
         title: values.title || undefined,
         email: values.email || undefined,
+        avatar_url: values.avatar_url?.trim() || null,
         phone: values.phone || undefined,
         department: values.department || undefined,
         country_code: values.country_code || undefined,
@@ -142,6 +149,22 @@ export function DirectoryContactDetailClient({
       else {
         toast.success('Contact updated');
         if (res.duplicateEmailWarning) toast.message('Another contact shares this email.');
+        setContact((c) => ({
+          ...c,
+          first_name: values.first_name,
+          last_name: values.last_name,
+          title: values.title || null,
+          email: values.email || null,
+          avatar_url: values.avatar_url?.trim() || null,
+          phone: values.phone || null,
+          department: values.department || null,
+          country_code: values.country_code || null,
+          region: values.region || null,
+          status: values.status,
+          notes: values.notes || null,
+          primary_directory_role_id: values.primary_directory_role_id || null,
+          primary_institution_id: values.primary_institution_id || null,
+        }));
         router.refresh();
       }
     });
@@ -161,14 +184,22 @@ export function DirectoryContactDetailClient({
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {contact.first_name} {contact.last_name}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Linked app login (profile) is not auto-updated when the user changes their account — keep directory fields
-            accurate manually.
-          </p>
+        <div className="flex items-start gap-3 min-w-0">
+          <Avatar className="h-14 w-14 shrink-0 rounded-lg after:rounded-lg border border-border">
+            <AvatarImage src={contact.avatar_url ?? undefined} alt="" className="rounded-lg" />
+            <AvatarFallback className="rounded-lg">
+              <User className="h-6 w-6 text-muted-foreground" />
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {contact.first_name} {contact.last_name}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Linked app login (profile) is not auto-updated when the user changes their account — keep directory fields
+              accurate manually.
+            </p>
+          </div>
         </div>
         <div className="flex gap-2">
           {canEdit && (
@@ -193,38 +224,6 @@ export function DirectoryContactDetailClient({
               {contact.status === 'active' ? 'Deactivate' : 'Activate'}
             </Button>
           )}
-          {canEdit && (
-            <AlertDialog>
-              <AlertDialogTrigger render={<Button variant="destructive" size="sm" className="text-xs" />}>
-                Delete
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete contact?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Only allowed when there are no study, site, or committee links. Otherwise deactivate instead.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      startTransition(async () => {
-                        const { error } = await deleteDirectoryContact(contact.id);
-                        if (error) toast.error(error);
-                        else {
-                          toast.success('Contact removed');
-                          router.push('/protected/directory');
-                        }
-                      });
-                    }}
-                  >
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
         </div>
       </div>
 
@@ -234,6 +233,27 @@ export function DirectoryContactDetailClient({
         </CardHeader>
         <CardContent className="space-y-3">
           <form onSubmit={onSave} className="space-y-3">
+            {canEdit ? (
+              <DirectoryContactPhotoField
+                companyId={companyId}
+                imageUrl={form.watch('avatar_url') ?? ''}
+                onImageUrlChange={(url) =>
+                  form.setValue('avatar_url', url, { shouldDirty: true })
+                }
+              />
+            ) : (
+              contact.avatar_url && (
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-16 w-16 rounded-lg after:rounded-lg border border-border">
+                    <AvatarImage src={contact.avatar_url} alt="" className="rounded-lg" />
+                    <AvatarFallback className="rounded-lg">
+                      <User className="h-7 w-7 text-muted-foreground" />
+                    </AvatarFallback>
+                  </Avatar>
+                  <p className="text-xs text-muted-foreground">Profile photo</p>
+                </div>
+              )
+            )}
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <Label className="text-xs">First name</Label>
@@ -255,7 +275,17 @@ export function DirectoryContactDetailClient({
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Phone</Label>
-                <Input className="text-xs h-9" {...form.register('phone')} disabled={!canEdit} />
+                <Input
+                  className="text-xs h-9"
+                  disabled={!canEdit}
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="+1 (555) 000-0000"
+                  value={form.watch('phone') ?? ''}
+                  onChange={(e) =>
+                    form.setValue('phone', formatPhoneNumber(e.target.value), { shouldDirty: true })
+                  }
+                />
               </div>
             </div>
             <DirectoryPrimaryRoleFields
@@ -288,8 +318,18 @@ export function DirectoryContactDetailClient({
             </p>
             <div className="space-y-2">
               <Label className="text-xs">Secondary roles</Label>
+              <p className="text-[11px] text-muted-foreground">
+                Options match the role category above. Choose &quot;All categories&quot; to show every role in
+                the library.
+              </p>
+              {secondaryHiddenCount > 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  {secondaryHiddenCount} additional secondary role
+                  {secondaryHiddenCount === 1 ? '' : 's'} selected in other categories (still saved).
+                </p>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto border rounded-md p-2">
-                {flatRoles.map((r) => (
+                {secondaryRoleOptions.map((r) => (
                   <label key={r.id} className="flex items-center gap-2 text-xs">
                     <input
                       type="checkbox"

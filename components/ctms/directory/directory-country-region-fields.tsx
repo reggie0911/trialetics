@@ -4,13 +4,13 @@ import { useMemo, type ReactNode } from 'react';
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { COUNTRIES } from '@/lib/data/countries';
+import { countriesForSelectList } from '@/lib/data/countries';
 import { regionsForCountry } from '@/lib/data/country-regions';
 
 const selectClass =
   'flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs disabled:opacity-50';
 
-const countriesSorted = [...COUNTRIES].sort((a, b) => a.name.localeCompare(b.name));
+const countriesForSelect = countriesForSelectList();
 
 export type DirectoryCountryRegionVariant = 'institutionAddress' | 'contactRow';
 
@@ -60,7 +60,7 @@ export function DirectoryCountryRegionFields({
         aria-label="Country"
       >
         <option value="">Optional</option>
-        {countriesSorted.map((c) => (
+        {countriesForSelect.map((c) => (
           <option key={c.code} value={c.code}>
             {c.name}
           </option>

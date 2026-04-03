@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Pencil,
   Archive,
@@ -34,7 +34,9 @@ import {
 import { toast } from 'sonner';
 
 import { closeStudy } from '@/lib/actions/studies';
-import type { Study, StudyCountryWithSubmissions, StudySite, SubjectWithSite, EnrollmentFunnelData, StudyTeamMemberWithProfile, TeamRole, MonitoringVisitWithRelations, StudyBudgetWithItems, SitePaymentWithSite, FinancialSummary, FinanceInvoiceWithRelations, KriValueWithDefinition, EnrollmentDataPoint } from '@/lib/types/ctms';
+import type { Study, StudyCountryWithSubmissions, StudySite, SubjectWithSite, EnrollmentFunnelData, StudyTeamMemberWithProfile, TeamRole, MonitoringVisitWithRelations, StudyBudgetWithItems, SitePaymentWithSite, FinancialSummary, FinanceInvoiceWithRelations, KriValueWithDefinition, EnrollmentDataPoint, FinanceApprovalTemplateOption } from '@/lib/types/ctms';
+import { TRIP_REPORT_DAYS_BASIS_LABELS } from '@/lib/types/visit-reports';
+import { studyOverviewHasDisplayableContent } from '@/lib/validation/study-overview';
 import { CountriesTab } from '@/components/ctms/countries/countries-tab';
 import { SitesTab } from '@/components/ctms/sites/sites-tab';
 import { SubjectsTab } from '@/components/ctms/subjects/subjects-tab';
@@ -44,7 +46,23 @@ import { FinancialsTab } from '@/components/ctms/financials/financials-tab';
 import { KriGauge } from '@/components/ctms/reports/kri-gauge';
 import { EnrollmentChart } from '@/components/ctms/reports/enrollment-chart';
 
-interface StudyDetailTabsProps {
+const STUDY_TAB_VALUES = [
+  'overview',
+  'countries',
+  'sites',
+  'subjects',
+  'team',
+  'visits',
+  'financials',
+] as const;
+
+type StudyTabValue = (typeof STUDY_TAB_VALUES)[number];
+
+function isStudyTab(v: string | null): v is StudyTabValue {
+  return v !== null && (STUDY_TAB_VALUES as readonly string[]).includes(v);
+}
+
+export interface StudyDetailTabsProps {
   study: Study;
   counts: { countries: number; sites: number };
   countries: StudyCountryWithSubmissions[];
@@ -61,6 +79,7 @@ interface StudyDetailTabsProps {
   kriValues: KriValueWithDefinition[];
   enrollmentCurve: EnrollmentDataPoint[];
   isAdmin: boolean;
+  financeApprovalTemplateOptions: FinanceApprovalTemplateOption[];
 }
 
 function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
@@ -73,8 +92,29 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
 }
 
 
-export function StudyDetailTabs({ study, counts, countries, sites, subjects, funnel, teamMembers, teamRoles, monitoringVisits, budgets, payments, financialSummary, financeInvoices, kriValues, enrollmentCurve, isAdmin }: StudyDetailTabsProps) {
+export function StudyDetailTabs({
+  study,
+  counts,
+  countries,
+  sites,
+  subjects,
+  funnel,
+  teamMembers,
+  teamRoles,
+  monitoringVisits,
+  budgets,
+  payments,
+  financialSummary,
+  financeInvoices,
+  kriValues,
+  enrollmentCurve,
+  isAdmin,
+  financeApprovalTemplateOptions,
+}: StudyDetailTabsProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const defaultTab: StudyTabValue = isStudyTab(tabParam) ? tabParam : 'overview';
   const [isClosing, setIsClosing] = useState(false);
 
   const handleClose = async () => {
@@ -147,7 +187,11 @@ export function StudyDetailTabs({ study, counts, countries, sites, subjects, fun
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs
+        key={`${study.id}-${defaultTab}`}
+        defaultValue={defaultTab}
+        className="space-y-4"
+      >
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="countries">
@@ -191,6 +235,14 @@ export function StudyDetailTabs({ study, counts, countries, sites, subjects, fun
                   <DetailRow label="Therapeutic Area" value={study.therapeutic_area} />
                   <DetailRow label="Indication" value={study.indication} />
                   <DetailRow label="Sponsor" value={study.sponsor} />
+                  <DetailRow
+                    label="Sponsor organization (directory)"
+                    value={
+                      study.sponsor_institution_id
+                        ? 'Linked — open Directory for organization details'
+                        : 'Not linked'
+                    }
+                  />
                 </dl>
               </CardContent>
             </Card>
@@ -210,6 +262,178 @@ export function StudyDetailTabs({ study, counts, countries, sites, subjects, fun
                 </dl>
               </CardContent>
             </Card>
+
+            {!studyOverviewHasDisplayableContent(study.overview) && (
+              <Card className="lg:col-span-2 border-dashed">
+                <CardHeader>
+                  <CardTitle className="text-base">Protocol & monitoring overview</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm text-muted-foreground space-y-2">
+                  <p>
+                    Extra protocol details (summary, objectives, planned sites, monitoring plan, and trip report
+                    timing) are not saved for this study yet, or could not be loaded.
+                  </p>
+                  <p>
+                    Use <span className="font-medium text-foreground">Edit</span>, then fill out the{' '}
+                    <span className="font-medium text-foreground">Study overview</span> section and save. Only
+                    fields in that section are shown as the cards below—not the main study information block by
+                    itself.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {study.overview &&
+              (study.overview.study_type ||
+                study.overview.design ||
+                study.overview.estimated_enrollment != null ||
+                study.overview.study_duration_months != null ||
+                study.overview.population) && (
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>Protocol summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <dl className="divide-y">
+                    <DetailRow label="Study type" value={study.overview.study_type} />
+                    <DetailRow label="Design" value={study.overview.design} />
+                    <DetailRow
+                      label="Estimated enrollment"
+                      value={
+                        study.overview.estimated_enrollment != null
+                          ? `${study.overview.estimated_enrollment} participants`
+                          : null
+                      }
+                    />
+                    <DetailRow
+                      label="Study duration"
+                      value={
+                        study.overview.study_duration_months != null
+                          ? `${study.overview.study_duration_months} months`
+                          : null
+                      }
+                    />
+                    <DetailRow label="Population" value={study.overview.population} />
+                  </dl>
+                </CardContent>
+              </Card>
+            )}
+
+            {study.overview &&
+              (study.overview.primary_objective ||
+                (study.overview.secondary_objectives && study.overview.secondary_objectives.length > 0)) && (
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>Objectives</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  {study.overview.primary_objective && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Primary objective</p>
+                      <p className="mt-1 whitespace-pre-wrap">{study.overview.primary_objective}</p>
+                    </div>
+                  )}
+                  {study.overview.secondary_objectives && study.overview.secondary_objectives.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Key secondary objectives (hierarchical testing)
+                      </p>
+                      <ul className="mt-1 list-disc space-y-1 pl-5">
+                        {study.overview.secondary_objectives.map((line) => (
+                          <li key={line}>{line}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {study.overview?.study_sites &&
+              (study.overview.study_sites.regions ||
+                study.overview.study_sites.site_count_summary ||
+                study.overview.study_sites.site_types) && (
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>Study sites (planned)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <dl className="divide-y">
+                    <DetailRow label="Regions" value={study.overview.study_sites.regions} />
+                    <DetailRow label="Number of sites" value={study.overview.study_sites.site_count_summary} />
+                    <DetailRow label="Site type" value={study.overview.study_sites.site_types} />
+                  </dl>
+                </CardContent>
+              </Card>
+            )}
+
+            {study.overview?.monitoring &&
+              (study.overview.monitoring.monitoring_type ||
+                study.overview.monitoring.sdv ||
+                (study.overview.monitoring.visit_types && study.overview.monitoring.visit_types.length > 0)) && (
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>Monitoring plan</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <dl className="divide-y">
+                    <DetailRow label="Monitoring type" value={study.overview.monitoring.monitoring_type} />
+                    <DetailRow label="SDV" value={study.overview.monitoring.sdv} />
+                  </dl>
+                  {study.overview.monitoring.visit_types &&
+                    study.overview.monitoring.visit_types.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground">Visit types</p>
+                      <ul className="mt-1 list-disc space-y-1 pl-5">
+                        {study.overview.monitoring.visit_types.map((line) => (
+                          <li key={line}>{line}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {study.overview?.trip_report_timing && (
+              <Card className="lg:col-span-2">
+                <CardHeader>
+                  <CardTitle>Monitoring trip report due date ranges</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <dl className="divide-y">
+                    <DetailRow
+                      label="Amount of days for report submission"
+                      value={
+                        study.overview.trip_report_timing.report_submission_days != null
+                          ? String(study.overview.trip_report_timing.report_submission_days)
+                          : null
+                      }
+                    />
+                    <DetailRow
+                      label="Amount of days for report approval"
+                      value={
+                        study.overview.trip_report_timing.report_approval_days != null
+                          ? String(study.overview.trip_report_timing.report_approval_days)
+                          : null
+                      }
+                    />
+                    <DetailRow
+                      label="Day count"
+                      value={
+                        study.overview.trip_report_timing.days_basis
+                          ? TRIP_REPORT_DAYS_BASIS_LABELS[study.overview.trip_report_timing.days_basis]
+                          : TRIP_REPORT_DAYS_BASIS_LABELS.calendar
+                      }
+                    />
+                  </dl>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Per-template settings in Trip Report Admin control calculated due dates on reports. Align the day
+                    count with those templates for consistent timelines.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
 
             {study.description && (
               <Card className="lg:col-span-2">
@@ -290,11 +514,15 @@ export function StudyDetailTabs({ study, counts, countries, sites, subjects, fun
         <TabsContent value="financials">
           <FinancialsTab
             studyId={study.id}
+            companyId={study.company_id}
             initialBudgets={budgets}
             initialPayments={payments}
             initialSummary={financialSummary}
             initialFinanceInvoices={financeInvoices}
             sites={sites.map((s) => ({ id: s.id, site_number: s.site_number, name: s.name }))}
+            isAdmin={isAdmin}
+            studyFinanceApprovalTemplateId={study.finance_approval_template_id}
+            financeApprovalTemplateOptions={financeApprovalTemplateOptions}
           />
         </TabsContent>
       </Tabs>

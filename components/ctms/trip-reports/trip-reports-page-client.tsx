@@ -318,7 +318,7 @@ export function TripReportsPageClient({
   return (
     <>
       <div className="flex flex-col gap-4">
-        <div>
+        <div data-onboarding="page-trip-reports">
           <h1 className="text-2xl font-semibold tracking-tight">Trip Report Summary</h1>
           <p className="text-sm text-muted-foreground">
             View and manage site visit reports. Create site visits and templates from the actions below.

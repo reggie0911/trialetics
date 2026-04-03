@@ -1,10 +1,20 @@
 'use client';
 
 import Link from 'next/link';
+import { useMemo, useState } from 'react';
 import { Wallet } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -18,6 +28,8 @@ import type { FinancialSummary } from '@/lib/types/ctms';
 import type { PortfolioMonthlySpendPoint, PortfolioStudyFinancialRow } from '@/lib/actions/financials';
 import { FinancialsPortfolioCharts } from '@/components/ctms/financials/financials-portfolio-charts';
 
+const ALL_STUDIES = '__all__';
+
 function formatCurrency(amount: number, currency: string = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
 }
@@ -26,24 +38,106 @@ interface FinancialsOverviewProps {
   studies: PortfolioStudyFinancialRow[];
   totals: FinancialSummary & { invoiceOpenAmount: number };
   monthlySpend: PortfolioMonthlySpendPoint[];
+  monthlySpendByStudyId: Record<string, PortfolioMonthlySpendPoint[]>;
 }
 
-export function FinancialsOverview({ studies, totals, monthlySpend }: FinancialsOverviewProps) {
-  const utilization = totals.totalBudget > 0
-    ? ((totals.totalPaid / totals.totalBudget) * 100).toFixed(1)
-    : '0.0';
+export function FinancialsOverview({
+  studies,
+  totals,
+  monthlySpend,
+  monthlySpendByStudyId,
+}: FinancialsOverviewProps) {
+  const [selectedStudyId, setSelectedStudyId] = useState<string>(ALL_STUDIES);
+
+  const sortedStudies = useMemo(
+    () => [...studies].sort((a, b) => a.title.localeCompare(b.title)),
+    [studies],
+  );
+
+  const filteredStudies = useMemo(() => {
+    if (selectedStudyId === ALL_STUDIES) return sortedStudies;
+    return sortedStudies.filter((s) => s.id === selectedStudyId);
+  }, [sortedStudies, selectedStudyId]);
+
+  const displayTotals = useMemo(() => {
+    if (selectedStudyId === ALL_STUDIES) return totals;
+    const st = sortedStudies.find((s) => s.id === selectedStudyId);
+    if (!st) return totals;
+    return {
+      totalBudget: st.totalBudget,
+      totalPaid: st.totalPaid,
+      totalPending: st.totalPending,
+      totalApproved: 0,
+      currency: st.currency,
+      invoiceOpenAmount: st.invoiceOpenAmount,
+    };
+  }, [selectedStudyId, sortedStudies, totals]);
+
+  const displayMonthlySpend = useMemo(() => {
+    if (selectedStudyId === ALL_STUDIES) return monthlySpend;
+    return monthlySpendByStudyId[selectedStudyId] ?? [];
+  }, [monthlySpend, monthlySpendByStudyId, selectedStudyId]);
+
+  const utilization =
+    displayTotals.totalBudget > 0
+      ? ((displayTotals.totalPaid / displayTotals.totalBudget) * 100).toFixed(1)
+      : '0.0';
+
+  const totalsFooterLabel = selectedStudyId === ALL_STUDIES ? 'Portfolio total' : 'Study total';
 
   return (
     <div className="space-y-6">
+      {sortedStudies.length > 0 && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="space-y-1.5 w-full sm:max-w-xs">
+            <Label htmlFor="financials-study-filter" className="text-xs">
+              Study
+            </Label>
+            <Select value={selectedStudyId} onValueChange={setSelectedStudyId}>
+              <SelectTrigger id="financials-study-filter" className="text-xs h-9 w-full sm:w-[280px]">
+                <SelectValue
+                  getDisplayLabel={(v) => {
+                    if (v === ALL_STUDIES) return 'All studies';
+                    return sortedStudies.find((s) => s.id === v)?.title ?? null;
+                  }}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_STUDIES} className="text-xs">
+                  All studies
+                </SelectItem>
+                {sortedStudies.map((s) => (
+                  <SelectItem key={s.id} value={s.id} className="text-xs">
+                    {s.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
+
       <Card className="rounded-lg">
         <CardContent className="flex flex-wrap items-center gap-4 md:gap-6 py-4">
           {[
-            { label: 'Total Budget', value: formatCurrency(totals.totalBudget, totals.currency), markerColor: null as string | null },
-            { label: 'Total Paid', value: formatCurrency(totals.totalPaid, totals.currency), markerColor: 'bg-emerald-500' },
-            { label: 'Pending', value: formatCurrency(totals.totalPending, totals.currency), markerColor: 'bg-amber-500' },
+            {
+              label: 'Total budget',
+              value: formatCurrency(displayTotals.totalBudget, displayTotals.currency),
+              markerColor: null as string | null,
+            },
+            {
+              label: 'Total paid',
+              value: formatCurrency(displayTotals.totalPaid, displayTotals.currency),
+              markerColor: 'bg-emerald-500',
+            },
+            {
+              label: 'Pending',
+              value: formatCurrency(displayTotals.totalPending, displayTotals.currency),
+              markerColor: 'bg-amber-500',
+            },
             {
               label: 'Open invoices',
-              value: formatCurrency(totals.invoiceOpenAmount, totals.currency),
+              value: formatCurrency(displayTotals.invoiceOpenAmount, displayTotals.currency),
               markerColor: 'bg-violet-500',
             },
             { label: 'Utilization', value: `${utilization}%`, markerColor: 'bg-blue-500' },
@@ -63,14 +157,18 @@ export function FinancialsOverview({ studies, totals, monthlySpend }: Financials
         </CardContent>
       </Card>
 
-      <FinancialsPortfolioCharts studies={studies} monthlySpend={monthlySpend} currency={totals.currency} />
+      <FinancialsPortfolioCharts
+        studies={filteredStudies}
+        monthlySpend={displayMonthlySpend}
+        currency={displayTotals.currency}
+      />
 
       <Card>
         <CardHeader>
-          <CardTitle>Budget by Study</CardTitle>
+          <CardTitle>Budget by study</CardTitle>
         </CardHeader>
         <CardContent>
-          {studies.length === 0 ? (
+          {sortedStudies.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Wallet className="h-8 w-8 text-muted-foreground mb-3" />
               <p className="text-sm font-medium text-muted-foreground">No financial data</p>
@@ -88,14 +186,18 @@ export function FinancialsOverview({ studies, totals, monthlySpend }: Financials
                     <TableHead className="text-xs text-right">Open inv.</TableHead>
                     <TableHead className="text-xs text-right">Remaining</TableHead>
                     <TableHead className="text-xs text-right">Utilization</TableHead>
+                    <TableHead className="text-xs text-right w-[1%] whitespace-nowrap">
+                      Actions
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {studies.map((study) => {
+                  {filteredStudies.map((study) => {
                     const remaining = study.totalBudget - study.totalPaid;
-                    const util = study.totalBudget > 0
-                      ? ((study.totalPaid / study.totalBudget) * 100).toFixed(1)
-                      : '0.0';
+                    const util =
+                      study.totalBudget > 0
+                        ? ((study.totalPaid / study.totalBudget) * 100).toFixed(1)
+                        : '0.0';
                     return (
                       <TableRow key={study.id}>
                         <TableCell className="text-xs font-medium">
@@ -112,26 +214,46 @@ export function FinancialsOverview({ studies, totals, monthlySpend }: Financials
                         <TableCell className="text-xs text-right">{formatCurrency(remaining, study.currency)}</TableCell>
                         <TableCell className="text-xs text-right">
                           <Badge
-                            variant={parseFloat(util) > 80 ? 'destructive' : parseFloat(util) > 50 ? 'outline' : 'secondary'}
+                            variant={
+                              parseFloat(util) > 80 ? 'destructive' : parseFloat(util) > 50 ? 'outline' : 'secondary'
+                            }
                             className="text-xs"
                           >
                             {util}%
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-xs text-right align-middle">
+                          <Button variant="outline" size="xs" className="text-xs" asChild>
+                            <Link href={`/protected/studies/${study.id}?tab=financials`}>Open</Link>
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     );
                   })}
                   <TableRow className="bg-muted/50 font-medium">
-                    <TableCell className="text-xs">Portfolio Total</TableCell>
-                    <TableCell className="text-xs text-right">{formatCurrency(totals.totalBudget, totals.currency)}</TableCell>
-                    <TableCell className="text-xs text-right text-green-700">{formatCurrency(totals.totalPaid, totals.currency)}</TableCell>
-                    <TableCell className="text-xs text-right text-orange-600">{formatCurrency(totals.totalPending, totals.currency)}</TableCell>
-                    <TableCell className="text-xs text-right text-violet-700">
-                      {formatCurrency(totals.invoiceOpenAmount, totals.currency)}
-                    </TableCell>
-                    <TableCell className="text-xs text-right">{formatCurrency(totals.totalBudget - totals.totalPaid, totals.currency)}</TableCell>
+                    <TableCell className="text-xs">{totalsFooterLabel}</TableCell>
                     <TableCell className="text-xs text-right">
-                      <Badge variant="outline" className="text-xs">{utilization}%</Badge>
+                      {formatCurrency(displayTotals.totalBudget, displayTotals.currency)}
+                    </TableCell>
+                    <TableCell className="text-xs text-right text-green-700">
+                      {formatCurrency(displayTotals.totalPaid, displayTotals.currency)}
+                    </TableCell>
+                    <TableCell className="text-xs text-right text-orange-600">
+                      {formatCurrency(displayTotals.totalPending, displayTotals.currency)}
+                    </TableCell>
+                    <TableCell className="text-xs text-right text-violet-700">
+                      {formatCurrency(displayTotals.invoiceOpenAmount, displayTotals.currency)}
+                    </TableCell>
+                    <TableCell className="text-xs text-right">
+                      {formatCurrency(displayTotals.totalBudget - displayTotals.totalPaid, displayTotals.currency)}
+                    </TableCell>
+                    <TableCell className="text-xs text-right">
+                      <Badge variant="outline" className="text-xs">
+                        {utilization}%
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-right" aria-hidden>
+                      {/* summary row: no per-study action */}
                     </TableCell>
                   </TableRow>
                 </TableBody>

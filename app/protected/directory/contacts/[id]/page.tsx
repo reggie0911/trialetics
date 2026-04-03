@@ -34,10 +34,11 @@ export default async function DirectoryContactPage({ params }: PageProps) {
       <Button variant="ghost" size="sm" className="text-xs -ml-2 h-8" asChild>
         <Link href="/protected/directory">
           <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-          Contacts & organizations
+          Contacts & Organizations
         </Link>
       </Button>
       <DirectoryContactDetailClient
+        companyId={access.companyId}
         contact={contactRes.data}
         canEdit={access.canEdit}
         catalog={catalog.categories}

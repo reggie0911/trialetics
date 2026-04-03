@@ -34,10 +34,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-
-import type {
-  StudyCountryWithSubmissions,
-  RegulatorySubmission,
+import {
+  COUNTRY_STATUS_OPTIONS,
+  REGULATORY_STATUS_OPTIONS,
+  type StudyCountryWithSubmissions,
+  type RegulatorySubmission,
 } from '@/lib/types/ctms';
 import {
   getStudyCountries,
@@ -175,9 +176,29 @@ export function CountriesTab({ studyId, initialCountries }: CountriesTabProps) {
                             ({country.country_code})
                           </span>
                         </CardTitle>
-                        <div className="flex items-center gap-2 mt-1">
-                          <StatusBadge status={country.status} className="text-xs" />
-                          <StatusBadge status={country.regulatory_status} className="text-xs" />
+                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                          <span className="flex items-center gap-1.5">
+                            <span className="shrink-0 text-muted-foreground">Participation:</span>
+                            <StatusBadge
+                              status={country.status}
+                              className="text-xs"
+                              label={
+                                COUNTRY_STATUS_OPTIONS.find((o) => o.value === country.status)?.label ??
+                                country.status
+                              }
+                            />
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <span className="shrink-0 text-muted-foreground">Regulatory:</span>
+                            <StatusBadge
+                              status={country.regulatory_status}
+                              className="text-xs"
+                              label={
+                                REGULATORY_STATUS_OPTIONS.find((o) => o.value === country.regulatory_status)
+                                  ?.label ?? country.regulatory_status
+                              }
+                            />
+                          </span>
                           {submissions.length > 0 && (
                             <span className="text-xs text-muted-foreground">
                               {submissions.length} submission{submissions.length !== 1 ? 's' : ''}

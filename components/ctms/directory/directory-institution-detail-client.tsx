@@ -33,28 +33,13 @@ import {
   updateInstitution,
   removeInstitutionStudyLink,
   upsertInstitutionStudyLink,
-  removeInstitutionSiteLink,
-  upsertInstitutionSiteLink,
   setInstitutionStatus,
-  deleteInstitution,
 } from '@/lib/actions/directory-institutions';
 import { institutionFormSchema } from '@/lib/validation/directory';
 import type { InstitutionRow } from '@/lib/types/directory';
 import type { Study } from '@/lib/types/ctms';
-import type { StudySiteWithStudy } from '@/lib/types/ctms';
-import { INSTITUTION_STUDY_RELATIONSHIP_OPTIONS } from '@/lib/types/directory';
+import { INSTITUTION_STUDY_RELATIONSHIP_OPTIONS, INSTITUTION_TYPE_OPTIONS } from '@/lib/types/directory';
 import { DirectoryCountryRegionFields } from '@/components/ctms/directory/directory-country-region-fields';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 
 type InstitutionDetail = InstitutionRow & {
   institution_study: {
@@ -81,21 +66,16 @@ interface Props {
   institution: InstitutionDetail;
   canEdit: boolean;
   studies: Study[];
-  sites: StudySiteWithStudy[];
-  allInstitutions: InstitutionRow[];
 }
 
 export function DirectoryInstitutionDetailClient({
   institution: initial,
   canEdit,
   studies,
-  sites,
-  allInstitutions,
 }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [studyOpen, setStudyOpen] = useState(false);
-  const [siteOpen, setSiteOpen] = useState(false);
 
   const form = useForm<
     z.input<typeof institutionFormSchema>,
@@ -115,17 +95,12 @@ export function DirectoryInstitutionDetailClient({
       region: initial.region ?? '',
       status: initial.status,
       notes: initial.notes ?? '',
+      // Not shown in UI; preserved on save from server record.
       parent_institution_id: initial.parent_institution_id ?? '',
     },
   });
 
   const normStudy = (s: unknown) => (Array.isArray(s) ? s[0] : s) as { title?: string; protocol_number?: string } | null;
-  const normSite = (s: unknown) =>
-    (Array.isArray(s) ? s[0] : s) as {
-      site_number?: string;
-      name?: string;
-      studies?: unknown;
-    } | null;
   const normContact = (c: unknown) =>
     (Array.isArray(c) ? c[0] : c) as { first_name?: string; last_name?: string; email?: string } | null;
 
@@ -133,6 +108,7 @@ export function DirectoryInstitutionDetailClient({
     startTransition(async () => {
       const { error } = await updateInstitution(initial.id, {
         ...values,
+        parent_institution_id: initial.parent_institution_id ?? null,
         address_line1: values.address_line1 || undefined,
         address_line2: values.address_line2 || undefined,
         city: values.city || undefined,
@@ -176,38 +152,6 @@ export function DirectoryInstitutionDetailClient({
               {initial.status === 'active' ? 'Deactivate' : 'Activate'}
             </Button>
           )}
-          {canEdit && (
-            <AlertDialog>
-              <AlertDialogTrigger render={<Button variant="destructive" size="sm" className="text-xs" />}>
-                Delete
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete organization?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Only when no study, site, contact, or sponsor links exist. Otherwise deactivate.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      startTransition(async () => {
-                        const { error } = await deleteInstitution(initial.id);
-                        if (error) toast.error(error);
-                        else {
-                          toast.success('Removed');
-                          router.push('/protected/directory');
-                        }
-                      });
-                    }}
-                  >
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
         </div>
       </div>
 
@@ -222,43 +166,17 @@ export function DirectoryInstitutionDetailClient({
               <Input className="text-xs h-9" {...form.register('name')} disabled={!canEdit} />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Type</Label>
+              <Label className="text-xs">Organization type</Label>
               <select
                 className="flex h-9 w-full rounded-md border border-input px-2 text-xs disabled:opacity-50"
                 disabled={!canEdit}
                 {...form.register('organization_type')}
               >
-                {[
-                  'sponsor',
-                  'cro',
-                  'clinical_site',
-                  'vendor',
-                  'irb_ec',
-                  'lab',
-                  'government',
-                  'other',
-                ].map((t) => (
-                  <option key={t} value={t}>
-                    {t.replace(/_/g, ' ')}
+                {INSTITUTION_TYPE_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Parent organization</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input px-2 text-xs disabled:opacity-50"
-                disabled={!canEdit}
-                {...form.register('parent_institution_id')}
-              >
-                <option value="">None</option>
-                {allInstitutions
-                  .filter((i) => i.id !== initial.id)
-                  .map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.name}
-                    </option>
-                  ))}
               </select>
             </div>
             <div className="space-y-1">
@@ -369,70 +287,6 @@ export function DirectoryInstitutionDetailClient({
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="text-base">Linked sites</CardTitle>
-          {canEdit && (
-            <Button type="button" variant="outline" size="sm" className="text-xs h-8" onClick={() => setSiteOpen(true)}>
-              <Plus className="h-3 w-3 mr-1" />
-              Add
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Site</TableHead>
-                <TableHead className="text-xs">Study</TableHead>
-                <TableHead className="text-xs w-16" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {initial.institution_study_site.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-xs text-muted-foreground">
-                    No site links.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                initial.institution_study_site.map((row) => {
-                  const ss = normSite(row.study_sites);
-                  const st = normStudy(ss?.studies);
-                  return (
-                    <TableRow key={row.id}>
-                      <TableCell className="text-xs">
-                        {ss ? `${ss.site_number} — ${ss.name}` : '—'}
-                      </TableCell>
-                      <TableCell className="text-xs">{st?.protocol_number ?? '—'}</TableCell>
-                      <TableCell className="text-xs">
-                        {canEdit && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => {
-                              startTransition(async () => {
-                                await removeInstitutionSiteLink(row.id);
-                                toast.success('Removed');
-                                router.refresh();
-                              });
-                            }}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">People</CardTitle>
         </CardHeader>
@@ -479,17 +333,6 @@ export function DirectoryInstitutionDetailClient({
         existing={new Set(initial.institution_study.map((x) => `${x.study_id}-${x.relationship_type}`))}
         onDone={() => {
           setStudyOpen(false);
-          router.refresh();
-        }}
-      />
-      <InstSiteDialog
-        open={siteOpen}
-        onOpenChange={setSiteOpen}
-        institutionId={initial.id}
-        sites={sites}
-        existingSiteIds={new Set(initial.institution_study_site.map((x) => x.study_site_id))}
-        onDone={() => {
-          setSiteOpen(false);
           router.refresh();
         }}
       />
@@ -567,64 +410,6 @@ function InstStudyDialog({
               ))}
             </select>
           </div>
-          <DialogFooter>
-            <Button type="submit" className="text-xs" disabled={pending}>
-              {pending ? 'Saving…' : 'Link'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function InstSiteDialog({
-  open,
-  onOpenChange,
-  institutionId,
-  sites,
-  existingSiteIds,
-  onDone,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  institutionId: string;
-  sites: StudySiteWithStudy[];
-  existingSiteIds: Set<string>;
-  onDone: () => void;
-}) {
-  const [pending, setPending] = useState(false);
-
-  const submit = async (fd: FormData) => {
-    const study_site_id = String(fd.get('study_site_id'));
-    if (existingSiteIds.has(study_site_id)) {
-      toast.error('Already linked');
-      return;
-    }
-    setPending(true);
-    const { error } = await upsertInstitutionSiteLink({ institution_id: institutionId, study_site_id });
-    setPending(false);
-    if (error) toast.error(error);
-    else {
-      toast.success('Linked');
-      onDone();
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="text-base">Link site</DialogTitle>
-        </DialogHeader>
-        <form action={submit} className="space-y-3">
-          <select name="study_site_id" required className="flex h-9 w-full rounded-md border border-input px-2 text-xs">
-            {sites.map((s) => (
-              <option key={s.id} value={s.id} disabled={existingSiteIds.has(s.id)}>
-                {s.studies?.protocol_number} / {s.site_number} — {s.name}
-              </option>
-            ))}
-          </select>
           <DialogFooter>
             <Button type="submit" className="text-xs" disabled={pending}>
               {pending ? 'Saving…' : 'Link'}

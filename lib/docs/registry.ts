@@ -50,14 +50,15 @@ export const DOC_CATEGORY_ORDER: DocCategory[] = [
 export const docsRegistry: DocEntry[] = [
   {
     slug: 'onboarding',
-    title: 'Onboarding',
-    description: 'Set up your company, create your first project, and invite your team.',
+    title: 'Guided setup',
+    description:
+      'In-app tour for admins and users: welcome dialog, coach marks on Studies and related areas, and Profile settings controls.',
     category: 'getting-started',
     iconKey: 'rocket',
     filePath: 'docs/user-manuals/onboarding.md',
     order: 1,
-    roles: ['admin'],
-    lastUpdated: '2026-03-21',
+    roles: ['admin', 'user'],
+    lastUpdated: '2026-03-26',
     moduleRoute: '/protected',
   },
   {
@@ -156,6 +157,19 @@ export const docsRegistry: DocEntry[] = [
     roles: ['admin', 'user'],
     lastUpdated: '2026-03-21',
     moduleRoute: '/protected/clinical-payments',
+  },
+  {
+    slug: 'financials-invoices',
+    title: 'Financials & Invoice Approvals',
+    description:
+      'Submitting invoices with AI extraction, configurable multi-step approval workflows, study defaults, amount escalation, approval queue, site budgets, and payment recording.',
+    category: 'payments',
+    iconKey: 'bookOpen',
+    filePath: 'docs/user-manuals/financials-invoices.md',
+    order: 2,
+    roles: ['admin', 'user'],
+    lastUpdated: '2026-03-31',
+    moduleRoute: '/protected/financials/approvals',
   },
   {
     slug: 'platform-admin',

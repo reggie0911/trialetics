@@ -5,6 +5,8 @@ import { createClient } from '@/lib/server';
 import type {
   StudyBudget,
   StudyBudgetWithItems,
+  StudyBudgetSection,
+  BudgetSectionType,
   BudgetLineItem,
   BudgetStatus,
   SitePayment,
@@ -21,15 +23,64 @@ import type {
 // Budgets
 // =====================================================
 
+export async function getStudyBudgetMeta(
+  budgetId: string
+): Promise<{ id: string; name: string } | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('study_budgets')
+    .select('id, name')
+    .eq('id', budgetId)
+    .maybeSingle();
+  if (error || !data) return null;
+  return data as { id: string; name: string };
+}
+
+/** Lightweight list for site Financials (propagate picker) — no line items. */
+export async function listStudyBudgetOptions(studyId: string): Promise<{ id: string; name: string }[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('study_budgets')
+    .select('id, name')
+    .eq('study_id', studyId)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data as { id: string; name: string }[]) ?? [];
+}
+
+/**
+ * Revalidates the study page + all site pages linked to the study.
+ * Call this whenever a study budget is created or materially updated so that
+ * linked site Financials tabs reflect the change promptly.
+ */
+export async function revalidateStudyFinancialsTree(studyId: string): Promise<void> {
+  const supabase = await createClient();
+  revalidatePath(`/protected/studies/${studyId}`);
+  revalidatePath('/protected/financials');
+  const { data: sites } = await supabase
+    .from('study_sites')
+    .select('id')
+    .eq('study_id', studyId);
+  for (const site of sites ?? []) {
+    revalidatePath(`/protected/sites/${site.id}`);
+  }
+}
+
 export async function getStudyBudgets(studyId: string): Promise<StudyBudgetWithItems[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('study_budgets')
-    .select('*, budget_line_items(*)')
+    .select('*, budget_line_items(*), study_budget_sections(*)')
     .eq('study_id', studyId)
     .order('created_at', { ascending: true });
   if (error) throw new Error(error.message);
-  return (data as unknown as StudyBudgetWithItems[]) ?? [];
+  const rows = (data as unknown as StudyBudgetWithItems[]) ?? [];
+  // Normalize: ensure sections are sorted by sort_order
+  return rows.map((b) => ({
+    ...b,
+    study_budget_sections: (b.study_budget_sections ?? []).sort((a, b) => a.sort_order - b.sort_order),
+    budget_line_items: (b.budget_line_items ?? []).sort((a, b) => a.sort_order - b.sort_order),
+  }));
 }
 
 export async function createBudget(
@@ -100,7 +151,7 @@ export async function deleteBudget(id: string, studyId: string): Promise<{ error
 export async function addLineItem(
   budgetId: string,
   studyId: string,
-  input: { category: string; description: string; unit_cost: number; quantity: number; notes?: string }
+  input: { category: string; description: string; unit_cost: number; quantity: number; notes?: string; section_id?: string | null }
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
@@ -111,6 +162,7 @@ export async function addLineItem(
       unit_cost: input.unit_cost,
       quantity: input.quantity,
       notes: input.notes || null,
+      section_id: input.section_id ?? null,
     });
     if (error) return { error: error.message };
     revalidatePath(`/protected/studies/${studyId}`);
@@ -134,6 +186,7 @@ export async function updateLineItem(
     const { error } = await supabase.from('budget_line_items').update(cleanUpdates).eq('id', id);
     if (error) return { error: error.message };
     revalidatePath(`/protected/studies/${studyId}`);
+    revalidatePath('/protected/financials');
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -144,6 +197,263 @@ export async function deleteLineItem(id: string, studyId: string): Promise<{ err
   const supabase = await createClient();
   try {
     const { error } = await supabase.from('budget_line_items').delete().eq('id', id);
+    if (error) return { error: error.message };
+    revalidatePath(`/protected/studies/${studyId}`);
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+export async function bulkInsertStudyBudgetLineItems(
+  budgetId: string,
+  studyId: string,
+  items: Array<{
+    category: string;
+    description: string;
+    unitCost: number;
+    quantity: number;
+    notes?: string | null;
+    sortOrder?: number;
+    sectionId?: string | null;
+    sectionName?: string | null;
+    costBasis?: string | null;
+  }>
+): Promise<{ error: string | null }> {
+  if (items.length === 0) return { error: null };
+  const supabase = await createClient();
+  try {
+    // Build a name -> section_id map for CSV rows that reference sections by name.
+    const sectionNameCache: Record<string, string> = {};
+    const itemsWithSectionNames = items.filter((i) => i.sectionName && !i.sectionId);
+    if (itemsWithSectionNames.length > 0) {
+      const { data: existingSections } = await supabase
+        .from('study_budget_sections')
+        .select('id, name')
+        .eq('budget_id', budgetId);
+      for (const s of existingSections ?? []) {
+        sectionNameCache[(s as { id: string; name: string }).name.toLowerCase()] = (s as { id: string; name: string }).id;
+      }
+      // Create any sections that don't exist yet
+      const uniqueNewNames = [
+        ...new Set(
+          itemsWithSectionNames
+            .map((i) => i.sectionName!)
+            .filter((n) => !sectionNameCache[n.toLowerCase()])
+        ),
+      ];
+      for (let idx = 0; idx < uniqueNewNames.length; idx++) {
+        const name = uniqueNewNames[idx];
+        const { data: newSec, error: secErr } = await supabase
+          .from('study_budget_sections')
+          .insert({
+            budget_id: budgetId,
+            section_type: 'other',
+            name,
+            sort_order: Object.keys(sectionNameCache).length + idx,
+          })
+          .select()
+          .single();
+        if (!secErr && newSec) {
+          sectionNameCache[name.toLowerCase()] = (newSec as { id: string }).id;
+        }
+      }
+    }
+
+    const rows = items.map((item, i) => {
+      const sectionId =
+        item.sectionId ??
+        (item.sectionName ? (sectionNameCache[item.sectionName.toLowerCase()] ?? null) : null);
+      return {
+        budget_id: budgetId,
+        category: item.category,
+        description: item.description,
+        unit_cost: item.unitCost,
+        quantity: item.quantity,
+        notes: item.notes ?? null,
+        sort_order: item.sortOrder ?? i,
+        section_id: sectionId,
+        cost_basis: item.costBasis ?? null,
+      };
+    });
+    const { error } = await supabase.from('budget_line_items').insert(rows);
+    if (error) return { error: error.message };
+    await tryInsertBudgetTransactionLog(supabase, budgetId, studyId, 'csv_import', {
+      count: rows.length,
+    });
+    revalidatePath(`/protected/studies/${studyId}`);
+    revalidatePath('/protected/financials');
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+// =====================================================
+// Budget Sections (Phase 1)
+// =====================================================
+
+async function tryInsertBudgetTransactionLog(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  budgetId: string,
+  studyId: string,
+  action: string,
+  payload: Record<string, unknown>
+): Promise<void> {
+  try {
+    await supabase.from('finance_transaction_log').insert({
+      entity_type: 'study_budget',
+      entity_id: budgetId,
+      related_id: studyId,
+      action,
+      payload,
+    });
+  } catch {
+    // Non-fatal: audit log failures must not block the primary operation
+  }
+}
+
+export async function listStudyBudgetSections(budgetId: string): Promise<StudyBudgetSection[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('study_budget_sections')
+    .select('*')
+    .eq('budget_id', budgetId)
+    .order('sort_order', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data as unknown as StudyBudgetSection[]) ?? [];
+}
+
+export async function createStudyBudgetSection(
+  budgetId: string,
+  studyId: string,
+  input: {
+    section_type: BudgetSectionType;
+    name: string;
+    indirect_rate?: number | null;
+    sort_order?: number;
+  }
+): Promise<{ data: StudyBudgetSection | null; error: string | null }> {
+  const supabase = await createClient();
+  try {
+    const { data, error } = await supabase
+      .from('study_budget_sections')
+      .insert({
+        budget_id: budgetId,
+        section_type: input.section_type,
+        name: input.name,
+        indirect_rate: input.indirect_rate ?? null,
+        sort_order: input.sort_order ?? 0,
+      })
+      .select()
+      .single();
+    if (error) return { data: null, error: error.message };
+    await tryInsertBudgetTransactionLog(supabase, budgetId, studyId, 'section_added', {
+      section_type: input.section_type,
+      name: input.name,
+    });
+    revalidatePath(`/protected/studies/${studyId}`);
+    return { data: data as unknown as StudyBudgetSection, error: null };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+export async function updateStudyBudgetSection(
+  id: string,
+  budgetId: string,
+  studyId: string,
+  updates: { name?: string; indirect_rate?: number | null; sort_order?: number }
+): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  try {
+    const { error } = await supabase
+      .from('study_budget_sections')
+      .update(updates)
+      .eq('id', id)
+      .eq('budget_id', budgetId);
+    if (error) return { error: error.message };
+    await tryInsertBudgetTransactionLog(supabase, budgetId, studyId, 'section_updated', {
+      section_id: id,
+      ...updates,
+    });
+    revalidatePath(`/protected/studies/${studyId}`);
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+export async function deleteStudyBudgetSection(
+  id: string,
+  budgetId: string,
+  studyId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  try {
+    // Unassign lines from this section before deleting (ON DELETE SET NULL handles it via DB)
+    const { error } = await supabase
+      .from('study_budget_sections')
+      .delete()
+      .eq('id', id)
+      .eq('budget_id', budgetId);
+    if (error) return { error: error.message };
+    await tryInsertBudgetTransactionLog(supabase, budgetId, studyId, 'section_deleted', {
+      section_id: id,
+    });
+    revalidatePath(`/protected/studies/${studyId}`);
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+export async function upgradeToStructuredBudget(
+  budgetId: string,
+  studyId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  try {
+    // Create a catch-all "Other" section
+    const { data: section, error: secErr } = await supabase
+      .from('study_budget_sections')
+      .insert({
+        budget_id: budgetId,
+        section_type: 'other',
+        name: 'Other',
+        sort_order: 0,
+      })
+      .select()
+      .single();
+    if (secErr) return { error: secErr.message };
+    // Assign all existing unsectioned line items to it
+    const { error: updateErr } = await supabase
+      .from('budget_line_items')
+      .update({ section_id: (section as unknown as StudyBudgetSection).id })
+      .eq('budget_id', budgetId)
+      .is('section_id', null);
+    if (updateErr) return { error: updateErr.message };
+    await tryInsertBudgetTransactionLog(supabase, budgetId, studyId, 'upgraded_to_structured', {});
+    revalidatePath(`/protected/studies/${studyId}`);
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+export async function assignLineItemToSection(
+  lineItemId: string,
+  sectionId: string | null,
+  budgetId: string,
+  studyId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  try {
+    const { error } = await supabase
+      .from('budget_line_items')
+      .update({ section_id: sectionId })
+      .eq('id', lineItemId)
+      .eq('budget_id', budgetId);
     if (error) return { error: error.message };
     revalidatePath(`/protected/studies/${studyId}`);
     return { error: null };
@@ -288,6 +598,7 @@ export async function createSchedule(
     });
     if (error) return { error: error.message };
     revalidatePath(`/protected/studies/${studyId}`);
+    revalidatePath(`/protected/sites/${siteId}`);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -297,7 +608,8 @@ export async function createSchedule(
 export async function updateSchedule(
   id: string,
   studyId: string,
-  updates: { milestone_name?: string; amount?: number; due_date?: string; status?: ScheduleStatus }
+  siteId: string,
+  updates: { milestone_name?: string; amount?: number; due_date?: string; status?: ScheduleStatus; currency?: string }
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
@@ -308,18 +620,24 @@ export async function updateSchedule(
     const { error } = await supabase.from('payment_schedules').update(cleanUpdates).eq('id', id);
     if (error) return { error: error.message };
     revalidatePath(`/protected/studies/${studyId}`);
+    revalidatePath(`/protected/sites/${siteId}`);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }
 }
 
-export async function deleteSchedule(id: string, studyId: string): Promise<{ error: string | null }> {
+export async function deleteSchedule(
+  id: string,
+  studyId: string,
+  siteId: string
+): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
     const { error } = await supabase.from('payment_schedules').delete().eq('id', id);
     if (error) return { error: error.message };
     revalidatePath(`/protected/studies/${studyId}`);
+    revalidatePath(`/protected/sites/${siteId}`);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -374,6 +692,8 @@ export async function getPortfolioFinancials(): Promise<{
   studies: PortfolioStudyFinancialRow[];
   totals: FinancialSummary & { invoiceOpenAmount: number };
   monthlySpend: PortfolioMonthlySpendPoint[];
+  /** Keys are study UUIDs; series for `finance_payments` (paid) only. */
+  monthlySpendByStudyId: Record<string, PortfolioMonthlySpendPoint[]>;
 }> {
   const supabase = await createClient();
 
@@ -392,7 +712,7 @@ export async function getPortfolioFinancials(): Promise<{
 
   const { data: finPay, error: finPayErr } = await supabase
     .from('finance_payments')
-    .select('paid_at, amount, status')
+    .select('study_id, paid_at, amount, status')
     .eq('status', 'paid');
 
   const openStatuses = new Set(['draft', 'submitted', 'under_review', 'approved']);
@@ -462,17 +782,32 @@ export async function getPortfolioFinancials(): Promise<{
   };
 
   const monthlyMap = new Map<string, number>();
+  const monthlyByStudy = new Map<string, Map<string, number>>();
   if (!finPayErr && finPay) {
     for (const row of finPay) {
       const d = row.paid_at as string | null;
       if (!d) continue;
-      const key = d.slice(0, 7);
-      monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + Number(row.amount));
+      const ky = d.slice(0, 7);
+      const amt = Number(row.amount);
+      monthlyMap.set(ky, (monthlyMap.get(ky) ?? 0) + amt);
+      const sid = row.study_id as string | null;
+      if (sid) {
+        if (!monthlyByStudy.has(sid)) monthlyByStudy.set(sid, new Map());
+        const sm = monthlyByStudy.get(sid)!;
+        sm.set(ky, (sm.get(ky) ?? 0) + amt);
+      }
     }
   }
   const monthlySpend: PortfolioMonthlySpendPoint[] = Array.from(monthlyMap.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([month, amount]) => ({ month, amount }));
 
-  return { studies, totals, monthlySpend };
+  const monthlySpendByStudyId: Record<string, PortfolioMonthlySpendPoint[]> = {};
+  for (const [sid, sm] of monthlyByStudy) {
+    monthlySpendByStudyId[sid] = Array.from(sm.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, amount]) => ({ month, amount }));
+  }
+
+  return { studies, totals, monthlySpend, monthlySpendByStudyId };
 }

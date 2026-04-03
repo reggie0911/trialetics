@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useOnboardingChrome } from '@/components/onboarding/onboarding-chrome-context';
 import { AIAssistantPanel } from './ai-assistant-panel';
 
 const TRACKER_ROUTES = [
@@ -40,8 +41,13 @@ export function AIAssistantButton() {
 export function AIAssistantInlineButton() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const { suppressAiAssistant } = useOnboardingChrome();
 
   if (TRACKER_ROUTES.some(route => pathname.startsWith(route))) {
+    return null;
+  }
+
+  if (suppressAiAssistant) {
     return null;
   }
 

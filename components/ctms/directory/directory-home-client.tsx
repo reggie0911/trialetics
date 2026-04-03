@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, Upload, ChevronRight, FileDown } from 'lucide-react';
+import { Plus, Search, Upload, ChevronRight, FileDown, User } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { listDirectoryContacts, createDirectoryContact } from '@/lib/actions/directory-contacts';
 import { listInstitutions, createInstitution as createInstitutionAction } from '@/lib/actions/directory-institutions';
 import { createCommittee as createCommitteeAction } from '@/lib/actions/directory-committees';
@@ -35,14 +36,16 @@ import { importDirectoryContactsFromCsv, importInstitutionsFromCsv } from '@/lib
 import type { DirectoryContactListItem } from '@/lib/types/directory';
 import type { InstitutionRow } from '@/lib/types/directory';
 import type { CommitteeRow } from '@/lib/types/directory';
-import type { DirectoryRoleCategory } from '@/lib/types/directory';
 import { INSTITUTION_TYPE_OPTIONS, COMMITTEE_TYPE_OPTIONS } from '@/lib/types/directory';
 import {
   directoryContactFormSchema,
   institutionFormSchema,
   committeeFormSchema,
 } from '@/lib/validation/directory';
-import { DirectoryPrimaryRoleFields } from '@/components/ctms/directory/directory-primary-role-fields';
+import {
+  QuickContactFormFields,
+  type QuickContactCatalogCategory,
+} from '@/components/ctms/directory/quick-contact-form-fields';
 import { DirectoryCountryRegionFields } from '@/components/ctms/directory/directory-country-region-fields';
 import {
   DIRECTORY_CONTACTS_TEMPLATE_FILENAME,
@@ -52,11 +55,10 @@ import {
 } from '@/lib/data/directory-csv-templates';
 import { triggerCsvDownload } from '@/lib/utils/csv-download';
 
-type CatalogCat = DirectoryRoleCategory & {
-  roles: { id: string; name: string; sort_order: number }[];
-};
+type CatalogCat = QuickContactCatalogCategory;
 
 interface DirectoryHomeClientProps {
+  companyId: string;
   canEdit: boolean;
   canImportCsv: boolean;
   catalog: CatalogCat[];
@@ -70,6 +72,7 @@ interface DirectoryHomeClientProps {
 }
 
 export function DirectoryHomeClient({
+  companyId,
   canEdit,
   canImportCsv,
   catalog,
@@ -164,50 +167,44 @@ export function DirectoryHomeClient({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Contacts & organizations</h1>
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-6">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-semibold tracking-tight">Contacts & Organizations</h1>
           <p className="text-sm text-muted-foreground">
             Global contacts and organizations. Primary affiliation is the main employer or site organization; you can
             add more links on each profile.
           </p>
-          <p className="text-xs text-muted-foreground mt-1 max-w-3xl">
-            Directory data may include personal information. Retain and delete records according to your organization’s
-            privacy policy and applicable law. Exported or downloaded lists should be handled securely.
-          </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {canImportCsv && (
+        {canImportCsv && (
+          <div className="flex flex-row flex-nowrap items-center gap-2 shrink-0 self-start md:self-center">
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="text-xs"
+              className="text-xs whitespace-nowrap"
               onClick={() => {
                 setCsvKind('contacts');
                 setCsvOpen(true);
               }}
             >
-              <Upload className="h-3.5 w-3.5 mr-1" />
+              <Upload className="h-3.5 w-3.5 mr-1 shrink-0" />
               Import contacts CSV
             </Button>
-          )}
-          {canImportCsv && (
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="text-xs"
+              className="text-xs whitespace-nowrap"
               onClick={() => {
                 setCsvKind('institutions');
                 setCsvOpen(true);
               }}
             >
-              <Upload className="h-3.5 w-3.5 mr-1" />
+              <Upload className="h-3.5 w-3.5 mr-1 shrink-0" />
               Import organizations CSV
             </Button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -254,6 +251,7 @@ export function DirectoryHomeClient({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="text-xs w-10" aria-label="Photo" />
                   <TableHead className="text-xs">Name</TableHead>
                   <TableHead className="text-xs">Email</TableHead>
                   <TableHead className="text-xs">Primary role</TableHead>
@@ -265,7 +263,7 @@ export function DirectoryHomeClient({
               <TableBody>
                 {contacts.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-xs text-muted-foreground text-center py-8">
+                    <TableCell colSpan={7} className="text-xs text-muted-foreground text-center py-8">
                       No contacts yet.
                     </TableCell>
                   </TableRow>
@@ -275,6 +273,14 @@ export function DirectoryHomeClient({
                     const pi = c.primary_institution as { name?: string } | null | undefined;
                     return (
                       <TableRow key={c.id}>
+                        <TableCell className="py-1.5">
+                          <Avatar className="h-8 w-8 rounded-lg after:rounded-lg">
+                            <AvatarImage src={c.avatar_url ?? undefined} alt="" className="rounded-lg" />
+                            <AvatarFallback className="rounded-lg text-[10px]">
+                              <User className="h-3.5 w-3.5" />
+                            </AvatarFallback>
+                          </Avatar>
+                        </TableCell>
                         <TableCell className="text-xs font-medium">
                           {c.first_name} {c.last_name}
                         </TableCell>
@@ -510,6 +516,7 @@ export function DirectoryHomeClient({
       </Tabs>
 
       <QuickContactDialog
+        companyId={companyId}
         open={contactOpen}
         onOpenChange={setContactOpen}
         catalog={catalog}
@@ -675,12 +682,14 @@ export function DirectoryHomeClient({
 }
 
 function QuickContactDialog({
+  companyId,
   open,
   onOpenChange,
   catalog,
   institutions,
   onCreated,
 }: {
+  companyId: string;
   open: boolean;
   onOpenChange: (o: boolean) => void;
   catalog: CatalogCat[];
@@ -692,6 +701,8 @@ function QuickContactDialog({
   const [primaryRoleId, setPrimaryRoleId] = useState('');
   const [contactCountryCode, setContactCountryCode] = useState('');
   const [contactRegion, setContactRegion] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactAvatarUrl, setContactAvatarUrl] = useState('');
 
   useEffect(() => {
     if (open) {
@@ -699,6 +710,8 @@ function QuickContactDialog({
       setPrimaryRoleId('');
       setContactCountryCode('');
       setContactRegion('');
+      setContactPhone('');
+      setContactAvatarUrl('');
     }
   }, [open]);
 
@@ -708,6 +721,7 @@ function QuickContactDialog({
       last_name: String(form.get('last_name') ?? ''),
       title: String(form.get('title') ?? '') || undefined,
       email: String(form.get('email') ?? '') || undefined,
+      avatar_url: String(form.get('avatar_url') ?? '').trim() || undefined,
       phone: String(form.get('phone') ?? '') || undefined,
       department: String(form.get('department') ?? '') || undefined,
       country_code: contactCountryCode || undefined,
@@ -750,88 +764,23 @@ function QuickContactDialog({
             await submit(new FormData(e.currentTarget));
           }}
         >
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">First name</Label>
-              <Input name="first_name" className="text-xs h-9" required />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Last name</Label>
-              <Input name="last_name" className="text-xs h-9" required />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Title</Label>
-            <Input name="title" className="text-xs h-9" />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Email</Label>
-              <Input name="email" type="email" className="text-xs h-9" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Phone</Label>
-              <Input name="phone" className="text-xs h-9" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground mb-1">Primary role (from library)</p>
-            <DirectoryPrimaryRoleFields
-              catalog={catalog}
-              categoryFilter={roleCategoryFilter}
-              onCategoryFilterChange={setRoleCategoryFilter}
-              roleId={primaryRoleId}
-              onRoleChange={setPrimaryRoleId}
-              emptyRoleLabel="Optional"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Primary organization</Label>
-            <select
-              name="primary_institution_id"
-              className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
-              defaultValue=""
-            >
-              <option value="">Optional — main affiliation</option>
-              {institutions.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            Additional organization links can be added on the contact profile. Profile-linked app users: set on the
-            detail page if needed.
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Department</Label>
-              <Input name="department" className="text-xs h-9" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Status</Label>
-              <select
-                name="status"
-                className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
-                defaultValue="active"
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-          </div>
-          <DirectoryCountryRegionFields
-            variant="contactRow"
-            countryCode={contactCountryCode}
-            region={contactRegion}
-            onCountryChange={setContactCountryCode}
-            onRegionChange={setContactRegion}
+          <QuickContactFormFields
+            catalog={catalog}
+            institutions={institutions}
+            roleCategoryFilter={roleCategoryFilter}
+            onRoleCategoryFilterChange={setRoleCategoryFilter}
+            primaryRoleId={primaryRoleId}
+            onPrimaryRoleChange={setPrimaryRoleId}
+            contactCountryCode={contactCountryCode}
+            contactRegion={contactRegion}
+            onContactCountryChange={setContactCountryCode}
+            onContactRegionChange={setContactRegion}
+            phone={contactPhone}
+            onPhoneChange={setContactPhone}
+            companyId={companyId}
+            avatarUrl={contactAvatarUrl}
+            onAvatarUrlChange={setContactAvatarUrl}
           />
-          <div className="space-y-1">
-            <Label className="text-xs">Notes</Label>
-            <Textarea name="notes" className="text-xs min-h-[60px]" />
-          </div>
           <DialogFooter>
             <Button type="button" variant="outline" className="text-xs" onClick={() => onOpenChange(false)}>
               Cancel
@@ -916,7 +865,7 @@ function QuickInstitutionDialog({
             <Input name="name" className="text-xs h-9" required />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Type</Label>
+            <Label className="text-xs">Organization type</Label>
             <select
               name="organization_type"
               className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"

@@ -72,6 +72,49 @@ import {
   removeTeamMember,
 } from '@/lib/actions/team';
 
+function humanizeUnderscoreLabel(value: string): string {
+  return value
+    .split('_')
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/** Trigger label for study team role select (never show raw enum / slug). */
+function formatTeamRoleTriggerLabel(value: string | null): string | null {
+  if (value == null || value === '') return null;
+  const opt = TEAM_ROLE_OPTIONS.find((o) => o.value === value);
+  if (opt) return opt.label;
+  const map = TEAM_ROLE_LABEL as Record<string, string>;
+  if (map[value]) return map[value];
+  return humanizeUnderscoreLabel(value);
+}
+
+function formatSiteAssignmentLabel(
+  sites: Pick<StudySite, 'id' | 'site_number' | 'name'>[],
+  siteId: string | null | undefined
+): string | null {
+  if (siteId == null || siteId === '') return 'All Sites';
+  const s = sites.find((x) => x.id === siteId);
+  return s ? `${s.site_number} — ${s.name}` : null;
+}
+
+function formatProfileTriggerLabel(
+  profiles: { id: string; first_name: string | null; last_name: string | null; email: string | null }[],
+  profileId: string | null
+): string | null {
+  if (profileId == null || profileId === '') return null;
+  const p = profiles.find((x) => x.id === profileId);
+  if (!p) return null;
+  const name = [p.first_name, p.last_name].filter(Boolean).join(' ').trim();
+  return name || p.email || null;
+}
+
+function formatCustomRoleTriggerLabel(teamRoles: TeamRole[], customRoleId: string | null): string | null {
+  if (customRoleId == null || customRoleId === '') return null;
+  return teamRoles.find((r) => r.id === customRoleId)?.role_name ?? null;
+}
+
 interface TeamTabProps {
   studyId: string;
   initialMembers: StudyTeamMemberWithProfile[];
@@ -387,7 +430,12 @@ function AddTeamMemberDialog({
             ) : (
               <Select value={form.watch('profile_id')} onValueChange={(val) => form.setValue('profile_id', val)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a person" />
+                  <SelectValue
+                    placeholder="Select a person"
+                    getDisplayLabel={(v) =>
+                      formatProfileTriggerLabel(profiles, v) ?? null
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {availableProfiles.map((p) => (
@@ -413,7 +461,10 @@ function AddTeamMemberDialog({
               <Label>Role</Label>
               <Select value={selectedRole} onValueChange={(val) => form.setValue('role', val)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select role" />
+                  <SelectValue
+                    placeholder="Select role"
+                    getDisplayLabel={(v) => formatTeamRoleTriggerLabel(v) ?? null}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {TEAM_ROLE_OPTIONS.map((opt) => (
@@ -427,7 +478,12 @@ function AddTeamMemberDialog({
                 <Label>Custom Role</Label>
                 <Select value={form.watch('custom_role_id')} onValueChange={(val) => form.setValue('custom_role_id', val)}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select custom role" />
+                    <SelectValue
+                      placeholder="Select custom role"
+                      getDisplayLabel={(v) =>
+                        formatCustomRoleTriggerLabel(teamRoles, v) ?? null
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {teamRoles.map((r) => (
@@ -444,7 +500,10 @@ function AddTeamMemberDialog({
               <Label>Site Assignment (optional)</Label>
               <Select value={form.watch('site_id')} onValueChange={(val) => form.setValue('site_id', val)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All sites" />
+                  <SelectValue
+                    placeholder="All sites"
+                    getDisplayLabel={(v) => formatSiteAssignmentLabel(sites, v) ?? null}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All Sites</SelectItem>
@@ -563,7 +622,10 @@ function EditTeamMemberDialog({
               <Label>Role</Label>
               <Select value={selectedRole} onValueChange={(val) => form.setValue('role', val)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select role" />
+                  <SelectValue
+                    placeholder="Select role"
+                    getDisplayLabel={(v) => formatTeamRoleTriggerLabel(v) ?? null}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {TEAM_ROLE_OPTIONS.map((opt) => (
@@ -577,7 +639,12 @@ function EditTeamMemberDialog({
                 <Label>Custom Role</Label>
                 <Select value={form.watch('custom_role_id')} onValueChange={(val) => form.setValue('custom_role_id', val)}>
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select custom role" />
+                    <SelectValue
+                      placeholder="Select custom role"
+                      getDisplayLabel={(v) =>
+                        formatCustomRoleTriggerLabel(teamRoles, v) ?? null
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {teamRoles.map((r) => (
@@ -594,7 +661,10 @@ function EditTeamMemberDialog({
               <Label>Site Assignment</Label>
               <Select value={form.watch('site_id')} onValueChange={(val) => form.setValue('site_id', val)}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="All sites" />
+                  <SelectValue
+                    placeholder="All sites"
+                    getDisplayLabel={(v) => formatSiteAssignmentLabel(sites, v) ?? null}
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All Sites</SelectItem>

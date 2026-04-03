@@ -9,7 +9,8 @@ import { getStudyVisits } from '@/lib/actions/visits';
 import { getStudyBudgets, getStudyPayments, getStudyFinancialSummary } from '@/lib/actions/financials';
 import { listFinanceInvoicesForStudy } from '@/lib/actions/finance-invoices';
 import { getStudyKriValues, getEnrollmentCurve } from '@/lib/actions/reports';
-import { StudyDetailTabs } from '@/components/ctms/studies/study-detail-tabs';
+import { StudyDetailTabsDynamic } from '@/components/ctms/studies/study-detail-tabs-dynamic';
+import { listFinanceApprovalTemplateOptions } from '@/lib/actions/finance-approval-templates';
 
 interface StudyDetailPageProps {
   params: Promise<{ id: string }>;
@@ -44,6 +45,7 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     financeInvoices,
     kriValues,
     enrollmentCurve,
+    financeApprovalTemplateOptions,
   ] = await Promise.all([
     getStudyById(id),
     getStudyCounts(id),
@@ -60,13 +62,14 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     listFinanceInvoicesForStudy(id).catch(() => []),
     getStudyKriValues(id),
     getEnrollmentCurve(id),
+    listFinanceApprovalTemplateOptions().catch(() => []),
   ]);
 
   if (!study) notFound();
 
   return (
     <div className="p-6">
-      <StudyDetailTabs
+      <StudyDetailTabsDynamic
         study={study}
         counts={counts}
         countries={countries}
@@ -83,6 +86,7 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
         kriValues={kriValues}
         enrollmentCurve={enrollmentCurve}
         isAdmin={profile?.role === 'admin'}
+        financeApprovalTemplateOptions={financeApprovalTemplateOptions}
       />
     </div>
   );

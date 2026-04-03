@@ -5,7 +5,9 @@
 export type FinanceLogEvent =
   | 'finance.invoice.create'
   | 'finance.invoice.submit'
+  | 'finance.invoice.resubmit'
   | 'finance.invoice.decision.rpc'
+  | 'finance.invoice.transaction_log'
   | 'finance.payment.create'
   | 'finance.payment.allocate';
 
