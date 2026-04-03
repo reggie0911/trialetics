@@ -2,7 +2,10 @@ import { redirect } from 'next/navigation';
 
 import { createClient } from '@/lib/server';
 import { TopNavbar } from '@/components/ctms/top-navbar';
+import { OnboardingProvider } from '@/components/onboarding/onboarding-provider';
+import { parseOnboardingState, readOnboardingAutoStartFromEnv, type OnboardingFlow } from '@/lib/onboarding';
 import type { SubscriptionPlan } from '@/lib/types/ctms';
+import type { Json } from '@/lib/types/database.types';
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -12,10 +15,12 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     redirect('/auth/login');
   }
 
+  const userId = data.user.id;
+
   let { data: profile } = await supabase
     .from('profiles')
-    .select('id, first_name, last_name, email, avatar_url, role, company_id, is_platform_admin')
-    .eq('user_id', data.user.id)
+    .select('id, first_name, last_name, email, avatar_url, role, company_id, is_platform_admin, onboarding_state')
+    .eq('user_id', userId)
     .maybeSingle();
 
   if (!profile || !profile.company_id) {
@@ -31,8 +36,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     }
     const { data: refetched } = await supabase
       .from('profiles')
-      .select('id, first_name, last_name, email, avatar_url, role, company_id, is_platform_admin')
-      .eq('user_id', data.user.id)
+      .select('id, first_name, last_name, email, avatar_url, role, company_id, is_platform_admin, onboarding_state')
+      .eq('user_id', userId)
       .maybeSingle();
     profile = refetched ?? null;
   }
@@ -91,25 +96,37 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const userName = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || profile.email || 'User';
   const userEmail = profile.email || data.user.email || '';
 
+  const onboardingFlow: OnboardingFlow = profile.role === 'admin' ? 'admin' : 'user';
+  const onboardingRoleState = parseOnboardingState(profile.onboarding_state as Json | null | undefined)[onboardingFlow];
+
   return (
-    <div className="min-h-screen flex flex-col" suppressHydrationWarning>
-      <TopNavbar
-        hasCtmsAccess={hasCtmsAccess}
-        hasTrackerAccess={hasTrackerAccess}
-        hasEtmfAccess={hasEtmfAccess}
-        hasEisfAccess={hasEisfAccess}
-        isPlatformAdmin={isPlatformAdmin}
-        studyTrackerMenuKeys={studyTrackerMenuKeys}
-        customTrackerNavItems={customTrackerNavItems}
-        companyName={displayCompanyName}
-        userName={userName}
-        userEmail={userEmail}
-        avatarUrl={profile.avatar_url}
-        currentPlan={currentPlan}
-      />
-      <main className="flex-1 pt-14" suppressHydrationWarning>
-        {children}
-      </main>
-    </div>
+    <OnboardingProvider
+      flow={onboardingFlow}
+      hasCtmsAccess={hasCtmsAccess}
+      isPlatformAdmin={isPlatformAdmin}
+      autoStartEnabled={readOnboardingAutoStartFromEnv()}
+      initialRoleState={onboardingRoleState}
+    >
+      <div className="min-h-screen flex flex-col" suppressHydrationWarning>
+        <TopNavbar
+          hasCtmsAccess={hasCtmsAccess}
+          hasTrackerAccess={hasTrackerAccess}
+          hasEtmfAccess={hasEtmfAccess}
+          hasEisfAccess={hasEisfAccess}
+          isPlatformAdmin={isPlatformAdmin}
+          isCompanyAdmin={profile.role === 'admin'}
+          studyTrackerMenuKeys={studyTrackerMenuKeys}
+          customTrackerNavItems={customTrackerNavItems}
+          companyName={displayCompanyName}
+          userName={userName}
+          userEmail={userEmail}
+          avatarUrl={profile.avatar_url}
+          currentPlan={currentPlan}
+        />
+        <main className="flex-1 pt-14" suppressHydrationWarning>
+          {children}
+        </main>
+      </div>
+    </OnboardingProvider>
   );
 }

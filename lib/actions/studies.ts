@@ -3,6 +3,17 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/server';
 import type { Study, StudyPhase, StudyStatus } from '@/lib/types/ctms';
+import type { StudyOverview } from '@/lib/validation/study-overview';
+import { parseStudyOverview, studyOverviewToDbValue } from '@/lib/validation/study-overview';
+
+function mapStudyRow(data: unknown): Study {
+  const row = data as Study & { overview?: unknown };
+  return {
+    ...row,
+    overview: parseStudyOverview(row.overview) ?? null,
+    finance_approval_template_id: row.finance_approval_template_id ?? null,
+  };
+}
 
 export interface CreateStudyInput {
   protocol_number: string;
@@ -16,6 +27,8 @@ export interface CreateStudyInput {
   start_date?: string;
   end_date?: string;
   description?: string;
+  /** Protocol summary; persisted as JSON. Pass null to clear. */
+  overview?: StudyOverview | null;
 }
 
 export interface UpdateStudyInput extends Partial<CreateStudyInput> {
@@ -81,7 +94,7 @@ export async function getStudies(filters?: StudyFilters): Promise<Study[]> {
   const { data, error } = await query;
 
   if (error) throw new Error(error.message);
-  return (data as unknown as Study[]) ?? [];
+  return ((data as unknown as Study[]) ?? []).map(mapStudyRow);
 }
 
 export async function getStudyById(id: string): Promise<Study | null> {
@@ -94,7 +107,7 @@ export async function getStudyById(id: string): Promise<Study | null> {
     .single();
 
   if (error) return null;
-  return data as unknown as Study;
+  return mapStudyRow(data);
 }
 
 export async function createStudy(input: CreateStudyInput): Promise<{ data: Study | null; error: string | null }> {
@@ -118,6 +131,7 @@ export async function createStudy(input: CreateStudyInput): Promise<{ data: Stud
         start_date: input.start_date || null,
         end_date: input.end_date || null,
         description: input.description || null,
+        overview: studyOverviewToDbValue(input.overview ?? null) ?? null,
       })
       .select()
       .single();
@@ -131,10 +145,60 @@ export async function createStudy(input: CreateStudyInput): Promise<{ data: Stud
 
     revalidatePath('/protected');
     revalidatePath('/protected/studies');
-    return { data: data as unknown as Study, error: null };
+    return { data: mapStudyRow(data), error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }
+}
+
+export async function updateStudyFinanceApprovalTemplate(input: {
+  studyId: string;
+  templateId: string | null;
+}): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: 'Not signed in.' };
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('company_id, role')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (!profile?.company_id) return { error: 'Profile not found.' };
+  if (profile.role !== 'admin') {
+    return { error: 'Only company administrators can change the study approval workflow.' };
+  }
+
+  const { data: study } = await supabase
+    .from('studies')
+    .select('company_id')
+    .eq('id', input.studyId)
+    .maybeSingle();
+  if (!study || study.company_id !== profile.company_id) return { error: 'Study not found.' };
+
+  if (input.templateId) {
+    const { data: tpl } = await supabase
+      .from('finance_approval_templates')
+      .select('id')
+      .eq('id', input.templateId)
+      .eq('company_id', profile.company_id)
+      .maybeSingle();
+    if (!tpl) return { error: 'Approval workflow not found.' };
+  }
+
+  const { error } = await supabase
+    .from('studies')
+    .update({ finance_approval_template_id: input.templateId })
+    .eq('id', input.studyId)
+    .eq('company_id', profile.company_id);
+  if (error) return { error: error.message };
+  revalidatePath('/protected/studies');
+  revalidatePath(`/protected/studies/${input.studyId}`);
+  revalidatePath('/protected/financials');
+  return { error: null };
 }
 
 export async function updateStudy(input: UpdateStudyInput): Promise<{ data: Study | null; error: string | null }> {
@@ -146,7 +210,11 @@ export async function updateStudy(input: UpdateStudyInput): Promise<{ data: Stud
 
     for (const [key, value] of Object.entries(updates)) {
       if (value !== undefined) {
-        cleanUpdates[key] = value === '' ? null : value;
+        if (key === 'overview') {
+          cleanUpdates[key] = studyOverviewToDbValue(value) ?? null;
+        } else {
+          cleanUpdates[key] = value === '' ? null : value;
+        }
       }
     }
 
@@ -167,7 +235,7 @@ export async function updateStudy(input: UpdateStudyInput): Promise<{ data: Stud
     revalidatePath('/protected');
     revalidatePath('/protected/studies');
     revalidatePath(`/protected/studies/${id}`);
-    return { data: data as unknown as Study, error: null };
+    return { data: mapStudyRow(data), error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }

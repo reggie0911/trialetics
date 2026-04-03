@@ -131,13 +131,16 @@ function AlertDialogDescription({
 
 function AlertDialogAction({
   className,
+  variant = "default",
+  size = "default",
   ...props
-}: React.ComponentProps<typeof Button>) {
+}: AlertDialogPrimitive.Close.Props &
+  Omit<React.ComponentProps<typeof Button>, "render" | "nativeButton">) {
+  /** Must use {@link AlertDialogPrimitive.Close} so Base UI dismisses the dialog; a plain Button leaves it open. */
   return (
-    <Button
+    <AlertDialogPrimitive.Close
       data-slot="alert-dialog-action"
-      className={cn(className)}
-      {...props}
+      render={<Button variant={variant} size={size} className={cn(className)} {...props} />}
     />
   )
 }

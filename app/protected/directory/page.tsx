@@ -26,6 +26,7 @@ export default async function DirectoryPage() {
   return (
     <div className="p-6">
       <DirectoryHomeClient
+        companyId={access.companyId}
         canEdit={access.canEdit}
         canImportCsv={access.canImportCsv}
         catalog={catalog.categories}

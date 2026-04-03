@@ -68,6 +68,7 @@ export interface DirectoryContactRow {
   last_name: string;
   title: string | null;
   email: string | null;
+  avatar_url: string | null;
   phone: string | null;
   department: string | null;
   country_code: string | null;
@@ -183,6 +184,41 @@ export interface DirectoryAssignmentHistoryRow {
   changed_by: string | null;
   snapshot: Record<string, unknown>;
   changed_at: string;
+}
+
+/** Payload for creating/updating an institution (Directory organizations). */
+export interface SaveInstitutionInput {
+  name: string;
+  organization_type: InstitutionOrganizationType;
+  address_line1?: string;
+  address_line2?: string;
+  city?: string;
+  state_region?: string;
+  postal_code?: string;
+  country_code?: string;
+  region?: string;
+  status?: 'active' | 'inactive';
+  notes?: string;
+  parent_institution_id?: string | null;
+}
+
+/** Payload for creating/updating a directory contact. */
+export interface SaveDirectoryContactInput {
+  first_name: string;
+  last_name: string;
+  title?: string;
+  email?: string;
+  avatar_url?: string | null;
+  phone?: string;
+  department?: string;
+  country_code?: string;
+  region?: string;
+  status?: 'active' | 'inactive';
+  notes?: string;
+  primary_directory_role_id?: string | null;
+  primary_institution_id?: string | null;
+  profile_id?: string | null;
+  secondary_role_ids?: string[];
 }
 
 export const INSTITUTION_TYPE_OPTIONS: { value: InstitutionOrganizationType; label: string }[] = [

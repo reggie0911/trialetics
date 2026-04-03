@@ -29,7 +29,7 @@ import {
 
 import type { StudyCountry, CountryStatus, RegulatoryStatus } from '@/lib/types/ctms';
 import { COUNTRY_STATUS_OPTIONS, REGULATORY_STATUS_OPTIONS } from '@/lib/types/ctms';
-import { COUNTRIES } from '@/lib/data/countries';
+import { COUNTRIES, countriesForSelectList } from '@/lib/data/countries';
 import { addStudyCountry, updateStudyCountry } from '@/lib/actions/countries';
 
 const addSchema = z.object({
@@ -73,7 +73,7 @@ export function CountryFormDialog({
         },
   });
 
-  const availableCountries = COUNTRIES.filter(
+  const availableCountries = countriesForSelectList().filter(
     (c) => !existingCodes.includes(c.code) || (isEdit && c.code === country?.country_code)
   );
 

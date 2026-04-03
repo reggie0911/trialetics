@@ -59,3 +59,16 @@ export const COUNTRIES: CountryOption[] = [
   { code: 'US', name: 'United States' },
   { code: 'VN', name: 'Vietnam' },
 ];
+
+const US_COUNTRY_CODE = 'US';
+
+/**
+ * Countries for dropdowns: United States first, then all others A–Z by name.
+ */
+export function countriesForSelectList(): CountryOption[] {
+  const us = COUNTRIES.find((c) => c.code === US_COUNTRY_CODE);
+  const rest = COUNTRIES.filter((c) => c.code !== US_COUNTRY_CODE).sort((a, b) =>
+    a.name.localeCompare(b.name),
+  );
+  return us ? [us, ...rest] : rest;
+}

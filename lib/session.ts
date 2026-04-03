@@ -29,16 +29,14 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Do not run code between createServerClient and
-  // supabase.auth.getClaims(). A simple mistake could make it very hard to debug
-  // issues with users being randomly logged out.
+  // IMPORTANT: Calling getUser() refreshes expired JWTs and writes
+  // the new tokens back to request.cookies + supabaseResponse.cookies
+  // via setAll(). This ensures downstream Server Components receive
+  // valid, non-expired auth cookies for PostgREST (RLS) queries.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  // IMPORTANT: If you remove getClaims() and you use server-side rendering
-  // with the Supabase client, your users may be randomly logged out.
-  const { data } = await supabase.auth.getClaims()
-  const user = data?.claims
-
-  // Public routes that don't require authentication
   const publicRoutes = [
     '/',
     '/auth',
@@ -56,35 +54,29 @@ export async function updateSession(request: NextRequest) {
   )
 
   if (!user && !isPublicRoute) {
-    // API routes must not be redirected to HTML login (webhooks, public endpoints, etc.).
     if (request.nextUrl.pathname.startsWith('/api/')) {
       return supabaseResponse
     }
-    // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     url.searchParams.set('next', request.nextUrl.pathname)
     return NextResponse.redirect(url)
   }
 
-  // Block deactivated users from accessing protected routes
   const isProtectedRoute = request.nextUrl.pathname === '/protected' || request.nextUrl.pathname.startsWith('/protected/')
   const isDeactivatedPage = request.nextUrl.pathname === '/auth/deactivated'
 
   if (user && isProtectedRoute && !isDeactivatedPage) {
-    const userId = (user as { sub?: string })?.sub
-    if (userId) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('is_active')
-        .eq('user_id', userId)
-        .single()
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_active')
+      .eq('user_id', user.id)
+      .single()
 
-      if (profile && profile.is_active === false) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/auth/deactivated'
-        return NextResponse.redirect(url)
-      }
+    if (profile && profile.is_active === false) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth/deactivated'
+      return NextResponse.redirect(url)
     }
   }
 

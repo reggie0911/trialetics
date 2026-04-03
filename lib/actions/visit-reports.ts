@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/server';
 import { createAdminClient } from '@/lib/server-admin';
 import type {
+  TripReportDaysBasis,
   VisitReportTemplate,
   VisitReportTemplateQuestion,
   VisitReportType,
@@ -174,10 +175,56 @@ function latestTripReportByVisitId(
   return map;
 }
 
-/** Match createSiteVisitWithReport: add whole calendar days in UTC from a YYYY-MM-DD anchor. */
+function isoDateOnly(iso: string): string {
+  return String(iso).split('T')[0];
+}
+
+function normalizeTripReportDaysBasis(raw: string | null | undefined): TripReportDaysBasis {
+  return raw === 'business' ? 'business' : 'calendar';
+}
+
+/** Match createSiteVisitWithReport: add whole calendar days from a YYYY-MM-DD anchor (date-only safe). */
 function addCalendarDaysFromIsoDate(anchor: string, days: number): string {
-  const start = new Date(anchor);
+  const part = isoDateOnly(anchor);
+  const start = new Date(`${part}T12:00:00.000Z`);
   return new Date(start.getTime() + days * 86400000).toISOString().split('T')[0];
+}
+
+/**
+ * v1 business days: skip Saturday/Sunday (UTC). Public holidays are not excluded.
+ * Cumulative with calendar mode: submission at N business days from anchor; approval at (N+M) business days from anchor.
+ */
+function addBusinessDaysFromIsoDate(anchorIso: string, days: number): string {
+  if (!Number.isFinite(days) || days <= 0) return isoDateOnly(anchorIso);
+  const anchor = isoDateOnly(anchorIso);
+  const d = new Date(`${anchor}T12:00:00.000Z`);
+  let added = 0;
+  while (added < days) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    const dow = d.getUTCDay();
+    if (dow !== 0 && dow !== 6) added++;
+  }
+  return d.toISOString().split('T')[0];
+}
+
+function addTripReportDueDaysFromAnchor(
+  anchorIso: string,
+  days: number,
+  basis: TripReportDaysBasis
+): string {
+  if (basis === 'business') return addBusinessDaysFromIsoDate(anchorIso, days);
+  return addCalendarDaysFromIsoDate(anchorIso, days);
+}
+
+function submissionAndApprovalDueFromVisitStart(
+  visitStartIso: string,
+  daysSubmission: number,
+  daysApproval: number,
+  basis: TripReportDaysBasis
+): { submissionDue: string; approvalDue: string } {
+  const submissionDue = addTripReportDueDaysFromAnchor(visitStartIso, daysSubmission, basis);
+  const approvalDue = addTripReportDueDaysFromAnchor(visitStartIso, daysSubmission + daysApproval, basis);
+  return { submissionDue, approvalDue };
 }
 
 function calendarDaysBetweenIso(from: string, to: string): number {
@@ -419,17 +466,26 @@ export async function getTripReportTrackerList(): Promise<{
         .filter((id): id is string => Boolean(id))
     ),
   ];
-  const templateById = new Map<string, { days_submission: number; days_approval: number }>();
+  const templateById = new Map<
+    string,
+    { days_submission: number; days_approval: number; days_basis: TripReportDaysBasis }
+  >();
   if (templateIds.length > 0) {
     const { data: tmplRows } = await admin
       .from('visit_report_templates')
-      .select('id, days_submission, days_approval')
+      .select('id, days_submission, days_approval, days_basis')
       .in('id', templateIds);
     for (const t of tmplRows ?? []) {
-      const row = t as { id: string; days_submission: number | null; days_approval: number | null };
+      const row = t as {
+        id: string;
+        days_submission: number | null;
+        days_approval: number | null;
+        days_basis: string | null;
+      };
       templateById.set(row.id, {
         days_submission: row.days_submission ?? 14,
         days_approval: row.days_approval ?? 7,
+        days_basis: normalizeTripReportDaysBasis(row.days_basis),
       });
     }
   }
@@ -481,8 +537,9 @@ export async function getTripReportTrackerList(): Promise<{
       const tmpl = templateById.get(templateId);
       const ds = tmpl?.days_submission ?? 14;
       const da = tmpl?.days_approval ?? 7;
-      expectedSub = addCalendarDaysFromIsoDate(anchor, ds);
-      expectedApp = addCalendarDaysFromIsoDate(anchor, ds + da);
+      const basis = tmpl?.days_basis ?? 'calendar';
+      expectedSub = addTripReportDueDaysFromAnchor(anchor, ds, basis);
+      expectedApp = addTripReportDueDaysFromAnchor(anchor, ds + da, basis);
     } else {
       expectedSub = storedSubDue;
       expectedApp = storedAppDue;
@@ -705,7 +762,8 @@ export interface TemplateWithQuestionCount extends VisitReportTemplate {
   study_name?: string | null;
 }
 
-const TEMPLATE_SELECT_COLS = 'id, company_id, name, visit_report_type, days_submission, days_approval, template_status, created_by, created_at, updated_at';
+const TEMPLATE_SELECT_COLS =
+  'id, company_id, name, visit_report_type, days_submission, days_approval, days_basis, template_status, created_by, created_at, updated_at';
 const TEMPLATE_SELECT_WITH_STUDY = `${TEMPLATE_SELECT_COLS}, study_id`;
 
 export async function getTemplatesWithQuestionCount(): Promise<TemplateWithQuestionCount[]> {
@@ -804,13 +862,23 @@ export async function createSiteVisitWithReport(
     if (input.template_id) {
       const { data: tmpl } = await supabase
         .from('visit_report_templates')
-        .select('days_submission, days_approval')
+        .select('days_submission, days_approval, days_basis')
         .eq('id', input.template_id)
         .single();
       if (tmpl) {
-        const start = new Date(input.start_date);
-        submissionDue = new Date(start.getTime() + (tmpl.days_submission ?? 14) * 86400000).toISOString().split('T')[0];
-        approvalDue = new Date(start.getTime() + ((tmpl.days_submission ?? 14) + (tmpl.days_approval ?? 7)) * 86400000).toISOString().split('T')[0];
+        const basis = normalizeTripReportDaysBasis(
+          (tmpl as { days_basis?: string | null }).days_basis
+        );
+        const ds = tmpl.days_submission ?? 14;
+        const da = tmpl.days_approval ?? 7;
+        const { submissionDue: sd, approvalDue: ad } = submissionAndApprovalDueFromVisitStart(
+          input.start_date,
+          ds,
+          da,
+          basis
+        );
+        submissionDue = sd;
+        approvalDue = ad;
       }
     }
 
@@ -865,6 +933,7 @@ export async function createTemplate(input: {
   visit_report_type: VisitReportType;
   days_submission: number;
   days_approval: number;
+  days_basis?: TripReportDaysBasis;
   study_id?: string | null;
 }): Promise<{ data: VisitReportTemplate | null; error: string | null; studySkipped?: boolean }> {
   const supabase = await createClient();
@@ -876,6 +945,7 @@ export async function createTemplate(input: {
       visit_report_type: input.visit_report_type,
       days_submission: input.days_submission,
       days_approval: input.days_approval,
+      days_basis: input.days_basis ?? 'calendar',
       template_status: 'active',
       created_by: createdBy,
     };
@@ -904,7 +974,15 @@ export async function createTemplate(input: {
 
 export async function updateTemplate(
   id: string,
-  input: { name?: string; visit_report_type?: VisitReportType; days_submission?: number; days_approval?: number; template_status?: 'active' | 'inactive'; study_id?: string | null }
+  input: {
+    name?: string;
+    visit_report_type?: VisitReportType;
+    days_submission?: number;
+    days_approval?: number;
+    days_basis?: TripReportDaysBasis;
+    template_status?: 'active' | 'inactive';
+    study_id?: string | null;
+  }
 ): Promise<{ error: string | null; studySkipped?: boolean }> {
   const supabase = await createClient();
   try {
@@ -2125,7 +2203,7 @@ export async function linkReportToTemplate(
     if (permErr) return { error: permErr };
     const { data: tmpl } = await supabase
       .from('visit_report_templates')
-      .select('days_submission, days_approval')
+      .select('days_submission, days_approval, days_basis')
       .eq('id', templateId)
       .single();
     let submissionDue: string | null = null;
@@ -2143,9 +2221,17 @@ export async function linkReportToTemplate(
             .eq('id', report.visit_id)
             .single()
         : { data: null };
-      const start = visit?.start_date ? new Date(visit.start_date) : new Date();
-      submissionDue = new Date(start.getTime() + (tmpl.days_submission ?? 14) * 86400000).toISOString().split('T')[0];
-      approvalDue = new Date(start.getTime() + ((tmpl.days_submission ?? 14) + (tmpl.days_approval ?? 7)) * 86400000).toISOString().split('T')[0];
+      const startIso = visit?.start_date
+        ? isoDateOnly(String(visit.start_date))
+        : isoDateOnly(new Date().toISOString());
+      const basis = normalizeTripReportDaysBasis(
+        (tmpl as { days_basis?: string | null }).days_basis
+      );
+      const ds = tmpl.days_submission ?? 14;
+      const da = tmpl.days_approval ?? 7;
+      const due = submissionAndApprovalDueFromVisitStart(startIso, ds, da, basis);
+      submissionDue = due.submissionDue;
+      approvalDue = due.approvalDue;
     }
     const { error } = await supabase
       .from('trip_reports')

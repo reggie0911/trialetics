@@ -179,20 +179,21 @@ export function SiteForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Country</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select value={field.value ?? ''} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger className="w-full">
                           <SelectValue
-                          placeholder="Select Country"
-                          getDisplayLabel={(v) =>
-                            countries.find((c) => c.id === v)
-                              ? `${countries.find((c) => c.id === v)!.country_name} (${countries.find((c) => c.id === v)!.country_code})`
-                              : v
-                          }
-                        />
+                            placeholder="Select country"
+                            getDisplayLabel={(v) => {
+                              if (v == null || v === '') return null;
+                              const c = countries.find((x) => x.id === v);
+                              return c ? `${c.country_name} (${c.country_code})` : v;
+                            }}
+                          />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
+                        <SelectItem value="">Not assigned</SelectItem>
                         {countries.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
                             {c.country_name} ({c.country_code})
@@ -212,7 +213,10 @@ export function SiteForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    value={field.value ?? 'identified'}
+                    onValueChange={field.onChange}
+                  >
                     <FormControl>
                       <SelectTrigger className="w-full">
                         <SelectValue

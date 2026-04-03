@@ -25,7 +25,7 @@ export function LoginForm({ next }: LoginFormProps) {
   const reasonMessage = useMemo(() => {
     const r = searchParams.get('reason');
     if (r === 'profile') {
-      return 'Your account is missing a workspace profile. Try signing in again, or contact support if this continues.';
+      return 'We had trouble setting up your account. Please try signing in again. If this continues, contact support.';
     }
     return null;
   }, [searchParams]);
@@ -42,14 +42,22 @@ export function LoginForm({ next }: LoginFormProps) {
       setIsLoading(false);
       return;
     }
+    if (!password) {
+      setError('Please enter your password.');
+      setIsLoading(false);
+      return;
+    }
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: emailTrimmed,
         password,
       });
       if (error) throw error;
-      // Full navigation so the proxy sees auth cookies on the next request (avoids RSC race with router.push).
+      if (!data.session) {
+        setError('Could not establish a session. Please try again.');
+        return;
+      }
       const target = next && next.startsWith('/') && !next.startsWith('//') ? next : '/protected';
       window.location.assign(target);
     } catch (error: unknown) {

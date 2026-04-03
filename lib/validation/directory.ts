@@ -5,10 +5,19 @@ const optionalUuid = z
   .optional()
   .transform((v) => (v === '' || v === undefined ? null : v));
 
+const optionalAvatarUrl = z
+  .string()
+  .optional()
+  .transform((s) => (typeof s === 'string' && s.trim() ? s.trim() : undefined))
+  .refine((s) => s === undefined || /^https:\/\/.+/i.test(s), {
+    message: 'Photo must be a valid https link',
+  });
+
 export const directoryContactFormSchema = z.object({
   first_name: z.string().min(1, 'First name is required'),
   last_name: z.string().min(1, 'Last name is required'),
   title: z.string().optional(),
+  avatar_url: optionalAvatarUrl,
   email: z
     .string()
     .optional()

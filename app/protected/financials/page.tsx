@@ -1,9 +1,20 @@
 import Link from 'next/link';
 import { getPortfolioFinancials } from '@/lib/actions/financials';
 import { FinancialsOverview } from '@/components/ctms/financials/financials-overview';
+import { createClient } from '@/lib/server';
 
 export default async function FinancialsPage() {
-  const { studies, totals, monthlySpend } = await getPortfolioFinancials();
+  const { studies, totals, monthlySpend, monthlySpendByStudyId } = await getPortfolioFinancials();
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  let isCompanyAdmin = false;
+  if (user) {
+    const { data: profile } = await supabase.from('profiles').select('role').eq('user_id', user.id).maybeSingle();
+    isCompanyAdmin = profile?.role === 'admin';
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -21,8 +32,21 @@ export default async function FinancialsPage() {
           </Link>{' '}
           (operational payment tools) — use Financials for study budgets and invoice-to-payment traceability.
         </p>
+        {isCompanyAdmin && (
+          <p className="text-xs text-muted-foreground mt-2">
+            <Link href="/protected/financials/approval-templates" className="underline hover:text-foreground">
+              Configure invoice approval workflows
+            </Link>{' '}
+            (steps, roles, and escalation thresholds).
+          </p>
+        )}
       </div>
-      <FinancialsOverview studies={studies} totals={totals} monthlySpend={monthlySpend} />
+      <FinancialsOverview
+        studies={studies}
+        totals={totals}
+        monthlySpend={monthlySpend}
+        monthlySpendByStudyId={monthlySpendByStudyId}
+      />
     </div>
   );
 }

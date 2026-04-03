@@ -147,6 +147,11 @@ function PlanCard({
         toast.error(data.error);
         return;
       }
+      if (data.upgraded) {
+        toast.success('Plan updated. Your subscription will refresh in a moment.');
+        window.location.href = '/protected/settings/billing?success=true';
+        return;
+      }
       if (data.url) {
         window.location.href = data.url;
       }
@@ -222,10 +227,18 @@ function PlanCard({
             size="sm"
             className="w-full"
             variant={isUpgrade ? 'default' : 'outline'}
-            onClick={hasSubscription ? handleManage : handleSubscribe}
+            onClick={() => {
+              if (isUpgrade) {
+                void handleSubscribe();
+              } else if (hasSubscription) {
+                void handleManage();
+              } else {
+                void handleSubscribe();
+              }
+            }}
             disabled={loading}
           >
-            {loading ? 'Loading...' : isUpgrade ? 'Upgrade' : 'Change Plan'}
+            {loading ? 'Loading...' : isUpgrade ? `Upgrade to ${config.name}` : 'Change Plan'}
           </Button>
         )}
       </CardContent>

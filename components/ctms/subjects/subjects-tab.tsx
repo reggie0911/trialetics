@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, X, Users, Trash2 } from 'lucide-react';
+import { Search, X, Users, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -39,7 +39,12 @@ import {
 
 import type { SubjectWithSite, EnrollmentFunnelData, StudySite } from '@/lib/types/ctms';
 import { SUBJECT_STATUS_OPTIONS } from '@/lib/types/ctms';
-import { getStudySubjects, getEnrollmentFunnel, deleteSubject } from '@/lib/actions/subjects';
+import {
+  getStudySubjects,
+  getEnrollmentFunnel,
+  getEnrollmentFunnelForSite,
+  deleteSubject,
+} from '@/lib/actions/subjects';
 import { EnrollmentFunnel } from './enrollment-funnel';
 import { SubjectFormDialog } from './subject-form-dialog';
 
@@ -48,6 +53,8 @@ interface SubjectsTabProps {
   initialSubjects: SubjectWithSite[];
   initialFunnel: EnrollmentFunnelData;
   sites: Pick<StudySite, 'id' | 'site_number' | 'name'>[];
+  /** When set, list and funnel are scoped to this clinical site */
+  siteScopeId?: string;
 }
 
 export function SubjectsTab({
@@ -55,6 +62,7 @@ export function SubjectsTab({
   initialSubjects,
   initialFunnel,
   sites,
+  siteScopeId,
 }: SubjectsTabProps) {
   const router = useRouter();
   const [subjects, setSubjects] = useState(initialSubjects);
@@ -67,17 +75,23 @@ export function SubjectsTab({
   const refreshData = useCallback(() => {
     startTransition(async () => {
       try {
-        const [subs, funnelData] = await Promise.all([
-          getStudySubjects(studyId),
-          getEnrollmentFunnel(studyId),
-        ]);
+        const [subs, funnelData] = siteScopeId
+          ? await Promise.all([
+              getStudySubjects(studyId, { siteId: siteScopeId }),
+              getEnrollmentFunnelForSite(siteScopeId),
+            ])
+          : await Promise.all([
+              getStudySubjects(studyId),
+              getEnrollmentFunnel(studyId),
+            ]);
         setSubjects(subs);
         setFunnel(funnelData);
+        router.refresh();
       } catch {
         toast.error('Failed to refresh subject data');
       }
     });
-  }, [studyId]);
+  }, [studyId, siteScopeId, router]);
 
   const filteredSubjects = useMemo(() => {
     let result = subjects;
@@ -96,15 +110,19 @@ export function SubjectsTab({
       result = result.filter((s) => s.status === statusFilter);
     }
 
-    if (siteFilter !== 'all') {
+    if (!siteScopeId && siteFilter !== 'all') {
       result = result.filter((s) => s.site_id === siteFilter);
     }
 
     return result;
-  }, [subjects, searchQuery, statusFilter, siteFilter]);
+  }, [subjects, searchQuery, statusFilter, siteFilter, siteScopeId]);
 
-  const handleDelete = async (id: string) => {
-    const { error } = await deleteSubject(id, studyId);
+  const handleDelete = async (id: string, subjectSiteId: string | null) => {
+    const { error } = await deleteSubject(
+      id,
+      studyId,
+      siteScopeId ?? subjectSiteId ?? undefined
+    );
     if (error) {
       toast.error(error);
       return;
@@ -122,7 +140,10 @@ export function SubjectsTab({
     });
   };
 
-  const hasActiveFilters = searchQuery || statusFilter !== 'all' || siteFilter !== 'all';
+  const hasActiveFilters =
+    Boolean(searchQuery) ||
+    statusFilter !== 'all' ||
+    (!siteScopeId && siteFilter !== 'all');
 
   return (
     <div className="space-y-4">
@@ -132,13 +153,16 @@ export function SubjectsTab({
         <div>
           <h3 className="text-lg font-medium">Subjects</h3>
           <p className="text-sm text-muted-foreground">
-            {subjects.length} subject{subjects.length !== 1 ? 's' : ''} enrolled in this study.
+            {subjects.length} subject{subjects.length !== 1 ? 's' : ''}{' '}
+            {siteScopeId ? 'at this site.' : 'enrolled in this study.'}
           </p>
         </div>
         <SubjectFormDialog
           studyId={studyId}
           sites={sites}
           onSuccess={refreshData}
+          defaultSiteIdWhenCreate={siteScopeId}
+          lockSiteSelection={Boolean(siteScopeId)}
         />
       </div>
 
@@ -169,7 +193,7 @@ export function SubjectsTab({
             ))}
           </SelectContent>
         </Select>
-        {sites.length > 0 && (
+        {!siteScopeId && sites.length > 0 && (
           <Select value={siteFilter} onValueChange={setSiteFilter}>
             <SelectTrigger className="w-[150px]">
               <SelectValue
@@ -226,7 +250,7 @@ export function SubjectsTab({
                 <TableHead className="text-xs">Subject Number</TableHead>
                 <TableHead className="text-xs">Screening Number</TableHead>
                 <TableHead className="text-xs">Randomization Number</TableHead>
-                <TableHead className="text-xs">Site</TableHead>
+                {!siteScopeId && <TableHead className="text-xs">Site</TableHead>}
                 <TableHead className="text-xs">Status</TableHead>
                 <TableHead className="text-xs">Screening Date</TableHead>
                 <TableHead className="text-xs">Randomization Date</TableHead>
@@ -280,7 +304,9 @@ export function SubjectsTab({
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(subject.id)}>
+                          <AlertDialogAction
+                            onClick={() => handleDelete(subject.id, subject.site_id)}
+                          >
                             Delete
                           </AlertDialogAction>
                         </AlertDialogFooter>

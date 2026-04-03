@@ -32,6 +32,7 @@ import {
   ContactRound,
   Package,
   FolderOpen,
+  ListOrdered,
 } from 'lucide-react';
 
 import Logo from '@/components/layout/logo';
@@ -70,7 +71,7 @@ const ctmsNavItems = [
   { label: 'Countries', href: '/protected/countries', icon: Globe },
   { label: 'Team', href: '/protected/team', icon: UsersRound },
   {
-    label: 'Contacts & organizations',
+    label: 'Contacts & Organizations',
     href: '/protected/directory',
     icon: ContactRound,
   },
@@ -88,9 +89,26 @@ const ctmsNavItems = [
   },
 ];
 
+function buildCtmsNavItems(isCompanyAdmin: boolean) {
+  type NavItem = (typeof ctmsNavItems)[number];
+  const out: NavItem[] = [...ctmsNavItems];
+  if (isCompanyAdmin) {
+    const idx = out.findIndex((x) => x.href === '/protected/financials');
+    if (idx >= 0) {
+      out.splice(idx + 1, 0, {
+        label: 'Approval templates',
+        href: '/protected/financials/approval-templates',
+        icon: ListOrdered,
+      });
+    }
+  }
+  return out;
+}
+
 const proFeatureRoutes = [
   '/protected/financials',
   '/protected/financials/approvals',
+  '/protected/financials/approval-templates',
   '/protected/reports',
   '/protected/time-expenses',
 ];
@@ -117,9 +135,12 @@ interface TopNavbarProps {
   userEmail: string;
   avatarUrl: string | null;
   currentPlan: SubscriptionPlan;
+  /** Company (tenant) admins see extra CTMS items such as invoice approval template editor. */
+  isCompanyAdmin?: boolean;
 }
 
 function getPageName(pathname: string, customNames: CustomTrackerNavItem[]): string {
+  if (pathname.startsWith('/protected/financials/approval-templates')) return 'Approval templates';
   if (pathname.startsWith('/protected/eisf')) return 'eISF';
   if (pathname.startsWith('/protected/etmf')) return 'eTMF';
   if (pathname.startsWith('/protected/platform/')) return 'Platform admin';
@@ -154,11 +175,14 @@ export function TopNavbar({
   userEmail,
   avatarUrl,
   currentPlan,
+  isCompanyAdmin = false,
 }: TopNavbarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+
+  const ctmsNavResolved = useMemo(() => buildCtmsNavItems(isCompanyAdmin), [isCompanyAdmin]);
 
   const studyTrackerMenuItems = useMemo(
     () => studyTrackerNavItems.filter((i) => studyTrackerMenuKeys.includes(i.key)),
@@ -179,7 +203,7 @@ export function TopNavbar({
   };
 
   const isCtmsActive =
-    hasCtmsAccess && ctmsNavItems.some((item) => isActive(item.href, item.exact));
+    hasCtmsAccess && ctmsNavResolved.some((item) => isActive(item.href, item.exact));
   const isEtmfActive = pathname === '/protected/etmf' || pathname.startsWith('/protected/etmf/');
   const isEisfActive = pathname === '/protected/eisf' || pathname.startsWith('/protected/eisf/');
   const isCustomActive =
@@ -232,12 +256,13 @@ export function TopNavbar({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={8} className="min-w-48">
                 {hasCtmsAccess ? (
-                  ctmsNavItems.map((item) => {
+                  ctmsNavResolved.map((item) => {
                     const locked = isLocked(item.href);
                     return (
                       <DropdownMenuItem
                         key={item.href}
                         className={cn('cursor-pointer', locked && 'opacity-50')}
+                        data-onboarding={item.href === '/protected/studies' ? 'nav-studies' : undefined}
                         onClick={() => router.push(locked ? '/protected/settings/billing' : item.href)}
                       >
                         <item.icon className="mr-2 h-4 w-4" />
@@ -472,9 +497,12 @@ export function TopNavbar({
           {hasCtmsAccess && <AIAssistantInlineButton />}
           <ThemeToggle className="h-9 w-9" />
 
-          <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-2 rounded-md px-2 py-1 outline-none hover:bg-muted transition-colors">
-              <Avatar className="h-7 w-7 !rounded-md after:!rounded-md">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="flex items-center gap-2 rounded-md px-2 py-1 outline-none hover:bg-muted transition-colors"
+                data-onboarding="nav-profile-menu"
+              >
+                <Avatar className="h-7 w-7 !rounded-md after:!rounded-md">
                 {avatarUrl && <AvatarImage src={avatarUrl} alt={userName} className="rounded-md" />}
                 <AvatarFallback className="text-[10px] rounded-md">{initials}</AvatarFallback>
               </Avatar>
@@ -525,7 +553,13 @@ export function TopNavbar({
           </DropdownMenu>
 
           {/* Mobile hamburger */}
-          <Button variant="ghost" size="icon" className="lg:hidden h-9 w-9" onClick={() => setMobileOpen(true)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden h-9 w-9"
+            data-onboarding="nav-mobile-menu"
+            onClick={() => setMobileOpen(true)}
+          >
             <Menu className="h-5 w-5" />
           </Button>
         </div>
@@ -541,13 +575,14 @@ export function TopNavbar({
           <div className="flex flex-col py-2 overflow-y-auto max-h-[calc(100vh-60px)]">
             <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">CTMS</p>
             {hasCtmsAccess ? (
-              ctmsNavItems.map((item) => {
+              ctmsNavResolved.map((item) => {
                 const locked = isLocked(item.href);
                 const active = isActive(item.href, item.exact);
                 return (
                   <Link
                     key={item.href}
                     href={locked ? '/protected/settings/billing' : item.href}
+                    data-onboarding={item.href === '/protected/studies' ? 'nav-studies' : undefined}
                     onClick={() => setMobileOpen(false)}
                     className={cn(
                       'flex items-center gap-2 px-4 py-2 text-sm transition-colors',

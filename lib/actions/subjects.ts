@@ -95,16 +95,7 @@ export async function getSubjectById(id: string): Promise<SubjectWithDetails | n
   return data as unknown as SubjectWithDetails;
 }
 
-export async function getEnrollmentFunnel(studyId: string): Promise<EnrollmentFunnelData> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from('subjects')
-    .select('status')
-    .eq('study_id', studyId);
-
-  if (error) throw new Error(error.message);
-
+function funnelFromStatusRows(rows: { status: string }[] | null | undefined): EnrollmentFunnelData {
   const counts: EnrollmentFunnelData = {
     preScreening: 0,
     screening: 0,
@@ -114,10 +105,10 @@ export async function getEnrollmentFunnel(studyId: string): Promise<EnrollmentFu
     completed: 0,
     withdrawn: 0,
     discontinued: 0,
-    total: data?.length ?? 0,
+    total: rows?.length ?? 0,
   };
 
-  for (const row of data ?? []) {
+  for (const row of rows ?? []) {
     switch (row.status) {
       case 'pre_screening': counts.preScreening++; break;
       case 'screening': counts.screening++; break;
@@ -131,6 +122,30 @@ export async function getEnrollmentFunnel(studyId: string): Promise<EnrollmentFu
   }
 
   return counts;
+}
+
+export async function getEnrollmentFunnel(studyId: string): Promise<EnrollmentFunnelData> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('subjects')
+    .select('status')
+    .eq('study_id', studyId);
+
+  if (error) throw new Error(error.message);
+  return funnelFromStatusRows(data ?? []);
+}
+
+export async function getEnrollmentFunnelForSite(siteId: string): Promise<EnrollmentFunnelData> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('subjects')
+    .select('status')
+    .eq('site_id', siteId);
+
+  if (error) throw new Error(error.message);
+  return funnelFromStatusRows(data ?? []);
 }
 
 export interface CreateSubjectInput {
@@ -174,6 +189,7 @@ export async function createSubject(
 
     revalidatePath('/protected');
     revalidatePath(`/protected/studies/${input.study_id}`);
+    revalidatePath(`/protected/sites/${input.site_id}`);
     return { data: data as unknown as Subject, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -193,6 +209,8 @@ export interface UpdateSubjectInput {
   completion_date?: string;
   withdrawal_date?: string;
   withdrawal_reason?: string;
+  /** Revalidate site detail after update when subject belongs to this site. */
+  revalidateSiteId?: string;
 }
 
 export async function updateSubject(
@@ -201,7 +219,7 @@ export async function updateSubject(
   const supabase = await createClient();
 
   try {
-    const { id, study_id, ...updates } = input;
+    const { id, study_id, revalidateSiteId, ...updates } = input;
     const cleanUpdates: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(updates)) {
@@ -224,6 +242,12 @@ export async function updateSubject(
 
     revalidatePath(`/protected/studies/${study_id}`);
     revalidatePath(`/protected/subjects/${id}`);
+    const updatedSiteId = cleanUpdates.site_id;
+    if (typeof revalidateSiteId === 'string') {
+      revalidatePath(`/protected/sites/${revalidateSiteId}`);
+    } else if (typeof updatedSiteId === 'string') {
+      revalidatePath(`/protected/sites/${updatedSiteId}`);
+    }
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -232,7 +256,8 @@ export async function updateSubject(
 
 export async function deleteSubject(
   id: string,
-  studyId: string
+  studyId: string,
+  siteId?: string
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
 
@@ -245,6 +270,7 @@ export async function deleteSubject(
     if (error) return { error: error.message };
 
     revalidatePath(`/protected/studies/${studyId}`);
+    if (siteId) revalidatePath(`/protected/sites/${siteId}`);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };

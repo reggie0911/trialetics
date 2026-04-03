@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useCallback, useTransition, useMemo } from 'react';
+import { useState, useCallback, useTransition, useMemo, useSyncExternalStore, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Pencil,
   ArrowLeft,
-  Users as UsersIcon,
+  Users,
   Building2,
   Mail,
   Copy,
@@ -27,10 +27,17 @@ import { toast } from 'sonner';
 import type {
   StudySiteWithDetails,
   Study,
+  StudySite,
   FinanceInvoiceWithRelations,
-  SiteBudgetRow,
+  FinanceApprovalTemplateOption,
+  InvoiceBudgetLineAllocationRef,
+  SiteBudgetWithLineItems,
   PaymentScheduleWithSite,
+  SubjectWithSite,
+  EnrollmentFunnelData,
 } from '@/lib/types/ctms';
+import type { InstitutionRow } from '@/lib/types/directory';
+import type { QuickContactCatalogCategory } from '@/components/ctms/directory/quick-contact-form-fields';
 import { updateSite } from '@/lib/actions/sites';
 
 import { SiteActivationStepper } from './site-activation-stepper';
@@ -39,7 +46,18 @@ import { SiteMap, type DirectionsInfo } from './site-map';
 import { SiteWeather } from './site-weather';
 import { SiteTasksTable } from './site-tasks-table';
 import { SiteFinancialsPanel } from './site-financials-panel';
+import type { SiteBudgetStudyOption } from '@/components/ctms/financials/site-budget-from-study-dialog';
+import { SubjectsTab } from '@/components/ctms/subjects/subjects-tab';
 import type { TaskWithRelations } from '@/lib/types/tasks';
+
+const noOpSubscribe = () => () => {};
+
+const SITE_MAIN_TABS = new Set(['overview', 'contacts', 'tasks', 'subjects', 'financials']);
+
+/** Radix Tabs uses @radix-ui/react-id, which can disagree with React 19 SSR useId(); mount tabs only on the client. */
+function useIsClient() {
+  return useSyncExternalStore(noOpSubscribe, () => true, () => false);
+}
 
 function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
   return (
@@ -129,14 +147,24 @@ function TravelNotesCard({
 
 interface SiteDetailTabsProps {
   site: StudySiteWithDetails;
-  study: Pick<Study, 'id' | 'title' | 'protocol_number'>;
+  study: Pick<Study, 'id' | 'title' | 'protocol_number' | 'company_id'>;
   isAdmin: boolean;
   enrolledCount: number;
   siteTasks: TaskWithRelations[];
   directoryContactOptions?: { id: string; label: string }[];
-  siteBudget: SiteBudgetRow | null;
+  directoryCatalog: QuickContactCatalogCategory[];
+  institutionsForQuickContact: InstitutionRow[];
+  siteBudget: SiteBudgetWithLineItems | null;
+  studyBudgetName?: string | null;
+  budgetAllocations?: Record<string, number>;
+  invoiceAllocationRefsByLine?: Record<string, InvoiceBudgetLineAllocationRef[]>;
   siteFinanceInvoices: FinanceInvoiceWithRelations[];
   sitePaymentSchedules: PaymentScheduleWithSite[];
+  initialSiteSubjects: SubjectWithSite[];
+  siteFunnel: EnrollmentFunnelData;
+  studySitesForSubjects: Pick<StudySite, 'id' | 'site_number' | 'name'>[];
+  financeApprovalTemplateOptions: FinanceApprovalTemplateOption[];
+  studyBudgetOptions?: SiteBudgetStudyOption[];
 }
 
 export function SiteDetailTabs({
@@ -146,15 +174,33 @@ export function SiteDetailTabs({
   enrolledCount,
   siteTasks,
   directoryContactOptions = [],
+  directoryCatalog,
+  institutionsForQuickContact,
   siteBudget,
+  studyBudgetName,
+  budgetAllocations = {},
+  invoiceAllocationRefsByLine = {},
   siteFinanceInvoices,
   sitePaymentSchedules,
+  initialSiteSubjects,
+  siteFunnel,
+  studySitesForSubjects,
+  financeApprovalTemplateOptions,
+  studyBudgetOptions = [],
 }: SiteDetailTabsProps) {
+  const isClient = useIsClient();
+  const searchParams = useSearchParams();
+  const [mainTab, setMainTab] = useState('overview');
   const [emailCopied, setEmailCopied] = useState(false);
   const [siteCoords, setSiteCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [airportDirections, setAirportDirections] = useState<DirectionsInfo | null>(null);
   const [hotelDirections, setHotelDirections] = useState<DirectionsInfo | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t && SITE_MAIN_TABS.has(t)) setMainTab(t);
+  }, [searchParams]);
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return null;
@@ -234,19 +280,29 @@ export function SiteDetailTabs({
 
       <SiteActivationStepper currentStatus={site.status} />
 
-      <Tabs defaultValue="overview" className="space-y-4">
+      {!isClient ? (
+        <div className="space-y-4" aria-busy="true">
+          <div className="h-10 max-w-xl rounded-md bg-muted/50 animate-pulse" />
+          <div className="min-h-[280px] rounded-md border border-dashed border-border/60 bg-muted/20 animate-pulse" />
+        </div>
+      ) : (
+      <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">
             <Building2 className="mr-1 h-3.5 w-3.5" />
             Overview
           </TabsTrigger>
           <TabsTrigger value="contacts">
-            <UsersIcon className="mr-1 h-3.5 w-3.5" />
+            <Users className="mr-1 h-3.5 w-3.5" />
             Contacts ({site.site_contacts?.length ?? 0})
           </TabsTrigger>
           <TabsTrigger value="tasks">
             <ListTodo className="mr-1 h-3.5 w-3.5" />
             Tasks ({siteTasks.length})
+          </TabsTrigger>
+          <TabsTrigger value="subjects">
+            <Users className="mr-1 h-3.5 w-3.5" />
+            Subjects ({initialSiteSubjects.length})
           </TabsTrigger>
           <TabsTrigger value="financials">
             <DollarSign className="mr-1 h-3.5 w-3.5" />
@@ -290,7 +346,7 @@ export function SiteDetailTabs({
               </div>
               <span className="text-muted-foreground/40">&middot;</span>
               <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                <UsersIcon className="h-4 w-4 shrink-0" />
+                <Users className="h-4 w-4 shrink-0" />
                 <span>
                   <span className="font-medium text-foreground">{site.site_contacts?.length ?? 0}</span> contacts
                 </span>
@@ -415,10 +471,13 @@ export function SiteDetailTabs({
 
         <TabsContent value="contacts">
           <SiteContactsPanel
+            companyId={study.company_id}
             siteId={site.id}
             studyId={site.study_id}
             initialContacts={site.site_contacts ?? []}
             directoryContactOptions={directoryContactOptions}
+            directoryCatalog={directoryCatalog}
+            institutions={institutionsForQuickContact}
           />
         </TabsContent>
 
@@ -426,16 +485,40 @@ export function SiteDetailTabs({
           <SiteTasksTable tasks={siteTasks} onRefresh={() => router.refresh()} isAdmin={isAdmin} />
         </TabsContent>
 
+        <TabsContent value="subjects">
+          <SubjectsTab
+            studyId={site.study_id}
+            initialSubjects={initialSiteSubjects}
+            initialFunnel={siteFunnel}
+            sites={studySitesForSubjects}
+            siteScopeId={site.id}
+          />
+        </TabsContent>
+
         <TabsContent value="financials">
           <SiteFinancialsPanel
             studyId={study.id}
             siteId={site.id}
+            companyId={study.company_id}
+            siteLabel={site.name ?? (site.site_number != null ? `Site ${site.site_number}` : site.id)}
+            studyLabel={study.title ?? study.protocol_number ?? study.id}
             siteBudget={siteBudget}
+            studyBudgetName={studyBudgetName}
+            budgetAllocations={budgetAllocations}
+            invoiceAllocationRefsByLine={invoiceAllocationRefsByLine}
             invoices={siteFinanceInvoices}
             schedules={sitePaymentSchedules}
+            invoiceSites={[
+              { id: site.id, site_number: site.site_number, name: site.name },
+            ]}
+            financeApprovalTemplateOptions={financeApprovalTemplateOptions}
+            studyBudgetOptions={studyBudgetOptions}
+            initialFinancialsSubTab={searchParams.get('siteFinTab')}
+            highlightInvoiceId={searchParams.get('invoice')}
           />
         </TabsContent>
       </Tabs>
+      )}
     </div>
   );
 }
