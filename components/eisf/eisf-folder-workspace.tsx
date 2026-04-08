@@ -205,7 +205,7 @@ export function EisfFolderWorkspace({
   };
 
   return (
-    <Tabs defaultValue="documents" className="space-y-4">
+    <Tabs tabsId="eisf-folder" defaultValue="documents" className="space-y-4">
       <TabsList>
         <TabsTrigger value="documents" className="text-xs">
           Documents

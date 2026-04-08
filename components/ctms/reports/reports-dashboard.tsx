@@ -118,7 +118,7 @@ export function ReportsDashboard({ initialKris, initialReports, portfolio }: Rep
   const totalSites = portfolio.reduce((s, p) => s + p.totalSites, 0);
 
   return (
-    <Tabs defaultValue="portfolio" className="space-y-4">
+    <Tabs tabsId="reports-dashboard" defaultValue="portfolio" className="space-y-4">
       <TabsList>
         <TabsTrigger value="portfolio">
           <BarChart3 className="mr-1 h-3.5 w-3.5" />

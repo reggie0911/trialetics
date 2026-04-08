@@ -1,6 +1,8 @@
 import { NextRequest } from 'next/server';
-import { createClient } from '@/lib/server';
 import crypto from 'crypto';
+
+import { createClient } from '@/lib/server';
+import { spreadsheetBufferToPlainText } from '@/lib/utils/excel-spreadsheet';
 
 interface UploadedAttachment {
   id: string;
@@ -29,12 +31,9 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
 
 async function extractExcelText(buffer: Buffer): Promise<string> {
   try {
-    const XLSX = await import('xlsx');
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    if (!firstSheet) return '[Empty spreadsheet]';
-    const csv = XLSX.utils.sheet_to_csv(firstSheet);
-    return csv.slice(0, MAX_TEXT_LENGTH);
+    const text = await spreadsheetBufferToPlainText(buffer, { sheetMode: 'first', maxLength: MAX_TEXT_LENGTH });
+    if (!text.trim()) return '[Empty spreadsheet]';
+    return text;
   } catch {
     return '[Excel text extraction failed]';
   }

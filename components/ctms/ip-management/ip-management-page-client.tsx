@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, FileDown, Printer, Plus } from 'lucide-react';
+import { ChevronDown, FileDown, Loader2, Printer, Plus, Search } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -11,65 +12,86 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type { Study } from '@/lib/types/ctms';
-import type { IpCategory, IpInTransitLineRow, IpLogRow, IpStudyMetricRow } from '@/lib/types/ip-management';
+import type {
+  IpCategory,
+  IpInTransitLineRow,
+  IpItemSiteMetricRow,
+  IpLogRow,
+  IpOrderRow,
+  IpStudyMetricRow,
+} from '@/lib/types/ip-management';
 import { IP_CATEGORY_LABELS, IP_DISPOSITION_LABELS, type IpDisposition } from '@/lib/types/ip-management';
 import {
-  createIpItem,
   getIpDispositionTotals,
+  getIpInTransitLines,
   getIpLedgerRoster,
   getIpLogRows,
   getIpLotBreakdown,
-  getIpInTransitLines,
   getIpReconciliationFlags,
   getIpStudyMetrics,
-  ipDestroyAtSite,
-  ipDispense,
-  ipInitialGlobalReceipt,
-  ipReceiveAtSite,
-  ipReturnToGlobal,
-  ipShipToSite,
-  ipTransferSite,
-  ipVerifyLot,
+  getIpTransactionReportData,
 } from '@/lib/actions/ip-management';
 import { getStudySites } from '@/lib/actions/sites';
 import { getStudySubjects } from '@/lib/actions/subjects';
 import { IpSummaryTable } from '@/components/ctms/ip-management/ip-summary-table';
 import { IpSummaryCharts } from '@/components/ctms/ip-management/ip-summary-charts';
 import { IpLogsTable } from '@/components/ctms/ip-management/ip-logs-table';
+import { IpLogsVerifyInventoryDialog } from '@/components/ctms/ip-management/ip-logs-verify-inventory-dialog';
+import { IpUnverifyInventoryDialog } from '@/components/ctms/ip-management/ip-unverify-inventory-dialog';
+import { IpReceiveInventoryDialog } from '@/components/ctms/ip-management/ip-receive-inventory-dialog';
+import { IpUnreceiveInventoryDialog } from '@/components/ctms/ip-management/ip-unreceive-inventory-dialog';
+import { IpReturnToManufacturerDialog } from '@/components/ctms/ip-management/ip-return-to-manufacturer-dialog';
+import { IpTransferSiteDialog } from '@/components/ctms/ip-management/ip-transfer-site-dialog';
+import { IpDestroyQuantityDialog } from '@/components/ctms/ip-management/ip-destroy-quantity-dialog';
+import { IpChangeDispositionDialog } from '@/components/ctms/ip-management/ip-change-disposition-dialog';
 import { IpLogsCharts } from '@/components/ctms/ip-management/ip-logs-charts';
+import { IpAddInventoryDialog } from '@/components/ctms/ip-management/ip-add-inventory-dialog';
+import { IpAddSiteDialog } from '@/components/ctms/ip-management/ip-add-site-dialog';
+import { IpArchiveOrderDialog } from '@/components/ctms/ip-management/ip-archive-order-dialog';
+import { IpRestoreOrderDialog } from '@/components/ctms/ip-management/ip-restore-order-dialog';
+import { IpAddOrderDialog } from '@/components/ctms/ip-management/ip-add-order-dialog';
+import { IpEditOrderDialog } from '@/components/ctms/ip-management/ip-edit-order-dialog';
+import { IpEditInventoryDialog } from '@/components/ctms/ip-management/ip-edit-inventory-dialog';
+import { IpDeleteEquipmentDialog } from '@/components/ctms/ip-management/ip-delete-equipment-dialog';
+import { IpRestoreEquipmentDialog } from '@/components/ctms/ip-management/ip-restore-equipment-dialog';
+import { IpDeleteSiteDialog } from '@/components/ctms/ip-management/ip-delete-site-dialog';
+import { IpRestoreSiteDialog } from '@/components/ctms/ip-management/ip-restore-site-dialog';
+import { IpLotHistoryDialog } from '@/components/ctms/ip-management/ip-lot-history-dialog';
+import { IpOrderShippingDocumentsDialog } from '@/components/ctms/ip-management/ip-order-shipping-documents-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { downloadIpInventoryLogPdf } from '@/lib/utils/ip-inventory-pdf';
+import { downloadIpInventoryLogPdf, downloadIpTransactionReportPdf } from '@/lib/utils/ip-inventory-pdf';
+import { Input } from '@/components/ui/input';
+import { DocsHelpLink } from '@/components/docs/docs-help-link';
 import { cn } from '@/lib/utils';
+import { getIpInventoryUiContext } from '@/lib/utils/ip-inventory-ui-copy';
+import { ipLogRowToOrderRow } from '@/lib/utils/ip-log-row';
+import {
+  logRowToMovementContext,
+  orderToMovementContext,
+  type IpMovementLineContext,
+} from '@/lib/utils/ip-order-actions';
 
-const CATEGORY_FILTER_OPTIONS: { value: string; label: string }[] = [
-  { value: '__all__', label: 'All categories' },
-  ...(
-    Object.entries(IP_CATEGORY_LABELS) as [IpCategory, string][]
-  ).map(([value, label]) => ({ value, label })),
-];
+function asIpCategory(value: string): IpCategory | undefined {
+  return Object.prototype.hasOwnProperty.call(IP_CATEGORY_LABELS, value) ? (value as IpCategory) : undefined;
+}
+
+const CATEGORY_FILTER_OPTIONS: { value: string; label: string }[] = (
+  Object.entries(IP_CATEGORY_LABELS) as [IpCategory, string][]
+).map(([value, label]) => ({ value, label }));
 
 interface IpManagementPageClientProps {
   studies: Study[];
+  isIpAdmin: boolean;
 }
 
-export function IpManagementPageClient({ studies }: IpManagementPageClientProps) {
+export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageClientProps) {
   const { toast } = useToast();
-  const [studyId, setStudyId] = useState<string>('');
+  const [studyId, setStudyId] = useState<string>(() => studies[0]?.id ?? '');
   const [siteId, setSiteId] = useState<string>('__all_sites__');
-  const [category, setCategory] = useState<string>('__all__');
+  const [category, setCategory] = useState<string>('investigational_drug');
   const [tab, setTab] = useState<'summary' | 'logs'>('summary');
   const [metrics, setMetrics] = useState<IpStudyMetricRow[]>([]);
   const [breakdown, setBreakdown] = useState<Awaited<ReturnType<typeof getIpLotBreakdown>>>([]);
@@ -77,45 +99,75 @@ export function IpManagementPageClient({ studies }: IpManagementPageClientProps)
   const [dispTotals, setDispTotals] = useState<Awaited<ReturnType<typeof getIpDispositionTotals>>>([]);
   const [roster, setRoster] = useState<Awaited<ReturnType<typeof getIpLedgerRoster>>>([]);
   const [flags, setFlags] = useState<Awaited<ReturnType<typeof getIpReconciliationFlags>>>([]);
+  const [inTransitLines, setInTransitLines] = useState<IpInTransitLineRow[]>([]);
   const [sites, setSites] = useState<Awaited<ReturnType<typeof getStudySites>>>([]);
   const [loading, setLoading] = useState(false);
   const [metricsOpen, setMetricsOpen] = useState(true);
+  const [dispositionFilter, setDispositionFilter] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const [addItemOpen, setAddItemOpen] = useState(false);
-  const [receiptOpen, setReceiptOpen] = useState(false);
-  const [shipOpen, setShipOpen] = useState(false);
+  const [ordersRefreshNonce, setOrdersRefreshNonce] = useState(0);
+  const [siteLinksRefreshNonce, setSiteLinksRefreshNonce] = useState(0);
+  const [siteLinksItemId, setSiteLinksItemId] = useState<string | null>(null);
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyTarget, setVerifyTarget] = useState<IpLogRow | IpOrderRow | null>(null);
+  const [unverifyOpen, setUnverifyOpen] = useState(false);
+  const [unverifyTarget, setUnverifyTarget] = useState<IpLogRow | IpOrderRow | null>(null);
+  const [editInventoryOpen, setEditInventoryOpen] = useState(false);
+  const [editInventoryMetric, setEditInventoryMetric] = useState<IpStudyMetricRow | null>(null);
+  const [deleteEquipmentOpen, setDeleteEquipmentOpen] = useState(false);
+  const [deleteEquipmentMetric, setDeleteEquipmentMetric] = useState<IpStudyMetricRow | null>(null);
+  const [restoreEquipmentOpen, setRestoreEquipmentOpen] = useState(false);
+  const [restoreEquipmentMetric, setRestoreEquipmentMetric] = useState<IpStudyMetricRow | null>(null);
+  const [deleteSiteOpen, setDeleteSiteOpen] = useState(false);
+  const [deleteSiteCtx, setDeleteSiteCtx] = useState<{
+    item: IpStudyMetricRow;
+    site: IpItemSiteMetricRow;
+  } | null>(null);
+  const [restoreSiteOpen, setRestoreSiteOpen] = useState(false);
+  const [restoreSiteCtx, setRestoreSiteCtx] = useState<{
+    item: IpStudyMetricRow;
+    site: IpItemSiteMetricRow;
+  } | null>(null);
+  const [addInventoryOpen, setAddInventoryOpen] = useState(false);
+  const [addSiteOpen, setAddSiteOpen] = useState(false);
+  const [addSiteMetric, setAddSiteMetric] = useState<IpStudyMetricRow | null>(null);
+  const [movementLine, setMovementLine] = useState<IpMovementLineContext | null>(null);
   const [receiveOpen, setReceiveOpen] = useState(false);
-  const [dispenseOpen, setDispenseOpen] = useState(false);
-  const [returnOpen, setReturnOpen] = useState(false);
+  const [unreceiveOpen, setUnreceiveOpen] = useState(false);
+  const [returnMfrOpen, setReturnMfrOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [destroyOpen, setDestroyOpen] = useState(false);
+  const [changeDispOpen, setChangeDispOpen] = useState(false);
 
-  const [newItemName, setNewItemName] = useState('');
-  const [newItemCategory, setNewItemCategory] = useState<IpCategory>('study_supplies');
-  const [newItemUnit, setNewItemUnit] = useState('Each');
+  const [addOrderOpen, setAddOrderOpen] = useState(false);
+  const [addOrderCtx, setAddOrderCtx] = useState<{
+    metric: IpStudyMetricRow;
+    studySiteId: string;
+  } | null>(null);
+  const [editOrderOpen, setEditOrderOpen] = useState(false);
+  const [editOrderData, setEditOrderData] = useState<IpOrderRow | null>(null);
+  const [archiveOrderOpen, setArchiveOrderOpen] = useState(false);
+  const [archiveOrderData, setArchiveOrderData] = useState<IpOrderRow | null>(null);
+  const [restoreOrderOpen, setRestoreOrderOpen] = useState(false);
+  const [restoreOrderData, setRestoreOrderData] = useState<IpOrderRow | null>(null);
+  const [lotHistoryOpen, setLotHistoryOpen] = useState(false);
+  const [lotHistoryLotId, setLotHistoryLotId] = useState('');
+  const [lotHistoryTitle, setLotHistoryTitle] = useState<string | undefined>(undefined);
+  const [shippingDocsOpen, setShippingDocsOpen] = useState(false);
+  const [shippingDocsCtx, setShippingDocsCtx] = useState<{
+    studyId: string;
+    orderId: string;
+    contextLabel: string;
+    canUpload: boolean;
+  } | null>(null);
 
-  const [receiptItemId, setReceiptItemId] = useState('');
-  const [receiptQty, setReceiptQty] = useState('1');
-  const [receiptLot, setReceiptLot] = useState('');
-  const [receiptSerial, setReceiptSerial] = useState('');
-
-  const [shipLotId, setShipLotId] = useState('');
-  const [shipSiteId, setShipSiteId] = useState('');
-  const [shipQty, setShipQty] = useState('1');
-
-  const [inTransitLines, setInTransitLines] = useState<IpInTransitLineRow[]>([]);
-  const [receiveLineKey, setReceiveLineKey] = useState('');
-  const [receiveQty, setReceiveQty] = useState('1');
-
-  const [activeLogRow, setActiveLogRow] = useState<IpLogRow | null>(null);
-  const [dispenseQty, setDispenseQty] = useState('1');
-  const [dispenseSubjectId, setDispenseSubjectId] = useState('');
   const [subjects, setSubjects] = useState<Awaited<ReturnType<typeof getStudySubjects>>>([]);
 
-  const [moveQty, setMoveQty] = useState('1');
-  const [transferToSiteId, setTransferToSiteId] = useState('');
-
-  const categoryFilter = category === '__all__' ? null : (category as IpCategory);
+  const categoryFilter: IpCategory = asIpCategory(category) ?? 'investigational_drug';
+  const inventoryUiContext = useMemo(() => getIpInventoryUiContext(categoryFilter), [categoryFilter]);
+  /** Category filter always applies; new/edit catalog dialogs match it read-only. */
+  const pageCategoryFilterLocked = true;
   const siteFilter = siteId === '__all_sites__' ? null : siteId;
 
   const refresh = useCallback(async () => {
@@ -131,10 +183,21 @@ export function IpManagementPageClient({ studies }: IpManagementPageClientProps)
     }
     setLoading(true);
     try {
-      const [m, b, lr, dt, rs, fl, tr] = await Promise.all([
-        getIpStudyMetrics({ studyId, siteId: siteFilter, category: categoryFilter }),
+      const [m, b, lr, dt, rs, fl, transit] = await Promise.all([
+        getIpStudyMetrics({
+          studyId,
+          siteId: siteFilter,
+          category: categoryFilter,
+          includeArchived: false,
+        }),
         getIpLotBreakdown({ studyId, siteId: siteFilter, category: categoryFilter }),
-        getIpLogRows({ studyId, siteId: siteFilter, category: categoryFilter }),
+        getIpLogRows({
+          studyId,
+          siteId: siteFilter,
+          category: categoryFilter,
+          disposition: dispositionFilter,
+          includeArchivedOrders: false,
+        }),
         getIpDispositionTotals({ studyId, siteId: siteFilter, category: categoryFilter }),
         getIpLedgerRoster({ studyId, siteId: siteFilter, limit: 40 }),
         getIpReconciliationFlags({ studyId, siteId: siteFilter }),
@@ -146,17 +209,17 @@ export function IpManagementPageClient({ studies }: IpManagementPageClientProps)
       setDispTotals(dt);
       setRoster(rs);
       setFlags(fl);
-      setInTransitLines(tr);
+      setInTransitLines(transit);
     } catch (e) {
       toast({
-        title: 'Could not load investigational product data',
+        title: 'Could not load inventory management data',
         description: e instanceof Error ? e.message : 'Unknown error',
         variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
-  }, [studyId, siteFilter, categoryFilter, toast]);
+  }, [studyId, siteFilter, categoryFilter, dispositionFilter, toast]);
 
   useEffect(() => {
     void refresh();
@@ -182,6 +245,64 @@ export function IpManagementPageClient({ studies }: IpManagementPageClientProps)
     }
     return m;
   }, [dispTotals]);
+
+  const inTransitQtyByLotSite = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const line of inTransitLines) {
+      const k = `${line.lot_id}:${line.study_site_id}`;
+      map.set(k, (map.get(k) ?? 0) + line.qty_in_transit);
+    }
+    return map;
+  }, [inTransitLines]);
+
+  const kpiTotals = useMemo(() => {
+    const totalItems = metrics.length;
+    let inStock = 0;
+    let atSites = 0;
+    let available = 0;
+    for (const m of metrics) {
+      inStock += m.global_in_stock;
+      atSites += m.site_onsite;
+      available += m.site_available;
+    }
+    return { totalItems, inStock, atSites, available };
+  }, [metrics]);
+
+  const filteredMetrics = useMemo(() => {
+    if (!searchQuery.trim()) return metrics;
+    const q = searchQuery.toLowerCase();
+    return metrics.filter((m) => m.item_name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q));
+  }, [metrics, searchQuery]);
+
+  const filteredLogRows = useMemo(() => {
+    if (!searchQuery.trim()) return logRows;
+    const q = searchQuery.toLowerCase();
+    return logRows.filter(
+      (r) =>
+        r.item_name.toLowerCase().includes(q) ||
+        r.serial_number?.toLowerCase().includes(q) ||
+        r.lot_number?.toLowerCase().includes(q) ||
+        r.batch_number?.toLowerCase().includes(q) ||
+        r.site_name?.toLowerCase().includes(q) ||
+        r.order_reference?.toLowerCase().includes(q) ||
+        r.disposition.toLowerCase().includes(q)
+    );
+  }, [logRows, searchQuery]);
+
+  const subjectOptions = useMemo(
+    () => subjects.map((s) => ({ id: s.id, subject_number: s.subject_number })),
+    [subjects]
+  );
+
+  const siteTransferOptions = useMemo(
+    () => sites.map((s) => ({ id: s.id, site_number: s.site_number, name: s.name })),
+    [sites]
+  );
+
+  const afterMutation = useCallback(async () => {
+    await refresh();
+    setOrdersRefreshNonce((n) => n + 1);
+  }, [refresh]);
 
   const formatSiteLabel = useCallback(
     (studySiteId: string) => {
@@ -211,230 +332,271 @@ export function IpManagementPageClient({ studies }: IpManagementPageClientProps)
     }
   };
 
-  const openShipForLot = (lotId: string, sId: string) => {
-    setShipLotId(lotId);
-    setShipSiteId(sId);
-    setShipQty('1');
-    setShipOpen(true);
+  const openAddSite = (metric: IpStudyMetricRow) => {
+    setAddSiteMetric(metric);
+    setAddSiteOpen(true);
   };
 
-  const submitAddItem = async () => {
-    if (!studyId || !newItemName.trim()) return;
-    try {
-      await createIpItem({
-        studyId,
-        name: newItemName.trim(),
-        category: newItemCategory,
-        unit: newItemUnit.trim() || 'Each',
-      });
-      toast({ title: 'Item added' });
-      setAddItemOpen(false);
-      setNewItemName('');
-      await refresh();
-    } catch (e) {
-      toast({
-        title: 'Failed to add item',
-        description: e instanceof Error ? e.message : 'Error',
-        variant: 'destructive',
-      });
-    }
+  const openEditInventory = (metric: IpStudyMetricRow) => {
+    setEditInventoryMetric(metric);
+    setEditInventoryOpen(true);
   };
 
-  const submitReceipt = async () => {
-    if (!studyId || !receiptItemId || !receiptQty) return;
-    try {
-      await ipInitialGlobalReceipt({
-        studyId,
-        itemId: receiptItemId,
-        quantity: Math.max(1, parseInt(receiptQty, 10) || 1),
-        lotNumber: receiptLot.trim() || null,
-        serialNumber: receiptSerial.trim() || null,
-      });
-      toast({ title: 'Global receipt recorded' });
-      setReceiptOpen(false);
-      await refresh();
-    } catch (e) {
-      toast({
-        title: 'Receipt failed',
-        description: e instanceof Error ? e.message : 'Error',
-        variant: 'destructive',
-      });
-    }
+  const openDeleteEquipment = (metric: IpStudyMetricRow) => {
+    setDeleteEquipmentMetric(metric);
+    setDeleteEquipmentOpen(true);
   };
 
-  const submitShip = async () => {
-    if (!studyId || !shipLotId || !shipSiteId) return;
-    try {
-      await ipShipToSite({
-        studyId,
-        lotId: shipLotId,
-        studySiteId: shipSiteId,
-        quantity: Math.max(1, parseInt(shipQty, 10) || 1),
-      });
-      toast({
-        title: 'Shipment recorded',
-        description: 'Receive at the site when the delivery arrives to move stock into site inventory.',
-      });
-      setShipOpen(false);
-      await refresh();
-    } catch (e) {
-      toast({
-        title: 'Ship failed',
-        description: e instanceof Error ? e.message : 'Error',
-        variant: 'destructive',
-      });
-    }
+  const openRestoreEquipment = (metric: IpStudyMetricRow) => {
+    setRestoreEquipmentMetric(metric);
+    setRestoreEquipmentOpen(true);
   };
 
-  const selectedReceiveLine = useMemo(() => {
-    if (!receiveLineKey) return null;
-    return inTransitLines.find((l) => `${l.lot_id}::${l.study_site_id}` === receiveLineKey) ?? null;
-  }, [receiveLineKey, inTransitLines]);
-
-  const submitReceive = async () => {
-    if (!studyId || !selectedReceiveLine) return;
-    const q = Math.max(1, parseInt(receiveQty, 10) || 1);
-    if (q > selectedReceiveLine.qty_in_transit) {
-      toast({
-        title: 'Quantity too high',
-        description: `At most ${selectedReceiveLine.qty_in_transit} in transit for this line.`,
-        variant: 'destructive',
-      });
-      return;
-    }
-    try {
-      await ipReceiveAtSite({
-        studyId,
-        lotId: selectedReceiveLine.lot_id,
-        studySiteId: selectedReceiveLine.study_site_id,
-        quantity: q,
-      });
-      toast({ title: 'Receipt at site recorded' });
-      setReceiveOpen(false);
-      await refresh();
-    } catch (e) {
-      toast({
-        title: 'Receive failed',
-        description: e instanceof Error ? e.message : 'Error',
-        variant: 'destructive',
-      });
-    }
+  const openDeleteSite = (item: IpStudyMetricRow, site: IpItemSiteMetricRow) => {
+    setDeleteSiteCtx({ item, site });
+    setDeleteSiteOpen(true);
   };
 
-  const submitVerify = async (row: IpLogRow) => {
+  const openRestoreSite = (item: IpStudyMetricRow, site: IpItemSiteMetricRow) => {
+    setRestoreSiteCtx({ item, site });
+    setRestoreSiteOpen(true);
+  };
+
+  const siteMetricLabel = (site: IpItemSiteMetricRow) =>
+    site.site_number && site.site_name
+      ? `${site.site_number} — ${site.site_name}`
+      : site.site_name || 'Site';
+
+  const handleViewTransactions = async (itemId: string, studySiteId?: string) => {
     if (!studyId) return;
     try {
-      await ipVerifyLot({ studyId, lotId: row.lot_id, studySiteId: row.study_site_id });
-      toast({ title: 'Verification recorded' });
-      await refresh();
+      const data = await getIpTransactionReportData({ studyId, itemId, studySiteId });
+      await downloadIpTransactionReportPdf(data);
+      toast({ title: 'Transaction report downloaded' });
     } catch (e) {
       toast({
-        title: 'Verify failed',
+        title: 'Failed to generate report',
         description: e instanceof Error ? e.message : 'Error',
         variant: 'destructive',
       });
     }
   };
 
-  const submitDispense = async () => {
-    if (!studyId || !activeLogRow || !dispenseSubjectId) return;
-    try {
-      await ipDispense({
-        studyId,
-        lotId: activeLogRow.lot_id,
-        studySiteId: activeLogRow.study_site_id,
-        quantity: Math.max(1, parseInt(dispenseQty, 10) || 1),
-        subjectId: dispenseSubjectId,
-      });
-      toast({ title: 'Dispense recorded' });
-      setDispenseOpen(false);
-      setActiveLogRow(null);
-      await refresh();
-    } catch (e) {
-      toast({
-        title: 'Dispense failed',
-        description: e instanceof Error ? e.message : 'Error',
-        variant: 'destructive',
-      });
-    }
+  const openAddOrder = (metric: IpStudyMetricRow, studySiteId: string) => {
+    setAddOrderCtx({ metric, studySiteId });
+    setAddOrderOpen(true);
   };
 
-  const submitReturn = async () => {
-    if (!studyId || !activeLogRow) return;
-    try {
-      await ipReturnToGlobal({
-        studyId,
-        lotId: activeLogRow.lot_id,
-        studySiteId: activeLogRow.study_site_id,
-        quantity: Math.max(1, parseInt(moveQty, 10) || 1),
-      });
-      toast({ title: 'Return recorded' });
-      setReturnOpen(false);
-      setActiveLogRow(null);
-      await refresh();
-    } catch (e) {
-      toast({
-        title: 'Return failed',
-        description: e instanceof Error ? e.message : 'Error',
-        variant: 'destructive',
-      });
-    }
+  const openEditOrder = (order: IpOrderRow) => {
+    setEditOrderData(order);
+    setEditOrderOpen(true);
   };
 
-  const submitTransfer = async () => {
-    if (!studyId || !activeLogRow || !transferToSiteId) return;
-    try {
-      await ipTransferSite({
-        studyId,
-        lotId: activeLogRow.lot_id,
-        fromSiteId: activeLogRow.study_site_id,
-        toSiteId: transferToSiteId,
-        quantity: Math.max(1, parseInt(moveQty, 10) || 1),
-      });
-      toast({ title: 'Transfer recorded' });
-      setTransferOpen(false);
-      setActiveLogRow(null);
-      await refresh();
-    } catch (e) {
-      toast({
-        title: 'Transfer failed',
-        description: e instanceof Error ? e.message : 'Error',
-        variant: 'destructive',
-      });
-    }
+  const openShippingDocsFromOrder = (order: IpOrderRow) => {
+    if (!studyId) return;
+    setShippingDocsCtx({
+      studyId,
+      orderId: order.order_id,
+      contextLabel: order.order_reference?.trim() ? order.order_reference : order.item_name,
+      canUpload: !order.deleted_at,
+    });
+    setShippingDocsOpen(true);
   };
 
-  const submitDestroy = async () => {
-    if (!studyId || !activeLogRow) return;
-    try {
-      await ipDestroyAtSite({
-        studyId,
-        lotId: activeLogRow.lot_id,
-        studySiteId: activeLogRow.study_site_id,
-        quantity: Math.max(1, parseInt(moveQty, 10) || 1),
-      });
-      toast({ title: 'Destruction recorded' });
-      setDestroyOpen(false);
-      setActiveLogRow(null);
-      await refresh();
-    } catch (e) {
-      toast({
-        title: 'Destroy failed',
-        description: e instanceof Error ? e.message : 'Error',
-        variant: 'destructive',
-      });
-    }
+  const openShippingDocsFromLog = (row: IpLogRow) => {
+    if (!studyId || !row.order_id) return;
+    setShippingDocsCtx({
+      studyId,
+      orderId: row.order_id,
+      contextLabel: row.order_reference?.trim() ? row.order_reference : row.item_name,
+      canUpload: !row.order_deleted_at,
+    });
+    setShippingDocsOpen(true);
   };
+
+  const openArchiveOrder = (order: IpOrderRow) => {
+    if (!isIpAdmin) return;
+    setArchiveOrderData(order);
+    setArchiveOrderOpen(true);
+  };
+
+  const openRestoreOrder = (order: IpOrderRow) => {
+    if (!isIpAdmin) return;
+    setRestoreOrderData(order);
+    setRestoreOrderOpen(true);
+  };
+
+  const bumpOrdersCache = useCallback(async () => {
+    await refresh();
+    setOrdersRefreshNonce((n) => n + 1);
+  }, [refresh]);
+
+  const handleAddSiteSuccess = useCallback(
+    async ({ itemId }: { itemId: string }) => {
+      await refresh();
+      setSiteLinksItemId(itemId);
+      setSiteLinksRefreshNonce((n) => n + 1);
+    },
+    [refresh]
+  );
+
+  const openLotHistory = (lotId: string, label?: string) => {
+    setLotHistoryLotId(lotId);
+    setLotHistoryTitle(label ? `History — ${label}` : 'Transaction history');
+    setLotHistoryOpen(true);
+  };
+
+  const openVerifyFromOrder = (order: IpOrderRow) => {
+    setVerifyTarget(order);
+    setVerifyOpen(true);
+  };
+
+  const openVerifyFromLog = (row: IpLogRow) => {
+    setVerifyTarget(row);
+    setVerifyOpen(true);
+  };
+
+  const openUnverifyFromOrder = (order: IpOrderRow) => {
+    if (!isIpAdmin) {
+      toast({ title: 'Administrators only', variant: 'destructive' });
+      return;
+    }
+    setUnverifyTarget(order);
+    setUnverifyOpen(true);
+  };
+
+  const openUnverifyFromLog = (row: IpLogRow) => {
+    if (!isIpAdmin) {
+      toast({ title: 'Administrators only', variant: 'destructive' });
+      return;
+    }
+    setUnverifyTarget(row);
+    setUnverifyOpen(true);
+  };
+
+  const transitForLogRow = useCallback(
+    (row: IpLogRow) => inTransitQtyByLotSite.get(`${row.lot_id}:${row.study_site_id}`) ?? 0,
+    [inTransitQtyByLotSite]
+  );
+
+  const openReceiveFromOrder = (order: IpOrderRow) => {
+    setMovementLine(orderToMovementContext(studyId, order));
+    setReceiveOpen(true);
+  };
+
+  const openReceiveFromLog = (row: IpLogRow) => {
+    setMovementLine(logRowToMovementContext(studyId, row, transitForLogRow(row)));
+    setReceiveOpen(true);
+  };
+
+  const openUnreceiveFromOrder = (order: IpOrderRow) => {
+    if (!isIpAdmin) {
+      toast({ title: 'Administrators only', variant: 'destructive' });
+      return;
+    }
+    setMovementLine(orderToMovementContext(studyId, order));
+    setUnreceiveOpen(true);
+  };
+
+  const openUnreceiveFromLog = (row: IpLogRow) => {
+    if (!isIpAdmin) {
+      toast({ title: 'Administrators only', variant: 'destructive' });
+      return;
+    }
+    setMovementLine(logRowToMovementContext(studyId, row, transitForLogRow(row)));
+    setUnreceiveOpen(true);
+  };
+
+  const openReturnFromOrder = (order: IpOrderRow) => {
+    setMovementLine(orderToMovementContext(studyId, order));
+    setReturnMfrOpen(true);
+  };
+
+  const openReturnFromLog = (row: IpLogRow) => {
+    setMovementLine(logRowToMovementContext(studyId, row, transitForLogRow(row)));
+    setReturnMfrOpen(true);
+  };
+
+  const openTransferFromOrder = (order: IpOrderRow) => {
+    setMovementLine(orderToMovementContext(studyId, order));
+    setTransferOpen(true);
+  };
+
+  const openTransferFromLog = (row: IpLogRow) => {
+    setMovementLine(logRowToMovementContext(studyId, row, transitForLogRow(row)));
+    setTransferOpen(true);
+  };
+
+  const openDestroyFromOrder = (order: IpOrderRow) => {
+    setMovementLine(orderToMovementContext(studyId, order));
+    setDestroyOpen(true);
+  };
+
+  const openDestroyFromLog = (row: IpLogRow) => {
+    setMovementLine(logRowToMovementContext(studyId, row, transitForLogRow(row)));
+    setDestroyOpen(true);
+  };
+
+  const openChangeDispFromOrder = (order: IpOrderRow) => {
+    setMovementLine(orderToMovementContext(studyId, order));
+    setChangeDispOpen(true);
+  };
+
+  const openChangeDispFromLog = (row: IpLogRow) => {
+    setMovementLine(logRowToMovementContext(studyId, row, transitForLogRow(row)));
+    setChangeDispOpen(true);
+  };
+
+  const openViewOrderTransactions = (order: IpOrderRow) => {
+    void handleViewTransactions(order.item_id, order.study_site_id);
+  };
+
+  const openDeleteLogOrder = (row: IpLogRow) => {
+    if (!isIpAdmin) {
+      toast({ title: 'Administrators only', variant: 'destructive' });
+      return;
+    }
+    const o = ipLogRowToOrderRow(row);
+    if (!o) {
+      toast({ title: 'No order is linked to this line', variant: 'destructive' });
+      return;
+    }
+    setArchiveOrderData(o);
+    setArchiveOrderOpen(true);
+  };
+
+  const openRestoreLogOrder = (row: IpLogRow) => {
+    if (!isIpAdmin) {
+      toast({ title: 'Administrators only', variant: 'destructive' });
+      return;
+    }
+    const o = ipLogRowToOrderRow(row);
+    if (!o) return;
+    setRestoreOrderData(o);
+    setRestoreOrderOpen(true);
+  };
+
+  const logsCategoryFooterLabel = useMemo(
+    () => IP_CATEGORY_LABELS[categoryFilter],
+    [categoryFilter]
+  );
 
   return (
     <div className="p-6 space-y-6 print:p-4">
       <div className="flex flex-col gap-4 print:hidden">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Investigational product</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Inventory summary, site logs, and audit trail (ledger-backed).
-            </p>
+          <div className="flex items-start gap-2">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Inventory Management</h1>
+              <p className="text-muted-foreground mt-1 text-sm">
+                Inventory summary, site logs, and audit trail (ledger-backed).
+              </p>
+            </div>
+            <DocsHelpLink
+              slug="inventory-management"
+              section="6-site-logistics"
+              className="mt-1.5 shrink-0"
+            />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" size="icon" onClick={handlePrint} aria-label="Print">
@@ -456,7 +618,7 @@ export function IpManagementPageClient({ studies }: IpManagementPageClientProps)
         <div className="flex flex-wrap gap-3 items-end">
           <div className="min-w-[220px] space-y-1">
             <Label className="text-xs">Study</Label>
-            <Select value={studyId || undefined} onValueChange={(v) => setStudyId(v ?? '')}>
+            <Select value={studyId} onValueChange={(v) => setStudyId(v ?? '')}>
               <SelectTrigger className="text-[12px] h-9 min-w-[220px]">
                 <SelectValue
                   placeholder="Select a study"
@@ -506,9 +668,9 @@ export function IpManagementPageClient({ studies }: IpManagementPageClientProps)
             <Select value={category} onValueChange={setCategory} disabled={!studyId}>
               <SelectTrigger className="text-[12px] h-9 min-w-[160px]">
                 <SelectValue
-                  placeholder="All categories"
+                  placeholder="Category"
                   getDisplayLabel={(v) => {
-                    if (v == null || v === '' || v === '__all__') return 'All categories';
+                    if (v == null || v === '') return null;
                     const opt = CATEGORY_FILTER_OPTIONS.find((o) => o.value === v);
                     return opt?.label ?? null;
                   }}
@@ -529,90 +691,160 @@ export function IpManagementPageClient({ studies }: IpManagementPageClientProps)
       {!studyId ? (
         <Card className="print:hidden">
           <CardContent className="py-12 text-center text-muted-foreground">
-            Select a study to view investigational product inventory and logs.
+            Select a study to view inventory and logs.
           </CardContent>
         </Card>
       ) : (
         <>
+          {loading && (
+            <div className="flex items-center justify-center gap-2 py-8 print:hidden">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <span className="text-sm text-muted-foreground">Loading inventory data…</span>
+            </div>
+          )}
+
+          {!loading && metrics.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 print:hidden">
+              {([
+                { label: 'Total items', value: kpiTotals.totalItems },
+                { label: 'In stock (global)', value: kpiTotals.inStock },
+                { label: 'At sites', value: kpiTotals.atSites },
+                { label: 'Available (site)', value: kpiTotals.available },
+              ] as const).map((kpi) => (
+                <Card key={kpi.label}>
+                  <CardContent className="py-3 px-4">
+                    <p className="text-xs text-muted-foreground">{kpi.label}</p>
+                    <p className="text-xl font-semibold tabular-nums">{kpi.value}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
           <div className="hidden print:block border-b pb-3 mb-4">
-            <h1 className="text-xl font-semibold">Investigational product report</h1>
+            <h1 className="text-xl font-semibold">Inventory Management report</h1>
             <p className="text-sm text-muted-foreground">
               {study?.protocol_number} — {study?.title}
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-muted-foreground mt-1" suppressHydrationWarning>
               Printed {new Date().toLocaleString()}
             </p>
           </div>
 
-          <Tabs value={tab} onValueChange={(v) => setTab(v as 'summary' | 'logs')} className="space-y-4">
+          <Tabs
+            tabsId="ip-management"
+            value={tab}
+            onValueChange={(v: string) => setTab(v as 'summary' | 'logs')}
+            className="space-y-4"
+          >
             <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
               <TabsList>
                 <TabsTrigger value="summary">Inventory summary</TabsTrigger>
                 <TabsTrigger value="logs">Inventory logs</TabsTrigger>
               </TabsList>
+
+              <div className="flex items-center gap-2">
+                {tab === 'logs' && dispositionFilter && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDispositionFilter(null)}
+                  >
+                    Clear filter: {IP_DISPOSITION_LABELS[dispositionFilter as IpDisposition] ?? dispositionFilter}
+                  </Button>
+                )}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search inventory…"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-8 w-48 pl-8 text-xs"
+                  />
+                </div>
+              </div>
             </div>
 
             <TabsContent value="summary" className="space-y-4">
               <div className="flex flex-wrap justify-end gap-2 print:hidden">
                 <Button
                   type="button"
-                  onClick={() => {
-                    setReceiptItemId(metrics[0]?.item_id ?? '');
-                    setReceiptOpen(true);
-                  }}
-                  disabled={!studyId || metrics.length === 0}
+                  onClick={() => setAddInventoryOpen(true)}
+                  disabled={!studyId}
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Add inventory
                 </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={!studyId || inTransitLines.length === 0}
-                  onClick={() => {
-                    const first = inTransitLines[0];
-                    setReceiveLineKey(first ? `${first.lot_id}::${first.study_site_id}` : '');
-                    setReceiveQty(first ? String(first.qty_in_transit) : '1');
-                    setReceiveOpen(true);
-                  }}
-                >
-                  Receive at site
-                </Button>
-                <Button type="button" variant="secondary" onClick={() => setAddItemOpen(true)}>
-                  New catalog item
-                </Button>
               </div>
               <p className="text-center text-lg font-medium print:block hidden">Inventory summary</p>
-              <IpSummaryCharts metrics={metrics} />
-              <IpSummaryTable metrics={metrics} breakdown={breakdown} onShipLot={openShipForLot} />
+              <IpSummaryCharts metrics={filteredMetrics} uiContext={inventoryUiContext} />
+              <IpSummaryTable
+                studyId={studyId}
+                metrics={filteredMetrics}
+                uiContext={inventoryUiContext}
+                archivedView={false}
+                archivedSitesView={false}
+                showArchivedOrders={false}
+                ordersRefreshNonce={ordersRefreshNonce}
+                siteLinksRefreshNonce={siteLinksRefreshNonce}
+                siteLinksItemId={siteLinksItemId}
+                isIpAdmin={isIpAdmin}
+                onEditInventory={studyId ? openEditInventory : undefined}
+                onDeleteEquipment={studyId ? openDeleteEquipment : undefined}
+                onRestoreEquipment={undefined}
+                onAddSite={studyId ? openAddSite : undefined}
+                onViewTransactions={(itemId, siteId) => void handleViewTransactions(itemId, siteId)}
+                onViewOrderTransactions={
+                  studyId ? openViewOrderTransactions : undefined
+                }
+                onAddOrder={studyId ? openAddOrder : undefined}
+                onEditOrder={studyId ? openEditOrder : undefined}
+                onReceiveInventory={studyId ? openReceiveFromOrder : undefined}
+                onReverseReceipt={studyId && isIpAdmin ? openUnreceiveFromOrder : undefined}
+                onReturnToManufacturer={studyId ? openReturnFromOrder : undefined}
+                onTransferOrder={studyId ? openTransferFromOrder : undefined}
+                onDestroyOrderLine={studyId ? openDestroyFromOrder : undefined}
+                onChangeDisposition={
+                  studyId && isIpAdmin ? openChangeDispFromOrder : undefined
+                }
+                onDeleteOrder={
+                  studyId && isIpAdmin ? openArchiveOrder : undefined
+                }
+                onVerifyOrder={studyId ? openVerifyFromOrder : undefined}
+                onUnverifyOrder={studyId && isIpAdmin ? openUnverifyFromOrder : undefined}
+                onRestoreOrder={undefined}
+                onDeleteSite={studyId ? openDeleteSite : undefined}
+                onRestoreSite={undefined}
+                onViewLotHistory={studyId ? openLotHistory : undefined}
+                onShippingDocuments={studyId ? openShippingDocsFromOrder : undefined}
+              />
             </TabsContent>
 
             <TabsContent value="logs" className="space-y-4">
               <IpLogsTable
-                rows={logRows}
-                onVerify={(row) => void submitVerify(row)}
-                onDispense={(row) => {
-                  setActiveLogRow(row);
-                  setDispenseQty('1');
-                  setDispenseSubjectId('');
-                  setDispenseOpen(true);
-                }}
-                onReturn={(row) => {
-                  setActiveLogRow(row);
-                  setMoveQty('1');
-                  setReturnOpen(true);
-                }}
-                onTransfer={(row) => {
-                  setActiveLogRow(row);
-                  setMoveQty('1');
-                  setTransferToSiteId('');
-                  setTransferOpen(true);
-                }}
-                onDestroy={(row) => {
-                  setActiveLogRow(row);
-                  setMoveQty('1');
-                  setDestroyOpen(true);
-                }}
+                rows={filteredLogRows}
+                studyProtocolNumber={study?.protocol_number}
+                studyName={study?.title}
+                categoryFooterLabel={logsCategoryFooterLabel}
+                uiContext={inventoryUiContext}
+                isIpAdmin={isIpAdmin}
+                inTransitQtyByLotSite={inTransitQtyByLotSite}
+                onViewTransactions={(row) => void handleViewTransactions(row.item_id, row.study_site_id)}
+                onViewLotHistory={studyId ? openLotHistory : undefined}
+                onShippingDocuments={studyId ? openShippingDocsFromLog : undefined}
+                onVerifyInventory={studyId ? openVerifyFromLog : undefined}
+                onUnverifyInventory={studyId && isIpAdmin ? openUnverifyFromLog : undefined}
+                onDeleteOrder={studyId && isIpAdmin ? openDeleteLogOrder : undefined}
+                onRestoreOrder={studyId && isIpAdmin ? openRestoreLogOrder : undefined}
+                onReceiveInventory={studyId ? openReceiveFromLog : undefined}
+                onReverseReceipt={studyId && isIpAdmin ? openUnreceiveFromLog : undefined}
+                onReturnToManufacturer={studyId ? openReturnFromLog : undefined}
+                onTransfer={studyId ? openTransferFromLog : undefined}
+                onDestroy={studyId ? openDestroyFromLog : undefined}
+                onChangeDisposition={
+                  studyId && isIpAdmin ? openChangeDispFromLog : undefined
+                }
               />
 
               {flags.some((f) => f.flag_unverified_used || f.flag_quantity_mismatch) && (
@@ -658,8 +890,12 @@ export function IpManagementPageClient({ studies }: IpManagementPageClientProps)
                             <button
                               key={k}
                               type="button"
-                              className="underline-offset-2 hover:underline"
+                              className={cn(
+                                'underline-offset-2 hover:underline',
+                                dispositionFilter === k && 'underline font-semibold'
+                              )}
                               onClick={() => {
+                                setDispositionFilter(dispositionFilter === k ? null : k);
                                 setTab('logs');
                               }}
                             >
@@ -706,359 +942,272 @@ export function IpManagementPageClient({ studies }: IpManagementPageClientProps)
           </Tabs>
 
           <footer className="flex justify-between text-xs text-muted-foreground border-t pt-4 print:mt-8">
-            <span>Investigational product</span>
+            <span>Inventory Management</span>
             <span>Proprietary and confidential</span>
           </footer>
         </>
       )}
 
-      {loading && studyId ? (
-        <p className="text-sm text-muted-foreground print:hidden">Loading…</p>
-      ) : null}
+      <IpAddInventoryDialog
+        open={addInventoryOpen}
+        onOpenChange={setAddInventoryOpen}
+        studyId={studyId}
+        studyLabel={study ? `${study.protocol_number} — ${study.title}` : ''}
+        pageCategoryFilterLocked={pageCategoryFilterLocked}
+        categoryFilter={categoryFilter}
+        onSuccess={refresh}
+      />
 
-      <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>New catalog item</DialogTitle>
-            <DialogDescription>Defines what you track (drug, device, equipment, or supplies).</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Name</Label>
-              <Input className="text-[12px] h-9" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Category</Label>
-              <Select value={newItemCategory} onValueChange={(v) => setNewItemCategory(v as IpCategory)}>
-                <SelectTrigger className="text-[12px] h-9">
-                  <SelectValue
-                    placeholder="Select category"
-                    getDisplayLabel={(v) =>
-                      v ? (IP_CATEGORY_LABELS[v as IpCategory] ?? null) : null
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.entries(IP_CATEGORY_LABELS) as [IpCategory, string][]).map(([val, lab]) => (
-                    <SelectItem key={val} value={val} className="text-[12px]">
-                      {lab}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Unit</Label>
-              <Input className="text-[12px] h-9" value={newItemUnit} onChange={(e) => setNewItemUnit(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => setAddItemOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => void submitAddItem()}>
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <IpAddSiteDialog
+        open={addSiteOpen}
+        onOpenChange={(o) => {
+          setAddSiteOpen(o);
+          if (!o) setAddSiteMetric(null);
+        }}
+        studyId={studyId}
+        studyLabel={study ? `${study.protocol_number} — ${study.title}` : ''}
+        metric={addSiteMetric}
+        sites={sites}
+        onSuccess={handleAddSiteSuccess}
+      />
 
-      <Dialog open={receiptOpen} onOpenChange={setReceiptOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Receive into global pool</DialogTitle>
-            <DialogDescription>Adds quantity to central inventory for the selected catalog item.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Item</Label>
-              <Select value={receiptItemId} onValueChange={setReceiptItemId}>
-                <SelectTrigger className="text-[12px] h-9">
-                  <SelectValue
-                    placeholder="Select item"
-                    getDisplayLabel={(v) => {
-                      if (v == null || v === '') return null;
-                      const row = metrics.find((m) => m.item_id === v);
-                      return row?.item_name ?? null;
-                    }}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {metrics.map((m) => (
-                    <SelectItem key={m.item_id} value={m.item_id} className="text-[12px]">
-                      {m.item_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Quantity</Label>
-              <Input className="text-[12px] h-9" value={receiptQty} onChange={(e) => setReceiptQty(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Lot number (optional)</Label>
-              <Input className="text-[12px] h-9" value={receiptLot} onChange={(e) => setReceiptLot(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Serial (optional)</Label>
-              <Input className="text-[12px] h-9" value={receiptSerial} onChange={(e) => setReceiptSerial(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => setReceiptOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => void submitReceipt()}>
-              Record receipt
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {studyId && editInventoryMetric && (
+        <IpEditInventoryDialog
+          open={editInventoryOpen}
+          onOpenChange={(o) => {
+            setEditInventoryOpen(o);
+            if (!o) setEditInventoryMetric(null);
+          }}
+          studyId={studyId}
+          studyLabel={study ? `${study.protocol_number} — ${study.title}` : ''}
+          itemId={editInventoryMetric.item_id}
+          metric={editInventoryMetric}
+          pageCategoryFilterLocked={pageCategoryFilterLocked}
+          categoryFilter={categoryFilter}
+          onSuccess={refresh}
+        />
+      )}
 
-      <Dialog open={shipOpen} onOpenChange={setShipOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Ship to site</DialogTitle>
-            <DialogDescription>
-              Removes quantity from the global pool and records an in-transit shipment. Use “Receive at site” when the
-              delivery arrives to post stock to the site.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Destination site</Label>
-              <Select value={shipSiteId} onValueChange={setShipSiteId}>
-                <SelectTrigger className="text-[12px] h-9">
-                  <SelectValue
-                    placeholder="Select destination site"
-                    getDisplayLabel={(v) => {
-                      if (v == null || v === '') return null;
-                      const s = sites.find((x) => x.id === v);
-                      return s ? `${s.site_number} — ${s.name}` : null;
-                    }}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {sites.map((s) => (
-                    <SelectItem key={s.id} value={s.id} className="text-[12px]">
-                      {s.site_number} — {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Quantity</Label>
-              <Input className="text-[12px] h-9" value={shipQty} onChange={(e) => setShipQty(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => setShipOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => void submitShip()}>
-              Record shipment
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {studyId && deleteEquipmentMetric && (
+        <IpDeleteEquipmentDialog
+          open={deleteEquipmentOpen}
+          onOpenChange={(o) => {
+            setDeleteEquipmentOpen(o);
+            if (!o) setDeleteEquipmentMetric(null);
+          }}
+          studyId={studyId}
+          itemId={deleteEquipmentMetric.item_id}
+          itemName={deleteEquipmentMetric.item_name}
+          onSuccess={refresh}
+        />
+      )}
 
-      <Dialog open={receiveOpen} onOpenChange={setReceiveOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Receive at site</DialogTitle>
-            <DialogDescription>
-              Confirms delivery into site on-hand inventory and records a received-at-site event in the audit trail
-              (including site name and number).
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Shipment line</Label>
-              <Select
-                value={receiveLineKey || undefined}
-                onValueChange={(v) => {
-                  setReceiveLineKey(v);
-                  const line = inTransitLines.find((l) => `${l.lot_id}::${l.study_site_id}` === v);
-                  if (line) setReceiveQty(String(line.qty_in_transit));
-                }}
-              >
-                <SelectTrigger className="text-[12px] h-9">
-                  <SelectValue
-                    placeholder="Select shipment"
-                    getDisplayLabel={(v) => {
-                      if (v == null || v === '') return null;
-                      const line = inTransitLines.find((l) => `${l.lot_id}::${l.study_site_id}` === v);
-                      if (!line) return null;
-                      return `${line.item_name} · Lot ${line.lot_number ?? '—'}${
-                        line.serial_number ? ` · ${line.serial_number}` : ''
-                      } · ${formatSiteLabel(line.study_site_id)} · ${line.qty_in_transit} in transit`;
-                    }}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {inTransitLines.map((l) => (
-                    <SelectItem
-                      key={`${l.lot_id}-${l.study_site_id}`}
-                      value={`${l.lot_id}::${l.study_site_id}`}
-                      className="text-[12px]"
-                    >
-                      {l.item_name} · Lot {l.lot_number ?? '—'}
-                      {l.serial_number ? ` · ${l.serial_number}` : ''} · {formatSiteLabel(l.study_site_id)} ·{' '}
-                      {l.qty_in_transit} in transit
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Quantity to receive</Label>
-              <Input className="text-[12px] h-9" value={receiveQty} onChange={(e) => setReceiveQty(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => setReceiveOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" disabled={!selectedReceiveLine} onClick={() => void submitReceive()}>
-              Record receipt
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {studyId && restoreEquipmentMetric && (
+        <IpRestoreEquipmentDialog
+          open={restoreEquipmentOpen}
+          onOpenChange={(o) => {
+            setRestoreEquipmentOpen(o);
+            if (!o) setRestoreEquipmentMetric(null);
+          }}
+          studyId={studyId}
+          itemId={restoreEquipmentMetric.item_id}
+          itemName={restoreEquipmentMetric.item_name}
+          onSuccess={refresh}
+        />
+      )}
 
-      <Dialog open={dispenseOpen} onOpenChange={setDispenseOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Record dispense</DialogTitle>
-            <DialogDescription>Links usage to a subject; creates an immutable ledger entry with snapshots.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Quantity</Label>
-              <Input className="text-[12px] h-9" value={dispenseQty} onChange={(e) => setDispenseQty(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Subject</Label>
-              <Select value={dispenseSubjectId} onValueChange={setDispenseSubjectId}>
-                <SelectTrigger className="text-[12px] h-9">
-                  <SelectValue
-                    placeholder="Select subject"
-                    getDisplayLabel={(v) => {
-                      if (v == null || v === '') return null;
-                      const sub = subjects.find((s) => s.id === v);
-                      return sub ? `Subject ${sub.subject_number}` : null;
-                    }}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.map((s) => (
-                    <SelectItem key={s.id} value={s.id} className="text-[12px]">
-                      Subject {s.subject_number}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => setDispenseOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => void submitDispense()}>
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {studyId && deleteSiteCtx && (
+        <IpDeleteSiteDialog
+          open={deleteSiteOpen}
+          onOpenChange={(o) => {
+            setDeleteSiteOpen(o);
+            if (!o) setDeleteSiteCtx(null);
+          }}
+          studyId={studyId}
+          itemId={deleteSiteCtx.item.item_id}
+          studySiteId={deleteSiteCtx.site.study_site_id}
+          siteLabel={siteMetricLabel(deleteSiteCtx.site)}
+          initialOrderCount={deleteSiteCtx.site.order_count}
+          onSuccess={refresh}
+        />
+      )}
 
-      <Dialog open={returnOpen} onOpenChange={setReturnOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Return to global</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-1">
-            <Label className="text-xs">Quantity</Label>
-            <Input className="text-[12px] h-9" value={moveQty} onChange={(e) => setMoveQty(e.target.value)} />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => setReturnOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => void submitReturn()}>
-              Confirm
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {studyId && restoreSiteCtx && (
+        <IpRestoreSiteDialog
+          open={restoreSiteOpen}
+          onOpenChange={(o) => {
+            setRestoreSiteOpen(o);
+            if (!o) setRestoreSiteCtx(null);
+          }}
+          studyId={studyId}
+          itemId={restoreSiteCtx.item.item_id}
+          studySiteId={restoreSiteCtx.site.study_site_id}
+          siteLabel={siteMetricLabel(restoreSiteCtx.site)}
+          initialOrderCount={restoreSiteCtx.site.order_count}
+          onSuccess={refresh}
+        />
+      )}
 
-      <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Transfer to site</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Destination site</Label>
-              <Select value={transferToSiteId} onValueChange={setTransferToSiteId}>
-                <SelectTrigger className="text-[12px] h-9">
-                  <SelectValue
-                    placeholder="Select destination site"
-                    getDisplayLabel={(v) => {
-                      if (v == null || v === '') return null;
-                      const s = sites.find((x) => x.id === v);
-                      return s ? `${s.site_number} — ${s.name}` : null;
-                    }}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {sites
-                    .filter((s) => s.id !== activeLogRow?.study_site_id)
-                    .map((s) => (
-                      <SelectItem key={s.id} value={s.id} className="text-[12px]">
-                        {s.site_number} — {s.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Quantity</Label>
-              <Input className="text-[12px] h-9" value={moveQty} onChange={(e) => setMoveQty(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => setTransferOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => void submitTransfer()}>
-              Transfer
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {studyId && (
+        <IpLotHistoryDialog
+          open={lotHistoryOpen}
+          onOpenChange={setLotHistoryOpen}
+          studyId={studyId}
+          lotId={lotHistoryLotId}
+          title={lotHistoryTitle}
+        />
+      )}
 
-      <Dialog open={destroyOpen} onOpenChange={setDestroyOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Destroy quantity</DialogTitle>
-            <DialogDescription>Permanent removal at the selected site.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-1">
-            <Label className="text-xs">Quantity</Label>
-            <Input className="text-[12px] h-9" value={moveQty} onChange={(e) => setMoveQty(e.target.value)} />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={() => setDestroyOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" variant="destructive" onClick={() => void submitDestroy()}>
-              Destroy
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <IpReceiveInventoryDialog
+        open={receiveOpen}
+        onOpenChange={(o) => {
+          setReceiveOpen(o);
+          if (!o) setMovementLine(null);
+        }}
+        line={movementLine}
+        onSuccess={afterMutation}
+      />
+
+      <IpUnreceiveInventoryDialog
+        open={unreceiveOpen}
+        onOpenChange={(o) => {
+          setUnreceiveOpen(o);
+          if (!o) setMovementLine(null);
+        }}
+        line={movementLine}
+        onSuccess={afterMutation}
+      />
+
+      <IpReturnToManufacturerDialog
+        open={returnMfrOpen}
+        onOpenChange={(o) => {
+          setReturnMfrOpen(o);
+          if (!o) setMovementLine(null);
+        }}
+        line={movementLine}
+        onSuccess={afterMutation}
+      />
+
+      <IpTransferSiteDialog
+        open={transferOpen}
+        onOpenChange={(o) => {
+          setTransferOpen(o);
+          if (!o) setMovementLine(null);
+        }}
+        line={movementLine}
+        sites={siteTransferOptions}
+        onSuccess={afterMutation}
+      />
+
+      <IpDestroyQuantityDialog
+        open={destroyOpen}
+        onOpenChange={(o) => {
+          setDestroyOpen(o);
+          if (!o) setMovementLine(null);
+        }}
+        line={movementLine}
+        onSuccess={afterMutation}
+      />
+
+      <IpChangeDispositionDialog
+        open={changeDispOpen}
+        onOpenChange={(o) => {
+          setChangeDispOpen(o);
+          if (!o) setMovementLine(null);
+        }}
+        line={movementLine}
+        isIpAdmin={isIpAdmin}
+        subjects={subjectOptions}
+        onSuccess={afterMutation}
+      />
+
+      <IpAddOrderDialog
+        open={addOrderOpen}
+        onOpenChange={(o) => {
+          if (!o) setAddOrderCtx(null);
+          setAddOrderOpen(o);
+        }}
+        studyId={studyId}
+        itemId={addOrderCtx?.metric.item_id ?? ''}
+        studySiteId={addOrderCtx?.studySiteId ?? ''}
+        itemCategory={addOrderCtx ? asIpCategory(addOrderCtx.metric.category) : undefined}
+        catalogUnit={addOrderCtx?.metric.unit}
+        onSuccess={refresh}
+      />
+
+      <IpEditOrderDialog
+        open={editOrderOpen}
+        onOpenChange={(o) => {
+          setEditOrderOpen(o);
+          if (!o) setEditOrderData(null);
+        }}
+        order={editOrderData}
+        onSuccess={refresh}
+      />
+
+      <IpArchiveOrderDialog
+        open={archiveOrderOpen}
+        onOpenChange={(o) => {
+          setArchiveOrderOpen(o);
+          if (!o) setArchiveOrderData(null);
+        }}
+        siteLabel={archiveOrderData ? formatSiteLabel(archiveOrderData.study_site_id) : ''}
+        order={archiveOrderData}
+        onSuccess={() => void bumpOrdersCache()}
+      />
+
+      <IpRestoreOrderDialog
+        open={restoreOrderOpen}
+        onOpenChange={(o) => {
+          setRestoreOrderOpen(o);
+          if (!o) setRestoreOrderData(null);
+        }}
+        siteLabel={restoreOrderData ? formatSiteLabel(restoreOrderData.study_site_id) : ''}
+        order={restoreOrderData}
+        onSuccess={() => void bumpOrdersCache()}
+      />
+
+      <IpLogsVerifyInventoryDialog
+        open={verifyOpen}
+        onOpenChange={(o) => {
+          setVerifyOpen(o);
+          if (!o) setVerifyTarget(null);
+        }}
+        studyId={studyId}
+        target={verifyTarget}
+        onSuccess={async () => {
+          await bumpOrdersCache();
+        }}
+      />
+
+      <IpUnverifyInventoryDialog
+        open={unverifyOpen}
+        onOpenChange={(o) => {
+          setUnverifyOpen(o);
+          if (!o) setUnverifyTarget(null);
+        }}
+        studyId={studyId}
+        target={unverifyTarget}
+        onSuccess={async () => {
+          await bumpOrdersCache();
+        }}
+      />
+
+      {shippingDocsCtx && (
+        <IpOrderShippingDocumentsDialog
+          open={shippingDocsOpen}
+          onOpenChange={(o) => {
+            setShippingDocsOpen(o);
+            if (!o) setShippingDocsCtx(null);
+          }}
+          studyId={shippingDocsCtx.studyId}
+          orderId={shippingDocsCtx.orderId}
+          contextLabel={shippingDocsCtx.contextLabel}
+          canUpload={shippingDocsCtx.canUpload}
+          onSuccess={() => void bumpOrdersCache()}
+        />
+      )}
+
     </div>
   );
 }

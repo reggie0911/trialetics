@@ -96,7 +96,7 @@ export function SubjectDetailTabs({ subject: initialSubject, study, sites, isAdm
         </div>
       </div>
 
-      <Tabs defaultValue="overview" className="space-y-4">
+      <Tabs tabsId="subject-detail" defaultValue="overview" className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">
             <User className="mr-1 h-3.5 w-3.5" />

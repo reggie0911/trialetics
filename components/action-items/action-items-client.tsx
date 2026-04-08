@@ -75,7 +75,7 @@ export function ActionItemsClient({ companyId, profileId }: ActionItemsClientPro
       </div>
 
       <Card>
-        <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <Tabs tabsId="action-items" value={activeTab} onValueChange={handleTabChange}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <TabsList>
               <TabsTrigger value="all">All Items</TabsTrigger>

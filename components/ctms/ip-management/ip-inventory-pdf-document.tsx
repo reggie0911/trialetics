@@ -1,9 +1,18 @@
 'use client';
 
 import React from 'react';
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { Document, Font, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 import type { IpLogRow } from '@/lib/types/ip-management';
 import { IP_DISPOSITION_LABELS, type IpDisposition } from '@/lib/types/ip-management';
+import { labelContainerFillState } from '@/lib/utils/ip-container-fill-state';
+
+Font.register({
+  family: 'Poppins',
+  fonts: [
+    { src: 'https://fonts.gstatic.com/s/poppins/v21/pxiEyp8kv8JHgFVrFJA.ttf', fontWeight: 400 },
+    { src: 'https://fonts.gstatic.com/s/poppins/v21/pxiByp8kv8JHgFVrLCz7V1s.ttf', fontWeight: 700 },
+  ],
+});
 
 const styles = StyleSheet.create({
   page: {
@@ -11,7 +20,7 @@ const styles = StyleSheet.create({
     paddingBottom: 48,
     paddingHorizontal: 36,
     fontSize: 9,
-    fontFamily: 'Helvetica',
+    fontFamily: 'Poppins',
     color: '#111827',
   },
   header: {
@@ -47,7 +56,23 @@ const styles = StyleSheet.create({
     borderTopColor: '#e5e7eb',
     paddingTop: 6,
   },
+  cellLotSub: { fontSize: 7, color: '#6b7280', marginTop: 2 },
 });
+
+function drugContainerAccountabilityPdf(r: IpLogRow) {
+  if (r.category !== 'investigational_drug') return null;
+  const lines = [
+    { key: 'd', title: 'Dispense', label: labelContainerFillState(r.dispensed_container_fill_state) },
+    { key: 'r', title: 'Return', label: labelContainerFillState(r.returned_container_fill_state) },
+    { key: 'x', title: 'Destroy', label: labelContainerFillState(r.destroyed_container_fill_state) },
+  ];
+  if (!lines.some((x) => x.label)) return null;
+  return lines.map(({ key, title, label }) => (
+    <Text key={key} style={styles.cellLotSub}>
+      {title}: {label ?? '—'}
+    </Text>
+  ));
+}
 
 export interface IpInventoryPdfData {
   studyLabel: string;
@@ -89,9 +114,12 @@ export function IpInventoryPdfDocument({
           {chunk.map((r) => (
             <View key={r.location_id} style={styles.row} wrap={false}>
               <Text style={styles.cellItem}>{r.item_name}</Text>
-              <Text style={styles.cellLot}>
-                {r.lot_number ?? '—'} {r.serial_number ? `/ ${r.serial_number}` : ''}
-              </Text>
+              <View style={styles.cellLot}>
+                <Text>
+                  {r.lot_number ?? '—'} {r.serial_number ? `/ ${r.serial_number}` : ''}
+                </Text>
+                {drugContainerAccountabilityPdf(r)}
+              </View>
               <Text style={styles.cellSite}>
                 {r.site_number ? `${r.site_number} — ` : ''}
                 {r.site_name ?? ''}
@@ -103,7 +131,7 @@ export function IpInventoryPdfDocument({
             </View>
           ))}
           <View style={styles.footer} fixed>
-            <Text>Investigational product</Text>
+            <Text>Inventory management</Text>
             <Text>Proprietary and confidential</Text>
           </View>
         </Page>

@@ -188,6 +188,7 @@ export function StudyDetailTabs({
       </div>
 
       <Tabs
+        tabsId={`study-detail-${study.id}`}
         key={`${study.id}-${defaultTab}`}
         defaultValue={defaultTab}
         className="space-y-4"

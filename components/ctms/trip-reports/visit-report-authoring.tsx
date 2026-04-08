@@ -1268,7 +1268,7 @@ export function VisitReportAuthoring({
             </p>
           </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="print:hidden">
+          <Tabs tabsId="visit-report-authoring" value={activeTab} onValueChange={setActiveTab} className="print:hidden">
             <TabsList className="w-full flex-wrap h-auto gap-1 overflow-x-auto border-b rounded-none bg-transparent p-0">
               <TabsTrigger value="study" className="rounded-b-none">Study Info</TabsTrigger>
               <TabsTrigger value="site">Site Details</TabsTrigger>

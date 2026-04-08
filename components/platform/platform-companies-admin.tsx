@@ -307,7 +307,7 @@ export function PlatformCompaniesAdmin({
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={onTabChange} className="gap-0">
+      <Tabs tabsId="platform-companies" value={activeTab} onValueChange={onTabChange} className="gap-0">
         <TabsList className="w-full flex-wrap justify-start gap-1 rounded-lg border bg-muted/30 p-1 h-auto">
           <TabsTrigger value="companies" className="rounded-md data-[state=active]:border">
             Company access

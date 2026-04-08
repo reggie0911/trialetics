@@ -186,7 +186,7 @@ export function IrbTrackingClient({ companyId }: IrbTrackingClientProps) {
       )}
 
       <Card>
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs tabsId="irb-tracking" value={activeTab} onValueChange={setActiveTab}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <TabsList>
               <TabsTrigger value="submissions">Submissions</TabsTrigger>

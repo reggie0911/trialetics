@@ -83,8 +83,8 @@ const ctmsNavItems = [
   { label: 'Invoice approvals', href: '/protected/financials/approvals', icon: FilePenLine },
   { label: 'Reports', href: '/protected/reports', icon: BarChart3 },
   {
-    label: 'Investigational product',
-    href: '/protected/investigational-product',
+    label: 'Inventory management',
+    href: '/protected/inventory-management',
     icon: Package,
   },
 ];

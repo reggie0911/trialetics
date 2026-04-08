@@ -868,6 +868,7 @@ export function SiteFinancialsPanel({
 
       {/* Stable id scopes Radix tab ids (avoids SSR/client hydration mismatches). Default tab: configure budget before line items. */}
       <Tabs
+        tabsId={`site-financials-panel-${siteId}`}
         id={`site-financials-panel-${siteId}`}
         value={financialsSubTab}
         onValueChange={setFinancialsSubTab}

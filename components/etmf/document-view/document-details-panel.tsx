@@ -13,7 +13,7 @@ interface DocumentDetailsPanelProps {
 
 export function DocumentDetailsPanel({ document, auditLog }: DocumentDetailsPanelProps) {
   return (
-    <Tabs defaultValue="details" className="h-full flex flex-col">
+    <Tabs tabsId="document-details" defaultValue="details" className="h-full flex flex-col">
       <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0">
         <TabsTrigger
           value="details"

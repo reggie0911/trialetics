@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import OpenAI from 'openai';
 
 import { createClient } from '@/lib/server';
+import { spreadsheetBufferToPlainText } from '@/lib/utils/excel-spreadsheet';
 
 const MAX_TEXT_LENGTH = 16000;
 
@@ -64,16 +65,7 @@ async function extractPdfViaFilesApi(
 
 async function extractExcelText(buffer: Buffer): Promise<string> {
   try {
-    const XLSX = await import('xlsx');
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
-    const parts: string[] = [];
-    for (const name of workbook.SheetNames) {
-      const sheet = workbook.Sheets[name];
-      if (!sheet) continue;
-      parts.push(`--- Sheet: ${name} ---`);
-      parts.push(XLSX.utils.sheet_to_csv(sheet));
-    }
-    return parts.join('\n').slice(0, MAX_TEXT_LENGTH);
+    return await spreadsheetBufferToPlainText(buffer, { sheetMode: 'all', maxLength: MAX_TEXT_LENGTH });
   } catch {
     return '';
   }

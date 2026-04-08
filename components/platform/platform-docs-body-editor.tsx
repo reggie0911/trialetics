@@ -72,7 +72,7 @@ export function PlatformDocsBodyEditor({
   }
 
   return (
-    <Tabs defaultValue="write" className="grid gap-2">
+    <Tabs tabsId="platform-docs-editor" defaultValue="write" className="grid gap-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Label className="text-sm font-medium">Documentation</Label>
         <TabsList className="h-7">

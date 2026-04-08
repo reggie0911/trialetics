@@ -180,7 +180,7 @@ export function VisitList({ visits, studies }: VisitListProps) {
         )}
       </div>
 
-      <Tabs defaultValue="table">
+      <Tabs tabsId="visit-list" defaultValue="table">
         <TabsList>
           <TabsTrigger value="table">
             <TableProperties className="mr-1.5 h-4 w-4" />

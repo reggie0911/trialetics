@@ -329,7 +329,7 @@ export default function BlogClient({ posts }: BlogClientProps) {
       {/* Filter Controls */}
       <div className="mt-14 mb-10 flex flex-col justify-between gap-4 md:mt-16 lg:mt-20 lg:flex-row">
         <div className="w-full overflow-x-auto">
-          <Tabs value={selectedCategory} onValueChange={handleCategoryChange}>
+          <Tabs tabsId="blog" value={selectedCategory} onValueChange={handleCategoryChange}>
             <ScrollArea className="pb-2" orientation="horizontal">
               <TabsList className="">
                 {categories.map((category) => (

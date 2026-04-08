@@ -65,7 +65,7 @@ export function ProfileSettingsModal({ open, onOpenChange, onDataSaved }: Profil
           </div>
         )}
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs tabsId="profile-settings" value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1 p-1">
             <TabsTrigger value="personal" className="gap-1.5 text-xs sm:text-sm py-2 px-2">
               <User className="h-4 w-4 shrink-0" />

@@ -1,7 +1,7 @@
 'use server';
 
+import ExcelJS from 'exceljs';
 import { pdf, type DocumentProps } from '@react-pdf/renderer';
-import * as XLSX from 'xlsx';
 import React, { type ReactElement } from 'react';
 
 import { TimeExpenseDashboardPdfDocument } from '@/components/ctms/time-expenses/time-expense-dashboard-pdf-document';
@@ -11,39 +11,50 @@ import type { TimeExpenseDashboardFilters } from '@/lib/types/time-expense';
 /** Returns base64-encoded .xlsx for client download. */
 export async function exportTimeExpenseDashboardXlsx(filters: TimeExpenseDashboardFilters): Promise<string> {
   const data = await getTimeExpenseDashboardData(filters);
-  const wb = XLSX.utils.book_new();
+  const workbook = new ExcelJS.Workbook();
 
-  const hoursTime = XLSX.utils.json_to_sheet(
-    data.hoursOverTime.map((r) => ({ Month: r.bucket, Hours: r.hours })),
-  );
-  XLSX.utils.book_append_sheet(wb, hoursTime, 'Hours over time');
+  {
+    const ws = workbook.addWorksheet('Hours over time');
+    ws.addRow(['Month', 'Hours']);
+    for (const r of data.hoursOverTime) {
+      ws.addRow([r.bucket, r.hours]);
+    }
+  }
 
-  const hoursStudy = XLSX.utils.json_to_sheet(
-    data.hoursByStudy.map((r) => ({ Study: r.name, Hours: r.value })),
-  );
-  XLSX.utils.book_append_sheet(wb, hoursStudy, 'Hours by study');
+  {
+    const ws = workbook.addWorksheet('Hours by study');
+    ws.addRow(['Study', 'Hours']);
+    for (const r of data.hoursByStudy) {
+      ws.addRow([r.name, r.value]);
+    }
+  }
 
-  const hoursAct = XLSX.utils.json_to_sheet(
-    data.hoursByActivity.map((r) => ({ Activity: r.name, Hours: r.value })),
-  );
-  XLSX.utils.book_append_sheet(wb, hoursAct, 'Hours by activity');
+  {
+    const ws = workbook.addWorksheet('Hours by activity');
+    ws.addRow(['Activity', 'Hours']);
+    for (const r of data.hoursByActivity) {
+      ws.addRow([r.name, r.value]);
+    }
+  }
 
-  const expCat = XLSX.utils.json_to_sheet(
-    data.expensesByCategory.map((r) => ({ Category: r.name, Amount: r.value })),
-  );
-  XLSX.utils.book_append_sheet(wb, expCat, 'Expenses by category');
+  {
+    const ws = workbook.addWorksheet('Expenses by category');
+    ws.addRow(['Category', 'Amount']);
+    for (const r of data.expensesByCategory) {
+      ws.addRow([r.name, r.value]);
+    }
+  }
 
-  const pipeline = XLSX.utils.json_to_sheet(
-    data.pipeline.map((r) => ({
-      Status: r.status,
-      Timesheets: r.timesheets,
-      Expense_reports: r.expenses,
-    })),
-  );
-  XLSX.utils.book_append_sheet(wb, pipeline, 'Pipeline');
+  {
+    const ws = workbook.addWorksheet('Pipeline');
+    ws.addRow(['Status', 'Timesheets', 'Expense_reports']);
+    for (const r of data.pipeline) {
+      ws.addRow([r.status, r.timesheets, r.expenses]);
+    }
+  }
 
-  const out = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
-  return out;
+  const buf = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buf).toString('base64');
 }
 
 /** Returns base64-encoded PDF summary for client download. */

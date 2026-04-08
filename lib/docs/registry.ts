@@ -75,6 +75,19 @@ export const docsRegistry: DocEntry[] = [
     moduleRoute: '/protected',
   },
   {
+    slug: 'inventory-management',
+    title: 'Inventory Management',
+    description:
+      'Central and site inventory for drugs, devices, equipment, and supplies—ship, receive, dispense, verify, soft-archive orders, and audit with a ledger-backed trail and transaction-style logs.',
+    category: 'ctms',
+    iconKey: 'pill',
+    filePath: 'docs/user-manuals/inventory-management.md',
+    order: 2,
+    roles: ['admin', 'user'],
+    lastUpdated: '2026-04-05',
+    moduleRoute: '/protected/inventory-management',
+  },
+  {
     slug: 'ae-metrics',
     title: 'AE Metrics',
     description: 'Upload, view, and analyze adverse event data from clinical trials.',

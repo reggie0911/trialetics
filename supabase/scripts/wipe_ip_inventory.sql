@@ -1,0 +1,116 @@
+-- =============================================================================
+-- WIPE INVESTIGATIONAL PRODUCT (IP) DATA — DESTRUCTIVE
+-- =============================================================================
+--
+-- This script deletes ALL rows from the IP inventory tables:
+--   ip_order_documents, ip_ledger_entries, ip_lot_locations, ip_orders,
+--   ip_lots, ip_item_site_links, ip_items
+--
+-- It does NOT delete studies, study_sites, subjects, profiles. Storage objects in
+-- bucket ip-shipping-documents are not removed; see clear_inventory_management_data.sql SECTION C.
+-- Views (e.g. ip_v_log_rows) are not tables; they reflect base tables only.
+--
+-- ---------------------------------------------------------------------------
+-- HOW TO RUN (runbook)
+-- ---------------------------------------------------------------------------
+--
+-- 1) Supabase Dashboard → SQL Editor
+--    - Run as a role that bypasses RLS (e.g. postgres / service role context).
+--    - The anon key and normal authenticated users are blocked by RLS on IP
+--      tables and cannot delete all rows across companies.
+--
+-- 2) psql (local or direct Postgres URL)
+--      psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/scripts/wipe_ip_inventory.sql
+--    Use the database connection string (port 5432), not the PostgREST URL.
+--
+-- 3) Optional Node automation
+--    Pipe this file into pg or use the `pg` client with process.env.DATABASE_URL;
+--    do not use the Supabase JS client with anon key for a full wipe.
+--
+-- ---------------------------------------------------------------------------
+-- SAFETY
+-- ---------------------------------------------------------------------------
+--
+-- - Irreversible without a backup or point-in-time recovery.
+-- - Run on staging first. Comment out COMMIT or use ROLLBACK to dry-run when
+--   your client wraps the script in a transaction (see sections below).
+-- - Take a backup before using in production.
+--
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- Step 0 — Pre-check (run separately; inspect counts before wiping)
+-- -----------------------------------------------------------------------------
+-- SELECT 'ip_order_documents' AS tbl, COUNT(*)::bigint AS n FROM public.ip_order_documents
+-- UNION ALL SELECT 'ip_ledger_entries', COUNT(*) FROM public.ip_ledger_entries
+-- UNION ALL SELECT 'ip_lot_locations', COUNT(*) FROM public.ip_lot_locations
+-- UNION ALL SELECT 'ip_orders', COUNT(*) FROM public.ip_orders
+-- UNION ALL SELECT 'ip_lots', COUNT(*) FROM public.ip_lots
+-- UNION ALL SELECT 'ip_item_site_links', COUNT(*) FROM public.ip_item_site_links
+-- UNION ALL SELECT 'ip_items', COUNT(*) FROM public.ip_items
+-- ORDER BY tbl;
+
+-- =============================================================================
+-- SECTION A — Full wipe (all studies, all IP rows)
+-- =============================================================================
+-- Uncomment the entire block below to execute. On error, the transaction aborts.
+-- If your SQL client auto-commits each statement, prefer SECTION B (DO block).
+-- Default: everything below is commented so opening this file is safe.
+
+-- BEGIN;
+--
+-- DELETE FROM public.ip_order_documents;
+-- DELETE FROM public.ip_ledger_entries;
+-- DELETE FROM public.ip_lot_locations;
+-- DELETE FROM public.ip_orders;
+-- DELETE FROM public.ip_lots;
+-- DELETE FROM public.ip_item_site_links;
+-- DELETE FROM public.ip_items;
+--
+-- COMMIT;
+-- -- ROLLBACK;  -- use instead of COMMIT to abort after testing in some clients
+
+-- =============================================================================
+-- SECTION B — Study-scoped wipe (alternative to SECTION A; do not run both)
+-- =============================================================================
+-- Set v_study_id to your study UUID. Leave NULL to wipe everything (same as A).
+-- Run this block OR Section A, not both in one session without resetting.
+--
+-- DO $$
+-- DECLARE
+--   v_study_id uuid := NULL;
+--   -- v_study_id uuid := '00000000-0000-0000-0000-000000000000'::uuid;
+-- BEGIN
+--   IF v_study_id IS NULL THEN
+--     RAISE NOTICE 'Wiping ALL inventory management rows';
+--     DELETE FROM public.ip_order_documents;
+--     DELETE FROM public.ip_ledger_entries;
+--     DELETE FROM public.ip_lot_locations;
+--     DELETE FROM public.ip_orders;
+--     DELETE FROM public.ip_lots;
+--     DELETE FROM public.ip_item_site_links;
+--     DELETE FROM public.ip_items;
+--   ELSE
+--     RAISE NOTICE 'Wiping inventory management rows for study %', v_study_id;
+--     DELETE FROM public.ip_order_documents WHERE study_id = v_study_id;
+--     DELETE FROM public.ip_ledger_entries WHERE study_id = v_study_id;
+--     DELETE FROM public.ip_lot_locations WHERE study_id = v_study_id;
+--     DELETE FROM public.ip_orders WHERE study_id = v_study_id;
+--     DELETE FROM public.ip_lots
+--     WHERE item_id IN (SELECT id FROM public.ip_items WHERE study_id = v_study_id);
+--     DELETE FROM public.ip_item_site_links WHERE study_id = v_study_id;
+--     DELETE FROM public.ip_items WHERE study_id = v_study_id;
+--   END IF;
+-- END $$;
+
+-- -----------------------------------------------------------------------------
+-- Step 9 — Post-check (expect zeros for full wipe, or zero per table for study)
+-- -----------------------------------------------------------------------------
+-- SELECT 'ip_order_documents' AS tbl, COUNT(*)::bigint AS n FROM public.ip_order_documents
+-- UNION ALL SELECT 'ip_ledger_entries', COUNT(*) FROM public.ip_ledger_entries
+-- UNION ALL SELECT 'ip_lot_locations', COUNT(*) FROM public.ip_lot_locations
+-- UNION ALL SELECT 'ip_orders', COUNT(*) FROM public.ip_orders
+-- UNION ALL SELECT 'ip_lots', COUNT(*) FROM public.ip_lots
+-- UNION ALL SELECT 'ip_item_site_links', COUNT(*) FROM public.ip_item_site_links
+-- UNION ALL SELECT 'ip_items', COUNT(*) FROM public.ip_items
+-- ORDER BY tbl;

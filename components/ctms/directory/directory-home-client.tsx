@@ -207,7 +207,7 @@ export function DirectoryHomeClient({
         )}
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs tabsId="directory-home" value={tab} onValueChange={setTab}>
         <TabsList className="h-9">
           <TabsTrigger value="contacts" className="text-xs">
             Contacts

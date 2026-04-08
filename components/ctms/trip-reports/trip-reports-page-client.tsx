@@ -325,7 +325,7 @@ export function TripReportsPageClient({
           </p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs tabsId="trip-reports" value={activeTab} onValueChange={setActiveTab} className="w-full">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <TabsList className="h-9 flex-wrap">
               <TabsTrigger value="summary">Trip Report Summary</TabsTrigger>
