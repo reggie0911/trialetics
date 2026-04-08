@@ -1,0 +1,108 @@
+/**
+ * Sample inventory log rows for Storybook, tests, or UI prototypes.
+ *
+ * **Row granularity:** Each row maps to one `ip_lot_locations` site line (lot + site).
+ * When `quantity_on_hand` > 1, the line represents multiple units, not a single serialized device.
+ *
+ * **Order join:** The live `ip_v_log_rows` view picks at most one `ip_orders` row per lot+site:
+ * prefer `deleted_at IS NULL`, then latest `created_at`.
+ */
+import type { IpLogRow } from '@/lib/types/ip-management';
+
+const base = {
+  study_id: '00000000-0000-0000-0000-000000000001',
+  study_site_id: '00000000-0000-0000-0000-000000000002',
+  site_number: '101',
+  site_name: 'General Hospital',
+  item_id: '00000000-0000-0000-0000-000000000003',
+  item_name: 'Study Binder Kit',
+  category: 'study_supplies' as const,
+  unit: 'Each',
+  lot_id: '00000000-0000-0000-0000-000000000004',
+  expiry_date: null as string | null,
+  batch_number: null as string | null,
+  flag_unverified_used: false,
+  received_by_name: 'Sample User',
+  dispensed_by_name: null as string | null,
+  verified_by_name: null as string | null,
+  dispensed_container_fill_state: null as string | null,
+  returned_container_fill_state: null as string | null,
+  destroyed_container_fill_state: null as string | null,
+  notes: null as string | null,
+  order_reference: null as string | null,
+  order_status: null as string | null,
+};
+
+export const MOCK_IP_INVENTORY_LOG_ROWS: IpLogRow[] = [
+  {
+    ...base,
+    location_id: 'mock-loc-1',
+    serial_number: 'SN-1001',
+    lot_number: 'L-A1',
+    quantity_on_hand: 1,
+    quantity_available: 1,
+    disposition: 'available',
+    verified_at: null,
+    verified_by_profile_id: null,
+    dispensed_at: null,
+    dispensed_subject_number: null,
+    received_at: '2024-09-26T10:00:00.000Z',
+    order_id: '00000000-0000-0000-0000-000000000010',
+    order_deleted_at: null,
+  },
+  {
+    ...base,
+    location_id: 'mock-loc-2',
+    serial_number: 'SN-1002',
+    lot_number: 'L-A2',
+    quantity_on_hand: 1,
+    quantity_available: 0,
+    disposition: 'used',
+    verified_at: null,
+    verified_by_profile_id: null,
+    dispensed_at: '2024-10-01T12:00:00.000Z',
+    dispensed_subject_number: 'ABC-123456',
+    dispensed_by_name: 'Dispense User',
+    received_at: '2024-09-20T10:00:00.000Z',
+    order_id: '00000000-0000-0000-0000-000000000011',
+    order_deleted_at: null,
+    flag_unverified_used: true,
+  },
+  {
+    ...base,
+    location_id: 'mock-loc-3',
+    serial_number: 'SN-1003',
+    lot_number: 'L-A3',
+    quantity_on_hand: 0,
+    quantity_available: 0,
+    disposition: 'used',
+    verified_at: '2024-10-05T15:00:00.000Z',
+    verified_by_profile_id: '00000000-0000-0000-0000-000000000099',
+    verified_by_name: 'Verifier User',
+    dispensed_at: '2024-10-02T12:00:00.000Z',
+    dispensed_subject_number: 'ABC-999999',
+    dispensed_by_name: 'Dispense User',
+    received_at: '2024-09-15T10:00:00.000Z',
+    order_id: '00000000-0000-0000-0000-000000000012',
+    order_deleted_at: null,
+    notes: 'Annual calibration current.',
+  },
+  {
+    ...base,
+    location_id: 'mock-loc-4',
+    serial_number: 'SN-ARCH',
+    lot_number: 'L-ARC',
+    quantity_on_hand: 0,
+    quantity_available: 0,
+    disposition: 'available',
+    verified_at: null,
+    verified_by_profile_id: null,
+    dispensed_at: null,
+    dispensed_subject_number: null,
+    received_at: '2024-08-01T10:00:00.000Z',
+    order_id: '00000000-0000-0000-0000-000000000013',
+    order_deleted_at: '2024-11-01T10:00:00.000Z',
+    order_reference: 'PO-7788',
+    order_status: 'open',
+  },
+];

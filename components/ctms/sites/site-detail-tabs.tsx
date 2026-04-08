@@ -286,7 +286,7 @@ export function SiteDetailTabs({
           <div className="min-h-[280px] rounded-md border border-dashed border-border/60 bg-muted/20 animate-pulse" />
         </div>
       ) : (
-      <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-4">
+      <Tabs tabsId="site-detail" value={mainTab} onValueChange={setMainTab} className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">
             <Building2 className="mr-1 h-3.5 w-3.5" />

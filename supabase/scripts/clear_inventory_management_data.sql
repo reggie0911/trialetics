@@ -1,0 +1,121 @@
+-- =============================================================================
+-- CLEAR INVENTORY MANAGEMENT MODULE DATA (Supabase / Postgres)
+-- =============================================================================
+--
+-- Removes all rows from public tables used by the Inventory management UI:
+--   ip_order_documents   — shipping doc metadata (bucket: ip-shipping-documents)
+--   ip_ledger_entries    — audit ledger
+--   ip_lot_locations     — on-hand / disposition per lot × site
+--   ip_orders            — site orders
+--   ip_lots              — lot / serial lines
+--   ip_item_site_links   — item ↔ site associations
+--   ip_items             — catalog items per study
+--
+-- Does NOT delete: studies, study_sites, subjects, profiles, companies.
+-- Views (e.g. ip_v_log_rows) are not tables.
+--
+-- DELETE order respects foreign keys (children before parents).
+--
+-- ---------------------------------------------------------------------------
+-- HOW TO RUN
+-- ---------------------------------------------------------------------------
+-- • Supabase Dashboard → SQL Editor, as a role that bypasses RLS (postgres /
+--   service role). Anon/authenticated keys cannot wipe all tenant rows.
+-- • psql:
+--     psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/scripts/clear_inventory_management_data.sql
+--   Use the Postgres connection (port 5432), not the PostgREST URL.
+--
+-- ---------------------------------------------------------------------------
+-- STORAGE (optional)
+-- ---------------------------------------------------------------------------
+-- Deleting ip_order_documents rows does not remove objects from Storage.
+-- After the data wipe, run SECTION C only if you also want to empty the
+-- private bucket `ip-shipping-documents`.
+--
+-- ---------------------------------------------------------------------------
+-- SAFETY
+-- ---------------------------------------------------------------------------
+-- Irreversible without backup or PITR. Test on staging first.
+--
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- Pre-check (run alone; inspect counts)
+-- -----------------------------------------------------------------------------
+-- SELECT 'ip_order_documents' AS tbl, COUNT(*)::bigint AS n FROM public.ip_order_documents
+-- UNION ALL SELECT 'ip_ledger_entries', COUNT(*) FROM public.ip_ledger_entries
+-- UNION ALL SELECT 'ip_lot_locations', COUNT(*) FROM public.ip_lot_locations
+-- UNION ALL SELECT 'ip_orders', COUNT(*) FROM public.ip_orders
+-- UNION ALL SELECT 'ip_lots', COUNT(*) FROM public.ip_lots
+-- UNION ALL SELECT 'ip_item_site_links', COUNT(*) FROM public.ip_item_site_links
+-- UNION ALL SELECT 'ip_items', COUNT(*) FROM public.ip_items
+-- ORDER BY tbl;
+
+-- =============================================================================
+-- SECTION A — Full wipe (all studies)
+-- =============================================================================
+-- Uncomment to execute.
+
+-- BEGIN;
+--
+-- DELETE FROM public.ip_order_documents;
+-- DELETE FROM public.ip_ledger_entries;
+-- DELETE FROM public.ip_lot_locations;
+-- DELETE FROM public.ip_orders;
+-- DELETE FROM public.ip_lots;
+-- DELETE FROM public.ip_item_site_links;
+-- DELETE FROM public.ip_items;
+--
+-- COMMIT;
+-- -- ROLLBACK;
+
+-- =============================================================================
+-- SECTION B — Study-scoped wipe (set v_study_id or NULL for same as Section A)
+-- =============================================================================
+
+-- DO $$
+-- DECLARE
+--   v_study_id uuid := NULL;
+--   -- v_study_id uuid := 'YOUR-STUDY-UUID-HERE'::uuid;
+-- BEGIN
+--   IF v_study_id IS NULL THEN
+--     RAISE NOTICE 'Clearing ALL inventory management rows';
+--     DELETE FROM public.ip_order_documents;
+--     DELETE FROM public.ip_ledger_entries;
+--     DELETE FROM public.ip_lot_locations;
+--     DELETE FROM public.ip_orders;
+--     DELETE FROM public.ip_lots;
+--     DELETE FROM public.ip_item_site_links;
+--     DELETE FROM public.ip_items;
+--   ELSE
+--     RAISE NOTICE 'Clearing inventory management rows for study %', v_study_id;
+--     DELETE FROM public.ip_order_documents WHERE study_id = v_study_id;
+--     DELETE FROM public.ip_ledger_entries WHERE study_id = v_study_id;
+--     DELETE FROM public.ip_lot_locations WHERE study_id = v_study_id;
+--     DELETE FROM public.ip_orders WHERE study_id = v_study_id;
+--     DELETE FROM public.ip_lots
+--     WHERE item_id IN (SELECT id FROM public.ip_items WHERE study_id = v_study_id);
+--     DELETE FROM public.ip_item_site_links WHERE study_id = v_study_id;
+--     DELETE FROM public.ip_items WHERE study_id = v_study_id;
+--   END IF;
+-- END $$;
+
+-- =============================================================================
+-- SECTION C — Optional: remove all objects in ip-shipping-documents bucket
+-- =============================================================================
+-- Run only after SECTION A or B if you want Storage emptied too.
+-- Requires sufficient privileges on storage.objects.
+
+-- DELETE FROM storage.objects WHERE bucket_id = 'ip-shipping-documents';
+
+-- -----------------------------------------------------------------------------
+-- Post-check (expect zeros after full wipe)
+-- -----------------------------------------------------------------------------
+-- SELECT 'ip_order_documents' AS tbl, COUNT(*)::bigint AS n FROM public.ip_order_documents
+-- UNION ALL SELECT 'ip_ledger_entries', COUNT(*) FROM public.ip_ledger_entries
+-- UNION ALL SELECT 'ip_lot_locations', COUNT(*) FROM public.ip_lot_locations
+-- UNION ALL SELECT 'ip_orders', COUNT(*) FROM public.ip_orders
+-- UNION ALL SELECT 'ip_lots', COUNT(*) FROM public.ip_lots
+-- UNION ALL SELECT 'ip_item_site_links', COUNT(*) FROM public.ip_item_site_links
+-- UNION ALL SELECT 'ip_items', COUNT(*) FROM public.ip_items
+-- ORDER BY tbl;

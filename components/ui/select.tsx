@@ -11,9 +11,15 @@ interface SelectProps extends Omit<React.ComponentProps<typeof SelectPrimitive.R
 }
 
 /** For Base UI Select, pass `items` (value + label) so the trigger shows labels while the list portal is closed. */
-function Select({ onValueChange, ...props }: SelectProps) {
+function Select({ onValueChange, value, defaultValue, ...props }: SelectProps) {
+  // Normalise so the component is always controlled when `value` is provided.
+  // Passing `undefined` makes Base UI treat it as uncontrolled, causing React
+  // warnings when state is later set to a real string.
+  const resolvedValue = value === undefined ? undefined : (value ?? '');
   return (
     <SelectPrimitive.Root
+      value={resolvedValue}
+      defaultValue={defaultValue}
       onValueChange={onValueChange ? (value: unknown) => {
         if (value != null) onValueChange(String(value));
       } : undefined}

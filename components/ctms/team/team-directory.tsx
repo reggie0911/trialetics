@@ -292,7 +292,7 @@ export function TeamDirectory({ members: initialMembers, studies, teamRoles, pen
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="members" className="space-y-4">
+      <Tabs tabsId="team-directory" defaultValue="members" className="space-y-4">
         <div className="flex items-center justify-between gap-4 border-b border-border">
           <TabsList className="h-auto border-0 p-0">
             <TabsTrigger value="members">Team Members</TabsTrigger>

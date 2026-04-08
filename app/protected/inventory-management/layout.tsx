@@ -1,6 +1,6 @@
 import { requireCtmsAccess } from '@/lib/server/require-ctms-access';
 
-export default async function InvestigationalProductLayout({
+export default async function InventoryManagementLayout({
   children,
 }: {
   children: React.ReactNode;

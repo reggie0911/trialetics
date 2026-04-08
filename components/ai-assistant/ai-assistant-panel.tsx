@@ -52,7 +52,7 @@ export function AIAssistantPanel({ open, onOpenChange }: AIAssistantPanelProps) 
         className="w-full max-w-[480px] p-0 flex flex-col"
         showCloseButton={true}
       >
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+        <Tabs tabsId="ai-assistant" value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
           <TabsList className="mx-4 mt-3 shrink-0">
             <TabsTrigger value="chat">Chat</TabsTrigger>
             <TabsTrigger value="voice">Voice</TabsTrigger>

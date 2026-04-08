@@ -2659,6 +2659,7 @@ export type Database = {
         Row: {
           category: string
           created_at: string
+          deleted_at: string | null
           id: string
           metadata: Json
           name: string
@@ -2670,6 +2671,7 @@ export type Database = {
         Insert: {
           category: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           metadata?: Json
           name: string
@@ -2681,6 +2683,7 @@ export type Database = {
         Update: {
           category?: string
           created_at?: string
+          deleted_at?: string | null
           id?: string
           metadata?: Json
           name?: string
@@ -2695,6 +2698,55 @@ export type Database = {
             columns: ["study_id"]
             isOneToOne: false
             referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ip_item_site_links: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          id: string
+          item_id: string
+          study_id: string
+          study_site_id: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          item_id: string
+          study_id: string
+          study_site_id: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          item_id?: string
+          study_id?: string
+          study_site_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ip_item_site_links_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "ip_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ip_item_site_links_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ip_item_site_links_study_site_id_fkey"
+            columns: ["study_site_id"]
+            isOneToOne: false
+            referencedRelation: "study_sites"
             referencedColumns: ["id"]
           },
         ]
@@ -2815,6 +2867,7 @@ export type Database = {
           disposition: string
           id: string
           lot_id: string
+          notes: string | null
           quantity_available: number
           quantity_on_hand: number
           study_id: string
@@ -2827,6 +2880,7 @@ export type Database = {
           disposition?: string
           id?: string
           lot_id: string
+          notes?: string | null
           quantity_available?: number
           quantity_on_hand?: number
           study_id: string
@@ -2839,6 +2893,7 @@ export type Database = {
           disposition?: string
           id?: string
           lot_id?: string
+          notes?: string | null
           quantity_available?: number
           quantity_on_hand?: number
           study_id?: string
@@ -2891,6 +2946,7 @@ export type Database = {
           created_at: string
           expiry_date: string | null
           id: string
+          inventory_trace_id: string | null
           item_id: string
           lot_number: string | null
           serial_number: string | null
@@ -2901,6 +2957,7 @@ export type Database = {
           created_at?: string
           expiry_date?: string | null
           id?: string
+          inventory_trace_id?: string | null
           item_id: string
           lot_number?: string | null
           serial_number?: string | null
@@ -2911,6 +2968,7 @@ export type Database = {
           created_at?: string
           expiry_date?: string | null
           id?: string
+          inventory_trace_id?: string | null
           item_id?: string
           lot_number?: string | null
           serial_number?: string | null
@@ -2933,10 +2991,75 @@ export type Database = {
           },
         ]
       }
+      ip_order_documents: {
+        Row: {
+          content_type: string
+          created_at: string
+          doc_kind: string
+          id: string
+          label: string | null
+          order_id: string
+          original_filename: string
+          storage_object_path: string
+          study_id: string
+          uploaded_by_profile_id: string
+        }
+        Insert: {
+          content_type?: string
+          created_at?: string
+          doc_kind?: string
+          id?: string
+          label?: string | null
+          order_id: string
+          original_filename?: string
+          storage_object_path: string
+          study_id: string
+          uploaded_by_profile_id: string
+        }
+        Update: {
+          content_type?: string
+          created_at?: string
+          doc_kind?: string
+          id?: string
+          label?: string | null
+          order_id?: string
+          original_filename?: string
+          storage_object_path?: string
+          study_id?: string
+          uploaded_by_profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'ip_order_documents_order_id_fkey'
+            columns: ['order_id']
+            isOneToOne: false
+            referencedRelation: 'ip_orders'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'ip_order_documents_study_id_fkey'
+            columns: ['study_id']
+            isOneToOne: false
+            referencedRelation: 'studies'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'ip_order_documents_uploaded_by_profile_id_fkey'
+            columns: ['uploaded_by_profile_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       ip_orders: {
         Row: {
           created_at: string
+          deleted_at: string | null
           id: string
+          inventory_trace_id: string | null
+          item_id: string | null
+          lot_id: string | null
           order_reference: string
           status: string
           study_id: string
@@ -2945,7 +3068,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          deleted_at?: string | null
           id?: string
+          inventory_trace_id?: string | null
+          item_id?: string | null
+          lot_id?: string | null
           order_reference?: string
           status?: string
           study_id: string
@@ -2954,7 +3081,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          deleted_at?: string | null
           id?: string
+          inventory_trace_id?: string | null
+          item_id?: string | null
+          lot_id?: string | null
           order_reference?: string
           status?: string
           study_id?: string
@@ -2974,6 +3105,20 @@ export type Database = {
             columns: ["study_site_id"]
             isOneToOne: false
             referencedRelation: "study_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ip_orders_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "ip_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ip_orders_lot_id_fkey"
+            columns: ["lot_id"]
+            isOneToOne: false
+            referencedRelation: "ip_lots"
             referencedColumns: ["id"]
           },
         ]
@@ -6278,14 +6423,27 @@ export type Database = {
           batch_number: string | null
           category: string | null
           disposition: string | null
+          dispensed_at: string | null
+          dispensed_by_name: string | null
+          dispensed_container_fill_state: string | null
+          dispensed_subject_number: string | null
+          destroyed_container_fill_state: string | null
           flag_unverified_used: boolean | null
           item_id: string | null
           item_name: string | null
           location_id: string | null
           lot_id: string | null
           lot_number: string | null
+          notes: string | null
+          order_deleted_at: string | null
+          order_id: string | null
+          order_reference: string | null
+          order_status: string | null
           quantity_available: number | null
           quantity_on_hand: number | null
+          received_at: string | null
+          received_by_name: string | null
+          returned_container_fill_state: string | null
           serial_number: string | null
           site_name: string | null
           site_number: string | null
@@ -6293,6 +6451,7 @@ export type Database = {
           study_site_id: string | null
           unit: string | null
           verified_at: string | null
+          verified_by_name: string | null
           verified_by_profile_id: string | null
         }
         Relationships: [
@@ -6512,6 +6671,16 @@ export type Database = {
         }[]
       }
       ip_assert_study_company: { Args: { p_study_id: string }; Returns: string }
+      ip_correct_site_lot_serial: {
+        Args: {
+          p_lot_id: string
+          p_reason?: string
+          p_serial_number: string
+          p_study_id: string
+          p_study_site_id: string
+        }
+        Returns: undefined
+      }
       ip_create_item: {
         Args: {
           p_category: string
@@ -6524,7 +6693,9 @@ export type Database = {
       }
       ip_destroy_at_site: {
         Args: {
+          p_container_fill_state?: string | null
           p_lot_id: string
+          p_notes?: string | null
           p_quantity: number
           p_study_id: string
           p_study_site_id: string
@@ -6533,21 +6704,83 @@ export type Database = {
       }
       ip_dispense: {
         Args: {
+          p_container_fill_state?: string | null
           p_lot_id: string
           p_quantity: number
           p_study_id: string
           p_study_site_id: string
-          p_subject_id: string
+          p_subject_id?: string | null
+          p_subject_number_free_text?: string | null
         }
         Returns: undefined
+      }
+      ip_ensure_site_lot_receipt_mirror_if_missing: {
+        Args: {
+          p_lot_id: string
+          p_study_id: string
+          p_study_site_id: string
+        }
+        Returns: boolean
+      }
+      ip_admin_reset_site_line_to_available: {
+        Args: {
+          p_lot_id: string
+          p_reason?: string | null
+          p_study_id: string
+          p_study_site_id: string
+        }
+        Returns: undefined
+      }
+      ip_admin_unverify_inventory_at_site: {
+        Args: {
+          p_lot_id: string
+          p_reason?: string | null
+          p_study_id: string
+          p_study_site_id: string
+        }
+        Returns: undefined
+      }
+      ip_archive_item: {
+        Args: { p_item_id: string }
+        Returns: undefined
+      }
+      ip_archive_item_site_link: {
+        Args: { p_item_id: string; p_study_id: string; p_study_site_id: string }
+        Returns: undefined
+      }
+      ip_get_item_site_metrics: {
+        Args: {
+          p_include_archived?: boolean
+          p_item_id: string
+          p_study_id: string
+        }
+        Returns: {
+          global_in_stock: number
+          global_returns: number
+          global_sent: number
+          order_count: number
+          site_available: number
+          site_destroyed: number
+          site_in_transit: number
+          site_name: string
+          site_number: string
+          site_onsite: number
+          site_returned: number
+          site_shipments: number
+          site_transfers: number
+          site_used: number
+          study_site_id: string
+        }[]
       }
       ip_get_study_metrics: {
         Args: {
           p_category?: string
+          p_include_archived?: boolean
           p_study_id: string
           p_study_site_id?: string
         }
         Returns: {
+          associated_sites: number
           category: string
           compliance_pct: number
           global_in_stock: number
@@ -6582,9 +6815,11 @@ export type Database = {
         Args: {
           p_batch_number?: string
           p_expiry_date?: string
+          p_inventory_trace_id?: string | null
           p_item_id: string
           p_lot_number?: string
           p_quantity: number
+          p_receipt_metadata?: unknown
           p_serial_number?: string
           p_study_id: string
         }
@@ -6608,12 +6843,32 @@ export type Database = {
         }
         Returns: string
       }
+      ip_order_dispatch: {
+        Args: {
+          p_batch_number?: string | null
+          p_expiry_date?: string | null
+          p_inventory_trace_id?: string | null
+          p_item_id: string
+          p_lot_number?: string | null
+          p_quantity: number
+          p_serial_number?: string | null
+          p_source_lot_id: string
+          p_study_id: string
+          p_study_site_id: string
+        }
+        Returns: string
+      }
       ip_receive_at_site: {
         Args: {
           p_lot_id: string
+          p_notes?: string | null
           p_quantity: number
+          p_received_at?: string | null
+          p_serial_number?: string | null
           p_study_id: string
           p_study_site_id: string
+          /** When true, ledger row is excluded from operator "Received" metrics (automated ship→receive). */
+          p_system_fulfillment?: boolean
         }
         Returns: undefined
       }
@@ -6630,8 +6885,27 @@ export type Database = {
       ip_resolve_caller_profile_id: { Args: never; Returns: string }
       ip_return_to_global: {
         Args: {
+          p_container_fill_state?: string | null
           p_lot_id: string
+          p_notes?: string | null
           p_quantity: number
+          p_study_id: string
+          p_study_site_id: string
+        }
+        Returns: undefined
+      }
+      ip_restore_item: {
+        Args: { p_item_id: string }
+        Returns: undefined
+      }
+      ip_restore_item_site_link: {
+        Args: { p_item_id: string; p_study_id: string; p_study_site_id: string }
+        Returns: undefined
+      }
+      ip_set_site_lot_serial: {
+        Args: {
+          p_lot_id: string
+          p_serial_number: string
           p_study_id: string
           p_study_site_id: string
         }
@@ -6656,8 +6930,39 @@ export type Database = {
         }
         Returns: undefined
       }
+      ip_unreceive_at_site: {
+        Args: {
+          p_lot_id: string
+          p_quantity: number
+          p_reason?: string | null
+          p_study_id: string
+          p_study_site_id: string
+        }
+        Returns: undefined
+      }
+      ip_update_item: {
+        Args: {
+          p_category?: string
+          p_item_id: string
+          p_metadata?: Json
+          p_name?: string
+          p_part_or_material_number?: string
+          p_unit?: string
+        }
+        Returns: undefined
+      }
+      ip_update_lot_location_notes: {
+        Args: { p_location_id: string; p_notes: string }
+        Returns: undefined
+      }
       ip_verify_lot: {
-        Args: { p_lot_id: string; p_study_id: string; p_study_site_id: string }
+        Args: {
+          p_comment?: string | null
+          p_lot_id: string
+          p_study_id: string
+          p_study_site_id: string
+          p_used_at?: string | null
+        }
         Returns: undefined
       }
       merge_mvrg_cvorres_fields: { Args: { jsonb_data: Json }; Returns: Json }
