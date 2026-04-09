@@ -5,14 +5,22 @@ import { IpManagementPageClient } from '@/components/ctms/ip-management/ip-manag
 export default async function InventoryManagementPage() {
   const [studies, supabase] = await Promise.all([getStudies(), createClient()]);
   const { data: userData } = await supabase.auth.getUser();
-  let isIpAdmin = false;
+  let profileRole: string = 'user';
+  let isPlatformAdmin = false;
   if (userData?.user?.id) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role, is_platform_admin')
       .eq('user_id', userData.user.id)
       .maybeSingle();
-    isIpAdmin = profile?.role === 'admin' || profile?.is_platform_admin === true;
+    profileRole = profile?.role ?? 'user';
+    isPlatformAdmin = profile?.is_platform_admin === true;
   }
-  return <IpManagementPageClient studies={studies} isIpAdmin={isIpAdmin} />;
+  return (
+    <IpManagementPageClient
+      studies={studies}
+      profileRole={profileRole}
+      isPlatformAdmin={isPlatformAdmin}
+    />
+  );
 }

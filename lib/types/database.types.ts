@@ -3060,6 +3060,7 @@ export type Database = {
           inventory_trace_id: string | null
           item_id: string | null
           lot_id: string | null
+          metadata: Json
           order_reference: string
           status: string
           study_id: string
@@ -3073,6 +3074,7 @@ export type Database = {
           inventory_trace_id?: string | null
           item_id?: string | null
           lot_id?: string | null
+          metadata?: Json
           order_reference?: string
           status?: string
           study_id: string
@@ -3086,6 +3088,7 @@ export type Database = {
           inventory_trace_id?: string | null
           item_id?: string | null
           lot_id?: string | null
+          metadata?: Json
           order_reference?: string
           status?: string
           study_id?: string

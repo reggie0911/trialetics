@@ -21,6 +21,20 @@ import type {
   IpLotLedgerEntry,
   IpOrderDocumentRow,
 } from '@/lib/types/ip-management';
+import { IP_CATEGORY_LABELS, IP_CATEGORY_ORDER } from '@/lib/types/ip-management';
+import {
+  buildOrderMetadataPatch,
+  IP_ITEM_DEFAULT_CONTENTS_PER_UNIT_KEY,
+  IP_ORDER_CONTENTS_PER_UNIT_KEY,
+  parseContentsPerCatalogUnitFromOrderMetadata,
+  parseDefaultContentsPerCatalogUnitFromItemMetadata,
+} from '@/lib/utils/ip-order-metadata';
+import { splitIntegerTotal } from '@/lib/utils/ip-shared-lot-split';
+import { assertIpMinTier, assertIpMinTierForSite, assertIpAdmin } from '@/lib/server/ip-access';
+
+function isValidIpCategory(value: string): value is IpCategory {
+  return Object.prototype.hasOwnProperty.call(IP_CATEGORY_LABELS, value);
+}
 
 const IP_PATH = '/protected/inventory-management';
 
@@ -51,23 +65,6 @@ async function resolveCallerProfileId(
   return profile.id;
 }
 
-/** Throws if the signed-in user is not a company admin or platform admin. */
-async function assertCompanyOrPlatformAdmin(): Promise<void> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('role, is_platform_admin')
-    .eq('user_id', user.id)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!profile || (profile.role !== 'admin' && !profile.is_platform_admin)) {
-    throw new Error('Only administrators can perform this action.');
-  }
-}
 
 function num(v: unknown): number {
   if (v === null || v === undefined) return 0;
@@ -261,13 +258,22 @@ export async function getIpStudyMetrics(params: {
   const rows = (data ?? []) as Record<string, unknown>[];
   const itemIds = rows.map((r) => String(r.item_id));
   const thresholds = new Map<string, number | null>();
+  const defaultContentsByItem = new Map<string, number | null>();
   if (itemIds.length > 0) {
     const { data: items } = await supabase
       .from('ip_items')
-      .select('id, min_stock_threshold')
+      .select('id, min_stock_threshold, metadata')
       .in('id', itemIds);
-    for (const it of (items ?? []) as Array<{ id: string; min_stock_threshold: number | null }>) {
+    for (const it of (items ?? []) as Array<{
+      id: string;
+      min_stock_threshold: number | null;
+      metadata: unknown;
+    }>) {
       thresholds.set(it.id, it.min_stock_threshold);
+      defaultContentsByItem.set(
+        it.id,
+        parseDefaultContentsPerCatalogUnitFromItemMetadata(it.metadata)
+      );
     }
   }
   return rows.map((r) => ({
@@ -289,7 +295,24 @@ export async function getIpStudyMetrics(params: {
     associated_sites: num(r.associated_sites),
     compliance_pct: numOrNull(r.compliance_pct),
     min_stock_threshold: thresholds.get(String(r.item_id)) ?? null,
+    default_contents_per_catalog_unit: defaultContentsByItem.get(String(r.item_id)) ?? null,
   }));
+}
+
+/** Distinct catalog categories for a study (non-archived `ip_items` only), enum order. */
+export async function getIpStudyCatalogCategories(studyId: string): Promise<IpCategory[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('ip_items')
+    .select('category')
+    .eq('study_id', studyId)
+    .is('deleted_at', null);
+  if (error) throw new Error(error.message);
+  const seen = new Set<IpCategory>();
+  for (const row of (data ?? []) as Array<{ category: string }>) {
+    if (isValidIpCategory(row.category)) seen.add(row.category);
+  }
+  return IP_CATEGORY_ORDER.filter((c) => seen.has(c));
 }
 
 export async function getIpLogRows(params: {
@@ -513,6 +536,13 @@ export async function updateIpItem(input: {
   minStockThreshold?: number | null;
 }): Promise<void> {
   const supabase = await createClient();
+  const { data: item, error: itemErr } = await supabase
+    .from('ip_items')
+    .select('study_id')
+    .eq('id', input.itemId)
+    .single();
+  if (itemErr) throw new Error(itemErr.message);
+  await assertIpMinTier(item.study_id, 'sponsor');
   const metaPatch =
     input.catalogMetadata != null ? catalogMetadataToJsonPatch(input.catalogMetadata) : null;
   const { error } = await supabase.rpc('ip_update_item', {
@@ -536,6 +566,13 @@ export async function updateIpItem(input: {
 
 export async function archiveIpItem(itemId: string): Promise<void> {
   const supabase = await createClient();
+  const { data: item, error: itemErr } = await supabase
+    .from('ip_items')
+    .select('study_id')
+    .eq('id', itemId)
+    .single();
+  if (itemErr) throw new Error(itemErr.message);
+  await assertIpAdmin(item.study_id);
   const { error } = await supabase.rpc('ip_archive_item', { p_item_id: itemId });
   if (error) throw new Error(error.message);
   revalidatePath(IP_PATH);
@@ -543,6 +580,13 @@ export async function archiveIpItem(itemId: string): Promise<void> {
 
 export async function restoreIpItem(itemId: string): Promise<void> {
   const supabase = await createClient();
+  const { data: item, error: itemErr } = await supabase
+    .from('ip_items')
+    .select('study_id')
+    .eq('id', itemId)
+    .single();
+  if (itemErr) throw new Error(itemErr.message);
+  await assertIpAdmin(item.study_id);
   const { error } = await supabase.rpc('ip_restore_item', { p_item_id: itemId });
   if (error) throw new Error(error.message);
   revalidatePath(IP_PATH);
@@ -598,7 +642,13 @@ export async function submitAddInventory(input: {
   batchNumber?: string | null;
   expiryDate?: string | null;
   receiptMetadata: IpReceiptLedgerMetadata;
+  /** Optional inner units per catalog unit (e.g. tablets per bottle, pairs per box); stored on `ip_items.metadata` for any category. */
+  defaultContentsPerCatalogUnit?: number;
 }): Promise<{ itemId: string; lotId: string }> {
+  const resolution = await assertIpMinTier(input.studyId, 'sponsor');
+  if (resolution.tier !== 'admin' && !resolution.teamRoles.includes('clinical_project_manager')) {
+    throw new Error('Only Clinical Project Managers or Admins can add inventory.');
+  }
   const supabase = await createClient();
   const qty = Math.floor(Number(input.quantity));
   if (!Number.isFinite(qty) || qty < 1) {
@@ -656,9 +706,16 @@ export async function submitAddInventory(input: {
     throw new Error(receiptError.message);
   }
 
-  const catalogMetaPatch = catalogMetadataToJsonPatch(
-    receiptLedgerMetadataToCatalogMeta(input.receiptMetadata)
-  );
+  const catalogMetaForPatch: IpItemCatalogMetadata = {
+    ...receiptLedgerMetadataToCatalogMeta(input.receiptMetadata),
+  };
+  if (input.defaultContentsPerCatalogUnit != null && Number.isFinite(input.defaultContentsPerCatalogUnit)) {
+    const n = Math.floor(Number(input.defaultContentsPerCatalogUnit));
+    if (n >= 1) {
+      catalogMetaForPatch.defaultContentsPerCatalogUnit = n;
+    }
+  }
+  const catalogMetaPatch = catalogMetadataToJsonPatch(catalogMetaForPatch);
   if (Object.keys(catalogMetaPatch).length > 0) {
     const { error: catalogMetaErr } = await supabase.rpc('ip_update_item', {
       p_item_id: itemId,
@@ -731,6 +788,8 @@ function parseItemCatalogMetadata(raw: unknown): IpItemCatalogMetadata {
     out.physical = m.physical as NonNullable<IpItemCatalogMetadata['physical']>;
   }
   if (typeof m.imageStoragePath === 'string') out.imageStoragePath = m.imageStoragePath;
+  const defContents = parseDefaultContentsPerCatalogUnitFromItemMetadata(m);
+  if (defContents !== null) out.defaultContentsPerCatalogUnit = defContents;
   return out;
 }
 
@@ -742,6 +801,14 @@ function catalogMetadataToJsonPatch(meta: IpItemCatalogMetadata): Record<string,
   if (meta.packagingDescription !== undefined) o.packagingDescription = meta.packagingDescription ?? '';
   if (meta.physical !== undefined) o.physical = meta.physical ?? {};
   if (meta.imageStoragePath !== undefined) o.imageStoragePath = meta.imageStoragePath ?? '';
+  if (meta.defaultContentsPerCatalogUnit !== undefined) {
+    if (meta.defaultContentsPerCatalogUnit === null) {
+      o[IP_ITEM_DEFAULT_CONTENTS_PER_UNIT_KEY] = null;
+    } else {
+      const n = Math.floor(Number(meta.defaultContentsPerCatalogUnit));
+      o[IP_ITEM_DEFAULT_CONTENTS_PER_UNIT_KEY] = n >= 1 ? n : null;
+    }
+  }
   return o;
 }
 
@@ -1035,6 +1102,7 @@ export async function linkIpCatalogItemToStudySite(input: {
   itemId: string;
   studySiteId: string;
 }): Promise<void> {
+  await assertIpMinTier(input.studyId, 'sponsor');
   const supabase = await createClient();
   await assertIpItemActiveForStudy(supabase, input.studyId, input.itemId);
   await insertOrRestoreIpItemSiteLink(supabase, input.studyId, input.itemId, input.studySiteId);
@@ -1050,6 +1118,7 @@ export async function linkIpCatalogItemToStudySites(input: {
   const unique = [...new Set(input.studySiteIds.filter(Boolean))];
   if (unique.length === 0) return;
 
+  await assertIpMinTier(input.studyId, 'sponsor');
   const supabase = await createClient();
   await assertIpItemActiveForStudy(supabase, input.studyId, input.itemId);
   for (const studySiteId of unique) {
@@ -1064,6 +1133,7 @@ export async function ipShipToSite(input: {
   studySiteId: string;
   quantity: number;
 }): Promise<void> {
+  await assertIpMinTier(input.studyId, 'sponsor');
   const supabase = await createClient();
   const { error } = await supabase.rpc('ip_ship_to_site', {
     p_study_id: input.studyId,
@@ -1087,6 +1157,7 @@ export async function ipReceiveAtSite(input: {
   /** When the lot has no serial yet, set on successful receive (ignored if lot already has one). */
   serialNumber?: string | null;
 }): Promise<void> {
+  await assertIpMinTierForSite(input.studyId, 'site', input.studySiteId);
   const supabase = await createClient();
   const sn = input.serialNumber?.trim() ? input.serialNumber.trim() : null;
   const { error } = await supabase.rpc('ip_receive_at_site', {
@@ -1202,6 +1273,7 @@ export async function ipDispense(input: {
   /** Ledger metadata for investigational drug container accountability (full / partial / empty). */
   containerFillState?: 'full' | 'partial' | 'empty' | null;
 }): Promise<void> {
+  await assertIpMinTierForSite(input.studyId, 'site', input.studySiteId);
   const supabase = await createClient();
   const free = input.subjectNumberFreeText?.trim() ?? '';
   const sid = input.subjectId?.trim() ?? '';
@@ -1234,7 +1306,7 @@ export async function ipAdminResetSiteLineToAvailable(input: {
   studySiteId: string;
   reason?: string | null;
 }): Promise<void> {
-  await assertCompanyOrPlatformAdmin();
+  await assertIpAdmin(input.studyId);
   const supabase = await createClient();
   const { error } = await supabase.rpc('ip_admin_reset_site_line_to_available', {
     p_study_id: input.studyId,
@@ -1254,6 +1326,7 @@ export async function ipVerifyLot(input: {
   /** Recorded in ledger metadata as date_of_use; verification timestamp remains server now. */
   dateOfUse?: string | null;
 }): Promise<void> {
+  await assertIpMinTier(input.studyId, 'sponsor');
   const supabase = await createClient();
   const { error } = await supabase.rpc('ip_verify_lot', {
     p_study_id: input.studyId,
@@ -1287,6 +1360,7 @@ export async function ipReturnToGlobal(input: {
   containerFillState?: 'full' | 'partial' | 'empty' | null;
   notes?: string | null;
 }): Promise<void> {
+  await assertIpMinTier(input.studyId, 'sponsor');
   const supabase = await createClient();
   const trimmedNotes = input.notes?.trim();
   const { error } = await supabase.rpc('ip_return_to_global', {
@@ -1311,6 +1385,7 @@ export async function ipUnreceiveAtSite(input: {
   /** Optional note stored on the ledger correction row. */
   reason?: string | null;
 }): Promise<void> {
+  await assertIpMinTierForSite(input.studyId, 'site', input.studySiteId);
   const supabase = await createClient();
   const { error } = await supabase.rpc('ip_unreceive_at_site', {
     p_study_id: input.studyId,
@@ -1323,13 +1398,14 @@ export async function ipUnreceiveAtSite(input: {
   revalidatePath(IP_PATH);
 }
 
-/** Admin-only: clear verification on a Used site line (audit via reconcile_adjustment). */
+/** Sponsor+: clear verification on a Used site line (audit via reconcile_adjustment). */
 export async function ipAdminUnverifyInventoryAtSite(input: {
   studyId: string;
   lotId: string;
   studySiteId: string;
   reason?: string | null;
 }): Promise<void> {
+  await assertIpMinTier(input.studyId, 'sponsor');
   const supabase = await createClient();
   const { error } = await supabase.rpc('ip_admin_unverify_inventory_at_site', {
     p_study_id: input.studyId,
@@ -1348,6 +1424,7 @@ export async function ipTransferSite(input: {
   toSiteId: string;
   quantity: number;
 }): Promise<void> {
+  await assertIpMinTier(input.studyId, 'sponsor');
   const supabase = await createClient();
   const { error } = await supabase.rpc('ip_transfer_site', {
     p_study_id: input.studyId,
@@ -1368,6 +1445,7 @@ export async function ipDestroyAtSite(input: {
   containerFillState?: 'full' | 'partial' | 'empty' | null;
   notes?: string | null;
 }): Promise<void> {
+  await assertIpMinTier(input.studyId, 'sponsor');
   const supabase = await createClient();
   const trimmedNotes = input.notes?.trim();
   const { error } = await supabase.rpc('ip_destroy_at_site', {
@@ -1537,6 +1615,7 @@ export async function getIpSiteOrders(params: {
       study_site_id,
       inventory_trace_id,
       deleted_at,
+      metadata,
       ip_lots (
         serial_number,
         lot_number,
@@ -1565,6 +1644,7 @@ export async function getIpSiteOrders(params: {
     study_site_id: string | null;
     inventory_trace_id: string | null;
     deleted_at: string | null;
+    metadata: unknown;
     ip_lots: {
       serial_number: string | null;
       lot_number: string | null;
@@ -1576,7 +1656,20 @@ export async function getIpSiteOrders(params: {
   };
 
   const orders = (data ?? []) as unknown as OrderJoin[];
+  orders.sort((a, b) => {
+    const t = (a.created_at ?? '').localeCompare(b.created_at ?? '');
+    if (t !== 0) return t;
+    return a.id.localeCompare(b.id);
+  });
+
+  const lotOrderCount = new Map<string, number>();
+  for (const o of orders) {
+    if (!o.lot_id) continue;
+    lotOrderCount.set(o.lot_id, (lotOrderCount.get(o.lot_id) ?? 0) + 1);
+  }
+
   const out: IpOrderRow[] = [];
+  const lotOrderIndex = new Map<string, number>();
 
   const lotIds = orders.map((o) => o.lot_id).filter(Boolean) as string[];
   const locMap = new Map<
@@ -1647,12 +1740,23 @@ export async function getIpSiteOrders(params: {
   for (const o of orders) {
     const lot = o.ip_lots;
     const item = lot?.ip_items;
-    const loc = o.lot_id ? locMap.get(o.lot_id) : undefined;
+    const lid = o.lot_id;
+    const loc = lid ? locMap.get(lid) : undefined;
+    const shareCount = lid ? (lotOrderCount.get(lid) ?? 1) : 1;
+    const shareIndex = lid ? (lotOrderIndex.get(lid) ?? 0) : 0;
+    if (lid) lotOrderIndex.set(lid, shareIndex + 1);
+
+    const qoh = loc?.quantity_on_hand ?? 0;
+    const qav = loc?.quantity_available ?? 0;
+    const transitFull = lid ? (transitByLot.get(lid) ?? 0) : 0;
+    const recvFull = lid ? Math.max(0, operatorRecvByLot.get(lid) ?? 0) : 0;
+    const split = shareCount > 1;
+
     out.push({
       order_id: o.id,
       order_reference: o.order_reference ?? '',
       order_status: o.status ?? 'open',
-      lot_id: o.lot_id ?? '',
+      lot_id: lid ?? '',
       item_id: o.item_id ?? lot?.item_id ?? '',
       item_name: item?.name ?? '',
       category: item?.category ?? '',
@@ -1662,18 +1766,19 @@ export async function getIpSiteOrders(params: {
       batch_number: lot?.batch_number ?? null,
       expiry_date: lot?.expiry_date ?? null,
       study_site_id: o.study_site_id ?? params.studySiteId,
-      quantity_on_hand: loc?.quantity_on_hand ?? 0,
-      quantity_available: loc?.quantity_available ?? 0,
+      quantity_on_hand: split ? splitIntegerTotal(qoh, shareIndex, shareCount) : qoh,
+      quantity_available: split ? splitIntegerTotal(qav, shareIndex, shareCount) : qav,
       disposition: loc?.disposition ?? 'available',
       verified_at: loc?.verified_at ?? null,
       deleted_at: o.deleted_at ?? null,
       inventory_trace_id: o.inventory_trace_id ?? null,
       sent_at: o.created_at ?? null,
-      in_transit_qty: o.lot_id ? transitByLot.get(o.lot_id) ?? 0 : 0,
-      operator_received_qty: o.lot_id ? Math.max(0, operatorRecvByLot.get(o.lot_id) ?? 0) : 0,
-      latest_dispense_container_fill_state: o.lot_id ? latestDispenseFill.get(o.lot_id) ?? null : null,
-      latest_return_container_fill_state: o.lot_id ? latestReturnFill.get(o.lot_id) ?? null : null,
-      latest_destroy_container_fill_state: o.lot_id ? latestDestroyFill.get(o.lot_id) ?? null : null,
+      in_transit_qty: split ? splitIntegerTotal(transitFull, shareIndex, shareCount) : transitFull,
+      operator_received_qty: split ? splitIntegerTotal(recvFull, shareIndex, shareCount) : recvFull,
+      latest_dispense_container_fill_state: lid ? latestDispenseFill.get(lid) ?? null : null,
+      latest_return_container_fill_state: lid ? latestReturnFill.get(lid) ?? null : null,
+      latest_destroy_container_fill_state: lid ? latestDestroyFill.get(lid) ?? null : null,
+      contents_per_catalog_unit: parseContentsPerCatalogUnitFromOrderMetadata(o.metadata),
     });
   }
 
@@ -1685,6 +1790,7 @@ export async function archiveIpItemSiteLink(input: {
   itemId: string;
   studySiteId: string;
 }): Promise<void> {
+  await assertIpAdmin(input.studyId);
   const supabase = await createClient();
   const { error } = await supabase.rpc('ip_archive_item_site_link', {
     p_study_id: input.studyId,
@@ -1700,6 +1806,7 @@ export async function restoreIpItemSiteLink(input: {
   itemId: string;
   studySiteId: string;
 }): Promise<void> {
+  await assertIpAdmin(input.studyId);
   const supabase = await createClient();
   const { error } = await supabase.rpc('ip_restore_item_site_link', {
     p_study_id: input.studyId,
@@ -1891,7 +1998,10 @@ export async function createIpOrder(input: {
   expiryDate?: string;
   quantity: number;
   orderReference?: string;
+  /** Investigational drug: inner units per catalog unit (e.g. tablets per bottle). Stored on `ip_orders.metadata`. */
+  contentsPerCatalogUnit?: number;
 }): Promise<void> {
+  await assertIpMinTier(input.studyId, 'sponsor');
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -1912,6 +2022,12 @@ export async function createIpOrder(input: {
   const batch = input.batchNumber?.trim() || '';
   const orderRef = input.orderReference?.trim() || '';
   const expiryForDb = input.expiryDate?.trim() ? input.expiryDate.trim() : null;
+
+  let orderMetadataForInsert: Record<string, unknown> | undefined;
+  if (input.contentsPerCatalogUnit != null) {
+    const c = Math.floor(Number(input.contentsPerCatalogUnit));
+    if (Number.isFinite(c) && c >= 1) orderMetadataForInsert = buildOrderMetadataPatch(c);
+  }
 
   async function applyExpiryToLotIfProvided(lotId: string): Promise<void> {
     if (!expiryForDb) return;
@@ -2008,6 +2124,7 @@ export async function createIpOrder(input: {
           order_reference: refForRow,
           status: 'open',
           inventory_trace_id: traceId,
+          ...(orderMetadataForInsert ? { metadata: orderMetadataForInsert } : {}),
         });
         if (orderErr) throw new Error(`Failed to create order: ${orderErr.message}`);
       }
@@ -2050,6 +2167,7 @@ export async function createIpOrder(input: {
         order_reference: refForRow,
         status: 'open',
         inventory_trace_id: traceId,
+        ...(orderMetadataForInsert ? { metadata: orderMetadataForInsert } : {}),
       });
       if (orderErr) throw new Error(`Failed to create order: ${orderErr.message}`);
       await applyExpiryToLotIfProvided(newLotId);
@@ -2094,6 +2212,7 @@ export async function createIpOrder(input: {
       order_reference: orderRef,
       status: 'open',
       inventory_trace_id: null,
+      ...(orderMetadataForInsert ? { metadata: orderMetadataForInsert } : {}),
     });
     if (orderErr) throw new Error(`Failed to create order: ${orderErr.message}`);
     await applyExpiryToLotIfProvided(lotId);
@@ -2132,6 +2251,7 @@ export async function createIpOrder(input: {
     order_reference: orderRef,
     status: 'open',
     inventory_trace_id: traceId,
+    ...(orderMetadataForInsert ? { metadata: orderMetadataForInsert } : {}),
   });
   if (orderErr) throw new Error(`Failed to create order: ${orderErr.message}`);
 
@@ -2143,14 +2263,17 @@ export async function updateIpOrder(input: {
   orderId: string;
   orderReference?: string;
   status?: string;
+  /** Set or clear inner units per catalog unit on order metadata (investigational drugs). Pass null to remove. */
+  contentsPerCatalogUnit?: number | null;
 }): Promise<void> {
   const supabase = await createClient();
   const { data: existing, error: selErr } = await supabase
     .from('ip_orders')
-    .select('deleted_at')
+    .select('study_id, deleted_at, metadata')
     .eq('id', input.orderId)
     .single();
   if (selErr) throw new Error(selErr.message);
+  await assertIpMinTier(existing.study_id, 'sponsor');
   if (existing?.deleted_at) {
     throw new Error('This order is archived. Restore it before editing.');
   }
@@ -2158,6 +2281,21 @@ export async function updateIpOrder(input: {
   const updates: Record<string, unknown> = {};
   if (input.orderReference !== undefined) updates.order_reference = input.orderReference;
   if (input.status !== undefined) updates.status = input.status;
+
+  if (input.contentsPerCatalogUnit !== undefined) {
+    const meta = {
+      ...((existing?.metadata as Record<string, unknown> | null) ?? {}),
+    };
+    if (input.contentsPerCatalogUnit === null) {
+      delete meta[IP_ORDER_CONTENTS_PER_UNIT_KEY];
+    } else {
+      const n = Math.floor(Number(input.contentsPerCatalogUnit));
+      if (n >= 1) meta[IP_ORDER_CONTENTS_PER_UNIT_KEY] = n;
+      else delete meta[IP_ORDER_CONTENTS_PER_UNIT_KEY];
+    }
+    updates.metadata = meta;
+  }
+
   if (Object.keys(updates).length === 0) return;
 
   const { error } = await supabase
@@ -2307,7 +2445,6 @@ export async function getIpOrderShippingDocumentSignedUrl(documentId: string): P
 
 /** Soft-archives an order (hides from default lists). Does not remove lot locations or ledger rows. */
 export async function archiveIpOrder(orderId: string): Promise<void> {
-  await assertCompanyOrPlatformAdmin();
   const supabase = await createClient();
 
   const { data: order, error: findErr } = await supabase
@@ -2316,6 +2453,7 @@ export async function archiveIpOrder(orderId: string): Promise<void> {
     .eq('id', orderId)
     .single();
   if (findErr) throw new Error(findErr.message);
+  await assertIpAdmin(order.study_id);
   if (order.deleted_at) throw new Error('This order is already archived.');
 
   if (order.lot_id && order.study_site_id) {
@@ -2344,15 +2482,15 @@ export async function archiveIpOrder(orderId: string): Promise<void> {
 }
 
 export async function restoreIpOrder(orderId: string): Promise<void> {
-  await assertCompanyOrPlatformAdmin();
   const supabase = await createClient();
 
   const { data: order, error: findErr } = await supabase
     .from('ip_orders')
-    .select('id, deleted_at')
+    .select('id, study_id, deleted_at')
     .eq('id', orderId)
     .single();
   if (findErr) throw new Error(findErr.message);
+  await assertIpAdmin(order.study_id);
   if (!order.deleted_at) throw new Error('This order is not archived.');
 
   const { error } = await supabase.from('ip_orders').update({ deleted_at: null }).eq('id', orderId);
@@ -2422,7 +2560,7 @@ export async function getIpTransactionReportData(params: {
   let ordersQuery = supabase
     .from('ip_orders')
     .select(`
-      id, lot_id,
+      id, lot_id, metadata,
       ip_lots (
         serial_number, lot_number, batch_number,
         ip_items ( name, category, unit )
@@ -2437,6 +2575,7 @@ export async function getIpTransactionReportData(params: {
   type OrdRaw = {
     id: string;
     lot_id: string | null;
+    metadata: unknown;
     ip_lots: {
       serial_number: string | null;
       lot_number: string | null;
@@ -2488,6 +2627,7 @@ export async function getIpTransactionReportData(params: {
         fillMaps && lid ? fillMaps.latestReturnFill.get(lid) ?? null : null,
       latest_destroy_container_fill_state:
         fillMaps && lid ? fillMaps.latestDestroyFill.get(lid) ?? null : null,
+      contents_per_catalog_unit: parseContentsPerCatalogUnitFromOrderMetadata(o.metadata),
     };
   });
 

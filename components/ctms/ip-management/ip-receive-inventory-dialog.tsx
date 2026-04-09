@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { format, isValid, parse } from 'date-fns';
+import { enUS } from 'date-fns/locale';
+import { CalendarDays, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -11,8 +13,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
@@ -22,6 +26,18 @@ import {
   ipReceiveAtSite,
 } from '@/lib/actions/ip-management';
 import type { IpMovementLineContext } from '@/lib/utils/ip-order-actions';
+import { cn } from '@/lib/utils';
+
+function parseReceiptIsoToDate(iso: string): Date | undefined {
+  if (!iso) return undefined;
+  const d = parse(iso, 'yyyy-MM-dd', new Date());
+  return isValid(d) ? d : undefined;
+}
+
+function formatIsoToReceiptDisplay(iso: string): string {
+  const parsed = parse(iso, 'yyyy-MM-dd', new Date());
+  return isValid(parsed) ? format(parsed, 'dd-MMM-yyyy', { locale: enUS }) : '';
+}
 
 export interface IpReceiveInventoryDialogProps {
   open: boolean;
@@ -39,8 +55,10 @@ export function IpReceiveInventoryDialog({
   const { toast } = useToast();
   const [qty, setQty] = useState('1');
   const [serialInput, setSerialInput] = useState('');
+  const [serialNa, setSerialNa] = useState(false);
   const [serialReason, setSerialReason] = useState('');
-  const [receivedDate, setReceivedDate] = useState('');
+  const [receivedDateIso, setReceivedDateIso] = useState('');
+  const [receiptDateOpen, setReceiptDateOpen] = useState(false);
   const [notes, setNotes] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -59,9 +77,14 @@ export function IpReceiveInventoryDialog({
     [line?.in_transit_qty, line?.quantity_on_hand]
   );
 
-  const originalSerialTrim = line?.serial_number?.trim() ?? '';
-  const inputSerialTrim = serialInput.trim();
-  const serialDirty = inputSerialTrim !== originalSerialTrim;
+  const originalSerialNormalized = useMemo(() => {
+    const t = line?.serial_number?.trim() ?? '';
+    return t.toUpperCase() === 'NA' ? 'NA' : t;
+  }, [line?.serial_number]);
+
+  const effectiveSerialTrim = serialNa ? 'NA' : serialInput.trim();
+  const serialDirty = effectiveSerialTrim !== originalSerialNormalized;
+  const showSerialChangeReason = serialDirty && eligibleForSerialRpc && hasSerialOnLot;
 
   const showSerialCorrectionOnly = Boolean(
     line &&
@@ -85,9 +108,17 @@ export function IpReceiveInventoryDialog({
   useEffect(() => {
     if (open && line) {
       setQty('1');
-      setSerialInput(line.serial_number?.trim() ? line.serial_number.trim() : '');
+      const rawSn = line.serial_number?.trim() ?? '';
+      if (rawSn.toUpperCase() === 'NA') {
+        setSerialNa(true);
+        setSerialInput('');
+      } else {
+        setSerialNa(false);
+        setSerialInput(rawSn);
+      }
       setSerialReason('');
-      setReceivedDate('');
+      setReceivedDateIso('');
+      setReceiptDateOpen(false);
       setNotes('');
       setConfirmed(false);
     }
@@ -117,7 +148,7 @@ export function IpReceiveInventoryDialog({
   const applySerialChangeIfNeeded = async (): Promise<boolean> => {
     if (!line) return false;
     if (!serialDirty) return true;
-    const sn = inputSerialTrim;
+    const sn = effectiveSerialTrim;
     if (!sn) {
       toast({
         title: 'Serial number required',
@@ -158,8 +189,8 @@ export function IpReceiveInventoryDialog({
           if (!ok) return;
         }
         const receivedAtIso =
-          receivedDate.trim() !== ''
-            ? new Date(`${receivedDate}T12:00:00`).toISOString()
+          receivedDateIso.trim() !== ''
+            ? new Date(`${receivedDateIso}T12:00:00`).toISOString()
             : null;
         await ipReceiveAtSite({
           studyId: line.studyId,
@@ -186,7 +217,7 @@ export function IpReceiveInventoryDialog({
     }
 
     if (canSaveSerialOnly) {
-      const sn = serialInput.trim();
+      const sn = effectiveSerialTrim;
       if (!sn) {
         toast({
           title: 'Serial number required',
@@ -263,17 +294,40 @@ export function IpReceiveInventoryDialog({
             <div className="space-y-1">
               <Label className="text-xs">Serial number</Label>
               {eligibleForSerialRpc ? (
-                <Input
-                  className="text-[12px] h-9"
-                  value={serialInput}
-                  onChange={(e) => setSerialInput(e.target.value)}
-                  placeholder={
-                    hasSerialOnLot
-                      ? 'Edit if the label does not match the physical unit.'
-                      : 'Serial number is optional, enter NA if not applicable.'
-                  }
-                  autoComplete="off"
-                />
+                <div className="space-y-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-2">
+                    <Input
+                      className="text-[12px] h-9 min-w-0 flex-1"
+                      value={serialInput}
+                      disabled={serialNa}
+                      onChange={(e) => setSerialInput(e.target.value)}
+                      placeholder={
+                        hasSerialOnLot ? 'Edit if the label does not match the physical unit.' : 'Enter serial number'
+                      }
+                      autoComplete="off"
+                    />
+                    <div className="flex shrink-0 items-center gap-2 sm:pb-0.5">
+                      <Checkbox
+                        id="ip-rcv-serial-na"
+                        checked={serialNa}
+                        onCheckedChange={(v) => {
+                          const on = v === true;
+                          setSerialNa(on);
+                          if (on) setSerialInput('');
+                        }}
+                        className="mt-0.5"
+                      />
+                      <Label htmlFor="ip-rcv-serial-na" className="text-[12px] font-normal cursor-pointer leading-snug">
+                        Not applicable (NA)
+                      </Label>
+                    </div>
+                  </div>
+                  {serialNa ? (
+                    <p className="text-[11px] text-muted-foreground leading-snug">
+                      NA will be saved as the serial number for this unit.
+                    </p>
+                  ) : null}
+                </div>
               ) : hasSerialOnLot ? (
                 <div
                   className="flex h-9 w-full min-w-0 items-center rounded-md border border-input bg-muted/30 px-2.5 text-[12px]"
@@ -288,7 +342,7 @@ export function IpReceiveInventoryDialog({
                 </p>
               )}
             </div>
-            {serialDirty && eligibleForSerialRpc && (
+            {showSerialChangeReason ? (
               <div className="space-y-1">
                 <Label htmlFor="ip-rcv-serial-reason" className="text-xs">
                   Reason for change <span className="text-muted-foreground font-normal">(optional)</span>
@@ -301,7 +355,7 @@ export function IpReceiveInventoryDialog({
                   placeholder="e.g. typo at dispatch, relabeled unit"
                 />
               </div>
-            )}
+            ) : null}
             {!canRecord && !canSaveSerialOnly && !showSerialCorrectionOnly ? (
               <p className="text-xs text-muted-foreground">
                 {hasSerialOnLot && (line.quantity_on_hand ?? 0) > 0
@@ -337,13 +391,51 @@ export function IpReceiveInventoryDialog({
                   <Label htmlFor="ip-rcv-date" className="text-xs">
                     Receipt date
                   </Label>
-                  <Input
-                    id="ip-rcv-date"
-                    type="date"
-                    className="text-[12px] h-9"
-                    value={receivedDate}
-                    onChange={(e) => setReceivedDate(e.target.value)}
-                  />
+                  <p className="text-[11px] text-muted-foreground leading-snug">Format: dd-MMM-yyyy (optional)</p>
+                  <Popover open={receiptDateOpen} onOpenChange={setReceiptDateOpen}>
+                    <PopoverTrigger
+                      id="ip-rcv-date"
+                      type="button"
+                      className={cn(
+                        'border-input bg-transparent shadow-xs flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-md border px-2.5 text-[12px] outline-none transition-[color,box-shadow]',
+                        'hover:bg-accent/50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                        !receivedDateIso && 'text-muted-foreground'
+                      )}
+                    >
+                      <span className="truncate tabular-nums text-left">
+                        {receivedDateIso ? formatIsoToReceiptDisplay(receivedDateIso) : '07-Apr-2026'}
+                      </span>
+                      <CalendarDays className="size-3.5 shrink-0 opacity-60" aria-hidden />
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-auto p-2 gap-2">
+                      <Calendar
+                        mode="single"
+                        selected={parseReceiptIsoToDate(receivedDateIso)}
+                        onSelect={(d) => {
+                          setReceivedDateIso(d ? format(d, 'yyyy-MM-dd') : '');
+                          setReceiptDateOpen(false);
+                        }}
+                        captionLayout="dropdown"
+                        fromYear={2000}
+                        toYear={new Date().getFullYear() + 5}
+                        defaultMonth={parseReceiptIsoToDate(receivedDateIso) ?? new Date()}
+                      />
+                      {receivedDateIso ? (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-full text-[12px] text-muted-foreground"
+                          onClick={() => {
+                            setReceivedDateIso('');
+                            setReceiptDateOpen(false);
+                          }}
+                        >
+                          Clear date
+                        </Button>
+                      ) : null}
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="ip-rcv-notes" className="text-xs">
@@ -386,8 +478,8 @@ export function IpReceiveInventoryDialog({
                 submitting ||
                 !confirmed ||
                 !line ||
-                (canSaveSerialOnly && !serialInput.trim()) ||
-                (showSerialCorrectionOnly && !serialInput.trim())
+                (canSaveSerialOnly && !effectiveSerialTrim) ||
+                (showSerialCorrectionOnly && !effectiveSerialTrim)
               }
             >
               {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

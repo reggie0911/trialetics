@@ -29,6 +29,7 @@ export function ipLogRowToOrderRow(row: IpLogRow): IpOrderRow | null {
     latest_dispense_container_fill_state: row.dispensed_container_fill_state,
     latest_return_container_fill_state: row.returned_container_fill_state,
     latest_destroy_container_fill_state: row.destroyed_container_fill_state,
+    contents_per_catalog_unit: null,
   };
 }
 

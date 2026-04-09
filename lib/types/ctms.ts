@@ -279,9 +279,11 @@ export type TeamMemberRole =
   | 'finance_reviewer'
   | 'inventory_specialist'
   | 'medical_writer'
+  | 'principal_investigator'
   | 'regulatory_specialist'
   | 'safety_specialist'
   | 'site_budget_specialist'
+  | 'study_coordinator'
   | 'study_startup_specialist'
   | 'vendor_manager'
   | 'custom';
@@ -351,9 +353,11 @@ export const TEAM_ROLE_OPTIONS: { value: TeamMemberRole; label: string }[] = [
   { value: 'finance_reviewer', label: 'Finance Reviewer' },
   { value: 'inventory_specialist', label: 'Inventory Specialist' },
   { value: 'medical_writer', label: 'Medical Writer' },
+  { value: 'principal_investigator', label: 'Principal Investigator (PI)' },
   { value: 'regulatory_specialist', label: 'Regulatory Specialist' },
   { value: 'safety_specialist', label: 'Safety Specialist' },
   { value: 'site_budget_specialist', label: 'Site Budget Specialist' },
+  { value: 'study_coordinator', label: 'Study Coordinator' },
   { value: 'study_startup_specialist', label: 'Study Startup Specialist' },
   { value: 'vendor_manager', label: 'Vendor Manager' },
   { value: 'custom', label: 'Custom Role' },
@@ -374,9 +378,11 @@ export const TEAM_ROLE_LABEL: Record<TeamMemberRole, string> = {
   finance_reviewer: 'Finance Reviewer',
   inventory_specialist: 'Inventory Specialist',
   medical_writer: 'Medical Writer',
+  principal_investigator: 'Principal Investigator (PI)',
   regulatory_specialist: 'Regulatory Specialist',
   safety_specialist: 'Safety Specialist',
   site_budget_specialist: 'Site Budget Specialist',
+  study_coordinator: 'Study Coordinator',
   study_startup_specialist: 'Study Startup Specialist',
   vendor_manager: 'Vendor Manager',
   custom: 'Custom',

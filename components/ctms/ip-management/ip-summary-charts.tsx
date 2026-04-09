@@ -1,6 +1,5 @@
 'use client';
 
-import { useMemo, useState } from 'react';
 import {
   ResponsiveContainer,
   BarChart,
@@ -8,21 +7,15 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
   Legend,
   PieChart,
   Pie,
   Cell,
+  LabelList,
 } from 'recharts';
-import { ChevronDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import type { IpStudyMetricRow } from '@/lib/types/ip-management';
 import { IP_CATEGORY_LABELS, type IpCategory } from '@/lib/types/ip-management';
-import type { IpInventoryUiContext } from '@/lib/utils/ip-inventory-ui-copy';
-import { getIpDrugWorkflowCardCopy, getIpInventoryChartsCopy } from '@/lib/utils/ip-inventory-ui-copy';
-import { cn } from '@/lib/utils';
 
 const PIE_COLORS = [
   'hsl(var(--primary))',
@@ -31,20 +24,25 @@ const PIE_COLORS = [
   'hsl(25 95% 53%)',
 ];
 
-interface IpSummaryChartsProps {
-  metrics: IpStudyMetricRow[];
-  /** Drives chart helper text and investigational-product reference card. */
-  uiContext?: IpInventoryUiContext;
+const PIE_OUTER_RADIUS = 88;
+/** Inner cut-out for donut chart (must be less than outer) */
+const PIE_INNER_RADIUS = 52;
+
+const BAR_LABEL_FILL = 'hsl(var(--foreground))';
+
+/** Top-left, top-right, bottom-right, bottom-left — top only for upright columns */
+const BAR_CORNER_RADIUS: [number, number, number, number] = [5, 5, 0, 0];
+
+function formatBarValueLabel(value: unknown): string {
+  if (typeof value === 'number' && value > 0) return String(value);
+  return '';
 }
 
-export function IpSummaryCharts({ metrics, uiContext = 'neutral' }: IpSummaryChartsProps) {
-  const [workflowOpen, setWorkflowOpen] = useState(false);
-  const chartsCopy = useMemo(() => getIpInventoryChartsCopy(uiContext), [uiContext]);
-  const workflowCopy = useMemo(
-    () => (uiContext === 'ip_drug' ? getIpDrugWorkflowCardCopy() : null),
-    [uiContext]
-  );
+interface IpSummaryChartsProps {
+  metrics: IpStudyMetricRow[];
+}
 
+export function IpSummaryCharts({ metrics }: IpSummaryChartsProps) {
   const stockFlowData = metrics.map((m) => ({
     name: m.item_name.length > 20 ? `${m.item_name.slice(0, 18)}…` : m.item_name,
     globalInStock: m.global_in_stock,
@@ -65,57 +63,7 @@ export function IpSummaryCharts({ metrics, uiContext = 'neutral' }: IpSummaryCha
   }));
 
   return (
-    <div className="space-y-4">
-      {workflowCopy && (
-        <Collapsible
-          open={workflowOpen}
-          onOpenChange={setWorkflowOpen}
-          className="rounded-lg border bg-card text-card-foreground shadow-xs print:hidden"
-        >
-          <CollapsibleTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full h-auto justify-between gap-2 px-4 py-3 font-normal hover:bg-muted/50 rounded-none rounded-t-lg"
-            >
-              <span className="text-sm font-semibold text-left text-foreground">{workflowCopy.title}</span>
-              <ChevronDown
-                className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', workflowOpen && 'rotate-180')}
-              />
-            </Button>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="space-y-4 px-4 pb-4 pt-0 text-sm text-muted-foreground border-t">
-              <div className="pt-4">
-                <p className="font-medium text-foreground text-xs mb-1.5">{workflowCopy.whatItTracksHeading}</p>
-                <ul className="list-disc pl-4 space-y-0.5">
-                  {workflowCopy.whatItTracks.map((t) => (
-                    <li key={t}>{t}</li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <p className="font-medium text-foreground text-xs mb-1.5">{workflowCopy.coreFocusHeading}</p>
-                <ul className="list-disc pl-4 space-y-0.5">
-                  {workflowCopy.coreFocus.map((t) => (
-                    <li key={t}>{t}</li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <p className="font-medium text-foreground text-xs mb-1.5">{workflowCopy.workflowHeading}</p>
-                <ol className="list-decimal pl-4 space-y-0.5">
-                  {workflowCopy.workflow.map((t) => (
-                    <li key={t}>{t}</li>
-                  ))}
-                </ol>
-              </div>
-              <p className="text-xs border-t pt-3 text-pretty leading-relaxed">{workflowCopy.quantityNote}</p>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
-
+    <div className="space-y-4 print:[print-color-adjust:exact] print:[-webkit-print-color-adjust:exact]">
       {metrics.length === 0 ? (
         <Card>
           <CardHeader>
@@ -128,22 +76,94 @@ export function IpSummaryCharts({ metrics, uiContext = 'neutral' }: IpSummaryCha
           <Card className="print:break-inside-avoid">
             <CardHeader>
               <CardTitle className="text-base">Point-in-time vs cumulative (by item)</CardTitle>
-              <p className="text-xs text-muted-foreground leading-relaxed">{chartsCopy.barSubtitle}</p>
             </CardHeader>
             <CardContent className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={stockFlowData} margin={{ top: 8, right: 8, left: 0, bottom: 48 }}>
+                <BarChart data={stockFlowData} margin={{ top: 22, right: 8, left: 0, bottom: 48 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="name" tick={{ fontSize: 9 }} interval={0} angle={-28} textAnchor="end" height={72} />
-                  <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <Tooltip contentStyle={{ fontSize: 12 }} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fontSize: 9 }}
+                    interval={0}
+                    tickMargin={8}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={false}
+                    tickLine={false}
+                    axisLine={false}
+                    width={0}
+                  />
                   <Legend wrapperStyle={{ fontSize: 10 }} />
-                  <Bar dataKey="globalInStock" name="Global in stock" fill="hsl(173 58% 42%)" />
-                  <Bar dataKey="siteOnsite" name="Site on hand" fill="hsl(var(--primary))" />
-                  <Bar dataKey="siteAvailable" name="Site available" fill="hsl(199 89% 48%)" />
-                  <Bar dataKey="siteReceivedCumulative" name="Received at site" fill="hsl(142 45% 42%)" />
-                  <Bar dataKey="globalSentCumulative" name="Shipped from global" fill="hsl(var(--muted-foreground))" />
-                  <Bar dataKey="globalReturnsCumulative" name="Returns" fill="hsl(38 92% 50%)" />
+                  <Bar
+                    dataKey="globalInStock"
+                    name="Global in stock"
+                    fill="hsl(173 58% 42%)"
+                    radius={BAR_CORNER_RADIUS}
+                  >
+                    <LabelList
+                      dataKey="globalInStock"
+                      position="top"
+                      fontSize={9}
+                      fill={BAR_LABEL_FILL}
+                      formatter={formatBarValueLabel}
+                    />
+                  </Bar>
+                  <Bar dataKey="siteOnsite" name="Site on hand" fill="hsl(var(--primary))" radius={BAR_CORNER_RADIUS}>
+                    <LabelList
+                      dataKey="siteOnsite"
+                      position="top"
+                      fontSize={9}
+                      fill={BAR_LABEL_FILL}
+                      formatter={formatBarValueLabel}
+                    />
+                  </Bar>
+                  <Bar dataKey="siteAvailable" name="Site available" fill="hsl(199 89% 48%)" radius={BAR_CORNER_RADIUS}>
+                    <LabelList
+                      dataKey="siteAvailable"
+                      position="top"
+                      fontSize={9}
+                      fill={BAR_LABEL_FILL}
+                      formatter={formatBarValueLabel}
+                    />
+                  </Bar>
+                  <Bar
+                    dataKey="siteReceivedCumulative"
+                    name="Received at site"
+                    fill="hsl(142 45% 42%)"
+                    radius={BAR_CORNER_RADIUS}
+                  >
+                    <LabelList
+                      dataKey="siteReceivedCumulative"
+                      position="top"
+                      fontSize={9}
+                      fill={BAR_LABEL_FILL}
+                      formatter={formatBarValueLabel}
+                    />
+                  </Bar>
+                  <Bar
+                    dataKey="globalSentCumulative"
+                    name="Shipped from global"
+                    fill="hsl(var(--muted-foreground))"
+                    radius={BAR_CORNER_RADIUS}
+                  >
+                    <LabelList
+                      dataKey="globalSentCumulative"
+                      position="top"
+                      fontSize={9}
+                      fill={BAR_LABEL_FILL}
+                      formatter={formatBarValueLabel}
+                    />
+                  </Bar>
+                  <Bar dataKey="globalReturnsCumulative" name="Returns" fill="hsl(38 92% 50%)" radius={BAR_CORNER_RADIUS}>
+                    <LabelList
+                      dataKey="globalReturnsCumulative"
+                      position="top"
+                      fontSize={9}
+                      fill={BAR_LABEL_FILL}
+                      formatter={formatBarValueLabel}
+                    />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -152,7 +172,6 @@ export function IpSummaryCharts({ metrics, uiContext = 'neutral' }: IpSummaryCha
           <Card className="print:break-inside-avoid">
             <CardHeader>
               <CardTitle className="text-base">Mix by category</CardTitle>
-              <p className="text-xs text-muted-foreground leading-relaxed">{chartsCopy.mixSubtitle}</p>
             </CardHeader>
             <CardContent className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -163,14 +182,14 @@ export function IpSummaryCharts({ metrics, uiContext = 'neutral' }: IpSummaryCha
                     nameKey="name"
                     cx="50%"
                     cy="50%"
-                    outerRadius={88}
-                    label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                    innerRadius={PIE_INNER_RADIUS}
+                    outerRadius={PIE_OUTER_RADIUS}
+                    label={({ name, value }) => `${String(name ?? '')}: ${value}`}
                   >
                     {pieData.map((_, i) => (
                       <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ fontSize: 12 }} />
                 </PieChart>
               </ResponsiveContainer>
             </CardContent>

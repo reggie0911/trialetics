@@ -28,6 +28,7 @@ import {
   ipReturnToGlobal,
 } from '@/lib/actions/ip-management';
 import type { IpMovementLineContext } from '@/lib/utils/ip-order-actions';
+import type { IpPermissions } from '@/lib/types/ip-access';
 import type { ContainerFillState } from '@/lib/utils/ip-container-fill-state';
 import { CONTAINER_FILL_STATE_LABELS, CONTAINER_FILL_STATE_VALUES } from '@/lib/utils/ip-container-fill-state';
 
@@ -42,7 +43,7 @@ export interface IpChangeDispositionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   line: IpMovementLineContext | null;
-  isIpAdmin: boolean;
+  permissions: IpPermissions;
   subjects: SubjectOption[];
   onSuccess: () => void | Promise<void>;
 }
@@ -51,7 +52,7 @@ export function IpChangeDispositionDialog({
   open,
   onOpenChange,
   line,
-  isIpAdmin,
+  permissions,
   subjects,
   onSuccess,
 }: IpChangeDispositionDialogProps) {
@@ -168,7 +169,7 @@ export function IpChangeDispositionDialog({
 
   const canSubmit =
     choice === 'unused'
-      ? isIpAdmin && unusedReason.trim() !== ''
+      ? permissions.canResetToAvailable && unusedReason.trim() !== ''
       : choice === 'used'
         ? maxAvail > 0 &&
           (!!subjectId || subjectManual.trim() !== '') &&
@@ -222,7 +223,7 @@ export function IpChangeDispositionDialog({
                   <SelectItem value="destroyed" className="text-[12px]">
                     Destroyed — discard quantity
                   </SelectItem>
-                  {isIpAdmin && (
+                  {permissions.canResetToAvailable && (
                     <SelectItem value="unused" className="text-[12px]">
                       Unused — mark available again (admin)
                     </SelectItem>
@@ -342,7 +343,7 @@ export function IpChangeDispositionDialog({
               </div>
             )}
 
-            {choice === 'unused' && isIpAdmin && (
+            {choice === 'unused' && permissions.canResetToAvailable && (
               <div className="space-y-1">
                 <Label htmlFor="ip-cd-reason" className="text-xs">
                   Reason <span className="text-destructive">*</span>

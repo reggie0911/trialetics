@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { format, parseISO } from 'date-fns';
 import { enUS } from 'date-fns/locale';
 import { ChevronDown, ChevronRight, Loader2, MoreHorizontal } from 'lucide-react';
@@ -26,6 +26,7 @@ import { IP_CATEGORY_LABELS, IP_DISPOSITION_LABELS, type IpCategory, type IpDisp
 import { getIpItemSiteMetrics, getIpSiteOrders } from '@/lib/actions/ip-management';
 import { cn } from '@/lib/utils';
 import { getSummaryOrderMenuFlags } from '@/lib/utils/ip-order-actions';
+import type { IpPermissions } from '@/lib/types/ip-access';
 import type { IpInventoryUiContext } from '@/lib/utils/ip-inventory-ui-copy';
 import { getIpInventorySummaryCopy } from '@/lib/utils/ip-inventory-ui-copy';
 import { labelContainerFillState } from '@/lib/utils/ip-container-fill-state';
@@ -35,6 +36,76 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+
+interface SummaryColumnTooltips {
+  item: string;
+  category: string;
+  unit: string;
+  inStock: string;
+  sent: string;
+  returnsGlobal: string;
+  received: string;
+  returnedSite: string;
+  transfers: string;
+  destroyed: string;
+  onsite: string;
+  available: string;
+}
+
+function summaryTableColumnTooltips(ctx: IpInventoryUiContext): SummaryColumnTooltips {
+  const item =
+    ctx === 'ip_drug'
+      ? 'Investigational product name from the study catalog for this row.'
+      : ctx === 'ip_device'
+        ? 'Device or supply name from the study catalog for this row.'
+        : 'Product or supply name from the study catalog for this row.';
+  return {
+    item,
+    category:
+      'Inventory category for this catalog item (for example investigational drug or device). It drives labels and workflows elsewhere.',
+    unit:
+      'Unit used for every quantity in this row (for example bottle, tablet, or kit), as stored on the catalog item.',
+    inStock:
+      'Quantity held in the central study pool—on-hand at study level but not at a site location in the ledger.',
+    sent:
+      'Total quantity shipped from the central pool toward sites (inventory ledger: shipped to site).',
+    returnsGlobal:
+      'Quantity returned from sites back to the central pool (inventory ledger: returned to global).',
+    received:
+      'Quantity physically received at sites by an operator. Automated ship-to-receive chains marked as system fulfillment are excluded from this count.',
+    returnedSite: 'Quantity returned while still in the site chain (site-level return movements in the ledger).',
+    transfers: 'Quantity moved between sites (transfer movements in the ledger).',
+    destroyed: 'Quantity destroyed at site (destroyed entries in the ledger).',
+    onsite: 'Total on-hand quantity recorded at site locations (sum of site on-hand balances).',
+    available:
+      'Quantity at sites still marked available for dispensing (sum of site available balances; can be less than onsite if some stock is allocated or in use).',
+  };
+}
+
+function SummaryThTip({
+  tooltip,
+  className,
+  rowSpan,
+  colSpan,
+  children,
+}: {
+  tooltip: string;
+  className?: string;
+  rowSpan?: number;
+  colSpan?: number;
+  children: ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<TableHead className={className} rowSpan={rowSpan} colSpan={colSpan} />}>
+        {children}
+      </TooltipTrigger>
+      <TooltipContent side="top" className="max-w-xs text-left leading-snug">
+        {tooltip}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
 
 function expiryStatus(dateStr: string | null): 'expired' | 'near' | null {
   if (!dateStr) return null;
@@ -92,7 +163,7 @@ interface IpSummaryTableProps {
   onVerifyOrder?: (order: IpOrderRow) => void;
   onUnverifyOrder?: (order: IpOrderRow) => void;
   onRestoreOrder?: (order: IpOrderRow) => void;
-  isIpAdmin?: boolean;
+  permissions: IpPermissions;
   onViewOrderTransactions?: (order: IpOrderRow) => void;
   onReceiveInventory?: (order: IpOrderRow) => void;
   onReverseReceipt?: (order: IpOrderRow) => void;
@@ -107,6 +178,10 @@ interface IpSummaryTableProps {
   /** Drives labels for investigational drug vs device vs mixed category views. */
   uiContext?: IpInventoryUiContext;
   className?: string;
+  /** When true, all item and site rows render expanded; site lists and orders are prefetched (e.g. browser print / Save as PDF). */
+  expandForPrint?: boolean;
+  /** Called once prefetch for expand-for-print finished (or immediately if there are no items). */
+  onExpandForPrintReady?: () => void;
 }
 
 export function IpSummaryTable({
@@ -129,7 +204,7 @@ export function IpSummaryTable({
   onVerifyOrder,
   onUnverifyOrder,
   onRestoreOrder,
-  isIpAdmin = false,
+  permissions,
   onViewOrderTransactions,
   onReceiveInventory,
   onReverseReceipt,
@@ -143,14 +218,21 @@ export function IpSummaryTable({
   onShippingDocuments,
   uiContext = 'neutral',
   className,
+  expandForPrint = false,
+  onExpandForPrintReady,
 }: IpSummaryTableProps) {
   const summaryCopy = useMemo(() => getIpInventorySummaryCopy(uiContext), [uiContext]);
+  const tips = useMemo(() => summaryTableColumnTooltips(uiContext), [uiContext]);
+  const showGlobal = permissions.canViewGlobalInventory;
+  const totalColSpan = showGlobal ? 15 : 12;
   const [openItems, setOpenItems] = useState<Set<string>>(() => new Set());
   const [openSites, setOpenSites] = useState<Map<string, Set<string>>>(() => new Map());
   const [siteMetrics, setSiteMetrics] = useState<Map<string, IpItemSiteMetricRow[]>>(() => new Map());
   const [siteOrders, setSiteOrders] = useState<Map<string, IpOrderRow[]>>(() => new Map());
   const [loadingItems, setLoadingItems] = useState<Set<string>>(() => new Set());
   const [loadingSites, setLoadingSites] = useState<Set<string>>(() => new Set());
+  const expandReadyCbRef = useRef(onExpandForPrintReady);
+  expandReadyCbRef.current = onExpandForPrintReady;
 
   const toggleItem = useCallback(async (itemId: string) => {
     setOpenItems((prev) => {
@@ -264,6 +346,105 @@ export function IpSummaryTable({
   );
 
   useEffect(() => {
+    if (!expandForPrint) return;
+    if (metrics.length === 0) {
+      queueMicrotask(() => expandReadyCbRef.current?.());
+      return;
+    }
+    let cancelled = false;
+    const itemIds = metrics.map((m) => m.item_id);
+    setLoadingItems((p) => new Set([...p, ...itemIds]));
+    let sitePairKeys: string[] = [];
+
+    (async () => {
+      let sitePairs: { key: string; itemId: string; studySiteId: string }[] = [];
+      try {
+        const itemResults = await Promise.all(
+          metrics.map((m) =>
+            getIpItemSiteMetrics({ studyId, itemId: m.item_id, includeArchived: archivedSitesView })
+          )
+        );
+        if (cancelled) return;
+
+        setSiteMetrics((prev) => {
+          const next = new Map(prev);
+          metrics.forEach((m, i) => next.set(m.item_id, itemResults[i]));
+          return next;
+        });
+        setOpenItems(() => new Set(itemIds));
+
+        const newOpenSites = new Map<string, Set<string>>();
+        metrics.forEach((m, i) => {
+          newOpenSites.set(
+            m.item_id,
+            new Set(itemResults[i].map((s) => s.study_site_id))
+          );
+        });
+        setOpenSites(newOpenSites);
+
+        sitePairs = [];
+        metrics.forEach((m, idx) => {
+          for (const s of itemResults[idx]) {
+            sitePairs.push({
+              key: `${m.item_id}::${s.study_site_id}`,
+              itemId: m.item_id,
+              studySiteId: s.study_site_id,
+            });
+          }
+        });
+        sitePairKeys = sitePairs.map((p) => p.key);
+        setLoadingSites((p) => {
+          const n = new Set(p);
+          for (const sp of sitePairs) n.add(sp.key);
+          return n;
+        });
+
+        const orderResults = await Promise.all(
+          sitePairs.map((p) =>
+            getIpSiteOrders({
+              studyId,
+              itemId: p.itemId,
+              studySiteId: p.studySiteId,
+              includeArchived: showArchivedOrders,
+            })
+          )
+        );
+        if (cancelled) return;
+
+        setSiteOrders((prev) => {
+          const next = new Map(prev);
+          sitePairs.forEach((p, i) => next.set(p.key, orderResults[i]));
+          return next;
+        });
+      } finally {
+        if (!cancelled) {
+          setLoadingItems((p) => {
+            const n = new Set(p);
+            for (const id of itemIds) n.delete(id);
+            return n;
+          });
+          setLoadingSites((p) => {
+            const n = new Set(p);
+            for (const k of sitePairKeys) n.delete(k);
+            return n;
+          });
+          expandReadyCbRef.current?.();
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    expandForPrint,
+    metricsSyncKey,
+    studyId,
+    archivedSitesView,
+    showArchivedOrders,
+  ]);
+
+  useEffect(() => {
     for (const itemId of openItemsRef.current) {
       void refreshItem(itemId);
       const sites = openSitesRef.current.get(itemId);
@@ -313,33 +494,57 @@ export function IpSummaryTable({
   }, [siteLinksRefreshNonce, siteLinksItemId, refreshItem]);
 
   return (
-    <TooltipProvider>
-    <div className={cn('rounded-md border overflow-x-auto', className)}>
-      <Table>
+    <TooltipProvider delay={200}>
+    <div
+      className={cn(
+        'rounded-md border overflow-x-auto print:overflow-visible print:max-w-none',
+        className
+      )}
+    >
+      <Table className="print:w-full print:min-w-0 print:table-auto">
         <TableHeader>
           <TableRow className="bg-muted/50 hover:bg-muted/50">
-            <TableHead rowSpan={2} className="align-bottom w-10" />
-            <TableHead rowSpan={2} className="align-bottom min-w-[160px]">
+            <TableHead rowSpan={2} className="align-bottom w-10 print:hidden" />
+            <SummaryThTip
+              rowSpan={2}
+              className="align-bottom min-w-[160px]"
+              tooltip={tips.item}
+            >
               Item
-            </TableHead>
-            <TableHead rowSpan={2} className="align-bottom">
+            </SummaryThTip>
+            <SummaryThTip rowSpan={2} className="align-bottom" tooltip={tips.category}>
               Category
-            </TableHead>
-            <TableHead rowSpan={2} className="align-bottom">
+            </SummaryThTip>
+            <SummaryThTip rowSpan={2} className="align-bottom" tooltip={tips.unit}>
               Unit
-            </TableHead>
-            <TableHead colSpan={3} className="text-center border-l">
-              Global inventory
-            </TableHead>
+            </SummaryThTip>
+            {showGlobal && (
+              <TableHead colSpan={3} className="text-center border-l">
+                Global inventory
+              </TableHead>
+            )}
             <TableHead colSpan={7} className="text-center border-l">
               Site inventory
             </TableHead>
-            <TableHead rowSpan={2} className="w-12" />
+            <TableHead rowSpan={2} className="w-12 print:hidden" />
           </TableRow>
           <TableRow className="bg-muted/50 hover:bg-muted/50">
-            <TableHead className="text-center border-l text-xs font-medium">In stock</TableHead>
-            <TableHead className="text-center text-xs font-medium">Sent</TableHead>
-            <TableHead className="text-center text-xs font-medium">Returns</TableHead>
+            {showGlobal && (
+              <>
+                <SummaryThTip
+                  className="text-center border-l text-xs font-medium"
+                  tooltip={tips.inStock}
+                >
+                  In stock
+                </SummaryThTip>
+                <SummaryThTip className="text-center text-xs font-medium" tooltip={tips.sent}>
+                  Sent
+                </SummaryThTip>
+                <SummaryThTip className="text-center text-xs font-medium" tooltip={tips.returnsGlobal}>
+                  Returns
+                </SummaryThTip>
+              </>
+            )}
             <TableHead className="text-center border-l text-xs font-medium p-0">
               <Tooltip>
                 <TooltipTrigger
@@ -348,12 +553,14 @@ export function IpSummaryTable({
                 >
                   Received
                 </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-xs text-left">
-                  Units physically received at sites (inventory ledger: received_at_site).
+                <TooltipContent side="top" className="max-w-xs text-left leading-snug">
+                  {tips.received}
                 </TooltipContent>
               </Tooltip>
             </TableHead>
-            <TableHead className="text-center text-xs font-medium">Returned</TableHead>
+            <SummaryThTip className="text-center text-xs font-medium" tooltip={tips.returnedSite}>
+              Returned
+            </SummaryThTip>
             <TableHead className="text-center text-xs font-medium p-0">
               <Tooltip>
                 <TooltipTrigger
@@ -362,22 +569,30 @@ export function IpSummaryTable({
                 >
                   {summaryCopy.usedHeader}
                 </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-xs text-left">
+                <TooltipContent side="top" className="max-w-xs text-left leading-snug">
                   {summaryCopy.usedTooltip}
                 </TooltipContent>
               </Tooltip>
             </TableHead>
-            <TableHead className="text-center text-xs font-medium">Transfers</TableHead>
-            <TableHead className="text-center text-xs font-medium">Destroyed</TableHead>
-            <TableHead className="text-center text-xs font-medium">Onsite</TableHead>
-            <TableHead className="text-center text-xs font-medium">Available</TableHead>
+            <SummaryThTip className="text-center text-xs font-medium" tooltip={tips.transfers}>
+              Transfers
+            </SummaryThTip>
+            <SummaryThTip className="text-center text-xs font-medium" tooltip={tips.destroyed}>
+              Destroyed
+            </SummaryThTip>
+            <SummaryThTip className="text-center text-xs font-medium" tooltip={tips.onsite}>
+              Onsite
+            </SummaryThTip>
+            <SummaryThTip className="text-center text-xs font-medium" tooltip={tips.available}>
+              Available
+            </SummaryThTip>
           </TableRow>
         </TableHeader>
         <TableBody>
           {metrics.length === 0 ? (
             <TableRow className="h-auto hover:bg-transparent">
               <TableCell
-                colSpan={15}
+                colSpan={totalColSpan}
                 className="text-center py-12 align-middle whitespace-normal break-words"
               >
                 {archivedView ? (
@@ -399,10 +614,14 @@ export function IpSummaryTable({
             </TableRow>
           ) : (
             metrics.map((m) => {
-              const itemOpen = openItems.has(m.item_id);
+              const itemOpen = expandForPrint || openItems.has(m.item_id);
               const sites = siteMetrics.get(m.item_id) ?? [];
               const itemLoading = loadingItems.has(m.item_id);
-              const distinctSites = itemOpen ? sites.length : (m.associated_sites ?? 0);
+              const distinctSites = itemOpen
+                ? sites.length > 0
+                  ? sites.length
+                  : (m.associated_sites ?? 0)
+                : (m.associated_sites ?? 0);
 
               return (
                 <Fragment key={m.item_id}>
@@ -411,7 +630,7 @@ export function IpSummaryTable({
                     className={cn('bg-primary/5', archivedView && 'opacity-80 bg-muted/40')}
                     data-state={itemOpen ? 'open' : undefined}
                   >
-                    <TableCell className="p-1">
+                    <TableCell className="p-1 print:hidden">
                       <Button
                         type="button"
                         variant="ghost"
@@ -450,9 +669,13 @@ export function IpSummaryTable({
                       {IP_CATEGORY_LABELS[m.category as IpCategory] ?? m.category}
                     </TableCell>
                     <TableCell className="text-sm">{m.unit}</TableCell>
-                    <TableCell className="text-center border-l tabular-nums">{m.global_in_stock}</TableCell>
-                    <TableCell className="text-center tabular-nums">{m.global_sent}</TableCell>
-                    <TableCell className="text-center tabular-nums">{m.global_returns}</TableCell>
+                    {showGlobal && (
+                      <>
+                        <TableCell className="text-center border-l tabular-nums">{m.global_in_stock}</TableCell>
+                        <TableCell className="text-center tabular-nums">{m.global_sent}</TableCell>
+                        <TableCell className="text-center tabular-nums">{m.global_returns}</TableCell>
+                      </>
+                    )}
                     <TableCell className="text-center border-l tabular-nums">{m.site_shipments}</TableCell>
                     <TableCell className="text-center tabular-nums">{m.site_returned}</TableCell>
                     <TableCell className="text-center tabular-nums">{m.site_used}</TableCell>
@@ -460,7 +683,7 @@ export function IpSummaryTable({
                     <TableCell className="text-center tabular-nums">{m.site_destroyed}</TableCell>
                     <TableCell className="text-center tabular-nums">{m.site_onsite}</TableCell>
                     <TableCell className="text-center tabular-nums">{m.site_available}</TableCell>
-                    <TableCell>
+                    <TableCell className="print:hidden">
                       <DropdownMenu>
                         <DropdownMenuTrigger
                           className={cn(
@@ -506,7 +729,9 @@ export function IpSummaryTable({
 
                   {/* Level 2: Site rows */}
                   {itemOpen && sites.map((site) => {
-                    const siteOpen = openSites.get(m.item_id)?.has(site.study_site_id) ?? false;
+                    const siteOpen =
+                      expandForPrint ||
+                      (openSites.get(m.item_id)?.has(site.study_site_id) ?? false);
                     const orderKey = `${m.item_id}::${site.study_site_id}`;
                     const orders = siteOrders.get(orderKey) ?? [];
                     const siteLoading = loadingSites.has(orderKey);
@@ -517,7 +742,7 @@ export function IpSummaryTable({
                     return (
                       <Fragment key={`${m.item_id}-site-${site.study_site_id}`}>
                         <TableRow className={cn('bg-muted/10', archivedSitesView && 'opacity-80 bg-muted/20')}>
-                          <TableCell className="p-1 pl-6">
+                          <TableCell className="p-1 pl-6 print:hidden">
                             <Button
                               type="button"
                               variant="ghost"
@@ -541,9 +766,13 @@ export function IpSummaryTable({
                               Associated orders: {site.order_count}
                             </div>
                           </TableCell>
-                          <TableCell className="text-center border-l tabular-nums">{site.global_in_stock}</TableCell>
-                          <TableCell className="text-center tabular-nums">{site.global_sent}</TableCell>
-                          <TableCell className="text-center tabular-nums">{site.global_returns}</TableCell>
+                          {showGlobal && (
+                            <>
+                              <TableCell className="text-center border-l tabular-nums">{site.global_in_stock}</TableCell>
+                              <TableCell className="text-center tabular-nums">{site.global_sent}</TableCell>
+                              <TableCell className="text-center tabular-nums">{site.global_returns}</TableCell>
+                            </>
+                          )}
                           <TableCell className="text-center border-l tabular-nums">{site.site_shipments}</TableCell>
                           <TableCell className="text-center tabular-nums">{site.site_returned}</TableCell>
                           <TableCell className="text-center tabular-nums">{site.site_used}</TableCell>
@@ -551,7 +780,7 @@ export function IpSummaryTable({
                           <TableCell className="text-center tabular-nums">{site.site_destroyed}</TableCell>
                           <TableCell className="text-center tabular-nums font-medium">{site.site_onsite}</TableCell>
                           <TableCell className="text-center tabular-nums font-medium">{site.site_available}</TableCell>
-                          <TableCell>
+                          <TableCell className="print:hidden">
                             <DropdownMenu>
                               <DropdownMenuTrigger
                                 className={cn(
@@ -606,7 +835,7 @@ export function IpSummaryTable({
                             const activeOrderMode =
                               !archivedView && !archivedSitesView && !showArchivedOrders;
                             const menu = getSummaryOrderMenuFlags(order, {
-                              isIpAdmin,
+                              permissions,
                               activeOrderMode,
                               archivedOrdersView: showArchivedOrders,
                             });
@@ -615,7 +844,7 @@ export function IpSummaryTable({
 
                             return (
                               <TableRow key={order.order_id} className="bg-muted/20">
-                                <TableCell />
+                                <TableCell className="print:hidden" />
                                 <TableCell colSpan={3} className="pl-14 text-sm">
                                   <div className="text-muted-foreground">
                                     {uiContext === 'ip_drug' ? (
@@ -666,6 +895,13 @@ export function IpSummaryTable({
                                       return null;
                                     })()}
                                   </div>
+                                  {order.category === 'investigational_drug' &&
+                                  order.contents_per_catalog_unit != null ? (
+                                    <div className="text-xs text-muted-foreground mt-1">
+                                      Contents per {order.unit.trim() || 'catalog unit'}:{' '}
+                                      {order.contents_per_catalog_unit}
+                                    </div>
+                                  ) : null}
                                   {order.category === 'investigational_drug' ? (
                                     (() => {
                                       const d = labelContainerFillState(order.latest_dispense_container_fill_state);
@@ -682,9 +918,13 @@ export function IpSummaryTable({
                                     })()
                                   ) : null}
                                 </TableCell>
-                                <TableCell className="text-center border-l text-muted-foreground">—</TableCell>
-                                <TableCell className="text-center text-muted-foreground">—</TableCell>
-                                <TableCell className="text-center text-muted-foreground">—</TableCell>
+                                {showGlobal && (
+                                  <>
+                                    <TableCell className="text-center border-l text-muted-foreground">—</TableCell>
+                                    <TableCell className="text-center text-muted-foreground">—</TableCell>
+                                    <TableCell className="text-center text-muted-foreground">—</TableCell>
+                                  </>
+                                )}
                                 <TableCell className="text-center border-l tabular-nums">
                                   {order.operator_received_qty}
                                 </TableCell>
@@ -694,7 +934,7 @@ export function IpSummaryTable({
                                 <TableCell className="text-center tabular-nums">{order.disposition === 'destroyed' ? 1 : 0}</TableCell>
                                 <TableCell className="text-center tabular-nums">{order.quantity_on_hand}</TableCell>
                                 <TableCell className="text-center tabular-nums">{order.quantity_available}</TableCell>
-                                <TableCell>
+                                <TableCell className="print:hidden">
                                   <DropdownMenu>
                                     <DropdownMenuTrigger
                                       className={cn(
@@ -818,7 +1058,7 @@ export function IpSummaryTable({
 
                         {siteOpen && siteLoading && (
                           <TableRow className="bg-muted/20">
-                            <TableCell colSpan={15} className="text-center py-3">
+                            <TableCell colSpan={totalColSpan} className="text-center py-3">
                               <Loader2 className="h-4 w-4 animate-spin inline-block mr-2" />
                               <span className="text-sm text-muted-foreground">Loading orders…</span>
                             </TableCell>
@@ -827,7 +1067,7 @@ export function IpSummaryTable({
 
                         {siteOpen && !siteLoading && orders.length === 0 && (
                           <TableRow className="bg-muted/20">
-                            <TableCell colSpan={15} className="text-center text-muted-foreground py-3 text-sm">
+                            <TableCell colSpan={totalColSpan} className="text-center text-muted-foreground py-3 text-sm">
                               No orders at this site yet.
                             </TableCell>
                           </TableRow>
@@ -838,7 +1078,7 @@ export function IpSummaryTable({
 
                   {itemOpen && itemLoading && (
                     <TableRow className="bg-muted/10">
-                      <TableCell colSpan={15} className="text-center py-3">
+                      <TableCell colSpan={totalColSpan} className="text-center py-3">
                         <Loader2 className="h-4 w-4 animate-spin inline-block mr-2" />
                         <span className="text-sm text-muted-foreground">Loading sites…</span>
                       </TableCell>
@@ -847,7 +1087,7 @@ export function IpSummaryTable({
 
                   {itemOpen && !itemLoading && sites.length === 0 && (
                     <TableRow className="bg-muted/10">
-                      <TableCell colSpan={15} className="text-center text-muted-foreground py-3 text-sm">
+                      <TableCell colSpan={totalColSpan} className="text-center text-muted-foreground py-3 text-sm">
                         No sites linked to this item. Use &quot;Add site&quot; to associate one.
                       </TableCell>
                     </TableRow>

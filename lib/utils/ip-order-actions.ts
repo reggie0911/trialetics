@@ -1,4 +1,5 @@
 import type { IpLogRow, IpOrderRow } from '@/lib/types/ip-management';
+import type { IpPermissions } from '@/lib/types/ip-access';
 import { getLogRowPrimaryMenuFlags } from '@/lib/utils/ip-log-row';
 
 /** Lot/site line for movement modals (summary order or log row). */
@@ -15,7 +16,7 @@ export interface IpMovementLineContext {
   batch_number: string | null;
   /** Catalog category (e.g. investigational_drug) for disposition modal branching. */
   category: string;
-  /** Ledger: quantity sent to this site not yet received (UI: “Sent — awaiting receipt”). */
+  /** Ledger: quantity sent to this site not yet received (UI: "Sent — awaiting receipt"). */
   in_transit_qty: number;
 }
 
@@ -58,7 +59,6 @@ export interface SummaryOrderMenuFlags {
   showEditOrder: boolean;
   showReceiveInventory: boolean;
   showVerifyInventory: boolean;
-  /** Admin-only: undo mistaken verification on a Used line. */
   showUnverifyInventory: boolean;
   showReturnToManufacturer: boolean;
   showReverseReceipt: boolean;
@@ -72,24 +72,32 @@ export interface SummaryOrderMenuFlags {
 
 export function getSummaryOrderMenuFlags(
   order: IpOrderRow,
-  opts: { isIpAdmin: boolean; activeOrderMode: boolean; archivedOrdersView: boolean }
+  opts: { permissions: IpPermissions; activeOrderMode: boolean; archivedOrdersView: boolean }
 ): SummaryOrderMenuFlags {
+  const p = opts.permissions;
   const deleted = !!order.deleted_at;
-  const showRestore = opts.isIpAdmin && opts.archivedOrdersView && deleted;
+  const showRestore = p.canRestoreRecords && opts.archivedOrdersView && deleted;
   const active = opts.activeOrderMode && !deleted;
 
-  const showEditOrder = active;
-  const showReceiveInventory = active && order.disposition !== 'used';
-  const showVerifyInventory = active && order.disposition === 'used' && !order.verified_at;
+  const receiveWorkflowComplete = order.in_transit_qty <= 0;
+
+  const showEditOrder = active && p.canEditRecords;
+  const showReceiveInventory = active && order.disposition !== 'used' && p.canReceiveInventory;
+  const showVerifyInventory = active && order.disposition === 'used' && !order.verified_at && p.canVerifyInventory;
   const showUnverifyInventory =
-    opts.isIpAdmin && active && order.disposition === 'used' && !!order.verified_at;
-  const showReturnToManufacturer = active && order.quantity_on_hand > 0;
+    p.canUnverifyInventory && active && order.disposition === 'used' && !!order.verified_at;
+  const showReturnToManufacturer =
+    active && order.quantity_on_hand > 0 && receiveWorkflowComplete && p.canUpdateDisposition;
   const showReverseReceipt =
-    opts.isIpAdmin && active && order.disposition === 'available' && order.quantity_available > 0;
-  const showTransfer = active && order.quantity_on_hand > 0;
-  const showDestroy = active && order.quantity_on_hand > 0;
-  const showChangeDisposition = opts.isIpAdmin && active;
-  const showDeleteOrder = opts.isIpAdmin && active && order.disposition !== 'used';
+    p.canUnreceiveInventory &&
+    active &&
+    order.disposition === 'available' &&
+    order.quantity_available > 0 &&
+    receiveWorkflowComplete;
+  const showTransfer = active && order.quantity_on_hand > 0 && receiveWorkflowComplete && p.canUpdateDisposition;
+  const showDestroy = active && order.quantity_on_hand > 0 && receiveWorkflowComplete && p.canUpdateDisposition;
+  const showChangeDisposition = p.canChangeDisposition && active && receiveWorkflowComplete;
+  const showDeleteOrder = p.canDeleteRecords && active && order.disposition !== 'used';
   const showViewTransactions = true;
 
   return {
@@ -105,7 +113,6 @@ export function getSummaryOrderMenuFlags(
     showChangeDisposition,
     showDeleteOrder,
     showRestoreOrder: showRestore,
-    /** Summary rows always offer View transactions; omit disabled placeholder. */
     showNoActionsDisabled: false,
   };
 }
@@ -114,7 +121,6 @@ export interface LogRowMenuFlags {
   showViewTransactions: boolean;
   showReceiveInventory: boolean;
   showVerifyInventory: boolean;
-  /** Admin-only: undo mistaken verification on a Used line. */
   showUnverifyInventory: boolean;
   showReturnToManufacturer: boolean;
   showReverseReceipt: boolean;
@@ -128,24 +134,32 @@ export interface LogRowMenuFlags {
 
 export function getLogRowExtendedMenuFlags(
   row: IpLogRow,
-  opts: { isIpAdmin: boolean },
-  _inTransitQty: number
+  opts: { permissions: IpPermissions },
+  inTransitQty: number
 ): LogRowMenuFlags {
+  const p = opts.permissions;
   const primary = getLogRowPrimaryMenuFlags(row);
   const orderArchived = !!row.order_deleted_at;
   const activeLine = !orderArchived;
 
-  const showReceiveInventory = activeLine && row.disposition !== 'used';
-  const showReturnToManufacturer = activeLine && row.quantity_on_hand > 0;
+  const receiveWorkflowComplete = inTransitQty <= 0;
+
+  const showReceiveInventory = activeLine && row.disposition !== 'used' && p.canReceiveInventory;
+  const showReturnToManufacturer =
+    activeLine && row.quantity_on_hand > 0 && receiveWorkflowComplete && p.canUpdateDisposition;
   const showReverseReceipt =
-    opts.isIpAdmin && activeLine && row.disposition === 'available' && row.quantity_available > 0;
-  const showTransfer = activeLine && row.quantity_on_hand > 0;
-  const showDestroy = activeLine && row.quantity_on_hand > 0;
-  const showChangeDisposition = opts.isIpAdmin && activeLine;
-  const showDeleteOrder = opts.isIpAdmin && primary.deleteOrder && row.disposition !== 'used';
-  const showRestoreOrder = opts.isIpAdmin && primary.restoreOrder;
+    p.canUnreceiveInventory &&
+    activeLine &&
+    row.disposition === 'available' &&
+    row.quantity_available > 0 &&
+    receiveWorkflowComplete;
+  const showTransfer = activeLine && row.quantity_on_hand > 0 && receiveWorkflowComplete && p.canUpdateDisposition;
+  const showDestroy = activeLine && row.quantity_on_hand > 0 && receiveWorkflowComplete && p.canUpdateDisposition;
+  const showChangeDisposition = p.canChangeDisposition && activeLine && receiveWorkflowComplete;
+  const showDeleteOrder = p.canDeleteRecords && primary.deleteOrder && row.disposition !== 'used';
+  const showRestoreOrder = p.canRestoreRecords && primary.restoreOrder;
   const showUnverifyInventory =
-    opts.isIpAdmin && activeLine && row.disposition === 'used' && !!row.verified_at;
+    p.canUnverifyInventory && activeLine && row.disposition === 'used' && !!row.verified_at;
 
   const actionable =
     !!row.order_id ||
@@ -165,7 +179,7 @@ export function getLogRowExtendedMenuFlags(
   return {
     showViewTransactions: primary.viewTransactions,
     showReceiveInventory,
-    showVerifyInventory: primary.verifyInventory,
+    showVerifyInventory: primary.verifyInventory && p.canVerifyInventory,
     showUnverifyInventory,
     showReturnToManufacturer,
     showReverseReceipt,

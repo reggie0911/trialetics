@@ -9,13 +9,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { IpLogRow } from '@/lib/types/ip-management';
+import type { IpPermissions } from '@/lib/types/ip-access';
 import { getLogRowExtendedMenuFlags } from '@/lib/utils/ip-order-actions';
 import { cn } from '@/lib/utils';
 import { MoreHorizontal } from 'lucide-react';
 
 export interface IpInventoryLogRowMenuProps {
   row: IpLogRow;
-  isIpAdmin: boolean;
+  permissions: IpPermissions;
   inTransitQty: number;
   onViewTransactions?: (row: IpLogRow) => void;
   onViewLotHistory?: () => void;
@@ -34,7 +35,7 @@ export interface IpInventoryLogRowMenuProps {
 
 export function IpInventoryLogRowMenu({
   row,
-  isIpAdmin,
+  permissions,
   inTransitQty,
   onViewTransactions,
   onViewLotHistory,
@@ -50,7 +51,7 @@ export function IpInventoryLogRowMenu({
   onDestroy,
   onChangeDisposition,
 }: IpInventoryLogRowMenuProps) {
-  const m = getLogRowExtendedMenuFlags(row, { isIpAdmin }, inTransitQty);
+  const m = getLogRowExtendedMenuFlags(row, { permissions }, inTransitQty);
 
   return (
     <DropdownMenu>

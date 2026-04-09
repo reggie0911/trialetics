@@ -82,7 +82,7 @@ export function getIpInventoryLogsCopy(ctx: IpInventoryUiContext): IpInventoryLo
       return {
         groupStatus: 'IP inventory status',
         groupDisposition: 'IP disposition and custody',
-        groupActions: 'Comments / actions',
+        groupActions: 'Actions',
         colProduct: 'Product name',
         colLotSerial: 'Lot number and expiry',
         colReceived: 'Received by / Date received',
@@ -98,7 +98,7 @@ export function getIpInventoryLogsCopy(ctx: IpInventoryUiContext): IpInventoryLo
       return {
         groupStatus: 'Device status',
         groupDisposition: 'Device disposition',
-        groupActions: 'Comments / actions',
+        groupActions: 'Actions',
         colProduct: 'Supply name',
         colLotSerial: 'Serial number / Lot number',
         colReceived: 'Received by / Date of received',
@@ -113,7 +113,7 @@ export function getIpInventoryLogsCopy(ctx: IpInventoryUiContext): IpInventoryLo
       return {
         groupStatus: 'Inventory status',
         groupDisposition: 'Disposition',
-        groupActions: 'Comments / actions',
+        groupActions: 'Actions',
         colProduct: 'Supply name',
         colLotSerial: 'Serial number / Lot number',
         colReceived: 'Received by / Date of received',
@@ -179,6 +179,8 @@ export interface IpAddOrderDrugCopy {
   dialogDescription: string;
   quantityLabel: string;
   catalogUnitHelper: (catalogUnit: string) => string;
+  contentsPerUnitLabel: string;
+  contentsPerUnitHelper: (catalogUnit: string) => string;
   toastCreatedOne: (catalogUnit: string) => string;
   toastCreatedMany: (qty: number, catalogUnit: string) => string;
 }
@@ -192,6 +194,19 @@ export function getAddOrderDrugCopy(): IpAddOrderDrugCopy {
       catalogUnit.trim().length > 0
         ? `Catalog unit: ${catalogUnit.trim()}`
         : 'Set the catalog unit on the product in Edit inventory if this looks wrong.',
+    contentsPerUnitLabel: 'Contents per catalog unit (optional)',
+    contentsPerUnitHelper: (catalogUnit: string) => {
+      const u = catalogUnit.trim().toLowerCase();
+      if (u.includes('bottle') || u.includes('vial') || u.includes('blister'))
+        return 'Tablets or capsules in each bottle, vial, or blister pack. Does not change how many catalog units you ship.';
+      if (u.includes('box') || u.includes('carton') || u.includes('case'))
+        return 'Packs, bottles, or blister cards inside each box, carton, or case. Does not change how many catalog units you ship.';
+      if (u.includes('kit') || u.includes('pack'))
+        return 'Syringes, pens, or doses inside each kit or pack (for example 4 syringes per pack). Does not change how many catalog units you ship.';
+      if (u.includes('pen') || u.includes('injector'))
+        return 'Doses or cartridges per pen or injector. Does not change how many catalog units you ship.';
+      return 'Smaller units inside each catalog unit—for example tablets per bottle, syringes per kit, ampules per tray, patches per pouch, or doses per pen. Does not change how many catalog units you ship.';
+    },
     toastCreatedOne: (catalogUnit: string) => {
       const u = catalogUnit.trim();
       return u.length > 0
@@ -204,3 +219,33 @@ export function getAddOrderDrugCopy(): IpAddOrderDrugCopy {
     },
   };
 }
+
+/** Add inventory: how the Unit field is used (non-drug / non-product-specific). */
+export const ADD_INVENTORY_UNIT_TOOLTIP_NEUTRAL =
+  'Receiving, shipping, and site summaries count in this unit (for example Each, Kit, Case, or Box). Pick the unit you actually track in the ledger.';
+
+/**
+ * Add inventory: tooltip for optional “contents per catalog unit”.
+ * Investigational drug uses the drug-specific helper; other categories use plain-language examples.
+ */
+export function getAddInventoryContentsPerUnitTooltip(
+  category: IpCategory,
+  drugCopy: Pick<IpAddOrderDrugCopy, 'contentsPerUnitHelper'>,
+  catalogUnit: string
+): string {
+  if (category === 'investigational_drug') {
+    return drugCopy.contentsPerUnitHelper(catalogUnit);
+  }
+  const u = catalogUnit.trim() || 'catalog unit';
+  if (category === 'investigational_device') {
+    return `Smaller countable units inside each ${u}—for example sensors or cartridges per kit, strips per pouch, or single-use pieces per sealed pack. Shipment and receipt quantities still use the catalog unit; this is optional detail for labeling and planning.`;
+  }
+  if (category === 'medical_equipment') {
+    return `Smaller countable units inside each ${u}—for example electrodes per set, probes per kit, or disposable tips per box. Shipment and receipt quantities still use the catalog unit; this is optional detail for labeling and planning.`;
+  }
+  return `Smaller countable units inside each ${u}—for example gloves per box, specimen tubes per pack, or booklets per kit. Shipment and receipt quantities still use the catalog unit; this is optional detail for labeling and planning.`;
+}
+
+/** Edit inventory: short description under “default contents” (all categories). */
+export const EDIT_INVENTORY_DEFAULT_CONTENTS_DESCRIPTION =
+  'Optional: how many smaller units are inside one catalog unit (for example tablets per bottle or pairs per box). Prefills the same optional field when adding a site order when supported. Leave blank to clear the saved default.';
