@@ -78,6 +78,10 @@ export interface IpInventoryPdfData {
   studyLabel: string;
   printedAt: string;
   rows: IpLogRow[];
+  /** Human-readable site filter, e.g. "All sites" or "501 — General Hospital". */
+  siteScopeLabel?: string;
+  /** Human-readable category filter, e.g. "All categories" or category label. */
+  categoryScopeLabel?: string;
 }
 
 export function IpInventoryPdfDocument({
@@ -99,6 +103,8 @@ export function IpInventoryPdfDocument({
           <View style={styles.header}>
             <Text style={styles.title}>Inventory log</Text>
             <Text style={styles.meta}>{data.studyLabel}</Text>
+            {data.siteScopeLabel ? <Text style={styles.meta}>Site: {data.siteScopeLabel}</Text> : null}
+            {data.categoryScopeLabel ? <Text style={styles.meta}>Category: {data.categoryScopeLabel}</Text> : null}
             <Text style={styles.meta}>Printed {data.printedAt}</Text>
             <Text style={styles.meta}>
               Page {pageIndex + 1} of {chunks.length}

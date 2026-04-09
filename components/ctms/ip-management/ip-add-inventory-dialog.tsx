@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Info, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -26,6 +26,12 @@ import { IP_CATEGORY_LABELS } from '@/lib/types/ip-management';
 import { submitAddInventory, uploadIpReceiptImage } from '@/lib/actions/ip-management';
 import { cn } from '@/lib/utils';
 import { formatNanpPhoneInput } from '@/lib/utils/phone-input';
+import {
+  ADD_INVENTORY_UNIT_TOOLTIP_NEUTRAL,
+  getAddInventoryContentsPerUnitTooltip,
+  getAddOrderDrugCopy,
+} from '@/lib/utils/ip-inventory-ui-copy';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export interface IpAddInventoryDialogProps {
   open: boolean;
@@ -80,6 +86,9 @@ export function IpAddInventoryDialog({
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [defaultContentsPerCatalog, setDefaultContentsPerCatalog] = useState('');
+
+  const drugCopy = useMemo(() => getAddOrderDrugCopy(), []);
 
   const effectiveCategory = pageCategoryFilterLocked && categoryFilter ? categoryFilter : category;
 
@@ -112,6 +121,7 @@ export function IpAddInventoryDialog({
     setDimensionUnit('');
     setImageFile(null);
     setImagePreviewUrl(null);
+    setDefaultContentsPerCatalog('');
   }, [categoryFilter, pageCategoryFilterLocked]);
 
   useEffect(() => {
@@ -176,6 +186,20 @@ export function IpAddInventoryDialog({
       return;
     }
 
+    let defaultContentsPerCatalogUnit: number | undefined;
+    if (defaultContentsPerCatalog.trim() !== '') {
+      const n = parseInt(defaultContentsPerCatalog.trim(), 10);
+      if (!Number.isFinite(n) || n < 1) {
+        toast({
+          title: 'Invalid contents per catalog unit',
+          description: 'Enter a whole number of at least 1, or leave the field blank.',
+          variant: 'destructive',
+        });
+        return;
+      }
+      defaultContentsPerCatalogUnit = n;
+    }
+
     let imagePath: string | undefined;
     if (imageFile) {
       try {
@@ -237,6 +261,7 @@ export function IpAddInventoryDialog({
         batchNumber: null,
         expiryDate: null,
         receiptMetadata,
+        ...(defaultContentsPerCatalogUnit !== undefined ? { defaultContentsPerCatalogUnit } : {}),
       });
       toast({ title: 'Inventory added' });
       onOpenChange(false);
@@ -367,15 +392,71 @@ export function IpAddInventoryDialog({
                   <Input className="text-[12px] h-9" type="number" min={1} value={qty} onChange={(e) => setQty(e.target.value)} />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Unit</Label>
-                  {effectiveCategory === 'investigational_drug' ? (
-                    <p className="text-[11px] text-muted-foreground leading-snug">
-                      Receiving, shipping, and site counts use this unit (for example Bottle or Pack). Use a dose unit
-                      such as Tablet only if you intentionally track by tablet.
-                    </p>
-                  ) : null}
+                  <div className="flex items-center gap-1.5">
+                    <Label className="text-xs">Unit</Label>
+                    <TooltipProvider delay={200}>
+                      <Tooltip>
+                        <TooltipTrigger
+                          type="button"
+                          className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          aria-label="How the catalog unit is used for quantities"
+                        >
+                          <Info className="size-3.5" strokeWidth={2} />
+                        </TooltipTrigger>
+                        <TooltipContent side="top" align="start" className="max-w-sm text-left leading-snug">
+                          {effectiveCategory === 'investigational_drug' ? (
+                            <>
+                              Receiving, shipping, and site counts use this unit (for example Bottle or Pack). Use a dose
+                              unit such as Tablet only if you intentionally track by tablet.
+                            </>
+                          ) : (
+                            ADD_INVENTORY_UNIT_TOOLTIP_NEUTRAL
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
                   <Input className="text-[12px] h-9" value={unit} onChange={(e) => setUnit(e.target.value)} />
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5">
+                  <Label className="text-xs">{drugCopy.contentsPerUnitLabel}</Label>
+                  <TooltipProvider delay={200}>
+                    <Tooltip>
+                      <TooltipTrigger
+                        type="button"
+                        className="inline-flex size-4 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label="What counts as contents per catalog unit"
+                      >
+                        <Info className="size-3.5" strokeWidth={2} />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" align="start" className="max-w-sm text-left leading-snug">
+                        {getAddInventoryContentsPerUnitTooltip(effectiveCategory, drugCopy, unit.trim() || 'catalog unit')}
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <Input
+                  className="text-[12px] h-9 max-w-xs"
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  placeholder="e.g. 30"
+                  value={defaultContentsPerCatalog}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '') {
+                      setDefaultContentsPerCatalog('');
+                      return;
+                    }
+                    const n = parseInt(v, 10);
+                    if (Number.isNaN(n)) return;
+                    if (n < 1) return;
+                    setDefaultContentsPerCatalog(String(n));
+                  }}
+                />
               </div>
 
               <div

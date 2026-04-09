@@ -33,10 +33,16 @@ export function IpEditOrderDialog({
   const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [orderReference, setOrderReference] = useState('');
+  const [contentsPerCatalogUnit, setContentsPerCatalogUnit] = useState('');
+
+  const isDrug = order?.category === 'investigational_drug';
 
   useEffect(() => {
     if (order) {
       setOrderReference(order.order_reference);
+      setContentsPerCatalogUnit(
+        order.contents_per_catalog_unit != null ? String(order.contents_per_catalog_unit) : ''
+      );
     }
   }, [order]);
 
@@ -44,9 +50,19 @@ export function IpEditOrderDialog({
     if (!order) return;
     setSubmitting(true);
     try {
+      let contentsUpdate: number | null | undefined;
+      if (isDrug) {
+        if (contentsPerCatalogUnit.trim() === '') {
+          contentsUpdate = null;
+        } else {
+          const c = parseInt(contentsPerCatalogUnit.trim(), 10);
+          contentsUpdate = Number.isFinite(c) && c >= 1 ? c : null;
+        }
+      }
       await updateIpOrder({
         orderId: order.order_id,
         orderReference,
+        ...(isDrug ? { contentsPerCatalogUnit: contentsUpdate } : {}),
       });
       toast({ title: 'Order updated' });
       onOpenChange(false);
@@ -83,6 +99,34 @@ export function IpEditOrderDialog({
               placeholder="Reference number"
             />
           </div>
+          {isDrug ? (
+            <div className="space-y-1">
+              <Label className="text-xs">Contents per catalog unit (optional)</Label>
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                Tablets, capsules, or inner packs in each {order?.unit?.trim() || 'catalog unit'}. Leave blank to
+                clear.
+              </p>
+              <Input
+                className="text-[12px] h-9"
+                type="number"
+                min={1}
+                inputMode="numeric"
+                placeholder="e.g. 30"
+                value={contentsPerCatalogUnit}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '') {
+                    setContentsPerCatalogUnit('');
+                    return;
+                  }
+                  const n = parseInt(v, 10);
+                  if (Number.isNaN(n)) return;
+                  if (n < 1) return;
+                  setContentsPerCatalogUnit(String(n));
+                }}
+              />
+            </div>
+          ) : null}
         </div>
         <DialogFooter>
           <Button

@@ -267,6 +267,11 @@ export function IpTransactionReportPdf({ data }: { data: IpTransactionReportData
                   <Text style={{ fontSize: 7.5 }}>
                     Lot Number: {row.lot_number ?? ''}
                   </Text>
+                  {row.contents_per_catalog_unit != null ? (
+                    <Text style={{ fontSize: 7.5 }}>
+                      Contents per {row.unit || 'catalog unit'}: {row.contents_per_catalog_unit}
+                    </Text>
+                  ) : null}
                   {transactionRowContainerFillPdf(row)}
                 </View>
                 <Text style={s.colCategory}>{row.category}</Text>

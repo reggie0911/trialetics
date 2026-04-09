@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import {
   Dialog,
@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { createIpOrder } from '@/lib/actions/ip-management';
 import type { IpCategory } from '@/lib/types/ip-management';
-import { getAddOrderDrugCopy } from '@/lib/utils/ip-inventory-ui-copy';
+import { getAddInventoryContentsPerUnitTooltip, getAddOrderDrugCopy } from '@/lib/utils/ip-inventory-ui-copy';
 import { useToast } from '@/hooks/use-toast';
 
 interface IpAddOrderDialogProps {
@@ -28,6 +28,10 @@ interface IpAddOrderDialogProps {
   itemCategory?: IpCategory;
   /** Catalog `unit` string from the item row (shown for drug context). */
   catalogUnit?: string;
+  /** Central pool quantity for this catalog item (matches Inventory summary “Global in stock”). */
+  globalInStock: number;
+  /** From catalog metadata; prefills optional contents field for any category when set. */
+  defaultContentsPerCatalogUnit?: number | null;
   onSuccess?: () => void;
 }
 
@@ -39,6 +43,8 @@ export function IpAddOrderDialog({
   studySiteId,
   itemCategory,
   catalogUnit = '',
+  globalInStock,
+  defaultContentsPerCatalogUnit = null,
   onSuccess,
 }: IpAddOrderDialogProps) {
   const { toast } = useToast();
@@ -47,28 +53,73 @@ export function IpAddOrderDialog({
   const [batchNumber, setBatchNumber] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [quantity, setQuantity] = useState('1');
+  const [contentsPerCatalogUnit, setContentsPerCatalogUnit] = useState('');
   const [orderReference, setOrderReference] = useState('');
 
   const isDrug = itemCategory === 'investigational_drug';
   const drugCopy = useMemo(() => getAddOrderDrugCopy(), []);
+  const contentsTooltipCategory = itemCategory ?? 'study_supplies';
+
+  const maxQty = useMemo(() => Math.max(0, Math.floor(Number(globalInStock))), [globalInStock]);
+
+  useEffect(() => {
+    if (!open) return;
+    setQuantity(maxQty > 0 ? '1' : '0');
+    if (defaultContentsPerCatalogUnit != null && defaultContentsPerCatalogUnit >= 1) {
+      setContentsPerCatalogUnit(String(defaultContentsPerCatalogUnit));
+    } else {
+      setContentsPerCatalogUnit('');
+    }
+  }, [open, maxQty, defaultContentsPerCatalogUnit]);
 
   const resetForm = useCallback(() => {
     setLotNumber('');
     setBatchNumber('');
     setExpiryDate('');
     setQuantity('1');
+    setContentsPerCatalogUnit('');
     setOrderReference('');
   }, []);
 
-  const parsedQty = useMemo(
-    () => Math.max(1, parseInt(quantity, 10) || 1),
-    [quantity]
+  const handleOpenChange = useCallback(
+    (next: boolean) => {
+      if (!next) resetForm();
+      onOpenChange(next);
+    },
+    [onOpenChange, resetForm]
   );
 
+  const parsedQty = useMemo(() => {
+    if (maxQty === 0) return 0;
+    const n = parseInt(quantity, 10);
+    if (quantity.trim() === '' || Number.isNaN(n)) return NaN;
+    return Math.min(Math.max(1, n), maxQty);
+  }, [quantity, maxQty]);
+
+  const canSubmit =
+    maxQty > 0 && Number.isFinite(parsedQty) && parsedQty >= 1 && parsedQty <= maxQty;
+
+  const handleQuantityChange = (raw: string) => {
+    if (maxQty <= 0) return;
+    if (raw === '') {
+      setQuantity('');
+      return;
+    }
+    const n = parseInt(raw, 10);
+    if (Number.isNaN(n)) return;
+    setQuantity(String(Math.min(Math.max(1, n), maxQty)));
+  };
+
   const handleSubmit = async () => {
+    if (!canSubmit || !Number.isFinite(parsedQty)) return;
     const qty = parsedQty;
     setSubmitting(true);
     try {
+      let contentsArg: number | undefined;
+      if (contentsPerCatalogUnit.trim() !== '') {
+        const c = parseInt(contentsPerCatalogUnit.trim(), 10);
+        if (Number.isFinite(c) && c >= 1) contentsArg = c;
+      }
       await createIpOrder({
         studyId,
         studySiteId,
@@ -78,6 +129,7 @@ export function IpAddOrderDialog({
         expiryDate: expiryDate.trim() || undefined,
         quantity: qty,
         orderReference: orderReference.trim() || undefined,
+        contentsPerCatalogUnit: contentsArg,
       });
       if (isDrug) {
         toast({
@@ -96,8 +148,7 @@ export function IpAddOrderDialog({
               : 'Stock was moved from central inventory to this site.',
         });
       }
-      resetForm();
-      onOpenChange(false);
+      handleOpenChange(false);
       await Promise.resolve(onSuccess?.());
     } catch (e) {
       toast({
@@ -111,13 +162,7 @@ export function IpAddOrderDialog({
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) resetForm();
-        onOpenChange(o);
-      }}
-    >
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Add order</DialogTitle>
@@ -158,6 +203,31 @@ export function IpAddOrderDialog({
             </div>
           </div>
           <div className="space-y-1">
+            <Label className="text-xs">{drugCopy.contentsPerUnitLabel}</Label>
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              {getAddInventoryContentsPerUnitTooltip(contentsTooltipCategory, drugCopy, catalogUnit)}
+            </p>
+            <Input
+              className="text-[12px] h-9"
+              type="number"
+              min={1}
+              inputMode="numeric"
+              placeholder="e.g. 30"
+              value={contentsPerCatalogUnit}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '') {
+                  setContentsPerCatalogUnit('');
+                  return;
+                }
+                const n = parseInt(v, 10);
+                if (Number.isNaN(n)) return;
+                if (n < 1) return;
+                setContentsPerCatalogUnit(String(n));
+              }}
+            />
+          </div>
+          <div className="space-y-1">
             <Label className="text-xs">
               {isDrug ? drugCopy.quantityLabel : 'Quantity'}{' '}
               <span className="text-destructive">*</span>
@@ -165,12 +235,29 @@ export function IpAddOrderDialog({
             {isDrug ? (
               <p className="text-[11px] text-muted-foreground leading-snug">{drugCopy.catalogUnitHelper(catalogUnit)}</p>
             ) : null}
+            {maxQty > 0 ? (
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                You can ship up to {maxQty} {maxQty === 1 ? 'unit' : 'units'} from central inventory.
+              </p>
+            ) : (
+              <p className="text-[11px] text-amber-800 dark:text-amber-300 leading-snug">
+                There is no stock in the central pool for this item. Add inventory before shipping to a site.
+              </p>
+            )}
             <Input
               className="text-[12px] h-9"
               type="number"
-              min={1}
+              min={maxQty > 0 ? 1 : 0}
+              max={maxQty}
+              disabled={maxQty <= 0}
               value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
+              onChange={(e) => handleQuantityChange(e.target.value)}
+              onBlur={() => {
+                if (maxQty <= 0) return;
+                if (quantity.trim() === '' || Number.isNaN(parseInt(quantity, 10))) {
+                  setQuantity('1');
+                }
+              }}
             />
           </div>
           <div className="space-y-1">
@@ -187,7 +274,7 @@ export function IpAddOrderDialog({
           <Button
             type="button"
             variant="secondary"
-            onClick={() => onOpenChange(false)}
+            onClick={() => handleOpenChange(false)}
             disabled={submitting}
           >
             Cancel
@@ -195,7 +282,7 @@ export function IpAddOrderDialog({
           <Button
             type="button"
             onClick={() => void handleSubmit()}
-            disabled={submitting}
+            disabled={submitting || !canSubmit}
           >
             {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Create order

@@ -84,7 +84,7 @@ export const docsRegistry: DocEntry[] = [
     filePath: 'docs/user-manuals/inventory-management.md',
     order: 2,
     roles: ['admin', 'user'],
-    lastUpdated: '2026-04-05',
+    lastUpdated: '2026-04-09',
     moduleRoute: '/protected/inventory-management',
   },
   {

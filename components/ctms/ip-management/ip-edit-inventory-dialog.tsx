@@ -26,6 +26,7 @@ import type { IpCategory, IpItemCatalogMetadata, IpStudyMetricRow } from '@/lib/
 import { IP_CATEGORY_LABELS } from '@/lib/types/ip-management';
 import { getIpItemForEdit, updateIpItem, uploadIpReceiptImage } from '@/lib/actions/ip-management';
 import { cn } from '@/lib/utils';
+import { EDIT_INVENTORY_DEFAULT_CONTENTS_DESCRIPTION } from '@/lib/utils/ip-inventory-ui-copy';
 import { formatPhoneFieldInput, normalizePhoneDisplayForInput } from '@/lib/utils/phone-input';
 
 export interface IpEditInventoryDialogProps {
@@ -61,6 +62,8 @@ export function IpEditInventoryDialog({
   const [unit, setUnit] = useState('Each');
   const [partNumber, setPartNumber] = useState('');
   const [minStockThreshold, setMinStockThreshold] = useState('');
+  /** Default inner units per catalog unit; prefills Add order optional contents for any category. */
+  const [defaultContentsPerCatalog, setDefaultContentsPerCatalog] = useState('');
 
   const [supplierName, setSupplierName] = useState('');
   const [address, setAddress] = useState('');
@@ -102,6 +105,11 @@ export function IpEditInventoryDialog({
       setUnit(data.unit);
       setPartNumber(data.partOrMaterialNumber ?? '');
       setMinStockThreshold(data.minStockThreshold != null ? String(data.minStockThreshold) : '');
+      setDefaultContentsPerCatalog(
+        data.catalogMeta.defaultContentsPerCatalogUnit != null
+          ? String(data.catalogMeta.defaultContentsPerCatalogUnit)
+          : ''
+      );
       const m = data.catalogMeta;
       setSupplierName(m.supplier?.name ?? '');
       setAddress(m.supplier?.address ?? '');
@@ -212,7 +220,17 @@ export function IpEditInventoryDialog({
       imagePath = storedImagePath ?? undefined;
     }
 
-    const catalogMetadata = buildCatalogMetadata(imagePath);
+    const baseCatalogMetadata = buildCatalogMetadata(imagePath);
+    const catalogMetadata: IpItemCatalogMetadata = {
+      ...baseCatalogMetadata,
+      defaultContentsPerCatalogUnit:
+        defaultContentsPerCatalog.trim() === ''
+          ? null
+          : (() => {
+              const n = parseInt(defaultContentsPerCatalog.trim(), 10);
+              return Number.isFinite(n) && n >= 1 ? n : null;
+            })(),
+    };
 
     setSubmitting(true);
     try {
@@ -403,6 +421,32 @@ export function IpEditInventoryDialog({
                     onChange={(e) => setMinStockThreshold(e.target.value)}
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs">Default contents per catalog unit (optional)</Label>
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  {EDIT_INVENTORY_DEFAULT_CONTENTS_DESCRIPTION}
+                </p>
+                <Input
+                  className="text-[12px] h-9 max-w-xs"
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  placeholder="e.g. 30"
+                  value={defaultContentsPerCatalog}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '') {
+                      setDefaultContentsPerCatalog('');
+                      return;
+                    }
+                    const n = parseInt(v, 10);
+                    if (Number.isNaN(n)) return;
+                    if (n < 1) return;
+                    setDefaultContentsPerCatalog(String(n));
+                  }}
+                />
               </div>
 
               <p className="text-xs font-medium text-foreground pt-1">Supplier</p>

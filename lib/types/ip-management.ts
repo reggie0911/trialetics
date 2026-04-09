@@ -12,6 +12,14 @@ export const IP_CATEGORY_LABELS: Record<IpCategory, string> = {
   study_supplies: 'Study supplies',
 };
 
+/** Stable UI / RPC filter order; keep in sync with `ip_items.category` CHECK constraint. */
+export const IP_CATEGORY_ORDER: IpCategory[] = [
+  'investigational_drug',
+  'investigational_device',
+  'medical_equipment',
+  'study_supplies',
+];
+
 /** Aligns with `ip_lot_locations.disposition` */
 export type IpDisposition =
   | 'available'
@@ -62,7 +70,10 @@ export interface IpReceiptLedgerMetadata {
 export type IpItemCatalogMetadata = Pick<
   IpReceiptLedgerMetadata,
   'supplier' | 'contact' | 'calibrationDays' | 'packagingDescription' | 'physical' | 'imageStoragePath'
->;
+> & {
+  /** Default inner units per catalog unit (e.g. tablets per bottle); prefill Add order for drugs. */
+  defaultContentsPerCatalogUnit?: number | null;
+};
 
 export interface IpItemForEdit {
   itemId: string;
@@ -111,6 +122,8 @@ export interface IpStudyMetricRow {
   compliance_pct: number | null;
   /** Optional minimum stock threshold from catalog item. Null = no threshold. */
   min_stock_threshold: number | null;
+  /** From `ip_items.metadata` for investigational drugs; prefill Add order contents field. */
+  default_contents_per_catalog_unit: number | null;
 }
 
 /** One open shipment line (shipped from global, not yet received at site). */
@@ -244,6 +257,8 @@ export interface IpOrderRow {
   latest_dispense_container_fill_state: string | null;
   latest_return_container_fill_state: string | null;
   latest_destroy_container_fill_state: string | null;
+  /** From `ip_orders.metadata` when set (e.g. tablets per bottle). */
+  contents_per_catalog_unit: number | null;
 }
 
 /** Row from `ip_order_documents` (packing slips / shipping files). */
@@ -305,6 +320,8 @@ export interface IpTransactionReportData {
     latest_dispense_container_fill_state: string | null;
     latest_return_container_fill_state: string | null;
     latest_destroy_container_fill_state: string | null;
+    /** Inner units per catalog unit when recorded on the order. */
+    contents_per_catalog_unit: number | null;
   }>;
 }
 

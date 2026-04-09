@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, FileDown, Loader2, Printer, Plus, Search } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FileDown, Loader2, Printer, Plus, Upload } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -13,7 +14,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { Study } from '@/lib/types/ctms';
 import type {
   IpCategory,
@@ -23,21 +29,23 @@ import type {
   IpOrderRow,
   IpStudyMetricRow,
 } from '@/lib/types/ip-management';
-import { IP_CATEGORY_LABELS, IP_DISPOSITION_LABELS, type IpDisposition } from '@/lib/types/ip-management';
+import { IP_CATEGORY_LABELS, IP_CATEGORY_ORDER } from '@/lib/types/ip-management';
 import {
-  getIpDispositionTotals,
   getIpInTransitLines,
-  getIpLedgerRoster,
   getIpLogRows,
   getIpLotBreakdown,
   getIpReconciliationFlags,
+  getIpStudyCatalogCategories,
   getIpStudyMetrics,
   getIpTransactionReportData,
+  getIpItemSiteMetrics,
+  getIpSiteOrders,
 } from '@/lib/actions/ip-management';
 import { getStudySites } from '@/lib/actions/sites';
 import { getStudySubjects } from '@/lib/actions/subjects';
 import { IpSummaryTable } from '@/components/ctms/ip-management/ip-summary-table';
 import { IpSummaryCharts } from '@/components/ctms/ip-management/ip-summary-charts';
+import { IpAnalyticsDashboard } from '@/components/ctms/ip-management/ip-analytics-dashboard';
 import { IpLogsTable } from '@/components/ctms/ip-management/ip-logs-table';
 import { IpLogsVerifyInventoryDialog } from '@/components/ctms/ip-management/ip-logs-verify-inventory-dialog';
 import { IpUnverifyInventoryDialog } from '@/components/ctms/ip-management/ip-unverify-inventory-dialog';
@@ -47,7 +55,6 @@ import { IpReturnToManufacturerDialog } from '@/components/ctms/ip-management/ip
 import { IpTransferSiteDialog } from '@/components/ctms/ip-management/ip-transfer-site-dialog';
 import { IpDestroyQuantityDialog } from '@/components/ctms/ip-management/ip-destroy-quantity-dialog';
 import { IpChangeDispositionDialog } from '@/components/ctms/ip-management/ip-change-disposition-dialog';
-import { IpLogsCharts } from '@/components/ctms/ip-management/ip-logs-charts';
 import { IpAddInventoryDialog } from '@/components/ctms/ip-management/ip-add-inventory-dialog';
 import { IpAddSiteDialog } from '@/components/ctms/ip-management/ip-add-site-dialog';
 import { IpArchiveOrderDialog } from '@/components/ctms/ip-management/ip-archive-order-dialog';
@@ -61,11 +68,15 @@ import { IpDeleteSiteDialog } from '@/components/ctms/ip-management/ip-delete-si
 import { IpRestoreSiteDialog } from '@/components/ctms/ip-management/ip-restore-site-dialog';
 import { IpLotHistoryDialog } from '@/components/ctms/ip-management/ip-lot-history-dialog';
 import { IpOrderShippingDocumentsDialog } from '@/components/ctms/ip-management/ip-order-shipping-documents-dialog';
+import { IpBulkUploadDialog } from '@/components/ctms/ip-management/ip-bulk-upload-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { downloadIpInventoryLogPdf, downloadIpTransactionReportPdf } from '@/lib/utils/ip-inventory-pdf';
-import { Input } from '@/components/ui/input';
-import { DocsHelpLink } from '@/components/docs/docs-help-link';
-import { cn } from '@/lib/utils';
+import {
+  downloadIpInventoryLogPdf,
+  downloadIpSummaryPdf,
+  downloadIpTransactionReportPdf,
+} from '@/lib/utils/ip-inventory-pdf';
+import { buildAnalyticsCsv } from '@/lib/utils/ip-analytics-metrics';
+import { triggerCsvDownload } from '@/lib/utils/csv-download';
 import { getIpInventoryUiContext } from '@/lib/utils/ip-inventory-ui-copy';
 import { ipLogRowToOrderRow } from '@/lib/utils/ip-log-row';
 import {
@@ -73,38 +84,49 @@ import {
   orderToMovementContext,
   type IpMovementLineContext,
 } from '@/lib/utils/ip-order-actions';
+import { cn } from '@/lib/utils';
+import type { IpPermissions } from '@/lib/types/ip-access';
+import { buildIpPermissions } from '@/lib/types/ip-access';
+import { getIpPermissionsForStudy } from '@/lib/server/ip-access';
+
+/** Fallback permissions used before a study is selected (no access). */
+const NO_PERMISSIONS: IpPermissions = buildIpPermissions('site', []);
 
 function asIpCategory(value: string): IpCategory | undefined {
   return Object.prototype.hasOwnProperty.call(IP_CATEGORY_LABELS, value) ? (value as IpCategory) : undefined;
 }
 
-const CATEGORY_FILTER_OPTIONS: { value: string; label: string }[] = (
-  Object.entries(IP_CATEGORY_LABELS) as [IpCategory, string][]
-).map(([value, label]) => ({ value, label }));
+/** Resolves select state when catalog categories are known (empty string = no selection). */
+function resolveQueryCategoryFromCatalog(
+  categoryState: string,
+  catalog: IpCategory[]
+): IpCategory | null {
+  if (catalog.length === 0) return null;
+  const c = asIpCategory(categoryState);
+  if (c && catalog.includes(c)) return c;
+  return catalog[0];
+}
 
 interface IpManagementPageClientProps {
   studies: Study[];
-  isIpAdmin: boolean;
+  profileRole: string;
+  isPlatformAdmin: boolean;
 }
 
-export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageClientProps) {
+export function IpManagementPageClient({ studies, profileRole, isPlatformAdmin }: IpManagementPageClientProps) {
   const { toast } = useToast();
   const [studyId, setStudyId] = useState<string>(() => studies[0]?.id ?? '');
   const [siteId, setSiteId] = useState<string>('__all_sites__');
   const [category, setCategory] = useState<string>('investigational_drug');
-  const [tab, setTab] = useState<'summary' | 'logs'>('summary');
+  const [tab, setTab] = useState<'summary' | 'logs' | 'analytics'>('summary');
   const [metrics, setMetrics] = useState<IpStudyMetricRow[]>([]);
   const [breakdown, setBreakdown] = useState<Awaited<ReturnType<typeof getIpLotBreakdown>>>([]);
   const [logRows, setLogRows] = useState<IpLogRow[]>([]);
-  const [dispTotals, setDispTotals] = useState<Awaited<ReturnType<typeof getIpDispositionTotals>>>([]);
-  const [roster, setRoster] = useState<Awaited<ReturnType<typeof getIpLedgerRoster>>>([]);
   const [flags, setFlags] = useState<Awaited<ReturnType<typeof getIpReconciliationFlags>>>([]);
   const [inTransitLines, setInTransitLines] = useState<IpInTransitLineRow[]>([]);
   const [sites, setSites] = useState<Awaited<ReturnType<typeof getStudySites>>>([]);
   const [loading, setLoading] = useState(false);
-  const [metricsOpen, setMetricsOpen] = useState(true);
-  const [dispositionFilter, setDispositionFilter] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [ipPermissions, setIpPermissions] = useState<IpPermissions>(NO_PERMISSIONS);
 
   const [ordersRefreshNonce, setOrdersRefreshNonce] = useState(0);
   const [siteLinksRefreshNonce, setSiteLinksRefreshNonce] = useState(0);
@@ -130,6 +152,7 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
     site: IpItemSiteMetricRow;
   } | null>(null);
   const [addInventoryOpen, setAddInventoryOpen] = useState(false);
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
   const [addSiteOpen, setAddSiteOpen] = useState(false);
   const [addSiteMetric, setAddSiteMetric] = useState<IpStudyMetricRow | null>(null);
   const [movementLine, setMovementLine] = useState<IpMovementLineContext | null>(null);
@@ -163,10 +186,30 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
   } | null>(null);
 
   const [subjects, setSubjects] = useState<Awaited<ReturnType<typeof getStudySubjects>>>([]);
+  const [catalogCategories, setCatalogCategories] = useState<IpCategory[] | null>(null);
+  const [printing, setPrinting] = useState(false);
+  /** When true, Toolbar Print waits for summary tree prefetch before calling window.print(). */
+  const printAfterSummaryExpandRef = useRef(false);
 
-  const categoryFilter: IpCategory = asIpCategory(category) ?? 'investigational_drug';
-  const inventoryUiContext = useMemo(() => getIpInventoryUiContext(categoryFilter), [categoryFilter]);
-  /** Category filter always applies; new/edit catalog dialogs match it read-only. */
+  const handleSummaryExpandForPrintReady = useCallback(() => {
+    if (!printAfterSummaryExpandRef.current) return;
+    printAfterSummaryExpandRef.current = false;
+    requestAnimationFrame(() => window.print());
+  }, []);
+
+  const metricsCategory: IpCategory | null = useMemo(() => {
+    if (!studyId) return null;
+    if (catalogCategories === null) return null;
+    if (catalogCategories.length === 0) return null;
+    const c = asIpCategory(category);
+    if (c && catalogCategories.includes(c)) return c;
+    return catalogCategories[0];
+  }, [studyId, catalogCategories, category]);
+
+  /** Page filter for edit dialog and typed children; only undefined when no study / empty catalog. */
+  const categoryFilter: IpCategory = metricsCategory ?? IP_CATEGORY_ORDER[0];
+  const inventoryUiContext = useMemo(() => getIpInventoryUiContext(metricsCategory), [metricsCategory]);
+  /** Edit inventory keeps category aligned with the page filter; Add inventory allows any standard category. */
   const pageCategoryFilterLocked = true;
   const siteFilter = siteId === '__all_sites__' ? null : siteId;
 
@@ -175,39 +218,37 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
       setMetrics([]);
       setBreakdown([]);
       setLogRows([]);
-      setDispTotals([]);
-      setRoster([]);
       setFlags([]);
       setInTransitLines([]);
+      setCatalogCategories(null);
       return;
     }
     setLoading(true);
     try {
-      const [m, b, lr, dt, rs, fl, transit] = await Promise.all([
+      const cats = await getIpStudyCatalogCategories(studyId);
+      setCatalogCategories(cats);
+      const queryCategory = resolveQueryCategoryFromCatalog(category, cats);
+      const [m, b, lr, fl, transit] = await Promise.all([
         getIpStudyMetrics({
           studyId,
           siteId: siteFilter,
-          category: categoryFilter,
+          category: queryCategory,
           includeArchived: false,
         }),
-        getIpLotBreakdown({ studyId, siteId: siteFilter, category: categoryFilter }),
+        getIpLotBreakdown({ studyId, siteId: siteFilter, category: queryCategory }),
         getIpLogRows({
           studyId,
           siteId: siteFilter,
-          category: categoryFilter,
-          disposition: dispositionFilter,
+          category: queryCategory,
+          disposition: null,
           includeArchivedOrders: false,
         }),
-        getIpDispositionTotals({ studyId, siteId: siteFilter, category: categoryFilter }),
-        getIpLedgerRoster({ studyId, siteId: siteFilter, limit: 40 }),
         getIpReconciliationFlags({ studyId, siteId: siteFilter }),
         getIpInTransitLines({ studyId, siteId: siteFilter }),
       ]);
       setMetrics(m);
       setBreakdown(b);
       setLogRows(lr);
-      setDispTotals(dt);
-      setRoster(rs);
       setFlags(fl);
       setInTransitLines(transit);
     } catch (e) {
@@ -219,11 +260,64 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
     } finally {
       setLoading(false);
     }
-  }, [studyId, siteFilter, categoryFilter, dispositionFilter, toast]);
+  }, [studyId, siteFilter, category, toast]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!studyId) {
+      setCatalogCategories(null);
+    }
+  }, [studyId]);
+
+  useEffect(() => {
+    if (!studyId) {
+      setIpPermissions(NO_PERMISSIONS);
+      return;
+    }
+    let cancelled = false;
+    getIpPermissionsForStudy(studyId)
+      .then((p) => {
+        if (cancelled) return;
+        setIpPermissions(p);
+        if (p.restrictedSiteIds && p.restrictedSiteIds.length > 0) {
+          setSiteId(p.restrictedSiteIds[0]);
+        }
+      })
+      .catch(() => { if (!cancelled) setIpPermissions(NO_PERMISSIONS); });
+    return () => { cancelled = true; };
+  }, [studyId]);
+
+  useEffect(() => {
+    if (!studyId || catalogCategories === null || catalogCategories.length === 0) return;
+    const c = asIpCategory(category);
+    if (!c || !catalogCategories.includes(c)) {
+      setCategory(catalogCategories[0]);
+    }
+  }, [studyId, catalogCategories, category]);
+
+  useEffect(() => {
+    const onBeforePrint = () => setPrinting(true);
+    const onAfterPrint = () => {
+      printAfterSummaryExpandRef.current = false;
+      setPrinting(false);
+    };
+    window.addEventListener('beforeprint', onBeforePrint);
+    window.addEventListener('afterprint', onAfterPrint);
+    return () => {
+      window.removeEventListener('beforeprint', onBeforePrint);
+      window.removeEventListener('afterprint', onAfterPrint);
+    };
+  }, []);
+
+  /** If the user leaves the summary tab while we were waiting to expand it for print, print the current tab instead of hanging. */
+  useEffect(() => {
+    if (!printing || tab === 'summary' || !printAfterSummaryExpandRef.current) return;
+    printAfterSummaryExpandRef.current = false;
+    requestAnimationFrame(() => window.print());
+  }, [tab, printing]);
 
   useEffect(() => {
     if (!studyId) {
@@ -236,15 +330,18 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
   }, [studyId]);
 
   const study = useMemo(() => studies.find((s) => s.id === studyId), [studies, studyId]);
-  const compliancePct = metrics[0]?.compliance_pct ?? null;
 
-  const dispositionWidget = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const r of dispTotals) {
-      m[r.disposition] = (m[r.disposition] ?? 0) + r.total_qty;
-    }
-    return m;
-  }, [dispTotals]);
+  const printSiteLabel = useMemo(() => {
+    if (!studyId) return '—';
+    if (siteId === '__all_sites__') return 'All sites';
+    const s = sites.find((x) => x.id === siteId);
+    return s ? `${s.site_number} — ${s.name}` : 'All sites';
+  }, [studyId, siteId, sites]);
+
+  const printCategoryLabel = useMemo(() => {
+    if (!studyId) return '—';
+    return metricsCategory ? IP_CATEGORY_LABELS[metricsCategory] : 'All categories';
+  }, [studyId, metricsCategory]);
 
   const inTransitQtyByLotSite = useMemo(() => {
     const map = new Map<string, number>();
@@ -254,40 +351,6 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
     }
     return map;
   }, [inTransitLines]);
-
-  const kpiTotals = useMemo(() => {
-    const totalItems = metrics.length;
-    let inStock = 0;
-    let atSites = 0;
-    let available = 0;
-    for (const m of metrics) {
-      inStock += m.global_in_stock;
-      atSites += m.site_onsite;
-      available += m.site_available;
-    }
-    return { totalItems, inStock, atSites, available };
-  }, [metrics]);
-
-  const filteredMetrics = useMemo(() => {
-    if (!searchQuery.trim()) return metrics;
-    const q = searchQuery.toLowerCase();
-    return metrics.filter((m) => m.item_name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q));
-  }, [metrics, searchQuery]);
-
-  const filteredLogRows = useMemo(() => {
-    if (!searchQuery.trim()) return logRows;
-    const q = searchQuery.toLowerCase();
-    return logRows.filter(
-      (r) =>
-        r.item_name.toLowerCase().includes(q) ||
-        r.serial_number?.toLowerCase().includes(q) ||
-        r.lot_number?.toLowerCase().includes(q) ||
-        r.batch_number?.toLowerCase().includes(q) ||
-        r.site_name?.toLowerCase().includes(q) ||
-        r.order_reference?.toLowerCase().includes(q) ||
-        r.disposition.toLowerCase().includes(q)
-    );
-  }, [logRows, searchQuery]);
 
   const subjectOptions = useMemo(
     () => subjects.map((s) => ({ id: s.id, subject_number: s.subject_number })),
@@ -312,15 +375,34 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
     [sites]
   );
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    if (tab === 'summary') {
+      printAfterSummaryExpandRef.current = true;
+      setPrinting(true);
+      return;
+    }
+    setPrinting(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => window.print());
+    });
+  };
 
-  const handleDownloadPdf = async () => {
+  const pdfScopeMeta = useMemo(
+    () => ({
+      siteScopeLabel: printSiteLabel,
+      categoryScopeLabel: printCategoryLabel,
+    }),
+    [printSiteLabel, printCategoryLabel]
+  );
+
+  const handleDownloadInventoryLogPdf = async () => {
     if (!study) return;
     try {
       await downloadIpInventoryLogPdf({
         studyLabel: `${study.protocol_number} — ${study.title}`,
         printedAt: new Date().toLocaleString(),
         rows: logRows,
+        ...pdfScopeMeta,
       });
       toast({ title: 'PDF downloaded' });
     } catch (e) {
@@ -330,6 +412,56 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
         variant: 'destructive',
       });
     }
+  };
+
+  const handleDownloadSummaryPdf = async () => {
+    if (!study || !studyId) return;
+    try {
+      const itemBlocks = await Promise.all(
+        metrics.map(async (m) => {
+          const siteRows = await getIpItemSiteMetrics({
+            studyId,
+            itemId: m.item_id,
+            includeArchived: false,
+          });
+          const sites = await Promise.all(
+            siteRows.map(async (site) => ({
+              site,
+              orders: await getIpSiteOrders({
+                studyId,
+                itemId: m.item_id,
+                studySiteId: site.study_site_id,
+                includeArchived: false,
+              }),
+            }))
+          );
+          return { metric: m, sites };
+        })
+      );
+      await downloadIpSummaryPdf({
+        studyLabel: `${study.protocol_number} — ${study.title}`,
+        printedAt: new Date().toLocaleString(),
+        metrics,
+        itemBlocks,
+        includeGlobalColumns: ipPermissions.canViewGlobalInventory,
+        ...pdfScopeMeta,
+      });
+      toast({ title: 'Summary PDF downloaded' });
+    } catch (e) {
+      toast({
+        title: 'PDF failed',
+        description: e instanceof Error ? e.message : 'Error',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDownloadAnalyticsCsv = () => {
+    if (!studyId) return;
+    const csv = buildAnalyticsCsv(logRows);
+    const safe = `${study?.protocol_number ?? 'study'}`.replace(/[^a-zA-Z0-9-]+/g, '-').slice(0, 40);
+    triggerCsvDownload(`inventory-analytics-${safe}-${new Date().toISOString().split('T')[0]}.csv`, csv);
+    toast({ title: 'CSV downloaded' });
   };
 
   const openAddSite = (metric: IpStudyMetricRow) => {
@@ -415,13 +547,13 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
   };
 
   const openArchiveOrder = (order: IpOrderRow) => {
-    if (!isIpAdmin) return;
+    if (!ipPermissions.canDeleteRecords) return;
     setArchiveOrderData(order);
     setArchiveOrderOpen(true);
   };
 
   const openRestoreOrder = (order: IpOrderRow) => {
-    if (!isIpAdmin) return;
+    if (!ipPermissions.canRestoreRecords) return;
     setRestoreOrderData(order);
     setRestoreOrderOpen(true);
   };
@@ -457,8 +589,8 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
   };
 
   const openUnverifyFromOrder = (order: IpOrderRow) => {
-    if (!isIpAdmin) {
-      toast({ title: 'Administrators only', variant: 'destructive' });
+    if (!ipPermissions.canUnverifyInventory) {
+      toast({ title: 'Insufficient permissions', variant: 'destructive' });
       return;
     }
     setUnverifyTarget(order);
@@ -466,8 +598,8 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
   };
 
   const openUnverifyFromLog = (row: IpLogRow) => {
-    if (!isIpAdmin) {
-      toast({ title: 'Administrators only', variant: 'destructive' });
+    if (!ipPermissions.canUnverifyInventory) {
+      toast({ title: 'Insufficient permissions', variant: 'destructive' });
       return;
     }
     setUnverifyTarget(row);
@@ -490,8 +622,8 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
   };
 
   const openUnreceiveFromOrder = (order: IpOrderRow) => {
-    if (!isIpAdmin) {
-      toast({ title: 'Administrators only', variant: 'destructive' });
+    if (!ipPermissions.canUnreceiveInventory) {
+      toast({ title: 'Insufficient permissions', variant: 'destructive' });
       return;
     }
     setMovementLine(orderToMovementContext(studyId, order));
@@ -499,8 +631,8 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
   };
 
   const openUnreceiveFromLog = (row: IpLogRow) => {
-    if (!isIpAdmin) {
-      toast({ title: 'Administrators only', variant: 'destructive' });
+    if (!ipPermissions.canUnreceiveInventory) {
+      toast({ title: 'Insufficient permissions', variant: 'destructive' });
       return;
     }
     setMovementLine(logRowToMovementContext(studyId, row, transitForLogRow(row)));
@@ -552,8 +684,8 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
   };
 
   const openDeleteLogOrder = (row: IpLogRow) => {
-    if (!isIpAdmin) {
-      toast({ title: 'Administrators only', variant: 'destructive' });
+    if (!ipPermissions.canDeleteRecords) {
+      toast({ title: 'Insufficient permissions', variant: 'destructive' });
       return;
     }
     const o = ipLogRowToOrderRow(row);
@@ -566,8 +698,8 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
   };
 
   const openRestoreLogOrder = (row: IpLogRow) => {
-    if (!isIpAdmin) {
-      toast({ title: 'Administrators only', variant: 'destructive' });
+    if (!ipPermissions.canRestoreRecords) {
+      toast({ title: 'Insufficient permissions', variant: 'destructive' });
       return;
     }
     const o = ipLogRowToOrderRow(row);
@@ -577,48 +709,114 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
   };
 
   const logsCategoryFooterLabel = useMemo(
-    () => IP_CATEGORY_LABELS[categoryFilter],
-    [categoryFilter]
+    () => (metricsCategory ? IP_CATEGORY_LABELS[metricsCategory] : 'All categories'),
+    [metricsCategory]
   );
+
+  const categoryFilterOptions = useMemo(() => {
+    if (catalogCategories === null || catalogCategories.length === 0) return [];
+    return catalogCategories.map((value) => ({ value, label: IP_CATEGORY_LABELS[value] }));
+  }, [catalogCategories]);
+
+  const categorySelectValue =
+    studyId && catalogCategories !== null && catalogCategories.length > 0
+      ? (() => {
+          const c = asIpCategory(category);
+          return c && catalogCategories.includes(c) ? c : catalogCategories[0];
+        })()
+      : '';
+
+  const categorySelectDisabled =
+    !studyId || catalogCategories === null || catalogCategories.length === 0;
+
+  const categoryEmptyHint = useMemo(() => {
+    if (!studyId || catalogCategories === null) return null;
+    if (catalogCategories.length === 0) {
+      return 'No catalog categories yet. Use Add inventory to create an item and choose a category.';
+    }
+    return null;
+  }, [studyId, catalogCategories]);
 
   return (
     <div className="p-6 space-y-6 print:p-4">
       <div className="flex flex-col gap-4 print:hidden">
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="flex items-start gap-2">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Inventory Management</h1>
-              <p className="text-muted-foreground mt-1 text-sm">
-                Inventory summary, site logs, and audit trail (ledger-backed).
-              </p>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Inventory Management</h1>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Inventory summary, site logs, compliance oversight, and audit trail.
+            </p>
+          </div>
+          <TooltipProvider delay={200}>
+            <div className="flex flex-wrap items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={handlePrint}
+                      aria-label="Print"
+                    />
+                  }
+                >
+                  <Printer className="h-4 w-4" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Print this page</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      disabled={!studyId}
+                      aria-label="Download reports"
+                      className={cn(buttonVariants({ variant: 'outline', size: 'icon' }))}
+                    >
+                      <FileDown className="h-4 w-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-[14rem]">
+                      <DropdownMenuItem
+                        disabled={logRows.length === 0}
+                        onClick={() => void handleDownloadInventoryLogPdf()}
+                      >
+                        Inventory log (PDF)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={metrics.length === 0}
+                        onClick={() => void handleDownloadSummaryPdf()}
+                      >
+                        Inventory summary (PDF)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        disabled={logRows.length === 0}
+                        onClick={handleDownloadAnalyticsCsv}
+                      >
+                        Analytics data (CSV)
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  {!studyId
+                    ? 'Select a study to download reports.'
+                    : 'Download inventory log PDF, summary PDF, or analytics CSV for the current filters.'}
+                </TooltipContent>
+              </Tooltip>
             </div>
-            <DocsHelpLink
-              slug="inventory-management"
-              section="6-site-logistics"
-              className="mt-1.5 shrink-0"
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" size="icon" onClick={handlePrint} aria-label="Print">
-              <Printer className="h-4 w-4" />
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => void handleDownloadPdf()}
-              disabled={!studyId || logRows.length === 0}
-              aria-label="Download inventory log PDF"
-            >
-              <FileDown className="h-4 w-4" />
-            </Button>
-          </div>
+          </TooltipProvider>
         </div>
 
         <div className="flex flex-wrap gap-3 items-end">
           <div className="min-w-[220px] space-y-1">
             <Label className="text-xs">Study</Label>
-            <Select value={studyId} onValueChange={(v) => setStudyId(v ?? '')}>
+            <Select
+              value={studyId}
+              onValueChange={(v) => {
+                setStudyId(v ?? '');
+                setCatalogCategories(null);
+              }}
+            >
               <SelectTrigger className="text-[12px] h-9 min-w-[220px]">
                 <SelectValue
                   placeholder="Select a study"
@@ -643,19 +841,24 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
             <Select value={siteId} onValueChange={setSiteId} disabled={!studyId}>
               <SelectTrigger className="text-[12px] h-9 min-w-[160px]">
                 <SelectValue
-                  placeholder="All sites"
+                  placeholder={ipPermissions.restrictedSiteIds ? 'Select site' : 'All sites'}
                   getDisplayLabel={(v) => {
-                    if (v == null || v === '' || v === '__all_sites__') return 'All sites';
+                    if (v == null || v === '' || v === '__all_sites__') return ipPermissions.restrictedSiteIds ? 'Select site' : 'All sites';
                     const s = sites.find((x) => x.id === v);
                     return s ? `${s.site_number} — ${s.name}` : null;
                   }}
                 />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all_sites__" className="text-[12px]">
-                  All sites
-                </SelectItem>
-                {sites.map((s) => (
+                {!ipPermissions.restrictedSiteIds && (
+                  <SelectItem value="__all_sites__" className="text-[12px]">
+                    All sites
+                  </SelectItem>
+                )}
+                {(ipPermissions.restrictedSiteIds
+                  ? sites.filter((s) => ipPermissions.restrictedSiteIds!.includes(s.id))
+                  : sites
+                ).map((s) => (
                   <SelectItem key={s.id} value={s.id} className="text-[12px]">
                     {s.site_number} — {s.name}
                   </SelectItem>
@@ -665,25 +868,36 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
           </div>
           <div className="min-w-[200px] space-y-1">
             <Label className="text-xs">Category</Label>
-            <Select value={category} onValueChange={setCategory} disabled={!studyId}>
+            <Select
+              value={categorySelectValue}
+              onValueChange={setCategory}
+              disabled={categorySelectDisabled}
+            >
               <SelectTrigger className="text-[12px] h-9 min-w-[160px]">
                 <SelectValue
-                  placeholder="Category"
+                  placeholder={
+                    catalogCategories !== null && catalogCategories.length === 0
+                      ? 'No catalog categories yet'
+                      : 'Category'
+                  }
                   getDisplayLabel={(v) => {
                     if (v == null || v === '') return null;
-                    const opt = CATEGORY_FILTER_OPTIONS.find((o) => o.value === v);
+                    const opt = categoryFilterOptions.find((o) => o.value === v);
                     return opt?.label ?? null;
                   }}
                 />
               </SelectTrigger>
               <SelectContent>
-                {CATEGORY_FILTER_OPTIONS.map((o) => (
+                {categoryFilterOptions.map((o) => (
                   <SelectItem key={o.value} value={o.value} className="text-[12px]">
                     {o.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {categoryEmptyHint ? (
+              <p className="text-[11px] text-muted-foreground max-w-[280px] leading-snug">{categoryEmptyHint}</p>
+            ) : null}
           </div>
         </div>
       </div>
@@ -703,29 +917,13 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
             </div>
           )}
 
-          {!loading && metrics.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 print:hidden">
-              {([
-                { label: 'Total items', value: kpiTotals.totalItems },
-                { label: 'In stock (global)', value: kpiTotals.inStock },
-                { label: 'At sites', value: kpiTotals.atSites },
-                { label: 'Available (site)', value: kpiTotals.available },
-              ] as const).map((kpi) => (
-                <Card key={kpi.label}>
-                  <CardContent className="py-3 px-4">
-                    <p className="text-xs text-muted-foreground">{kpi.label}</p>
-                    <p className="text-xl font-semibold tabular-nums">{kpi.value}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
           <div className="hidden print:block border-b pb-3 mb-4">
             <h1 className="text-xl font-semibold">Inventory Management report</h1>
             <p className="text-sm text-muted-foreground">
               {study?.protocol_number} — {study?.title}
             </p>
+            <p className="text-sm text-muted-foreground mt-1">Site: {printSiteLabel}</p>
+            <p className="text-sm text-muted-foreground">Category: {printCategoryLabel}</p>
             <p className="text-xs text-muted-foreground mt-1" suppressHydrationWarning>
               Printed {new Date().toLocaleString()}
             </p>
@@ -734,54 +932,44 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
           <Tabs
             tabsId="ip-management"
             value={tab}
-            onValueChange={(v: string) => setTab(v as 'summary' | 'logs')}
+            onValueChange={(v: string) => setTab(v as 'summary' | 'logs' | 'analytics')}
             className="space-y-4"
           >
             <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
               <TabsList>
                 <TabsTrigger value="summary">Inventory summary</TabsTrigger>
                 <TabsTrigger value="logs">Inventory logs</TabsTrigger>
+                <TabsTrigger value="analytics">Analytics</TabsTrigger>
               </TabsList>
-
-              <div className="flex items-center gap-2">
-                {tab === 'logs' && dispositionFilter && (
+              {ipPermissions.canAddInventory && (
+                <div className="flex items-center gap-2">
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
-                    onClick={() => setDispositionFilter(null)}
+                    onClick={() => setBulkUploadOpen(true)}
+                    disabled={!studyId}
                   >
-                    Clear filter: {IP_DISPOSITION_LABELS[dispositionFilter as IpDisposition] ?? dispositionFilter}
+                    <Upload className="h-4 w-4 mr-2" />
+                    Bulk upload
                   </Button>
-                )}
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    placeholder="Search inventory…"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-8 w-48 pl-8 text-xs"
-                  />
+                  <Button
+                    type="button"
+                    onClick={() => setAddInventoryOpen(true)}
+                    disabled={!studyId}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add inventory
+                  </Button>
                 </div>
-              </div>
+              )}
             </div>
 
             <TabsContent value="summary" className="space-y-4">
-              <div className="flex flex-wrap justify-end gap-2 print:hidden">
-                <Button
-                  type="button"
-                  onClick={() => setAddInventoryOpen(true)}
-                  disabled={!studyId}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add inventory
-                </Button>
-              </div>
               <p className="text-center text-lg font-medium print:block hidden">Inventory summary</p>
-              <IpSummaryCharts metrics={filteredMetrics} uiContext={inventoryUiContext} />
+              <IpSummaryCharts metrics={metrics} />
               <IpSummaryTable
                 studyId={studyId}
-                metrics={filteredMetrics}
+                metrics={metrics}
                 uiContext={inventoryUiContext}
                 archivedView={false}
                 archivedSitesView={false}
@@ -789,61 +977,63 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
                 ordersRefreshNonce={ordersRefreshNonce}
                 siteLinksRefreshNonce={siteLinksRefreshNonce}
                 siteLinksItemId={siteLinksItemId}
-                isIpAdmin={isIpAdmin}
-                onEditInventory={studyId ? openEditInventory : undefined}
-                onDeleteEquipment={studyId ? openDeleteEquipment : undefined}
+                permissions={ipPermissions}
+                onEditInventory={studyId && ipPermissions.canEditRecords ? openEditInventory : undefined}
+                onDeleteEquipment={studyId && ipPermissions.canDeleteRecords ? openDeleteEquipment : undefined}
                 onRestoreEquipment={undefined}
-                onAddSite={studyId ? openAddSite : undefined}
+                onAddSite={studyId && ipPermissions.canEditRecords ? openAddSite : undefined}
                 onViewTransactions={(itemId, siteId) => void handleViewTransactions(itemId, siteId)}
                 onViewOrderTransactions={
                   studyId ? openViewOrderTransactions : undefined
                 }
-                onAddOrder={studyId ? openAddOrder : undefined}
-                onEditOrder={studyId ? openEditOrder : undefined}
-                onReceiveInventory={studyId ? openReceiveFromOrder : undefined}
-                onReverseReceipt={studyId && isIpAdmin ? openUnreceiveFromOrder : undefined}
-                onReturnToManufacturer={studyId ? openReturnFromOrder : undefined}
-                onTransferOrder={studyId ? openTransferFromOrder : undefined}
-                onDestroyOrderLine={studyId ? openDestroyFromOrder : undefined}
+                onAddOrder={studyId && ipPermissions.canCreateShipments ? openAddOrder : undefined}
+                onEditOrder={studyId && ipPermissions.canEditRecords ? openEditOrder : undefined}
+                onReceiveInventory={studyId && ipPermissions.canReceiveInventory ? openReceiveFromOrder : undefined}
+                onReverseReceipt={studyId && ipPermissions.canUnreceiveInventory ? openUnreceiveFromOrder : undefined}
+                onReturnToManufacturer={studyId && ipPermissions.canUpdateDisposition ? openReturnFromOrder : undefined}
+                onTransferOrder={studyId && ipPermissions.canUpdateDisposition ? openTransferFromOrder : undefined}
+                onDestroyOrderLine={studyId && ipPermissions.canUpdateDisposition ? openDestroyFromOrder : undefined}
                 onChangeDisposition={
-                  studyId && isIpAdmin ? openChangeDispFromOrder : undefined
+                  studyId && ipPermissions.canChangeDisposition ? openChangeDispFromOrder : undefined
                 }
                 onDeleteOrder={
-                  studyId && isIpAdmin ? openArchiveOrder : undefined
+                  studyId && ipPermissions.canDeleteRecords ? openArchiveOrder : undefined
                 }
-                onVerifyOrder={studyId ? openVerifyFromOrder : undefined}
-                onUnverifyOrder={studyId && isIpAdmin ? openUnverifyFromOrder : undefined}
+                onVerifyOrder={studyId && ipPermissions.canVerifyInventory ? openVerifyFromOrder : undefined}
+                onUnverifyOrder={studyId && ipPermissions.canUnverifyInventory ? openUnverifyFromOrder : undefined}
                 onRestoreOrder={undefined}
                 onDeleteSite={studyId ? openDeleteSite : undefined}
                 onRestoreSite={undefined}
                 onViewLotHistory={studyId ? openLotHistory : undefined}
                 onShippingDocuments={studyId ? openShippingDocsFromOrder : undefined}
+                expandForPrint={printing}
+                onExpandForPrintReady={handleSummaryExpandForPrintReady}
               />
             </TabsContent>
 
             <TabsContent value="logs" className="space-y-4">
+              <p className="text-center text-lg font-medium print:block hidden">Inventory logs</p>
               <IpLogsTable
-                rows={filteredLogRows}
-                studyProtocolNumber={study?.protocol_number}
-                studyName={study?.title}
+                rows={logRows}
+                expandForPrint={printing}
                 categoryFooterLabel={logsCategoryFooterLabel}
                 uiContext={inventoryUiContext}
-                isIpAdmin={isIpAdmin}
+                permissions={ipPermissions}
                 inTransitQtyByLotSite={inTransitQtyByLotSite}
                 onViewTransactions={(row) => void handleViewTransactions(row.item_id, row.study_site_id)}
                 onViewLotHistory={studyId ? openLotHistory : undefined}
                 onShippingDocuments={studyId ? openShippingDocsFromLog : undefined}
-                onVerifyInventory={studyId ? openVerifyFromLog : undefined}
-                onUnverifyInventory={studyId && isIpAdmin ? openUnverifyFromLog : undefined}
-                onDeleteOrder={studyId && isIpAdmin ? openDeleteLogOrder : undefined}
-                onRestoreOrder={studyId && isIpAdmin ? openRestoreLogOrder : undefined}
-                onReceiveInventory={studyId ? openReceiveFromLog : undefined}
-                onReverseReceipt={studyId && isIpAdmin ? openUnreceiveFromLog : undefined}
-                onReturnToManufacturer={studyId ? openReturnFromLog : undefined}
-                onTransfer={studyId ? openTransferFromLog : undefined}
-                onDestroy={studyId ? openDestroyFromLog : undefined}
+                onVerifyInventory={studyId && ipPermissions.canVerifyInventory ? openVerifyFromLog : undefined}
+                onUnverifyInventory={studyId && ipPermissions.canUnverifyInventory ? openUnverifyFromLog : undefined}
+                onDeleteOrder={studyId && ipPermissions.canDeleteRecords ? openDeleteLogOrder : undefined}
+                onRestoreOrder={studyId && ipPermissions.canRestoreRecords ? openRestoreLogOrder : undefined}
+                onReceiveInventory={studyId && ipPermissions.canReceiveInventory ? openReceiveFromLog : undefined}
+                onReverseReceipt={studyId && ipPermissions.canUnreceiveInventory ? openUnreceiveFromLog : undefined}
+                onReturnToManufacturer={studyId && ipPermissions.canUpdateDisposition ? openReturnFromLog : undefined}
+                onTransfer={studyId && ipPermissions.canUpdateDisposition ? openTransferFromLog : undefined}
+                onDestroy={studyId && ipPermissions.canUpdateDisposition ? openDestroyFromLog : undefined}
                 onChangeDisposition={
-                  studyId && isIpAdmin ? openChangeDispFromLog : undefined
+                  studyId && ipPermissions.canChangeDisposition ? openChangeDispFromLog : undefined
                 }
               />
 
@@ -866,78 +1056,22 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
                 </Card>
               )}
 
-              <IpLogsCharts dispositionTotals={dispTotals} compliancePct={compliancePct} />
+            </TabsContent>
 
-              <Collapsible open={metricsOpen} onOpenChange={setMetricsOpen}>
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm" className="print:hidden gap-1">
-                    <ChevronDown className={cn('h-4 w-4 transition', metricsOpen && 'rotate-180')} />
-                    Metrics and user roster
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Disposition summary</CardTitle>
-                        <p className="text-xs text-muted-foreground">Quantity on site locations by disposition.</p>
-                      </CardHeader>
-                      <CardContent className="flex flex-wrap gap-3 text-sm">
-                        {Object.keys(dispositionWidget).length === 0 ? (
-                          <span className="text-muted-foreground">No data</span>
-                        ) : (
-                          Object.entries(dispositionWidget).map(([k, v]) => (
-                            <button
-                              key={k}
-                              type="button"
-                              className={cn(
-                                'underline-offset-2 hover:underline',
-                                dispositionFilter === k && 'underline font-semibold'
-                              )}
-                              onClick={() => {
-                                setDispositionFilter(dispositionFilter === k ? null : k);
-                                setTab('logs');
-                              }}
-                            >
-                              <span className="font-medium">
-                                {IP_DISPOSITION_LABELS[k as IpDisposition] ?? k}
-                              </span>
-                              : {v}
-                            </button>
-                          ))
-                        )}
-                        <span className="text-muted-foreground border-l pl-3 ml-1">
-                          Compliance:{' '}
-                          {compliancePct != null && Number.isFinite(compliancePct)
-                            ? `${compliancePct.toFixed(1)}%`
-                            : '—'}
-                        </span>
-                      </CardContent>
-                    </Card>
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base">Recent ledger activity</CardTitle>
-                      </CardHeader>
-                      <CardContent className="max-h-[200px] overflow-y-auto text-sm space-y-2">
-                        {roster.length === 0 ? (
-                          <p className="text-muted-foreground">No ledger entries yet.</p>
-                        ) : (
-                          roster.map((r, i) => (
-                            <div key={i} className="border-b border-border/60 pb-2 last:border-0">
-                              <div className="font-medium">{r.performer_label}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {r.entry_type.replace(/_/g, ' ')} ·{' '}
-                                {new Date(r.performed_at).toLocaleString()}
-                                {r.subject_number_snapshot ? ` · Subject ${r.subject_number_snapshot}` : ''}
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </CardContent>
-                    </Card>
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
+            <TabsContent value="analytics" className="space-y-4">
+              <h2 className="text-lg font-semibold">Inventory analytics</h2>
+              <IpAnalyticsDashboard
+                metrics={metrics}
+                logRows={logRows}
+                flags={flags}
+                breakdown={breakdown}
+                inTransitLines={inTransitLines}
+                loading={loading}
+                categoryFilter={categoryFilter}
+                uiContext={inventoryUiContext}
+                studyName={study?.title}
+                protocolNumber={study?.protocol_number}
+              />
             </TabsContent>
           </Tabs>
 
@@ -953,8 +1087,16 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
         onOpenChange={setAddInventoryOpen}
         studyId={studyId}
         studyLabel={study ? `${study.protocol_number} — ${study.title}` : ''}
-        pageCategoryFilterLocked={pageCategoryFilterLocked}
-        categoryFilter={categoryFilter}
+        pageCategoryFilterLocked={false}
+        categoryFilter={metricsCategory}
+        onSuccess={refresh}
+      />
+
+      <IpBulkUploadDialog
+        open={bulkUploadOpen}
+        onOpenChange={setBulkUploadOpen}
+        studyId={studyId}
+        studyLabel={study ? `${study.protocol_number} — ${study.title}` : ''}
         onSuccess={refresh}
       />
 
@@ -1116,7 +1258,7 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
           if (!o) setMovementLine(null);
         }}
         line={movementLine}
-        isIpAdmin={isIpAdmin}
+        permissions={ipPermissions}
         subjects={subjectOptions}
         onSuccess={afterMutation}
       />
@@ -1132,6 +1274,8 @@ export function IpManagementPageClient({ studies, isIpAdmin }: IpManagementPageC
         studySiteId={addOrderCtx?.studySiteId ?? ''}
         itemCategory={addOrderCtx ? asIpCategory(addOrderCtx.metric.category) : undefined}
         catalogUnit={addOrderCtx?.metric.unit}
+        globalInStock={addOrderCtx?.metric.global_in_stock ?? 0}
+        defaultContentsPerCatalogUnit={addOrderCtx?.metric.default_contents_per_catalog_unit ?? null}
         onSuccess={refresh}
       />
 
