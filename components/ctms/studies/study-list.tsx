@@ -157,8 +157,26 @@ export function StudyList({ studies }: StudyListProps) {
           return <span className="text-muted-foreground text-xs">{date.toLocaleDateString()}</span>;
         },
       },
+      {
+        id: 'open',
+        header: 'Actions',
+        enableSorting: false,
+        cell: ({ row }) => (
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              router.push(`/protected/studies/${row.original.id}`);
+            }}
+          >
+            Open
+          </Button>
+        ),
+      },
     ],
-    []
+    [router]
   );
 
   const table = useReactTable({

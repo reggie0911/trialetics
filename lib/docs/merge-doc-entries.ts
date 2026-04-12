@@ -22,6 +22,7 @@ const VALID_ICON_KEYS = new Set<string>([
   'creditCard',
   'shield',
   'bookOpen',
+  'flaskConical',
 ]);
 
 function formatDocDate(iso: string): string {

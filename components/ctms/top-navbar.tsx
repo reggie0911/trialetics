@@ -22,6 +22,7 @@ import {
   ChevronDown,
   Lock,
   ListTodo,
+  Palette,
   CheckSquare,
   FileText,
   Shield,
@@ -126,6 +127,7 @@ interface TopNavbarProps {
   hasTrackerAccess: boolean;
   hasEtmfAccess: boolean;
   hasEisfAccess: boolean;
+  hasBrandforgeAccess: boolean;
   isPlatformAdmin: boolean;
   /** Keys from `companies.enabled_study_tracker_keys` to show under Custom → Study trackers (serializable). */
   studyTrackerMenuKeys: string[];
@@ -141,6 +143,7 @@ interface TopNavbarProps {
 
 function getPageName(pathname: string, customNames: CustomTrackerNavItem[]): string {
   if (pathname.startsWith('/protected/financials/approval-templates')) return 'Approval templates';
+  if (pathname.startsWith('/protected/brand-forge')) return 'BrandForge';
   if (pathname.startsWith('/protected/eisf')) return 'eISF';
   if (pathname.startsWith('/protected/etmf')) return 'eTMF';
   if (pathname.startsWith('/protected/platform/')) return 'Platform admin';
@@ -167,6 +170,7 @@ export function TopNavbar({
   hasTrackerAccess,
   hasEtmfAccess,
   hasEisfAccess,
+  hasBrandforgeAccess,
   isPlatformAdmin,
   studyTrackerMenuKeys,
   customTrackerNavItems,
@@ -190,6 +194,9 @@ export function TopNavbar({
   );
 
   const pageName = getPageName(pathname, customTrackerNavItems);
+
+  /** Platform admins always see BrandForge in nav; tenants need the company flag. */
+  const showBrandforgeInNav = hasBrandforgeAccess || isPlatformAdmin;
 
   const isActive = (href: string, exact?: boolean) => {
     if (exact) return pathname === href;
@@ -445,9 +452,24 @@ export function TopNavbar({
                     })}
                   </>
                 )}
-                {isPlatformAdmin && (
+                {showBrandforgeInNav && (
                   <>
                     {hasCtmsAccess && <DropdownMenuSeparator />}
+                    <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                      Brand & Creative
+                    </div>
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() => router.push('/protected/brand-forge')}
+                    >
+                      <Palette className="mr-2 h-4 w-4" />
+                      BrandForge
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {isPlatformAdmin && (
+                  <>
+                    {(hasCtmsAccess || showBrandforgeInNav) && <DropdownMenuSeparator />}
                     <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
                       Platform
                     </div>
@@ -474,7 +496,7 @@ export function TopNavbar({
                     </DropdownMenuItem>
                   </>
                 )}
-                {!hasCtmsAccess && !isPlatformAdmin && (
+                {!hasCtmsAccess && !showBrandforgeInNav && !isPlatformAdmin && (
                   <div className="px-2 py-2 text-xs text-muted-foreground">Coming soon</div>
                 )}
               </DropdownMenuContent>
@@ -795,9 +817,27 @@ export function TopNavbar({
                 })}
               </>
             )}
+            {showBrandforgeInNav && (
+              <>
+                <p className="px-4 py-1 text-[10px] text-muted-foreground">Brand & Creative</p>
+                <Link
+                  href="/protected/brand-forge"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                    pathname.startsWith('/protected/brand-forge')
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'text-muted-foreground hover:bg-muted',
+                  )}
+                >
+                  <Palette className="h-4 w-4" />
+                  BrandForge
+                </Link>
+              </>
+            )}
             {isPlatformAdmin && (
               <>
-                {hasCtmsAccess && <p className="px-4 py-1 text-[10px] text-muted-foreground">Platform</p>}
+                {(hasCtmsAccess || showBrandforgeInNav) && <p className="px-4 py-1 text-[10px] text-muted-foreground">Platform</p>}
                 <Link
                   href="/protected/platform/companies"
                   onClick={() => setMobileOpen(false)}
@@ -824,7 +864,7 @@ export function TopNavbar({
                 </Link>
               </>
             )}
-            {!hasCtmsAccess && !isPlatformAdmin && (
+            {!hasCtmsAccess && !showBrandforgeInNav && !isPlatformAdmin && (
               <div className="px-4 py-2 text-sm text-muted-foreground">Coming soon</div>
             )}
 

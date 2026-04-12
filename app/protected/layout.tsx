@@ -48,7 +48,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   const { data: company } = await supabase
     .from('companies')
-    .select('name, has_tracker_access, has_ctms_access, has_etmf_access, has_eisf_access, enabled_study_tracker_keys')
+    .select('name, has_tracker_access, has_ctms_access, has_etmf_access, has_eisf_access, has_brandforge_access, enabled_study_tracker_keys')
     .eq('id', profile.company_id)
     .single();
 
@@ -61,7 +61,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const hasEtmfAccess = company?.has_etmf_access === true;
   const hasEisfAccess = company?.has_eisf_access === true;
   const hasTrackerAccess = company?.has_tracker_access === true;
-  const hasProductAccess = hasCtmsAccess || hasTrackerAccess || hasEtmfAccess || hasEisfAccess;
+  const hasBrandforgeAccess = company?.has_brandforge_access === true;
+  const hasProductAccess = hasCtmsAccess || hasTrackerAccess || hasEtmfAccess || hasEisfAccess || hasBrandforgeAccess;
 
   const enabledStudyKeys = (company?.enabled_study_tracker_keys as string[] | null | undefined) ?? [];
   /** Plain string[] only — icons are resolved inside the client TopNavbar. */
@@ -113,6 +114,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
           hasTrackerAccess={hasTrackerAccess}
           hasEtmfAccess={hasEtmfAccess}
           hasEisfAccess={hasEisfAccess}
+          hasBrandforgeAccess={hasBrandforgeAccess}
           isPlatformAdmin={isPlatformAdmin}
           isCompanyAdmin={profile.role === 'admin'}
           studyTrackerMenuKeys={studyTrackerMenuKeys}

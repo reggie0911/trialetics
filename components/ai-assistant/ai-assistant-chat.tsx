@@ -82,6 +82,13 @@ const SUGGESTED_PROMPTS: Record<string, string[]> = {
     'Any overdue visits?',
     'List visit templates',
   ],
+  'brand-forge': [
+    'What color palette works best for this study?',
+    'Generate tagline options for this study',
+    'Review my brand for patient-appropriateness',
+    'What visual style fits a rare disease pediatric trial?',
+    'Help me create a recruitment visual strategy',
+  ],
 };
 
 function getModuleKey(pathname: string): string {

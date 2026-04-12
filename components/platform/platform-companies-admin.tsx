@@ -147,7 +147,12 @@ export function PlatformCompaniesAdmin({
 
   const onToggleModule = (
     company: PlatformCompanyRow,
-    key: 'has_ctms_access' | 'has_eisf_access' | 'has_etmf_access' | 'has_tracker_access',
+    key:
+      | 'has_ctms_access'
+      | 'has_eisf_access'
+      | 'has_etmf_access'
+      | 'has_tracker_access'
+      | 'has_brandforge_access',
     value: boolean
   ) => {
     const prevSnapshot = company;
@@ -160,6 +165,7 @@ export function PlatformCompaniesAdmin({
         hasEisfAccess: next.has_eisf_access,
         hasEtmfAccess: next.has_etmf_access,
         hasTrackerAccess: next.has_tracker_access,
+        hasBrandforgeAccess: next.has_brandforge_access,
       });
       if (!res.success) {
         patchCompany(company.id, prevSnapshot);
@@ -322,8 +328,8 @@ export function PlatformCompaniesAdmin({
 
         <TabsContent value="companies" className="mt-6 space-y-4">
           <p className="text-sm text-muted-foreground">
-            Enable CTMS, eTMF, eISF, and custom trackers per company. Expand a row to license each{' '}
-            <span className="font-medium text-foreground">builder</span> definition.
+            Enable CTMS, eTMF, eISF, BrandForge, and custom trackers per company. Expand a row to license
+            each <span className="font-medium text-foreground">builder</span> definition.
           </p>
           <div className="rounded-lg border">
         <Table>
@@ -334,6 +340,7 @@ export function PlatformCompaniesAdmin({
               <TableHead className="text-center">CTMS</TableHead>
               <TableHead className="text-center">eTMF</TableHead>
               <TableHead className="text-center">eISF</TableHead>
+              <TableHead className="text-center">BrandForge</TableHead>
               <TableHead className="text-center">Custom trackers</TableHead>
             </TableRow>
           </TableHeader>
@@ -381,6 +388,13 @@ export function PlatformCompaniesAdmin({
                   </TableCell>
                   <TableCell className="text-center">
                     <Switch
+                      checked={c.has_brandforge_access}
+                      disabled={pending}
+                      onCheckedChange={(v) => onToggleModule(c, 'has_brandforge_access', v)}
+                    />
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Switch
                       checked={c.has_tracker_access}
                       disabled={pending}
                       onCheckedChange={(v) => onToggleModule(c, 'has_tracker_access', v)}
@@ -389,7 +403,7 @@ export function PlatformCompaniesAdmin({
                 </TableRow>
                 {expandedId === c.id && (
                   <TableRow className="bg-muted/40">
-                    <TableCell colSpan={6} className="p-4">
+                    <TableCell colSpan={7} className="p-4">
                       <div className="flex items-center justify-between gap-3 mb-3">
                         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           Custom tracker definitions

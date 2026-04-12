@@ -10,6 +10,7 @@ import {
   CreditCard,
   Shield,
   BookOpen,
+  FlaskConical,
 } from 'lucide-react';
 import type { DocIconKey } from './registry';
 
@@ -24,6 +25,7 @@ const DOC_ICON_MAP: Record<DocIconKey, LucideIcon> = {
   creditCard: CreditCard,
   shield: Shield,
   bookOpen: BookOpen,
+  flaskConical: FlaskConical,
 };
 
 export function getDocIcon(key: DocIconKey): LucideIcon {

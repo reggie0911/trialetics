@@ -1,4 +1,4 @@
-export type DocCategory = 'getting-started' | 'ctms' | 'trackers' | 'payments' | 'admin';
+export type DocCategory = 'getting-started' | 'ctms' | 'trackers' | 'payments' | 'admin' | 'tools';
 
 /** Serializable icon id — map to Lucide in client code via `getDocIcon` from `@/lib/docs/doc-icons`. */
 export type DocIconKey =
@@ -11,7 +11,8 @@ export type DocIconKey =
   | 'pill'
   | 'creditCard'
   | 'shield'
-  | 'bookOpen';
+  | 'bookOpen'
+  | 'flaskConical';
 
 export interface DocEntry {
   slug: string;
@@ -29,6 +30,8 @@ export interface DocEntry {
    */
   lastUpdated: string;
   moduleRoute?: string;
+  /** When set, the index card links directly here instead of `/protected/docs/${slug}`. */
+  href?: string;
 }
 
 export const DOC_CATEGORY_LABELS: Record<DocCategory, string> = {
@@ -37,6 +40,7 @@ export const DOC_CATEGORY_LABELS: Record<DocCategory, string> = {
   trackers: 'Study Trackers',
   payments: 'Payments & Financials',
   admin: 'Administration',
+  tools: 'AI Tools & Creative',
 };
 
 export const DOC_CATEGORY_ORDER: DocCategory[] = [
@@ -44,6 +48,7 @@ export const DOC_CATEGORY_ORDER: DocCategory[] = [
   'ctms',
   'trackers',
   'payments',
+  'tools',
   'admin',
 ];
 
@@ -196,6 +201,19 @@ export const docsRegistry: DocEntry[] = [
     lastUpdated: '2026-03-21',
     moduleRoute: '/protected/platform/companies',
   },
+  {
+    slug: 'brand-forge',
+    title: 'BrandForge User Manual',
+    description:
+      'AI-powered clinical study identity system — study intake wizard, logo generation, color/typography editors, recruitment creative kits, material themes, PDF export, and share links.',
+    category: 'tools',
+    iconKey: 'flaskConical',
+    filePath: 'docs/user-manuals/brand-forge.md',
+    order: 1,
+    roles: ['admin', 'user'],
+    lastUpdated: '2026-04-09',
+    moduleRoute: '/protected/brand-forge',
+  },
 ];
 
 export function getDocBySlug(slug: string): DocEntry | undefined {
@@ -218,6 +236,7 @@ export function getDocsByCategory(entries: DocEntry[]): Record<DocCategory, DocE
     trackers: [],
     payments: [],
     admin: [],
+    tools: [],
   };
   for (const entry of entries) {
     grouped[entry.category].push(entry);
