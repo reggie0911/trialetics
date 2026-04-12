@@ -2586,7 +2586,7 @@ export async function getIpTransactionReportData(params: {
   const ordRows = (ordersRaw ?? []) as unknown as OrdRaw[];
 
   const lotIds = ordRows.map((o) => o.lot_id).filter(Boolean) as string[];
-  let locMap = new Map<string, { quantity_on_hand: number; quantity_available: number; disposition: string }>();
+  const locMap = new Map<string, { quantity_on_hand: number; quantity_available: number; disposition: string }>();
   if (lotIds.length > 0) {
     let q = supabase
       .from('ip_lot_locations')
