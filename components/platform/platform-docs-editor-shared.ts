@@ -11,6 +11,7 @@ export const ICON_LABELS: Record<DocIconKey, string> = {
   creditCard: 'Credit card',
   shield: 'Shield',
   bookOpen: 'Book',
+  flaskConical: 'Flask',
 };
 
 /** Strip HTML comments for Preview tab only (author notes / screenshot hints). */

@@ -48,6 +48,7 @@ const agentLoaders: Record<string, AgentLoader> = {
   'feasibility-site-selection': () => import('./feasibility-site-selection').then(m => m.feasibilitySiteSelectionAgent),
   'retention-engagement': () => import('./retention-engagement').then(m => m.retentionEngagementAgent),
   'docs-assistant': () => import('./docs-assistant').then(m => m.docsAssistantAgent),
+  'brandforge-strategist': () => import('./brandforge-strategist').then(m => m.brandforgeStrategistAgent),
 };
 
 const agentCache: Record<string, AgentConfig> = {};
@@ -118,6 +119,7 @@ const moduleContextMap: Record<string, string[]> = {
   'feasibility-site-selection': ['/protected/feasibility'],
   'retention-engagement': ['/protected/patient-engagement'],
   'docs-assistant': ['/protected/docs'],
+  'brandforge-strategist': ['/protected/brand-forge'],
 };
 
 export function findAgentIdForPage(pagePath: string): string | null {

@@ -42,7 +42,7 @@ export function DocsIndex({ entries, grouped }: DocsIndexProps) {
                 return (
                   <Link
                     key={entry.slug}
-                    href={`/protected/docs/${entry.slug}`}
+                    href={entry.href ?? `/protected/docs/${entry.slug}`}
                     className="group"
                   >
                     <Card className="h-full transition-shadow hover:shadow-md group-hover:border-primary/30">
