@@ -103,7 +103,7 @@ export default async function SharedBrandKitPage({ params }: SharedBrandKitPageP
                   ))}
                 </div>
               )}
-              {(direction.tagline_options as string[] | null)?.length! > 0 && (
+              {((direction.tagline_options as string[] | null)?.length ?? 0) > 0 && (
                 <div>
                   <p className="text-xs font-medium mb-1">Taglines</p>
                   <ul className="space-y-1">
