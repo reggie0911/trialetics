@@ -1,0 +1,24 @@
+---
+description: Supabase SSR clients — server vs browser boundaries
+globs: lib/server.ts,lib/client.ts,lib/actions/**/*.ts,app/api/**/*.ts
+alwaysApply: false
+---
+
+# Trialetics Supabase clients
+
+- **Server** (Server Components, Route Handlers, `lib/actions/*`): Import `createClient` from **`@/lib/server`**. It is **async** — always `const supabase = await createClient()`.
+- **Browser** (Client Components, client-only flows): Import `createClient` from **`@/lib/client`**. It is synchronous — `const supabase = createClient()`.
+- **Do not** instantiate `createServerClient` / `createBrowserClient` ad hoc in feature code; use the shared factories so cookies and env stay consistent.
+- **Auth**: After `createClient()`, use `supabase.auth.getUser()` (or session helpers already used in the file) as the rest of the route does. Do not log secrets or passwords.
+- **Actions**: When adding server actions in `lib/actions/`, follow existing patterns: accept IDs as strings, validate with Zod where forms send data, return typed results or errors consistent with siblings in the same file.
+
+```ts
+// Server Component / Route Handler / server action
+import { createClient } from '@/lib/server';
+const supabase = await createClient();
+
+// Client Component
+'use client';
+import { createClient } from '@/lib/client';
+const supabase = createClient();
+```

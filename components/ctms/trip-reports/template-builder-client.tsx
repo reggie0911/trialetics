@@ -67,11 +67,18 @@ interface TemplateBuilderClientProps {
   initialQuestions: VisitReportTemplateQuestion[];
   studies: StudyOption[];
   readOnly?: boolean;
+  tripReportsBasePath?: string;
 }
 
 const DEBOUNCE_MS = 500;
 
-export function TemplateBuilderClient({ template, initialQuestions, studies, readOnly = false }: TemplateBuilderClientProps) {
+export function TemplateBuilderClient({
+  template,
+  initialQuestions,
+  studies,
+  readOnly = false,
+  tripReportsBasePath = '/protected/studies',
+}: TemplateBuilderClientProps) {
   const router = useRouter();
   const [questions, setQuestions] = useState(initialQuestions);
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
@@ -206,7 +213,7 @@ export function TemplateBuilderClient({ template, initialQuestions, studies, rea
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link
-            href="/protected/trip-reports?tab=admin"
+            href={`${tripReportsBasePath}?tab=admin`}
             className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}
           >
             <ArrowLeft className="h-4 w-4 mr-1" />
@@ -217,7 +224,7 @@ export function TemplateBuilderClient({ template, initialQuestions, studies, rea
               <h1 className="text-2xl font-semibold tracking-tight">{template.name}</h1>
               {readOnly ? (
                 <Link
-                  href={`/protected/trip-reports/templates/${template.id}`}
+                  href={`${tripReportsBasePath}/templates/${template.id}`}
                   className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'shrink-0')}
                 >
                   <Pencil className="h-4 w-4 mr-1.5" />

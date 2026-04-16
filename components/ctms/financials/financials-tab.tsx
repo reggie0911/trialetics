@@ -70,6 +70,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useStudyHub } from '@/components/ctms/study-hub-context';
+import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
 
 import type {
   StudyBudget,
@@ -178,6 +181,8 @@ export function FinancialsTab({
   const [addSectionRate, setAddSectionRate] = useState('');
   const [addSectionSaving, setAddSectionSaving] = useState(false);
   const [upgradingBudgetId, setUpgradingBudgetId] = useState<string | null>(null);
+  const readOnly = useStudyHub()?.isStudyReadOnly ?? false;
+  const disabledTooltip = readOnly ? STUDY_DEACTIVATED_TOOLTIP : undefined;
 
   useEffect(() => {
     setStudyWorkflowSelect(studyFinanceApprovalTemplateId ?? STUDY_FINANCE_TEMPLATE_NONE);
@@ -290,6 +295,7 @@ export function FinancialsTab({
   };
 
   const handleAddSection = async () => {
+    if (readOnly) return;
     if (!addSectionBudgetId || !addSectionName.trim()) return;
     setAddSectionSaving(true);
     const indirectRate = addSectionRate.trim() !== '' ? parseFloat(addSectionRate) / 100 : null;
@@ -309,6 +315,7 @@ export function FinancialsTab({
   };
 
   const handleUpgradeBudget = async (budgetId: string) => {
+    if (readOnly) return;
     setUpgradingBudgetId(budgetId);
     const { error } = await upgradeToStructuredBudget(budgetId, studyId);
     setUpgradingBudgetId(null);
@@ -401,8 +408,19 @@ export function FinancialsTab({
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-lg font-medium">Budgets</h3>
           <div className="flex items-center gap-2">
-            <BudgetWizardDialog studyId={studyId} companyId={companyId} onSuccess={refreshData} />
-            <BudgetFormDialog studyId={studyId} onSuccess={refreshData} />
+            <BudgetWizardDialog
+              studyId={studyId}
+              companyId={companyId}
+              onSuccess={refreshData}
+              disabled={readOnly}
+              disabledTooltip={disabledTooltip}
+            />
+            <BudgetFormDialog
+              studyId={studyId}
+              onSuccess={refreshData}
+              readOnly={readOnly}
+              disabledTooltip={disabledTooltip}
+            />
           </div>
         </div>
 
@@ -453,6 +471,7 @@ export function FinancialsTab({
                           <span className="hidden h-8 w-px shrink-0 self-center bg-border/70 sm:block" aria-hidden />
                           <Select
                             value={budget.status}
+                            disabled={readOnly}
                             onValueChange={async (val) => {
                               const { error } = await updateBudget(budget.id, studyId, { status: val as BudgetStatus });
                               if (error) toast.error(error);
@@ -482,9 +501,9 @@ export function FinancialsTab({
                             <FileDown className="h-3.5 w-3.5 mr-1" />
                             CSV template
                           </Button>
-                          <label className="cursor-pointer inline-flex">
+                          <label className={readOnly ? 'cursor-not-allowed inline-flex' : 'cursor-pointer inline-flex'}>
                             <span
-                              className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-[min(var(--radius-md),10px)] border border-border bg-background px-2.5 h-8 text-xs font-medium shadow-xs hover:bg-muted hover:text-foreground transition-all select-none dark:border-input dark:bg-input/30 dark:hover:bg-input/50 ${csvImporting ? 'pointer-events-none opacity-60' : ''}`}
+                              className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-[min(var(--radius-md),10px)] border border-border bg-background px-2.5 h-8 text-xs font-medium shadow-xs hover:bg-muted hover:text-foreground transition-all select-none dark:border-input dark:bg-input/30 dark:hover:bg-input/50 ${csvImporting || readOnly ? 'pointer-events-none opacity-60' : ''}`}
                             >
                               {csvImporting ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -497,7 +516,7 @@ export function FinancialsTab({
                               type="file"
                               accept=".csv,text/csv"
                               className="hidden"
-                              disabled={csvImporting}
+                              disabled={csvImporting || readOnly}
                               onChange={(e) => {
                                 const f = e.target.files?.[0];
                                 if (f) void handleStudyBudgetCsvFile(f, budget.id, budget.budget_line_items.length);
@@ -512,6 +531,8 @@ export function FinancialsTab({
                             companyId={companyId}
                             currency={budget.currency}
                             onSuccess={refreshData}
+                            disabled={readOnly}
+                            disabledTooltip={disabledTooltip}
                           />
                           <LineItemFormDialog
                             budgetId={budget.id}
@@ -519,6 +540,8 @@ export function FinancialsTab({
                             currency={budget.currency}
                             sections={budget.study_budget_sections}
                             onSuccess={refreshData}
+                            readOnly={readOnly}
+                            disabledTooltip={disabledTooltip}
                           />
                           {budget.study_budget_sections.length > 0 && (
                             <>
@@ -541,23 +564,38 @@ export function FinancialsTab({
                               studyBudgetName={budget.name}
                               sites={sites}
                               onSuccess={refreshData}
+                              disabled={readOnly}
+                              disabledTooltip={disabledTooltip}
                             />
                           )}
-                          <AlertDialog>
-                            <AlertDialogTrigger render={<Button variant="ghost" size="sm" className="h-7 w-7 p-0" />}>
-                              <Trash2 className="h-3 w-3 text-destructive" />
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete Budget</AlertDialogTitle>
-                                <AlertDialogDescription>This will permanently remove &ldquo;{budget.name}&rdquo; and all line items.</AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteBudget(budget.id)}>Delete</AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          {readOnly ? (
+                            <Tooltip>
+                              <TooltipTrigger render={<span className="inline-flex" />}>
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled aria-label="Delete budget">
+                                  <Trash2 className="h-3 w-3 text-destructive" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                                {STUDY_DEACTIVATED_TOOLTIP}
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            <AlertDialog>
+                              <AlertDialogTrigger render={<Button variant="ghost" size="sm" className="h-7 w-7 p-0" />}>
+                                <Trash2 className="h-3 w-3 text-destructive" />
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Budget</AlertDialogTitle>
+                                  <AlertDialogDescription>This will permanently remove &ldquo;{budget.name}&rdquo; and all line items.</AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteBudget(budget.id)}>Delete</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
                         </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -566,7 +604,8 @@ export function FinancialsTab({
                               variant="outline"
                               size="sm"
                               className="h-8 text-xs"
-                              disabled={upgradingBudgetId === budget.id}
+                              disabled={upgradingBudgetId === budget.id || readOnly}
+                              title={readOnly ? STUDY_DEACTIVATED_TOOLTIP : undefined}
                               onClick={() => handleUpgradeBudget(budget.id)}
                             >
                               {upgradingBudgetId === budget.id ? (
@@ -582,6 +621,8 @@ export function FinancialsTab({
                               variant="outline"
                               size="sm"
                               className="h-8 text-xs"
+                              disabled={readOnly}
+                              title={readOnly ? STUDY_DEACTIVATED_TOOLTIP : undefined}
                               onClick={() => {
                                 setAddSectionBudgetId(budget.id);
                                 setAddSectionName('');
@@ -606,6 +647,8 @@ export function FinancialsTab({
                             isAdmin={isAdmin}
                             onSuccess={refreshData}
                             formatCurrency={formatCurrency}
+                            readOnly={readOnly}
+                            disabledTooltip={disabledTooltip}
                             plannedEnrollment={(budget as unknown as { planned_enrollment?: number | null }).planned_enrollment ?? null}
                             onDeleteSection={async (sectionId) => {
                               const { error } = await deleteStudyBudgetSection(sectionId, budget.id, studyId);
@@ -628,6 +671,8 @@ export function FinancialsTab({
                                 lineTotal={lineTotal}
                                 onSuccess={refreshData}
                                 formatCurrency={formatCurrency}
+                                readOnly={readOnly}
+                                disabledTooltip={disabledTooltip}
                               />
                             )}
                             {budget.budget_line_items.length === 0 && (
@@ -650,16 +695,36 @@ export function FinancialsTab({
       {isAdmin && (
         <>
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="text-xs gap-1.5"
-              onClick={() => setStudyWorkflowModalOpen(true)}
-            >
-              <Settings2 className="h-3.5 w-3.5" />
-              Study invoice approval workflow
-            </Button>
+            {readOnly ? (
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs gap-1.5"
+                    disabled
+                  >
+                    <Settings2 className="h-3.5 w-3.5" />
+                    Study invoice approval workflow
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  {STUDY_DEACTIVATED_TOOLTIP}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs gap-1.5"
+                onClick={() => setStudyWorkflowModalOpen(true)}
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                Study invoice approval workflow
+              </Button>
+            )}
           </div>
 
           <Dialog open={studyWorkflowModalOpen} onOpenChange={setStudyWorkflowModalOpen}>
@@ -683,7 +748,7 @@ export function FinancialsTab({
                   <Select
                     value={studyWorkflowSelect}
                     onValueChange={setStudyWorkflowSelect}
-                    disabled={financeApprovalTemplateOptions.length === 0}
+                    disabled={readOnly || financeApprovalTemplateOptions.length === 0}
                   >
                     <SelectTrigger className="text-xs h-9">
                       <SelectValue
@@ -721,7 +786,8 @@ export function FinancialsTab({
                   type="button"
                   size="sm"
                   className="text-xs"
-                  disabled={financeApprovalTemplateOptions.length === 0}
+                  disabled={readOnly || financeApprovalTemplateOptions.length === 0}
+                  title={readOnly ? STUDY_DEACTIVATED_TOOLTIP : undefined}
                   onClick={() => {
                     startTransition(async () => {
                       const templateId =
@@ -749,6 +815,7 @@ export function FinancialsTab({
         sites={sites}
         onChanged={refreshData}
         approvalTemplateOptions={financeApprovalTemplateOptions}
+        readOnly={readOnly}
       />
       <FinancialsStudyCharts summary={summary} financeInvoices={financeInvoices} currency={summary.currency} />
 
@@ -756,7 +823,13 @@ export function FinancialsTab({
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-medium">Site Payments</h3>
-          <PaymentFormDialog studyId={studyId} sites={sites} onSuccess={refreshData} />
+          <PaymentFormDialog
+            studyId={studyId}
+            sites={sites}
+            onSuccess={refreshData}
+            readOnly={readOnly}
+            disabledTooltip={disabledTooltip}
+          />
         </div>
 
         {payments.length === 0 ? (
@@ -796,6 +869,7 @@ export function FinancialsTab({
                     <TableCell>
                       <Select
                         value={payment.status}
+                        disabled={readOnly}
                         onValueChange={(val) => handlePaymentStatus(payment.id, val as PaymentStatus)}
                       >
                         <SelectTrigger className="h-7 w-[100px] text-xs">
@@ -813,21 +887,34 @@ export function FinancialsTab({
                       </Select>
                     </TableCell>
                     <TableCell>
-                      <AlertDialog>
-                        <AlertDialogTrigger render={<Button variant="ghost" size="sm" className="h-7 w-7 p-0" />}>
-                          <Trash2 className="h-3 w-3 text-destructive" />
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Payment</AlertDialogTitle>
-                            <AlertDialogDescription>This will permanently remove this payment record.</AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeletePayment(payment.id)}>Delete</AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      {readOnly ? (
+                        <Tooltip>
+                          <TooltipTrigger render={<span className="inline-flex" />}>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled aria-label="Delete payment">
+                              <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-xs text-xs">
+                            {STUDY_DEACTIVATED_TOOLTIP}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <AlertDialog>
+                          <AlertDialogTrigger render={<Button variant="ghost" size="sm" className="h-7 w-7 p-0" />}>
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Payment</AlertDialogTitle>
+                              <AlertDialogDescription>This will permanently remove this payment record.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeletePayment(payment.id)}>Delete</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -932,7 +1019,7 @@ export function FinancialsTab({
             <Button
               size="sm"
               className="text-xs"
-              disabled={addSectionSaving || !addSectionName.trim()}
+              disabled={readOnly || addSectionSaving || !addSectionName.trim()}
               onClick={handleAddSection}
             >
               {addSectionSaving && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
@@ -955,7 +1042,17 @@ const budgetSchema = z.object({
 
 type BudgetFormValues = z.infer<typeof budgetSchema>;
 
-function BudgetFormDialog({ studyId, onSuccess }: { studyId: string; onSuccess: () => void }) {
+function BudgetFormDialog({
+  studyId,
+  onSuccess,
+  readOnly = false,
+  disabledTooltip,
+}: {
+  studyId: string;
+  onSuccess: () => void;
+  readOnly?: boolean;
+  disabledTooltip?: string;
+}) {
   const [open, setOpen] = useState(false);
   const form = useForm<BudgetFormValues>({
     resolver: zodResolver(budgetSchema),
@@ -972,10 +1069,29 @@ function BudgetFormDialog({ studyId, onSuccess }: { studyId: string; onSuccess: 
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" />}>
-        <Plus className="mr-2 h-4 w-4" />Add Budget
-      </DialogTrigger>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (readOnly && o) return;
+        setOpen(o);
+      }}
+    >
+      {readOnly ? (
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>
+            <DialogTrigger render={<Button size="sm" disabled />}>
+              <Plus className="mr-2 h-4 w-4" />Add Budget
+            </DialogTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            {disabledTooltip}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <DialogTrigger render={<Button size="sm" />}>
+          <Plus className="mr-2 h-4 w-4" />Add Budget
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Create Budget</DialogTitle>
@@ -1019,118 +1135,6 @@ function BudgetFormDialog({ studyId, onSuccess }: { studyId: string; onSuccess: 
   );
 }
 
-function EditBudgetDialog({
-  budget,
-  studyId,
-  onSuccess,
-}: {
-  budget: StudyBudget;
-  studyId: string;
-  onSuccess: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const form = useForm<BudgetFormValues>({
-    resolver: zodResolver(budgetSchema),
-    defaultValues: {
-      name: budget.name,
-      total_amount: String(budget.total_amount),
-      currency: budget.currency,
-    },
-  });
-
-  useEffect(() => {
-    if (open) {
-      form.reset({
-        name: budget.name,
-        total_amount: String(budget.total_amount),
-        currency: budget.currency,
-      });
-    }
-  }, [open, budget.id, budget.name, budget.total_amount, budget.currency, form]);
-
-  const onSubmit = async (values: BudgetFormValues) => {
-    const { error } = await updateBudget(budget.id, studyId, {
-      name: values.name,
-      total_amount: parseFloat(values.total_amount),
-      currency: values.currency,
-    });
-    if (error) {
-      toast.error(error);
-      return;
-    }
-    toast.success('Budget updated');
-    setOpen(false);
-    onSuccess();
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={<Button type="button" variant="ghost" size="sm" className="h-7 w-7 shrink-0 p-0" title="Edit budget" />}
-      >
-        <Pencil className="h-3 w-3" />
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Edit budget</DialogTitle>
-          <DialogDescription>Update the name, total, or currency for this study budget.</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-xs">Budget name</Label>
-            <Input className="text-xs" placeholder="e.g., Primary Study Budget" {...form.register('name')} />
-            {form.formState.errors.name && (
-              <p className="text-xs text-destructive">{form.formState.errors.name.message}</p>
-            )}
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label className="text-xs">Total amount</Label>
-              <Input className="text-xs" type="number" step="0.01" placeholder="0.00" {...form.register('total_amount')} />
-              {form.formState.errors.total_amount && (
-                <p className="text-xs text-destructive">{form.formState.errors.total_amount.message}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs">Currency</Label>
-              <Select value={form.watch('currency')} onValueChange={(val) => form.setValue('currency', val)}>
-                <SelectTrigger className="w-full text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="USD" className="text-xs">
-                    USD
-                  </SelectItem>
-                  <SelectItem value="EUR" className="text-xs">
-                    EUR
-                  </SelectItem>
-                  <SelectItem value="GBP" className="text-xs">
-                    GBP
-                  </SelectItem>
-                  <SelectItem value="CHF" className="text-xs">
-                    CHF
-                  </SelectItem>
-                  <SelectItem value="JPY" className="text-xs">
-                    JPY
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" className="text-xs" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" className="text-xs" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? 'Saving...' : 'Save changes'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // Line Item Form Dialog
 
 /** Human-readable section label for selects (never show raw UUIDs). */
@@ -1159,6 +1163,8 @@ function LineItemFormDialog({
   defaultSectionId,
   onSuccess,
   triggerLabel,
+  readOnly = false,
+  disabledTooltip,
 }: {
   budgetId: string;
   studyId: string;
@@ -1167,6 +1173,8 @@ function LineItemFormDialog({
   defaultSectionId?: string;
   onSuccess: () => void;
   triggerLabel?: React.ReactNode;
+  readOnly?: boolean;
+  disabledTooltip?: string;
 }) {
   const [open, setOpen] = useState(false);
   const form = useForm<LineItemFormValues>({
@@ -1176,6 +1184,7 @@ function LineItemFormDialog({
 
   // Reset section to defaultSectionId whenever dialog opens
   const handleOpenChange = (next: boolean) => {
+    if (readOnly && next) return;
     setOpen(next);
     if (next) form.setValue('section_id', defaultSectionId ?? '');
   };
@@ -1198,9 +1207,22 @@ function LineItemFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger render={<Button variant="outline" size="sm" className="h-8 text-xs" />}>
-        {triggerLabel ?? <><Plus className="mr-1 h-3 w-3" />Add Line Item</>}
-      </DialogTrigger>
+      {readOnly ? (
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>
+            <DialogTrigger render={<Button variant="outline" size="sm" className="h-8 text-xs" disabled />}>
+              {triggerLabel ?? <><Plus className="mr-1 h-3 w-3" />Add Line Item</>}
+            </DialogTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            {disabledTooltip}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <DialogTrigger render={<Button variant="outline" size="sm" className="h-8 text-xs" />}>
+          {triggerLabel ?? <><Plus className="mr-1 h-3 w-3" />Add Line Item</>}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Add Budget Line Item</DialogTitle>
@@ -1283,11 +1305,15 @@ function EditLineItemDialog({
   studyId,
   currency,
   onSuccess,
+  readOnly = false,
+  disabledTooltip,
 }: {
   item: BudgetLineItem;
   studyId: string;
   currency: string;
   onSuccess: () => void;
+  readOnly?: boolean;
+  disabledTooltip?: string;
 }) {
   const [open, setOpen] = useState(false);
   const form = useForm<LineItemFormValues>({
@@ -1331,14 +1357,44 @@ function EditLineItemDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button type="button" variant="ghost" size="sm" className="h-7 w-7 shrink-0 p-0" title="Edit line item" />
-        }
-      >
-        <Pencil className="h-3 w-3" />
-      </DialogTrigger>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (readOnly && o) return;
+        setOpen(o);
+      }}
+    >
+      {readOnly ? (
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>
+            <DialogTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 shrink-0 p-0"
+                  title="Edit line item"
+                  disabled
+                />
+              }
+            >
+              <Pencil className="h-3 w-3" />
+            </DialogTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            {disabledTooltip}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <DialogTrigger
+          render={
+            <Button type="button" variant="ghost" size="sm" className="h-7 w-7 shrink-0 p-0" title="Edit line item" />
+          }
+        >
+          <Pencil className="h-3 w-3" />
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Edit line item</DialogTitle>
@@ -1406,10 +1462,14 @@ function PaymentFormDialog({
   studyId,
   sites,
   onSuccess,
+  readOnly = false,
+  disabledTooltip,
 }: {
   studyId: string;
   sites: Pick<StudySite, 'id' | 'site_number' | 'name'>[];
   onSuccess: () => void;
+  readOnly?: boolean;
+  disabledTooltip?: string;
 }) {
   const [open, setOpen] = useState(false);
   const form = useForm<PaymentFormValues>({
@@ -1435,10 +1495,29 @@ function PaymentFormDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger render={<Button size="sm" />}>
-        <Plus className="mr-2 h-4 w-4" />Record Payment
-      </DialogTrigger>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (readOnly && o) return;
+        setOpen(o);
+      }}
+    >
+      {readOnly ? (
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>
+            <DialogTrigger render={<Button size="sm" disabled />}>
+              <Plus className="mr-2 h-4 w-4" />Record Payment
+            </DialogTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            {disabledTooltip}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <DialogTrigger render={<Button size="sm" />}>
+          <Plus className="mr-2 h-4 w-4" />Record Payment
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Record Site Payment</DialogTitle>
@@ -1522,6 +1601,8 @@ function FlatLineItemsTable({
   lineTotal,
   onSuccess,
   formatCurrency: fmt,
+  readOnly = false,
+  disabledTooltip,
 }: {
   items: BudgetLineItem[];
   studyId: string;
@@ -1529,6 +1610,8 @@ function FlatLineItemsTable({
   lineTotal: number;
   onSuccess: () => void;
   formatCurrency: (n: number, c: string) => string;
+  readOnly?: boolean;
+  disabledTooltip?: string;
 }) {
   return (
     <div className="rounded-md border mb-3">
@@ -1553,8 +1636,21 @@ function FlatLineItemsTable({
               <TableCell className="text-xs text-right font-medium">{fmt(Number(item.total_cost), currency)}</TableCell>
               <TableCell className="p-2">
                 <div className="flex items-center justify-end gap-0.5">
-                  <EditLineItemDialog item={item} studyId={studyId} currency={currency} onSuccess={onSuccess} />
-                  <DeleteLineItemButton itemId={item.id} studyId={studyId} onSuccess={onSuccess} />
+                  <EditLineItemDialog
+                    item={item}
+                    studyId={studyId}
+                    currency={currency}
+                    onSuccess={onSuccess}
+                    readOnly={readOnly}
+                    disabledTooltip={disabledTooltip}
+                  />
+                  <DeleteLineItemButton
+                    itemId={item.id}
+                    studyId={studyId}
+                    onSuccess={onSuccess}
+                    readOnly={readOnly}
+                    disabledTooltip={disabledTooltip}
+                  />
                 </div>
               </TableCell>
             </TableRow>
@@ -1574,11 +1670,36 @@ function DeleteLineItemButton({
   itemId,
   studyId,
   onSuccess,
+  readOnly = false,
+  disabledTooltip,
 }: {
   itemId: string;
   studyId: string;
   onSuccess: () => void;
+  readOnly?: boolean;
+  disabledTooltip?: string;
 }) {
+  if (readOnly) {
+    return (
+      <Tooltip>
+        <TooltipTrigger render={<span className="inline-flex" />}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 shrink-0"
+            title="Remove line item"
+            disabled
+            aria-label="Remove line item"
+          >
+            <Trash2 className="h-3 w-3 text-destructive" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-xs text-xs">
+          {disabledTooltip}
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
   return (
     <Button
       variant="ghost"
@@ -1611,6 +1732,8 @@ function SectionedBudgetContent({
   onDeleteSection,
   onUpdateSectionRate,
   plannedEnrollment,
+  readOnly = false,
+  disabledTooltip,
 }: {
   budget: StudyBudgetWithItems;
   studyId: string;
@@ -1621,6 +1744,8 @@ function SectionedBudgetContent({
   onDeleteSection: (sectionId: string) => void;
   onUpdateSectionRate: (sectionId: string, rate: number | null) => void;
   plannedEnrollment?: number | null;
+  readOnly?: boolean;
+  disabledTooltip?: string;
 }) {
   // Lines with no section go into an implicit "Unsectioned" bucket
   const unsectionedLines = budget.budget_line_items.filter((l) => l.section_id == null);
@@ -1653,6 +1778,8 @@ function SectionedBudgetContent({
             onDeleteSection={onDeleteSection}
             onUpdateSectionRate={onUpdateSectionRate}
             plannedEnrollment={plannedEnrollment}
+            readOnly={readOnly}
+            disabledTooltip={disabledTooltip}
           />
         );
       })}
@@ -1685,8 +1812,21 @@ function SectionedBudgetContent({
                   <TableCell className="text-xs text-right font-medium">{fmt(Number(item.total_cost), currency)}</TableCell>
                   <TableCell className="p-2">
                     <div className="flex items-center justify-end gap-0.5">
-                      <EditLineItemDialog item={item} studyId={studyId} currency={currency} onSuccess={onSuccess} />
-                      <DeleteLineItemButton itemId={item.id} studyId={studyId} onSuccess={onSuccess} />
+                      <EditLineItemDialog
+                        item={item}
+                        studyId={studyId}
+                        currency={currency}
+                        onSuccess={onSuccess}
+                        readOnly={readOnly}
+                        disabledTooltip={disabledTooltip}
+                      />
+                      <DeleteLineItemButton
+                        itemId={item.id}
+                        studyId={studyId}
+                        onSuccess={onSuccess}
+                        readOnly={readOnly}
+                        disabledTooltip={disabledTooltip}
+                      />
                     </div>
                   </TableCell>
                 </TableRow>
@@ -1726,6 +1866,8 @@ function BudgetSectionGroup({
   onDeleteSection,
   onUpdateSectionRate,
   plannedEnrollment,
+  readOnly = false,
+  disabledTooltip,
 }: {
   budgetId: string;
   section: StudyBudgetSection;
@@ -1741,7 +1883,10 @@ function BudgetSectionGroup({
   onDeleteSection: (sectionId: string) => void;
   onUpdateSectionRate: (sectionId: string, rate: number | null) => void;
   plannedEnrollment?: number | null;
+  readOnly?: boolean;
+  disabledTooltip?: string;
 }) {
+  const canMutate = isAdmin && !readOnly;
   const [editingRate, setEditingRate] = useState(false);
   const [rateInput, setRateInput] = useState(
     section.indirect_rate != null ? String(section.indirect_rate * 100) : ''
@@ -1796,7 +1941,7 @@ function BudgetSectionGroup({
         </div>
         {isAdmin && (
           <div className="flex items-center gap-1">
-            {editingRate ? (
+            {canMutate && editingRate ? (
               <div className="flex items-center gap-1">
                 <Input
                   className="h-6 w-20 text-xs"
@@ -1831,7 +1976,7 @@ function BudgetSectionGroup({
                   Cancel
                 </Button>
               </div>
-            ) : (
+            ) : canMutate ? (
               <Button
                 variant="ghost"
                 size="sm"
@@ -1844,7 +1989,19 @@ function BudgetSectionGroup({
                 <Pencil className="h-3 w-3 mr-1" />
                 {section.indirect_rate != null ? 'Edit rate' : 'Set indirect rate'}
               </Button>
-            )}
+            ) : readOnly ? (
+                <Tooltip>
+                  <TooltipTrigger render={<span className="inline-flex" />}>
+                    <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" disabled>
+                      <Pencil className="h-3 w-3 mr-1" />
+                      {section.indirect_rate != null ? 'Edit rate' : 'Set indirect rate'}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs text-xs">
+                    {disabledTooltip}
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
             <LineItemFormDialog
               budgetId={budgetId}
               studyId={studyId}
@@ -1853,25 +2010,40 @@ function BudgetSectionGroup({
               defaultSectionId={section.id}
               onSuccess={onSuccess}
               triggerLabel={<><Plus className="h-3 w-3 mr-1" />Add item</>}
+              readOnly={readOnly}
+              disabledTooltip={disabledTooltip}
             />
-            <AlertDialog>
-              <AlertDialogTrigger render={<Button variant="ghost" size="sm" className="h-6 w-6 p-0" />}>
-                <Trash2 className="h-3 w-3 text-destructive" />
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Remove section?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    The section &ldquo;{section.name}&rdquo; will be removed. Line items in this section
-                    will become unsectioned and stay in the budget.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => onDeleteSection(section.id)}>Remove</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            {canMutate ? (
+              <AlertDialog>
+                <AlertDialogTrigger render={<Button variant="ghost" size="sm" className="h-6 w-6 p-0" />}>
+                  <Trash2 className="h-3 w-3 text-destructive" />
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remove section?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      The section &ldquo;{section.name}&rdquo; will be removed. Line items in this section
+                      will become unsectioned and stay in the budget.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => onDeleteSection(section.id)}>Remove</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : readOnly ? (
+                <Tooltip>
+                  <TooltipTrigger render={<span className="inline-flex" />}>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" disabled aria-label="Remove section">
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs text-xs">
+                    {disabledTooltip}
+                  </TooltipContent>
+                </Tooltip>
+              ) : null}
           </div>
         )}
       </div>
@@ -1890,6 +2062,7 @@ function BudgetSectionGroup({
               plannedEnrollment={plannedEnrollment}
               enrollmentActual={enrollmentActual}
               isAdmin={isAdmin}
+              readOnly={readOnly}
               onChanged={handleProcedureGridChanged}
             />
           ) : null}
@@ -1932,8 +2105,21 @@ function BudgetSectionGroup({
               <TableCell className="text-xs text-right font-medium">{fmt(Number(item.total_cost), currency)}</TableCell>
               <TableCell className="p-2">
                 <div className="flex items-center justify-end gap-0.5">
-                  <EditLineItemDialog item={item} studyId={studyId} currency={currency} onSuccess={onSuccess} />
-                  <DeleteLineItemButton itemId={item.id} studyId={studyId} onSuccess={onSuccess} />
+                  <EditLineItemDialog
+                    item={item}
+                    studyId={studyId}
+                    currency={currency}
+                    onSuccess={onSuccess}
+                    readOnly={readOnly}
+                    disabledTooltip={disabledTooltip}
+                  />
+                  <DeleteLineItemButton
+                    itemId={item.id}
+                    studyId={studyId}
+                    onSuccess={onSuccess}
+                    readOnly={readOnly}
+                    disabledTooltip={disabledTooltip}
+                  />
                 </div>
               </TableCell>
             </TableRow>

@@ -4,11 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:webpack": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "seed:ip-dummy": "node scripts/seed-ip-inventory-dummy.mjs"
+    "stripe:seed-test-prices": "node scripts/stripe-seed-test-prices.mjs",
+    "seed:ip-dummy": "node scripts/seed-ip-inventory-dummy.mjs",
+    "backfill:site-coordinates": "node scripts/backfill-site-coordinates.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.41",

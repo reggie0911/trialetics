@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import type {
   StudyBudget,
   StudyBudgetWithItems,
@@ -55,7 +57,7 @@ export async function listStudyBudgetOptions(studyId: string): Promise<{ id: str
  */
 export async function revalidateStudyFinancialsTree(studyId: string): Promise<void> {
   const supabase = await createClient();
-  revalidatePath(`/protected/studies/${studyId}`);
+  revalidateStudyCtmsLayout(studyId);
   revalidatePath('/protected/financials');
   const { data: sites } = await supabase
     .from('study_sites')
@@ -91,6 +93,9 @@ export async function createBudget(
 ): Promise<{ data: StudyBudget | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { data: null, error: writeGuard };
+
     const { data, error } = await supabase
       .from('study_budgets')
       .insert({
@@ -102,7 +107,7 @@ export async function createBudget(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     revalidatePath('/protected/financials');
     return { data: data as unknown as StudyBudget, error: null };
   } catch (err) {
@@ -117,13 +122,16 @@ export async function updateBudget(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const cleanUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (value !== undefined) cleanUpdates[key] = value;
     }
     const { error } = await supabase.from('study_budgets').update(cleanUpdates).eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     revalidatePath('/protected/financials');
     return { error: null };
   } catch (err) {
@@ -134,9 +142,12 @@ export async function updateBudget(
 export async function deleteBudget(id: string, studyId: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase.from('study_budgets').delete().eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     revalidatePath('/protected/financials');
     return { error: null };
   } catch (err) {
@@ -155,6 +166,9 @@ export async function addLineItem(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase.from('budget_line_items').insert({
       budget_id: budgetId,
       category: input.category,
@@ -165,7 +179,7 @@ export async function addLineItem(
       section_id: input.section_id ?? null,
     });
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -179,13 +193,16 @@ export async function updateLineItem(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const cleanUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (value !== undefined) cleanUpdates[key] = value === '' ? null : value;
     }
     const { error } = await supabase.from('budget_line_items').update(cleanUpdates).eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     revalidatePath('/protected/financials');
     return { error: null };
   } catch (err) {
@@ -196,9 +213,12 @@ export async function updateLineItem(
 export async function deleteLineItem(id: string, studyId: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase.from('budget_line_items').delete().eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -223,6 +243,9 @@ export async function bulkInsertStudyBudgetLineItems(
   if (items.length === 0) return { error: null };
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     // Build a name -> section_id map for CSV rows that reference sections by name.
     const sectionNameCache: Record<string, string> = {};
     const itemsWithSectionNames = items.filter((i) => i.sectionName && !i.sectionId);
@@ -281,7 +304,7 @@ export async function bulkInsertStudyBudgetLineItems(
     await tryInsertBudgetTransactionLog(supabase, budgetId, studyId, 'csv_import', {
       count: rows.length,
     });
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     revalidatePath('/protected/financials');
     return { error: null };
   } catch (err) {
@@ -336,6 +359,9 @@ export async function createStudyBudgetSection(
 ): Promise<{ data: StudyBudgetSection | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { data: null, error: writeGuard };
+
     const { data, error } = await supabase
       .from('study_budget_sections')
       .insert({
@@ -352,7 +378,7 @@ export async function createStudyBudgetSection(
       section_type: input.section_type,
       name: input.name,
     });
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { data: data as unknown as StudyBudgetSection, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -367,6 +393,9 @@ export async function updateStudyBudgetSection(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase
       .from('study_budget_sections')
       .update(updates)
@@ -377,7 +406,7 @@ export async function updateStudyBudgetSection(
       section_id: id,
       ...updates,
     });
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -391,6 +420,9 @@ export async function deleteStudyBudgetSection(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     // Unassign lines from this section before deleting (ON DELETE SET NULL handles it via DB)
     const { error } = await supabase
       .from('study_budget_sections')
@@ -401,7 +433,7 @@ export async function deleteStudyBudgetSection(
     await tryInsertBudgetTransactionLog(supabase, budgetId, studyId, 'section_deleted', {
       section_id: id,
     });
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -414,6 +446,9 @@ export async function upgradeToStructuredBudget(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     // Create a catch-all "Other" section
     const { data: section, error: secErr } = await supabase
       .from('study_budget_sections')
@@ -434,7 +469,7 @@ export async function upgradeToStructuredBudget(
       .is('section_id', null);
     if (updateErr) return { error: updateErr.message };
     await tryInsertBudgetTransactionLog(supabase, budgetId, studyId, 'upgraded_to_structured', {});
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -449,13 +484,16 @@ export async function assignLineItemToSection(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase
       .from('budget_line_items')
       .update({ section_id: sectionId })
       .eq('id', lineItemId)
       .eq('budget_id', budgetId);
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -503,6 +541,9 @@ export async function createPayment(
 ): Promise<{ data: SitePayment | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.study_id);
+    if (writeGuard) return { data: null, error: writeGuard };
+
     const { data, error } = await supabase
       .from('site_payments')
       .insert({
@@ -518,7 +559,7 @@ export async function createPayment(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath(`/protected/studies/${input.study_id}`);
+    revalidateStudyCtmsLayout(input.study_id);
     revalidatePath('/protected/financials');
     return { data: data as unknown as SitePayment, error: null };
   } catch (err) {
@@ -533,6 +574,9 @@ export async function updatePayment(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const cleanUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (value !== undefined) cleanUpdates[key] = value === '' ? null : value;
@@ -542,7 +586,7 @@ export async function updatePayment(
     }
     const { error } = await supabase.from('site_payments').update(cleanUpdates).eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     revalidatePath('/protected/financials');
     return { error: null };
   } catch (err) {
@@ -553,9 +597,12 @@ export async function updatePayment(
 export async function deletePayment(id: string, studyId: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase.from('site_payments').delete().eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     revalidatePath('/protected/financials');
     return { error: null };
   } catch (err) {
@@ -588,6 +635,9 @@ export async function createSchedule(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase.from('payment_schedules').insert({
       study_id: studyId,
       site_id: siteId,
@@ -597,7 +647,7 @@ export async function createSchedule(
       currency: currency || 'USD',
     });
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     revalidatePath(`/protected/sites/${siteId}`);
     return { error: null };
   } catch (err) {
@@ -613,13 +663,16 @@ export async function updateSchedule(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const cleanUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (value !== undefined) cleanUpdates[key] = value === '' ? null : value;
     }
     const { error } = await supabase.from('payment_schedules').update(cleanUpdates).eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     revalidatePath(`/protected/sites/${siteId}`);
     return { error: null };
   } catch (err) {
@@ -634,9 +687,12 @@ export async function deleteSchedule(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase.from('payment_schedules').delete().eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     revalidatePath(`/protected/sites/${siteId}`);
     return { error: null };
   } catch (err) {

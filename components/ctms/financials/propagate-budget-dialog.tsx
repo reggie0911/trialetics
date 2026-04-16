@@ -22,6 +22,8 @@ import {
 import type { StudySite } from '@/lib/types/ctms';
 import { generateSiteBudgetFromStudy } from '@/lib/actions/site-budget-propagation';
 import { RegionalCostModifierLabel } from '@/components/ctms/financials/regional-cost-modifier-label';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
 
 interface PropagateBudgetDialogProps {
   studyId: string;
@@ -29,6 +31,8 @@ interface PropagateBudgetDialogProps {
   studyBudgetName: string;
   sites: Pick<StudySite, 'id' | 'site_number' | 'name'>[];
   onSuccess?: () => void;
+  disabled?: boolean;
+  disabledTooltip?: string;
 }
 
 interface SiteOverride {
@@ -43,6 +47,8 @@ export function PropagateBudgetDialog({
   studyBudgetName,
   sites,
   onSuccess,
+  disabled = false,
+  disabledTooltip,
 }: PropagateBudgetDialogProps) {
   const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
@@ -109,12 +115,39 @@ export function PropagateBudgetDialog({
     });
   };
 
+  const tip = disabledTooltip ?? STUDY_DEACTIVATED_TOOLTIP;
+
+  const handleOpenChange = (o: boolean) => {
+    if (disabled && o) return;
+    setOpen(o);
+    if (!o) {
+      setDone(false);
+      setResults([]);
+      setSelectedSiteIds(new Set());
+    }
+  };
+
+  const trigger = (
+    <DialogTrigger
+      render={<Button variant="outline" size="sm" className="text-xs gap-1.5" disabled={disabled} />}
+    >
+      <Share2 className="h-3.5 w-3.5" />
+      Propagate to sites
+    </DialogTrigger>
+  );
+
   return (
-    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setDone(false); setResults([]); setSelectedSiteIds(new Set()); } }}>
-      <DialogTrigger render={<Button variant="outline" size="sm" className="text-xs gap-1.5" />}>
-        <Share2 className="h-3.5 w-3.5" />
-        Propagate to sites
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {disabled && tip ? (
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>{trigger}</TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            {tip}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        trigger
+      )}
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base">Propagate to Site Budgets</DialogTitle>

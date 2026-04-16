@@ -58,6 +58,8 @@ interface SiteFormProps {
   mode: 'create' | 'edit';
   onSuccess?: () => void;
   directoryContactOptions?: { id: string; label: string }[];
+  /** When set, navigates to study-scoped site URLs after save. */
+  ctmsStudyRouteId?: string;
 }
 
 export function SiteForm({
@@ -67,9 +69,15 @@ export function SiteForm({
   mode,
   onSuccess,
   directoryContactOptions = [],
+  ctmsStudyRouteId,
 }: SiteFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const siteDetailHref = (sid: string) =>
+    ctmsStudyRouteId
+      ? `/protected/studies/${ctmsStudyRouteId}/sites/${sid}`
+      : `/protected/studies/${studyId}/sites/${sid}`;
 
   const form = useForm<SiteFormValues>({
     resolver: zodResolver(siteFormSchema),
@@ -112,7 +120,7 @@ export function SiteForm({
           return;
         }
         toast.success('Site created successfully');
-        router.push(`/protected/sites/${data!.id}`);
+        router.push(siteDetailHref(data!.id));
       } else {
         const { error } = await updateSite({
           id: site!.id,
@@ -128,7 +136,7 @@ export function SiteForm({
         if (onSuccess) {
           onSuccess();
         } else {
-          router.push(`/protected/sites/${site!.id}`);
+          router.push(siteDetailHref(site!.id));
         }
       }
     } finally {

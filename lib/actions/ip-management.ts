@@ -2,7 +2,9 @@
 
 import { randomUUID } from 'crypto';
 import { revalidatePath } from 'next/cache';
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import { createAdminClient } from '@/lib/server-admin';
 import type {
   IpAddSiteEquipmentContext,
@@ -37,6 +39,11 @@ function isValidIpCategory(value: string): value is IpCategory {
 }
 
 const IP_PATH = '/protected/inventory-management';
+
+function revalidateIpInventoryUi(studyId?: string | null) {
+  revalidatePath(IP_PATH);
+  if (studyId) revalidateStudyCtmsLayout(studyId);
+}
 
 const IP_SHIPPING_BUCKET = 'ip-shipping-documents';
 const IP_SHIPPING_MAX_BYTES = 15 * 1024 * 1024;
@@ -520,7 +527,7 @@ export async function createIpItem(input: {
     }
   }
 
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
   return itemId;
 }
 
@@ -561,7 +568,7 @@ export async function updateIpItem(input: {
       .eq('id', input.itemId);
     if (threshErr) throw new Error(threshErr.message);
   }
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(item.study_id);
 }
 
 export async function archiveIpItem(itemId: string): Promise<void> {
@@ -575,7 +582,7 @@ export async function archiveIpItem(itemId: string): Promise<void> {
   await assertIpAdmin(item.study_id);
   const { error } = await supabase.rpc('ip_archive_item', { p_item_id: itemId });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(item.study_id);
 }
 
 export async function restoreIpItem(itemId: string): Promise<void> {
@@ -589,7 +596,7 @@ export async function restoreIpItem(itemId: string): Promise<void> {
   await assertIpAdmin(item.study_id);
   const { error } = await supabase.rpc('ip_restore_item', { p_item_id: itemId });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(item.study_id);
 }
 
 export async function ipInitialGlobalReceipt(input: {
@@ -615,7 +622,7 @@ export async function ipInitialGlobalReceipt(input: {
     p_inventory_trace_id: null,
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
   return String(data);
 }
 
@@ -728,7 +735,7 @@ export async function submitAddInventory(input: {
     if (catalogMetaErr) throw new Error(catalogMetaErr.message);
   }
 
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
   return { itemId, lotId: String(lotId) };
 }
 
@@ -893,6 +900,9 @@ async function assertIpItemActiveForStudy(
   studyId: string,
   itemId: string
 ): Promise<void> {
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+  if (writeGuard) throw new Error(writeGuard);
+
   const { data, error } = await supabase
     .from('ip_items')
     .select('deleted_at')
@@ -912,6 +922,9 @@ async function assertIpItemSiteLinkActiveForStudy(
   itemId: string,
   studySiteId: string
 ): Promise<void> {
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+  if (writeGuard) throw new Error(writeGuard);
+
   const { data, error } = await supabase
     .from('ip_item_site_links')
     .select('deleted_at')
@@ -1106,7 +1119,7 @@ export async function linkIpCatalogItemToStudySite(input: {
   const supabase = await createClient();
   await assertIpItemActiveForStudy(supabase, input.studyId, input.itemId);
   await insertOrRestoreIpItemSiteLink(supabase, input.studyId, input.itemId, input.studySiteId);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 /** Associate a catalog item with multiple study sites in one save (deduped IDs; single revalidation). */
@@ -1124,7 +1137,7 @@ export async function linkIpCatalogItemToStudySites(input: {
   for (const studySiteId of unique) {
     await insertOrRestoreIpItemSiteLink(supabase, input.studyId, input.itemId, studySiteId);
   }
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 export async function ipShipToSite(input: {
@@ -1142,7 +1155,7 @@ export async function ipShipToSite(input: {
     p_quantity: input.quantity,
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 export async function ipReceiveAtSite(input: {
@@ -1170,7 +1183,7 @@ export async function ipReceiveAtSite(input: {
     p_serial_number: sn,
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 /** Set or replace lot serial when the line has in-transit or on-hand quantity at the site; ledger reconcile_adjustment. */
@@ -1192,7 +1205,7 @@ export async function ipCorrectSiteLotSerial(input: {
     p_reason: input.reason?.trim() ? input.reason.trim() : null,
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 export async function ipSetSiteLotSerial(input: {
@@ -1211,14 +1224,14 @@ export async function ipSetSiteLotSerial(input: {
     p_serial_number: sn,
   });
   if (!error) {
-    revalidatePath(IP_PATH);
+    revalidateIpInventoryUi(input.studyId);
     return;
   }
   if (!isMissingPostgrestRpc(error, 'ip_set_site_lot_serial')) {
     throw new Error(error.message);
   }
   await ipSetSiteLotSerialFallback(supabase, input, sn);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 export async function ensureIpSiteLotReceiptMirrorIfMissing(input: {
@@ -1296,7 +1309,7 @@ export async function ipDispense(input: {
       : {}),
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 /** Admin-only: reset site line disposition to available (audit via reconcile_adjustment). */
@@ -1315,7 +1328,7 @@ export async function ipAdminResetSiteLineToAvailable(input: {
     p_reason: input.reason?.trim() ? input.reason.trim() : null,
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 export async function ipVerifyLot(input: {
@@ -1336,7 +1349,7 @@ export async function ipVerifyLot(input: {
     p_used_at: input.dateOfUse ?? null,
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 export async function updateIpLotLocationNotes(input: {
@@ -1349,7 +1362,12 @@ export async function updateIpLotLocationNotes(input: {
     p_notes: input.notes,
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  const { data: locRow } = await supabase
+    .from('ip_lot_locations')
+    .select('study_id')
+    .eq('id', input.locationId)
+    .maybeSingle();
+  revalidateIpInventoryUi((locRow as { study_id?: string } | null)?.study_id ?? null);
 }
 
 export async function ipReturnToGlobal(input: {
@@ -1374,7 +1392,7 @@ export async function ipReturnToGlobal(input: {
     ...(trimmedNotes ? { p_notes: trimmedNotes } : {}),
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 export async function ipUnreceiveAtSite(input: {
@@ -1395,7 +1413,7 @@ export async function ipUnreceiveAtSite(input: {
     p_reason: input.reason?.trim() ? input.reason.trim() : null,
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 /** Sponsor+: clear verification on a Used site line (audit via reconcile_adjustment). */
@@ -1414,7 +1432,7 @@ export async function ipAdminUnverifyInventoryAtSite(input: {
     p_reason: input.reason?.trim() ? input.reason.trim() : null,
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 export async function ipTransferSite(input: {
@@ -1434,7 +1452,7 @@ export async function ipTransferSite(input: {
     p_quantity: input.quantity,
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 export async function ipDestroyAtSite(input: {
@@ -1459,7 +1477,7 @@ export async function ipDestroyAtSite(input: {
     ...(trimmedNotes ? { p_notes: trimmedNotes } : {}),
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 export interface IpLedgerRosterRow {
@@ -1798,7 +1816,7 @@ export async function archiveIpItemSiteLink(input: {
     p_study_site_id: input.studySiteId,
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 export async function restoreIpItemSiteLink(input: {
@@ -1814,7 +1832,7 @@ export async function restoreIpItemSiteLink(input: {
     p_study_site_id: input.studySiteId,
   });
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 const IP_ORDER_CENTRAL_POOL_ERR =
@@ -2129,7 +2147,7 @@ export async function createIpOrder(input: {
         if (orderErr) throw new Error(`Failed to create order: ${orderErr.message}`);
       }
       await applyExpiryToLotIfProvided(lotId);
-      revalidatePath(IP_PATH);
+      revalidateIpInventoryUi(input.studyId);
       return;
     }
 
@@ -2172,7 +2190,7 @@ export async function createIpOrder(input: {
       if (orderErr) throw new Error(`Failed to create order: ${orderErr.message}`);
       await applyExpiryToLotIfProvided(newLotId);
     }
-    revalidatePath(IP_PATH);
+    revalidateIpInventoryUi(input.studyId);
     return;
   }
 
@@ -2216,7 +2234,7 @@ export async function createIpOrder(input: {
     });
     if (orderErr) throw new Error(`Failed to create order: ${orderErr.message}`);
     await applyExpiryToLotIfProvided(lotId);
-    revalidatePath(IP_PATH);
+    revalidateIpInventoryUi(input.studyId);
     return;
   }
 
@@ -2256,7 +2274,7 @@ export async function createIpOrder(input: {
   if (orderErr) throw new Error(`Failed to create order: ${orderErr.message}`);
 
   await applyExpiryToLotIfProvided(newLotId);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 export async function updateIpOrder(input: {
@@ -2303,7 +2321,7 @@ export async function updateIpOrder(input: {
     .update(updates)
     .eq('id', input.orderId);
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(existing.study_id);
 }
 
 export async function listIpOrderDocuments(input: {
@@ -2395,7 +2413,7 @@ export async function uploadIpOrderShippingDocument(input: {
     await supabase.storage.from(IP_SHIPPING_BUCKET).remove([objectPath]);
     throw new Error(insErr.message);
   }
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(input.studyId);
 }
 
 export async function deleteIpOrderShippingDocument(documentId: string): Promise<void> {
@@ -2423,7 +2441,7 @@ export async function deleteIpOrderShippingDocument(documentId: string): Promise
   }
   const { error: delRow } = await supabase.from('ip_order_documents').delete().eq('id', documentId);
   if (delRow) throw new Error(delRow.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(row.study_id);
 }
 
 export async function getIpOrderShippingDocumentSignedUrl(documentId: string): Promise<string> {
@@ -2478,7 +2496,7 @@ export async function archiveIpOrder(orderId: string): Promise<void> {
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', orderId);
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(order.study_id);
 }
 
 export async function restoreIpOrder(orderId: string): Promise<void> {
@@ -2495,7 +2513,7 @@ export async function restoreIpOrder(orderId: string): Promise<void> {
 
   const { error } = await supabase.from('ip_orders').update({ deleted_at: null }).eq('id', orderId);
   if (error) throw new Error(error.message);
-  revalidatePath(IP_PATH);
+  revalidateIpInventoryUi(order.study_id);
 }
 
 export async function getIpTransactionReportData(params: {

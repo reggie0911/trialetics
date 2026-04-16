@@ -62,6 +62,8 @@ interface CreateSiteVisitModalProps {
   templates: TemplateWithQuestionCount[];
   initialTemplateId?: string | null;
   onSuccess: () => void;
+  /** When set, the study is fixed (study picker hidden). */
+  defaultStudyId?: string;
 }
 
 export function CreateSiteVisitModal({
@@ -71,6 +73,7 @@ export function CreateSiteVisitModal({
   templates,
   initialTemplateId,
   onSuccess,
+  defaultStudyId,
 }: CreateSiteVisitModalProps) {
   const [sites, setSites] = useState<StudySite[]>([]);
   const [isPending, startTransition] = useTransition();
@@ -112,6 +115,22 @@ export function CreateSiteVisitModal({
       setValue('template_id', initialTemplateId);
     }
   }, [open, initialTemplateId, setValue]);
+
+  useEffect(() => {
+    if (open && defaultStudyId) {
+      setValue('study_id', defaultStudyId);
+      setValue('site_id', '');
+      setValue('template_id', '');
+      startTransition(async () => {
+        try {
+          const list = await getStudySites(defaultStudyId);
+          setSites(list);
+        } catch {
+          setSites([]);
+        }
+      });
+    }
+  }, [open, defaultStudyId, setValue, startTransition]);
 
   const loadSites = (sid: string) => {
     if (!sid) {
@@ -174,32 +193,34 @@ export function CreateSiteVisitModal({
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="flex flex-col gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="study_id">Protocol Name</Label>
-              <Select
-                value={studyId ?? ''}
-                onValueChange={onStudyChange}
-              >
-                <SelectTrigger id="study_id" className="text-[12px]">
-                  <SelectValue
-                    placeholder="Select Protocol Name..."
-                    getDisplayLabel={(v) => {
-                      if (!v) return null;
-                      const s = studies.find((x) => x.id === v);
-                      return s ? (s.protocol_number ? `${s.title} (${s.protocol_number})` : s.title) : v;
-                    }}
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {studies.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>{s.title} ({s.protocol_number})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.study_id && (
-                <p className="text-xs text-destructive">{errors.study_id.message}</p>
-              )}
-            </div>
+            {!defaultStudyId && (
+              <div className="space-y-2">
+                <Label htmlFor="study_id">Protocol Name</Label>
+                <Select
+                  value={studyId ?? ''}
+                  onValueChange={onStudyChange}
+                >
+                  <SelectTrigger id="study_id" className="text-[12px]">
+                    <SelectValue
+                      placeholder="Select Protocol Name..."
+                      getDisplayLabel={(v) => {
+                        if (!v) return null;
+                        const s = studies.find((x) => x.id === v);
+                        return s ? (s.protocol_number ? `${s.title} (${s.protocol_number})` : s.title) : v;
+                      }}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {studies.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>{s.title} ({s.protocol_number})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.study_id && (
+                  <p className="text-xs text-destructive">{errors.study_id.message}</p>
+                )}
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="site_id">Site Name</Label>
               <Select

@@ -1,16 +1,22 @@
 import { redirect, notFound } from 'next/navigation';
 import { createClient } from '@/lib/server';
-import { getStudyById, getStudyCounts } from '@/lib/actions/studies';
+import { getStudyById, getStudyCounts, getStudies } from '@/lib/actions/studies';
 import { getStudyCountries } from '@/lib/actions/countries';
 import { getStudySites } from '@/lib/actions/sites';
 import { getStudySubjects, getEnrollmentFunnel } from '@/lib/actions/subjects';
-import { getStudyTeamMembers, getTeamRoles } from '@/lib/actions/team';
+import {
+  getTeamDirectory,
+  getTeamRoles,
+  getPendingInvitations,
+  getJoinLinks,
+} from '@/lib/actions/team';
 import { getStudyVisits } from '@/lib/actions/visits';
 import { getStudyBudgets, getStudyPayments, getStudyFinancialSummary } from '@/lib/actions/financials';
 import { listFinanceInvoicesForStudy } from '@/lib/actions/finance-invoices';
 import { getStudyKriValues, getEnrollmentCurve } from '@/lib/actions/reports';
 import { StudyDetailTabsDynamic } from '@/components/ctms/studies/study-detail-tabs-dynamic';
 import { listFinanceApprovalTemplateOptions } from '@/lib/actions/finance-approval-templates';
+import { countTeamMembersScopedToStudy } from '@/lib/team/scope-team-members';
 
 interface StudyDetailPageProps {
   params: Promise<{ id: string }>;
@@ -29,6 +35,8 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     .eq('user_id', user.id)
     .single();
 
+  const isAdmin = profile?.role === 'admin';
+
   const [
     study,
     counts,
@@ -36,8 +44,11 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     sites,
     subjects,
     funnel,
-    teamMembers,
+    teamDirectoryMembers,
+    teamStudies,
     teamRoles,
+    pendingTeamInvitations,
+    joinTeamLinks,
     monitoringVisits,
     budgets,
     studyPayments,
@@ -53,8 +64,11 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     getStudySites(id),
     getStudySubjects(id),
     getEnrollmentFunnel(id),
-    getStudyTeamMembers(id),
+    getTeamDirectory(),
+    getStudies(),
     getTeamRoles(),
+    getPendingInvitations(),
+    isAdmin ? getJoinLinks() : Promise.resolve([]),
     getStudyVisits(id),
     getStudyBudgets(id),
     getStudyPayments(id),
@@ -67,6 +81,8 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
 
   if (!study) notFound();
 
+  const teamTabCount = countTeamMembersScopedToStudy(teamDirectoryMembers, id);
+
   return (
     <div className="p-6">
       <StudyDetailTabsDynamic
@@ -76,8 +92,12 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
         sites={sites}
         subjects={subjects}
         funnel={funnel}
-        teamMembers={teamMembers}
+        teamTabCount={teamTabCount}
+        teamDirectoryMembers={teamDirectoryMembers}
+        teamStudies={teamStudies}
         teamRoles={teamRoles}
+        pendingTeamInvitations={pendingTeamInvitations}
+        joinTeamLinks={joinTeamLinks}
         monitoringVisits={monitoringVisits}
         budgets={budgets}
         payments={studyPayments}
@@ -85,7 +105,7 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
         financeInvoices={financeInvoices}
         kriValues={kriValues}
         enrollmentCurve={enrollmentCurve}
-        isAdmin={profile?.role === 'admin'}
+        isAdmin={isAdmin}
         financeApprovalTemplateOptions={financeApprovalTemplateOptions}
       />
     </div>

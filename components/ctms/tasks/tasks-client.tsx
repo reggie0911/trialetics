@@ -34,6 +34,8 @@ interface TasksClientProps {
   studies: { id: string; title: string }[];
   initialCounts: TaskDashboardCounts;
   isAdmin?: boolean;
+  /** When set, tasks and milestones are scoped to this study (study filter hidden). */
+  lockedStudyId?: string;
 }
 
 export function TasksClient({
@@ -42,10 +44,11 @@ export function TasksClient({
   studies,
   initialCounts,
   isAdmin = false,
+  lockedStudyId,
 }: TasksClientProps) {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [studyFilter, setStudyFilter] = useState<string>('all');
+  const [studyFilter, setStudyFilter] = useState<string>(() => lockedStudyId ?? 'all');
   const [viewMode, setViewMode] = useState<'table' | 'board'>('table');
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
@@ -130,7 +133,7 @@ export function TasksClient({
               ))}
             </SelectContent>
           </Select>
-          {studies.length > 1 && (
+          {!lockedStudyId && studies.length > 1 && (
             <Select value={studyFilter} onValueChange={setStudyFilter}>
               <SelectTrigger className="w-[200px]">
                 <SelectValue

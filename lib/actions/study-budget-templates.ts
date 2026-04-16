@@ -24,6 +24,11 @@ import {
 import { revalidateStudyFinancialsTree } from '@/lib/actions/financials';
 import { listStudyVisitDefinitions } from '@/lib/actions/study-visit-definitions';
 
+function revalidateFinancialsHubAndStudiesLayout() {
+  revalidatePath('/protected/financials');
+  revalidatePath('/protected/studies', 'layout');
+}
+
 // ─── Template CRUD ────────────────────────────────────────────────────────────
 
 export async function listStudyBudgetTemplates(companyId: string): Promise<StudyBudgetTemplate[]> {
@@ -76,7 +81,7 @@ export async function createStudyBudgetTemplate(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath('/protected/financials');
+    revalidateFinancialsHubAndStudiesLayout();
     return { data: data as unknown as StudyBudgetTemplate, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'Unexpected error.' };
@@ -100,7 +105,7 @@ export async function updateStudyBudgetTemplate(
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath('/protected/financials');
+    revalidateFinancialsHubAndStudiesLayout();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unexpected error.' };
@@ -112,7 +117,7 @@ export async function deleteStudyBudgetTemplate(id: string): Promise<{ error: st
   try {
     const { error } = await supabase.from('study_budget_templates').delete().eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath('/protected/financials');
+    revalidateFinancialsHubAndStudiesLayout();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unexpected error.' };
@@ -145,7 +150,7 @@ export async function cloneStudyBudgetTemplate(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath('/protected/financials');
+    revalidateFinancialsHubAndStudiesLayout();
     return { data: data as unknown as StudyBudgetTemplate, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'Unexpected error.' };

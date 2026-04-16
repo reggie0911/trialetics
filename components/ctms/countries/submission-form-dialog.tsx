@@ -31,6 +31,7 @@ import {
 import type { RegulatorySubmission, SubmissionType, SubmissionStatus } from '@/lib/types/ctms';
 import { SUBMISSION_TYPE_OPTIONS, SUBMISSION_STATUS_OPTIONS } from '@/lib/types/ctms';
 import { addSubmission, updateSubmission } from '@/lib/actions/countries';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const submissionSchema = z.object({
   submission_type: z.string().min(1, 'Please select a type'),
@@ -49,6 +50,8 @@ interface SubmissionFormDialogProps {
   studyCountryId: string;
   submission?: RegulatorySubmission;
   onSuccess: () => void;
+  disabled?: boolean;
+  disabledTooltip?: string;
 }
 
 export function SubmissionFormDialog({
@@ -56,6 +59,8 @@ export function SubmissionFormDialog({
   studyCountryId,
   submission,
   onSuccess,
+  disabled = false,
+  disabledTooltip,
 }: SubmissionFormDialogProps) {
   const [open, setOpen] = useState(false);
   const isEdit = !!submission;
@@ -125,26 +130,44 @@ export function SubmissionFormDialog({
     onSuccess();
   };
 
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          isEdit ? (
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" />
-          ) : (
-            <Button variant="outline" size="sm" />
-          )
-        }
-      >
-        {isEdit ? (
-          <Pencil className="h-3 w-3" />
+  const handleOpenChange = (next: boolean) => {
+    if (disabled && next) return;
+    setOpen(next);
+  };
+
+  const trigger = (
+    <DialogTrigger
+      render={
+        isEdit ? (
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={disabled} />
         ) : (
-          <>
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            Add Submission
-          </>
-        )}
-      </DialogTrigger>
+          <Button variant="outline" size="sm" disabled={disabled} />
+        )
+      }
+    >
+      {isEdit ? (
+        <Pencil className="h-3 w-3" />
+      ) : (
+        <>
+          <Plus className="mr-1 h-3.5 w-3.5" />
+          Add Submission
+        </>
+      )}
+    </DialogTrigger>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {disabled && disabledTooltip ? (
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>{trigger}</TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            {disabledTooltip}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        trigger
+      )}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>

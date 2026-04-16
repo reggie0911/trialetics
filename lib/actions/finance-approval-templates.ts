@@ -14,7 +14,9 @@ function revalidateTemplatePaths() {
   revalidatePath('/protected/financials');
   revalidatePath('/protected/financials/approvals');
   revalidatePath('/protected/financials/approval-templates');
+  revalidatePath('/protected');
   revalidatePath('/protected/studies');
+  revalidatePath('/protected/studies', 'layout');
 }
 
 async function requireCompanyAdmin(): Promise<{ companyId: string; error: string | null }> {

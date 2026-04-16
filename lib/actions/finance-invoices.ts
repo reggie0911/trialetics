@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertStudyWritable, assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import { logFinanceEvent } from '@/lib/finance/log';
 import type {
   FinanceInvoiceEntityType,
@@ -15,7 +17,7 @@ function revalidateFinancials(studyId: string) {
   revalidatePath('/protected/financials');
   revalidatePath('/protected/financials/approvals');
   revalidatePath('/protected/financials/approval-templates');
-  revalidatePath(`/protected/studies/${studyId}`);
+  revalidateStudyCtmsLayout(studyId);
   revalidatePath(`/protected/sites`);
 }
 
@@ -133,7 +135,7 @@ export async function listFinanceInvoicesForSite(siteId: string): Promise<Financ
   return (data ?? []) as FinanceInvoiceWithRelations[];
 }
 
-export async function listCompanyFinanceInvoicesForQueue(): Promise<FinanceInvoiceWithRelations[]> {
+export async function listCompanyFinanceInvoicesForQueue(studyId?: string): Promise<FinanceInvoiceWithRelations[]> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -146,12 +148,14 @@ export async function listCompanyFinanceInvoicesForQueue(): Promise<FinanceInvoi
     .maybeSingle();
   if (!profile?.company_id) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('finance_invoices')
     .select('*, studies(title), study_sites(site_number, name), institutions(name)')
     .eq('company_id', profile.company_id)
     .in('status', ['submitted', 'under_review'])
     .order('received_at', { ascending: true });
+  if (studyId) query = query.eq('study_id', studyId);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []) as FinanceInvoiceWithRelations[];
 }
@@ -192,6 +196,9 @@ export async function createFinanceInvoiceDraft(input: {
   if (!study || study.company_id !== profile.company_id) {
     return { data: null, error: 'Study not found.' };
   }
+
+  const { error: writeGuard } = await assertStudyWritable(supabase, input.studyId, profile.company_id);
+  if (writeGuard) return { data: null, error: writeGuard };
 
   let templateId: string | null = null;
   if (input.templateId) {
@@ -253,6 +260,9 @@ export async function submitFinanceInvoice(
   studyId: string
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+  if (writeGuard) return { error: writeGuard };
+
   const { data: inv } = await supabase
     .from('finance_invoices')
     .select('company_id, status, template_id, study_id')
@@ -336,6 +346,9 @@ export async function resubmitRejectedFinanceInvoice(
     };
   }
 
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+  if (writeGuard) return { error: writeGuard, userMessage: writeGuard };
+
   const resolvedId = await resolveFinanceInvoiceWorkflowTemplateId(supabase, inv, studyId);
 
   const { error } = await supabase
@@ -372,6 +385,9 @@ export async function financeInvoiceRecordDecisionRpc(
   comment?: string | null
 ): Promise<{ error: string | null; userMessage?: string }> {
   const supabase = await createClient();
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+  if (writeGuard) return { error: writeGuard, userMessage: writeGuard };
+
   const { data, error } = await supabase.rpc('finance_invoice_record_decision', {
     p_invoice_id: invoiceId,
     p_decision: decision,
@@ -414,7 +430,11 @@ export async function recordFinancePaymentForInvoice(input: {
     .eq('id', input.invoiceId)
     .single();
   if (!inv) return { error: 'Invoice not found.' };
+  if (inv.study_id !== input.studyId) return { error: 'Invoice does not belong to this study.' };
   if (inv.status !== 'approved') return { error: 'Invoice must be approved before recording payment.' };
+
+  const { error: writeGuard } = await assertStudyWritable(supabase, input.studyId, inv.company_id);
+  if (writeGuard) return { error: writeGuard };
 
   const paidAt = input.paidAt ?? new Date().toISOString();
 

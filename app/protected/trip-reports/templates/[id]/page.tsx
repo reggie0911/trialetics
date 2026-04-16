@@ -1,8 +1,11 @@
-import { notFound } from 'next/navigation';
-import { getTemplateById, getTemplateQuestions } from '@/lib/actions/visit-reports';
-import { getStudies } from '@/lib/actions/studies';
-import { TemplateBuilderClient } from '@/components/ctms/trip-reports/template-builder-client';
+import { notFound, redirect } from 'next/navigation';
 
+import { getTemplateById } from '@/lib/actions/visit-reports';
+
+/**
+ * Legacy URL: canonical template builder is under
+ * `/protected/studies/[studyId]/trip-reports/templates/[templateId]`.
+ */
 export default async function TemplateBuilderPage({
   params,
   searchParams,
@@ -11,30 +14,13 @@ export default async function TemplateBuilderPage({
   searchParams: Promise<{ mode?: string }>;
 }) {
   const { id } = await params;
-  const resolvedSearchParams = await searchParams;
-  const readOnly = resolvedSearchParams?.mode === 'view';
-  const [template, questions, studies] = await Promise.all([
-    getTemplateById(id),
-    getTemplateQuestions(id),
-    getStudies(),
-  ]);
+  const { mode } = await searchParams;
+  const template = await getTemplateById(id);
   if (!template) notFound();
-
-  return (
-    <div className="p-6">
-      <TemplateBuilderClient
-        template={template}
-        initialQuestions={questions}
-        studies={studies.map((s) => ({
-          id: s.id,
-          title: s.title,
-          protocol_number: s.protocol_number,
-          description: s.description,
-          therapeutic_area: s.therapeutic_area,
-          indication: s.indication,
-        }))}
-        readOnly={readOnly}
-      />
-    </div>
-  );
+  const studyId = template.study_id;
+  if (!studyId) {
+    redirect('/protected/studies?studyRequired=1');
+  }
+  const suffix = mode === 'view' ? '?mode=view' : '';
+  redirect(`/protected/studies/${studyId}/trip-reports/templates/${id}${suffix}`);
 }

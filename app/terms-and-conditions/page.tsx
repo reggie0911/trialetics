@@ -211,6 +211,18 @@ export default function TermsOfUse() {
               <p className="text-muted-foreground leading-relaxed">
                 This Agreement commences upon the date you create an account or otherwise begin using the Service. Data related to your account remains available until the Agreement with the Client has been terminated or your access is terminated by the Client.
               </p>
+              <div className="space-y-3 ml-4">
+                <h3 className="text-xl font-semibold">A. Subscription Billing, Renewals, and Cancellation</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  Unless otherwise agreed in a Master Services Agreement, subscriptions renew automatically at the end of each billing period (monthly or annual). Pricing, taxes, and any approved discounts are presented during checkout and invoice generation through our payment processor.
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  If payment fails, Trialetics may mark the subscription as past due while retrying payment through configured dunning settings. During a past-due period, Trialetics may display in-app billing notices and may limit functionality if payment remains unresolved for an extended period.
+                </p>
+                <p className="text-muted-foreground leading-relaxed">
+                  If a subscription is cancelled at period end, access generally remains available through the paid term and changes after that date according to the applicable plan and contractual terms. For immediate cancellations, Trialetics may apply read-only or restricted access sooner. Any refund terms are governed by the applicable commercial agreement.
+                </p>
+              </div>
             </section>
 
             {/* Section 13 */}

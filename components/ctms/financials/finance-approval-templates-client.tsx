@@ -171,8 +171,8 @@ export function FinanceApprovalTemplatesClient({ initialTemplates }: FinanceAppr
             When an invoice total is above the escalation amount (USD), one additional step requires a Finance Director or Executive Director on the study team.
           </p>
           <p className="text-xs text-muted-foreground mt-2">
-            <Link href="/protected/financials" className="underline hover:text-foreground">
-              Back to Financials
+            <Link href="/protected/studies" className="underline hover:text-foreground">
+              Back to studies
             </Link>
           </p>
         </div>

@@ -91,9 +91,17 @@ interface VisitDetailProps {
   initialReport: TripReportWithAuthor | null;
   initialFindings: TripReportFinding[];
   initialFollowUps: FollowUpItem[];
+  /** When set, back link targets the study visits list. */
+  scopeStudyId?: string;
 }
 
-export function VisitDetail({ visit, initialReport, initialFindings, initialFollowUps }: VisitDetailProps) {
+export function VisitDetail({
+  visit,
+  initialReport,
+  initialFindings,
+  initialFollowUps,
+  scopeStudyId,
+}: VisitDetailProps) {
   const [report, setReport] = useState(initialReport);
   const [findings, setFindings] = useState(initialFindings);
   const [followUps, setFollowUps] = useState(initialFollowUps);
@@ -150,11 +158,15 @@ export function VisitDetail({ visit, initialReport, initialFindings, initialFoll
     refreshReport();
   };
 
+  const studyBackHref = scopeStudyId
+    ? `/protected/studies/${scopeStudyId}/visits`
+    : `/protected/studies/${visit.study_id}`;
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <Button variant="ghost" size="sm" render={<Link href={`/protected/studies/${visit.study_id}`} />} nativeButton={false} className="-ml-2">
+          <Button variant="ghost" size="sm" render={<Link href={studyBackHref} />} nativeButton={false} className="-ml-2">
             <ArrowLeft className="mr-1 h-4 w-4" />
             {visit.studies?.title ?? 'Study'}
           </Button>

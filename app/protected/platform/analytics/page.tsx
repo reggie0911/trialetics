@@ -20,11 +20,11 @@ export default async function PlatformAnalyticsPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Business analytics</h1>
           <p className="text-sm text-muted-foreground max-w-xl">
             Product and tenant metrics (plans, seats, modules, trackers, configuration audit).
-            Clinical trial KPIs stay under{' '}
-            <Link href="/protected/reports" className="text-primary underline-offset-4 hover:underline">
-              Reports
+            Clinical trial KPIs live in each study&apos;s Reports area — open a{' '}
+            <Link href="/protected/studies" className="text-primary underline-offset-4 hover:underline">
+              study
             </Link>
-            .
+            {' '}first.
           </p>
         </div>
         <Link

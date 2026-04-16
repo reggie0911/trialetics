@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
@@ -16,6 +16,10 @@ export default async function EditStudyPage({ params }: EditStudyPageProps) {
   const study = await getStudyById(id);
 
   if (!study) notFound();
+
+  if (study.status === 'closed') {
+    redirect(`/protected/studies/${id}?tab=overview&readOnly=1`);
+  }
 
   const { data: institutions } = await listInstitutions({ limit: 100 });
   const institutionOptions = (institutions ?? []).map((i) => ({ id: i.id, name: i.name }));

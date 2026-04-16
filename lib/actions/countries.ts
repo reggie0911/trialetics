@@ -1,7 +1,8 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/server';
+import { assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import type {
   Study,
   StudyCountry,
@@ -88,6 +89,9 @@ export async function addStudyCountry(
   const supabase = await createClient();
 
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.study_id);
+    if (writeGuard) return { data: null, error: writeGuard };
+
     const { data, error } = await supabase
       .from('study_countries')
       .insert({
@@ -107,7 +111,7 @@ export async function addStudyCountry(
       return { data: null, error: error.message };
     }
 
-    revalidatePath(`/protected/studies/${input.study_id}`);
+    revalidateStudyCtmsLayout(input.study_id);
     return { data: data as unknown as StudyCountry, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -120,6 +124,9 @@ export async function updateStudyCountry(
   const supabase = await createClient();
 
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.study_id);
+    if (writeGuard) return { error: writeGuard };
+
     const { id, study_id, ...updates } = input;
     const cleanUpdates: Record<string, unknown> = {};
 
@@ -136,7 +143,7 @@ export async function updateStudyCountry(
 
     if (error) return { error: error.message };
 
-    revalidatePath(`/protected/studies/${study_id}`);
+    revalidateStudyCtmsLayout(study_id);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -150,6 +157,9 @@ export async function removeStudyCountry(
   const supabase = await createClient();
 
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase
       .from('study_countries')
       .delete()
@@ -157,7 +167,7 @@ export async function removeStudyCountry(
 
     if (error) return { error: error.message };
 
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -171,6 +181,8 @@ export async function addSubmission(
 
   try {
     const { study_id, ...insertData } = input;
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, study_id);
+    if (writeGuard) return { data: null, error: writeGuard };
 
     const { data, error } = await supabase
       .from('regulatory_submissions')
@@ -189,7 +201,7 @@ export async function addSubmission(
 
     if (error) return { data: null, error: error.message };
 
-    revalidatePath(`/protected/studies/${study_id}`);
+    revalidateStudyCtmsLayout(study_id);
     return { data: data as unknown as RegulatorySubmission, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -202,6 +214,9 @@ export async function updateSubmission(
   const supabase = await createClient();
 
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.study_id);
+    if (writeGuard) return { error: writeGuard };
+
     const { id, study_id, ...updates } = input;
     const cleanUpdates: Record<string, unknown> = {};
 
@@ -218,7 +233,7 @@ export async function updateSubmission(
 
     if (error) return { error: error.message };
 
-    revalidatePath(`/protected/studies/${study_id}`);
+    revalidateStudyCtmsLayout(study_id);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -232,6 +247,9 @@ export async function deleteSubmission(
   const supabase = await createClient();
 
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase
       .from('regulatory_submissions')
       .delete()
@@ -239,7 +257,7 @@ export async function deleteSubmission(
 
     if (error) return { error: error.message };
 
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };

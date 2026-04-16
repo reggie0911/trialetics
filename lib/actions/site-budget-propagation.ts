@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import type { StudyBudgetSection, BudgetLineItem } from '@/lib/types/ctms';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -47,6 +49,9 @@ export async function generateSiteBudgetFromStudy(
 ): Promise<PropagationResult> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { siteBudgetId: '', linesCreated: 0, error: writeGuard };
+
     // Load study budget + sections + line items
     const { data: studyBudget, error: sbErr } = await supabase
       .from('study_budgets')
@@ -135,7 +140,7 @@ export async function generateSiteBudgetFromStudy(
     });
 
     revalidatePath(`/protected/sites/${siteId}`);
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { siteBudgetId, linesCreated, error: null };
   } catch (err) {
     return { siteBudgetId: '', linesCreated: 0, error: err instanceof Error ? err.message : 'Unexpected error.' };
@@ -237,6 +242,9 @@ export async function resyncSiteBudgetFromStudy(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { data: studyResult, error: studyErr } = await supabase
       .from('study_budgets')
       .select('*, study_budget_sections(*), budget_line_items(*)')
@@ -322,7 +330,7 @@ export async function resyncSiteBudgetFromStudy(
     });
 
     revalidatePath(`/protected/sites/${siteId}`);
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unexpected error.' };

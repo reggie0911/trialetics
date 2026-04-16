@@ -60,6 +60,13 @@ async function getCompanyId(): Promise<string> {
   return profile.company_id;
 }
 
+/** Legacy `/protected/trip-reports` plus study-scoped routes under `/protected/studies/[id]/…`. */
+function revalidateTripReportRelatedUi() {
+  revalidatePath('/protected/trip-reports');
+  revalidatePath('/protected/visits');
+  revalidatePath('/protected/studies', 'layout');
+}
+
 export interface TripReportSummaryRow {
   id: string;
   visit_id: string;
@@ -303,7 +310,7 @@ export async function getStudyCpmsForReviewerAssignment(
   return rows.sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
 }
 
-export async function getTripReportSummaryList(): Promise<TripReportSummaryRow[]> {
+export async function getTripReportSummaryList(studyId?: string | null): Promise<TripReportSummaryRow[]> {
   const supabase = await createClient();
   let currentProfileId: string | null = null;
   try {
@@ -312,7 +319,7 @@ export async function getTripReportSummaryList(): Promise<TripReportSummaryRow[]
     currentProfileId = null;
   }
 
-  const { data: visits, error } = await supabase
+  let visitQuery = supabase
     .from('monitoring_visits')
     .select(`
       id,
@@ -326,6 +333,8 @@ export async function getTripReportSummaryList(): Promise<TripReportSummaryRow[]
       studies ( title, protocol_number )
     `)
     .order('planned_date', { ascending: false, nullsFirst: true });
+  if (studyId) visitQuery = visitQuery.eq('study_id', studyId);
+  const { data: visits, error } = await visitQuery;
 
   if (error) throw new Error(error.message);
 
@@ -413,7 +422,7 @@ export async function getTripReportSummaryList(): Promise<TripReportSummaryRow[]
   return rows;
 }
 
-export async function getTripReportTrackerList(): Promise<{
+export async function getTripReportTrackerList(studyId?: string | null): Promise<{
   rows: TripReportTrackerRow[];
   metrics: TrackerComplianceMetrics;
 }> {
@@ -428,7 +437,7 @@ export async function getTripReportTrackerList(): Promise<{
     currentProfileId = null;
   }
 
-  const { data: visits, error } = await supabase
+  let trackerVisitQuery = supabase
     .from('monitoring_visits')
     .select(`
       id,
@@ -442,6 +451,8 @@ export async function getTripReportTrackerList(): Promise<{
       studies ( title )
     `)
     .order('planned_date', { ascending: false, nullsFirst: true });
+  if (studyId) trackerVisitQuery = trackerVisitQuery.eq('study_id', studyId);
+  const { data: visits, error } = await trackerVisitQuery;
 
   if (error) return { rows: [], metrics: { submissionCompleted: 0, submissionOverdue: 0, submissionTotal: 0, submissionPercent: 0, approvalCompleted: 0, approvalOverdue: 0, approvalTotal: 0, approvalPercent: 0 } };
 
@@ -664,7 +675,7 @@ export async function getTripReportTrackerList(): Promise<{
   return { rows, metrics };
 }
 
-export async function getTripReportReviewQueue(): Promise<TripReportReviewQueueRow[]> {
+export async function getTripReportReviewQueue(studyId?: string | null): Promise<TripReportReviewQueueRow[]> {
   const supabase = await createClient();
   let currentProfileId: string | null = null;
   try {
@@ -680,7 +691,8 @@ export async function getTripReportReviewQueue(): Promise<TripReportReviewQueueR
     .eq('profile_id', currentProfileId)
     .eq('is_active', true)
     .eq('role', 'clinical_project_manager');
-  const studyIds = [...new Set((cpmStudies ?? []).map((r: { study_id: string }) => r.study_id))];
+  let studyIds = [...new Set((cpmStudies ?? []).map((r: { study_id: string }) => r.study_id))];
+  if (studyId) studyIds = studyIds.filter((id) => id === studyId);
   if (studyIds.length === 0) return [];
 
   const { data: visits } = await supabase
@@ -912,8 +924,7 @@ export async function createSiteVisitWithReport(
 
     if (reportError) return { visitId: null, error: reportError.message };
 
-    revalidatePath('/protected/trip-reports');
-    revalidatePath('/protected/visits');
+    revalidateTripReportRelatedUi();
     return { visitId: visit.id, error: null };
   } catch (err) {
     return { visitId: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -965,7 +976,7 @@ export async function createTemplate(input: {
         .single());
     }
     if (error) return { data: null, error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { data: data as VisitReportTemplate, error: null, ...(studySkipped && { studySkipped: true }) };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -994,7 +1005,7 @@ export async function updateTemplate(
       result = await supabase.from('visit_report_templates').update(inputWithoutStudyId).eq('id', id);
     }
     if (result.error) return { error: result.error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null, ...(studySkipped && { studySkipped: true }) };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1023,7 +1034,7 @@ export async function deleteTemplate(id: string): Promise<{ error: string | null
     }
     const { error } = await supabase.from('visit_report_templates').delete().eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1079,7 +1090,7 @@ export async function addTemplateQuestion(input: {
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { data: data as VisitReportTemplateQuestion, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1091,7 +1102,7 @@ export async function deleteTemplateQuestion(questionId: string): Promise<{ erro
   try {
     const { error } = await supabase.from('visit_report_template_questions').delete().eq('id', questionId);
     if (error) return { error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1114,7 +1125,7 @@ export async function updateTemplateQuestion(
       .update(payload)
       .eq('id', questionId);
     if (error) return { error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1130,7 +1141,7 @@ export async function reorderTemplateQuestions(
     for (let i = 0; i < questionIds.length; i++) {
       await supabase.from('visit_report_template_questions').update({ sort_order: i }).eq('id', questionIds[i]).eq('template_id', templateId);
     }
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1592,7 +1603,7 @@ export async function saveReportDraft(
       );
       if (upsertErr) return { error: upsertErr.message };
     }
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1650,7 +1661,7 @@ export async function submitReport(
         reviewerId: (report as { reviewer_id?: string | null })?.reviewer_id ?? null,
       });
     }
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1688,7 +1699,7 @@ export async function startReview(reportId: string): Promise<{ error: string | n
       toStatus: 'under_review',
       actorProfileId: profileId,
     });
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1782,7 +1793,7 @@ export async function saveReviewerComments(
     }
     const { error: reportUpErr } = await supabase.from('trip_reports').update(sectionComments).eq('id', reportId);
     if (reportUpErr) return { error: reportUpErr.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1843,9 +1854,16 @@ export async function returnReport(
       actorProfileId: profileId,
     });
     if (r.created_by && r.visit_id) {
-      await notifyReportReturnedToAuthor({ authorProfileId: r.created_by, visitId: r.visit_id });
+      const { studyId } = await getStudyIdForVisit(supabase, r.visit_id);
+      if (studyId) {
+        await notifyReportReturnedToAuthor({
+          authorProfileId: r.created_by,
+          visitId: r.visit_id,
+          studyId,
+        });
+      }
     }
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1887,7 +1905,7 @@ export async function recallReport(reportId: string): Promise<{ error: string | 
       toStatus: 'authoring',
       actorProfileId: profileId,
     });
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1971,7 +1989,7 @@ export async function voidApproval(
       actorProfileId: profileId,
       metadata: { void_approval: true, reason: trimmedReason },
     });
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2033,7 +2051,7 @@ export async function approveReport(
         visitId: r.visit_id,
       });
     }
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2092,9 +2110,9 @@ export async function assignReportReviewer(
       },
     });
     if (reviewerProfileId && reviewerProfileId !== prev) {
-      await notifyReviewerAssigned({ reviewerProfileId, visitId });
+      await notifyReviewerAssigned({ reviewerProfileId, visitId, studyId });
     }
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2169,7 +2187,7 @@ export async function transitionReportStatusForTest(
       .update(payload)
       .eq('id', reportId);
     if (error) return { error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2185,7 +2203,7 @@ export async function saveReportNarrative(reportId: string, narrative: string | 
     const payload: Record<string, unknown> = { narrative: narrative ?? null };
     const { error } = await supabase.from('trip_reports').update(payload).eq('id', reportId);
     if (error) return { error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2242,7 +2260,7 @@ export async function linkReportToTemplate(
       })
       .eq('id', reportId);
     if (error) return { error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2279,7 +2297,7 @@ export async function addAttendee(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { data: data as TripReportAttendee, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2302,7 +2320,7 @@ export async function removeAttendee(attendeeId: string): Promise<{ error: strin
     if (permErr) return { error: permErr };
     const { error } = await supabase.from('trip_report_attendees').delete().eq('id', attendeeId);
     if (error) return { error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2338,7 +2356,7 @@ export async function addCrfEntry(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { data: data as TripReportCrfEntry, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2361,7 +2379,7 @@ export async function removeCrfEntry(entryId: string): Promise<{ error: string |
     if (permErr) return { error: permErr };
     const { error } = await supabase.from('trip_report_crf_entries').delete().eq('id', entryId);
     if (error) return { error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2398,7 +2416,7 @@ export async function addActionItem(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { data: data as TripReportActionItem, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2428,7 +2446,7 @@ export async function updateActionItem(
     if (Object.keys(payload).length === 0) return { error: null };
     const { error } = await supabase.from('trip_report_action_items').update(payload).eq('id', itemId);
     if (error) return { error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2483,7 +2501,7 @@ export async function uploadVisitReportAttachment(
       .single();
 
     if (insertErr) return { data: null, error: insertErr.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { data: row as TripReportAttachment, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'Upload failed' };
@@ -2506,7 +2524,7 @@ export async function deleteVisitReportAttachment(attachmentId: string): Promise
     await supabase.storage.from('visit-report-attachments').remove([(att as { storage_path: string }).storage_path]);
     const { error: delErr } = await supabase.from('visit_report_attachments').delete().eq('id', attachmentId);
     if (delErr) return { error: delErr.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Delete failed' };
@@ -2598,7 +2616,7 @@ export async function bulkUploadTemplateQuestions(
 
     const { error } = await supabase.from('visit_report_template_questions').insert(rows);
     if (error) return { count: 0, error: error.message };
-    revalidatePath('/protected/trip-reports');
+    revalidateTripReportRelatedUi();
     return { count: rows.length, error: null };
   } catch (err) {
     return { count: 0, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };

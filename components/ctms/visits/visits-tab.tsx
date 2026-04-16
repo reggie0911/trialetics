@@ -13,6 +13,8 @@ import {
   CalendarDays,
   FileText,
   ExternalLink,
+  Search,
+  TableProperties,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -58,6 +60,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { VisitCalendar } from './visit-calendar';
 
 import type {
   MonitoringVisitWithRelations,
@@ -76,6 +81,8 @@ import {
   updateVisit,
   deleteVisit,
 } from '@/lib/actions/visits';
+import { useStudyHub } from '@/components/ctms/study-hub-context';
+import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
 
 interface VisitsTabProps {
   studyId: string;
@@ -84,8 +91,12 @@ interface VisitsTabProps {
 }
 
 export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
+  const readOnly = useStudyHub()?.isStudyReadOnly ?? false;
+  const disabledTooltip = readOnly ? STUDY_DEACTIVATED_TOOLTIP : undefined;
   const [visits, setVisits] = useState(initialVisits);
+  const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [, startTransition] = useTransition();
 
   const refreshVisits = useCallback(() => {
@@ -119,9 +130,17 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
     return [visit.profiles.first_name, visit.profiles.last_name].filter(Boolean).join(' ') || '—';
   };
 
-  const filteredVisits = statusFilter === 'all'
-    ? visits
-    : visits.filter((v) => v.status === statusFilter);
+  const filteredVisits = visits.filter((v) => {
+    if (statusFilter !== 'all' && v.status !== statusFilter) return false;
+    if (typeFilter !== 'all' && v.visit_type !== typeFilter) return false;
+    if (search) {
+      const s = search.toLowerCase();
+      const siteName = (v.study_sites?.name ?? '').toLowerCase();
+      const studyTitle = (v.studies?.title ?? '').toLowerCase();
+      if (!siteName.includes(s) && !studyTitle.includes(s)) return false;
+    }
+    return true;
+  });
 
   const counts = {
     total: visits.length,
@@ -130,174 +149,239 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
     completed: visits.filter((v) => v.status === 'completed').length,
   };
 
+  const visitStatItems = [
+    { label: 'Total', key: 'total' as const, markerColor: null as string | null, statusFilter: 'all' },
+    { label: 'Planned', key: 'planned' as const, markerColor: 'bg-amber-500', statusFilter: 'planned' },
+    { label: 'Confirmed', key: 'confirmed' as const, markerColor: 'bg-blue-500', statusFilter: 'confirmed' },
+    { label: 'Completed', key: 'completed' as const, markerColor: 'bg-emerald-500', statusFilter: 'completed' },
+  ];
+
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="py-3 px-4">
-            <p className="text-xs text-muted-foreground">Total</p>
-            <p className="text-xl font-semibold">{counts.total}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 px-4">
-            <p className="text-xs text-muted-foreground">Planned</p>
-            <p className="text-xl font-semibold">{counts.planned}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 px-4">
-            <p className="text-xs text-muted-foreground">Confirmed</p>
-            <p className="text-xl font-semibold">{counts.confirmed}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="py-3 px-4">
-            <p className="text-xs text-muted-foreground">Completed</p>
-            <p className="text-xl font-semibold">{counts.completed}</p>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="rounded-lg">
+        <CardContent className="flex flex-wrap items-center gap-4 md:gap-6 py-4">
+          {visitStatItems.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => setStatusFilter(item.statusFilter)}
+              className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
+            >
+              {item.markerColor && (
+                <span className={`h-2 w-4 shrink-0 rounded-full ${item.markerColor}`} aria-hidden />
+              )}
+              <span>
+                {item.label} ({counts[item.key]})
+              </span>
+            </button>
+          ))}
+        </CardContent>
+      </Card>
 
-      <div className="flex items-center justify-between gap-3">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue
-              placeholder="All Statuses"
-              getDisplayLabel={(v) => {
-                if (v === 'all') return 'All Statuses';
-                return MONITORING_VISIT_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? v;
-              }}
-            />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {MONITORING_VISIT_STATUS_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <VisitFormDialog studyId={studyId} sites={sites} onSuccess={refreshVisits} />
-      </div>
-
-      {filteredVisits.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <ClipboardCheck className="h-8 w-8 text-muted-foreground mb-3" />
-            <p className="text-sm font-medium text-muted-foreground">No monitoring visits</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Schedule monitoring visits to track site performance and compliance.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Type</TableHead>
-                <TableHead className="text-xs">Site</TableHead>
-                <TableHead className="text-xs">Monitor</TableHead>
-                <TableHead className="text-xs">Planned Date</TableHead>
-                <TableHead className="text-xs">Actual Date</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Report</TableHead>
-                <TableHead className="text-xs w-[100px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredVisits.map((visit) => {
-                const hasReport = visit.trip_reports && visit.trip_reports.length > 0;
-                return (
-                  <TableRow key={visit.id}>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {VISIT_TYPE_LABEL[visit.visit_type]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs font-medium">
-                      {visit.study_sites?.name ?? '—'}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {monitorName(visit)}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <CalendarDays className="h-3 w-3" />
-                        {formatDate(visit.planned_date)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDate(visit.actual_date)}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={visit.status} className="text-xs" />
-                    </TableCell>
-                    <TableCell>
-                      {hasReport ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2 text-xs"
-                          render={<Link href={`/protected/visits/${visit.id}`} />}
-                          nativeButton={false}
-                        >
-                          <FileText className="mr-1 h-3 w-3" />
-                          View
-                        </Button>
-                      ) : visit.status === 'completed' ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 px-2 text-xs"
-                          render={<Link href={`/protected/visits/${visit.id}`} />}
-                          nativeButton={false}
-                        >
-                          <Plus className="mr-1 h-3 w-3" />
-                          Create
-                        </Button>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          render={<Link href={`/protected/visits/${visit.id}`} />}
-                          nativeButton={false}
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                        </Button>
-                        <VisitFormDialog studyId={studyId} sites={sites} visit={visit} onSuccess={refreshVisits} />
-                        <AlertDialog>
-                          <AlertDialogTrigger render={<Button variant="ghost" size="sm" className="h-7 w-7 p-0" />}>
-                            <Trash2 className="h-3 w-3 text-destructive" />
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Visit</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This will permanently delete this monitoring visit and any associated trip reports, findings, and follow-up items.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(visit.id)}>Delete</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="relative min-w-0 flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by site or study..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
         </div>
-      )}
+        <div className="flex flex-wrap items-center gap-3 lg:ml-auto">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue
+                placeholder="All Statuses"
+                getDisplayLabel={(v) => {
+                  if (v === 'all') return 'All Statuses';
+                  return MONITORING_VISIT_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? v;
+                }}
+              />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              {MONITORING_VISIT_STATUS_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue
+                placeholder="All Types"
+                getDisplayLabel={(v) => {
+                  if (v === 'all') return 'All Types';
+                  return VISIT_TYPE_OPTIONS.find((o) => o.value === v)?.label ?? v;
+                }}
+              />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              {VISIT_TYPE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <VisitFormDialog
+            studyId={studyId}
+            sites={sites}
+            onSuccess={refreshVisits}
+            readOnly={readOnly}
+            disabledTooltip={disabledTooltip}
+          />
+        </div>
+      </div>
+
+      <Tabs tabsId={`visits-tab-${studyId}`} defaultValue="table">
+        <TabsList>
+          <TabsTrigger value="table">
+            <TableProperties className="mr-1.5 h-4 w-4" />
+            Table
+          </TabsTrigger>
+          <TabsTrigger value="calendar">
+            <CalendarDays className="mr-1.5 h-4 w-4" />
+            Calendar
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="table">
+          {filteredVisits.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <ClipboardCheck className="h-10 w-10 text-muted-foreground mb-3" />
+                <p className="text-sm font-medium text-muted-foreground">No monitoring visits found</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {visits.length === 0
+                    ? 'Schedule monitoring visits to track site performance and compliance.'
+                    : 'Try adjusting your search or filters.'}
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Type</TableHead>
+                    <TableHead className="text-xs">Site</TableHead>
+                    <TableHead className="text-xs">Monitor</TableHead>
+                    <TableHead className="text-xs">Planned Date</TableHead>
+                    <TableHead className="text-xs">Actual Date</TableHead>
+                    <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs">Report</TableHead>
+                    <TableHead className="text-xs w-[50px]" />
+                    <TableHead className="text-xs w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredVisits.map((visit) => {
+                    const hasReport = visit.trip_reports && visit.trip_reports.length > 0;
+                    return (
+                      <TableRow key={visit.id}>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {VISIT_TYPE_LABEL[visit.visit_type]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-xs font-medium">
+                          {visit.study_sites?.name ?? '—'}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {monitorName(visit)}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <CalendarDays className="h-3 w-3" />
+                            {formatDate(visit.planned_date)}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {formatDate(visit.actual_date)}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={visit.status} className="text-xs" />
+                        </TableCell>
+                        <TableCell>
+                          {hasReport ? (
+                            <FileText className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            render={<Link href={`/protected/studies/${studyId}/visits/${visit.id}`} />}
+                            nativeButton={false}
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <VisitFormDialog
+                              studyId={studyId}
+                              sites={sites}
+                              visit={visit}
+                              onSuccess={refreshVisits}
+                              readOnly={readOnly}
+                              disabledTooltip={disabledTooltip}
+                            />
+                            {readOnly ? (
+                              <Tooltip>
+                                <TooltipTrigger render={<span className="inline-flex" />}>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0"
+                                    disabled
+                                    aria-label="Delete visit"
+                                  >
+                                    <Trash2 className="h-3 w-3 text-destructive" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                                  {STUDY_DEACTIVATED_TOOLTIP}
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              <AlertDialog>
+                                <AlertDialogTrigger render={<Button variant="ghost" size="sm" className="h-7 w-7 p-0" />}>
+                                  <Trash2 className="h-3 w-3 text-destructive" />
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete Visit</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This will permanently delete this monitoring visit and any associated trip reports, findings, and follow-up items.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDelete(visit.id)}>Delete</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="calendar">
+          <VisitCalendar visits={filteredVisits} scopeStudyId={studyId} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -320,11 +404,15 @@ function VisitFormDialog({
   sites,
   visit,
   onSuccess,
+  readOnly = false,
+  disabledTooltip,
 }: {
   studyId: string;
   sites: Pick<StudySite, 'id' | 'site_number' | 'name'>[];
   visit?: MonitoringVisitWithRelations;
   onSuccess: () => void;
+  readOnly?: boolean;
+  disabledTooltip?: string;
 }) {
   const [open, setOpen] = useState(false);
   const isEdit = !!visit;
@@ -376,17 +464,52 @@ function VisitFormDialog({
     onSuccess();
   };
 
+  const handleOpenChange = (next: boolean) => {
+    if (readOnly && next) return;
+    setOpen(next);
+  };
+
+  const editTrigger = (
+    <DialogTrigger render={<Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={readOnly} />}>
+      <Pencil className="h-3 w-3" />
+    </DialogTrigger>
+  );
+
+  const scheduleTrigger = (
+    <DialogTrigger render={<Button size="sm" disabled={readOnly} />}>
+      <Plus className="mr-2 h-4 w-4" />
+      Schedule Visit
+    </DialogTrigger>
+  );
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          isEdit
-            ? <Button variant="ghost" size="sm" className="h-7 w-7 p-0" />
-            : <Button size="sm" />
-        }
-      >
-        {isEdit ? <Pencil className="h-3 w-3" /> : <><Plus className="mr-2 h-4 w-4" />Schedule Visit</>}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {isEdit ? (
+        readOnly && disabledTooltip ? (
+          <Tooltip>
+            <TooltipTrigger render={<span className="inline-flex" />}>{editTrigger}</TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              {disabledTooltip}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          editTrigger
+        )
+      ) : readOnly && disabledTooltip ? (
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>{scheduleTrigger}</TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            {disabledTooltip}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>{scheduleTrigger}</TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            Plan a new monitoring visit for a site on this study.
+          </TooltipContent>
+        </Tooltip>
+      )}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Visit' : 'Schedule Monitoring Visit'}</DialogTitle>

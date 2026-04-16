@@ -19,6 +19,37 @@ import {
 } from '@/components/ui/card';
 
 const faqData = [
+  // Pricing FAQs
+  {
+    id: 'switch-plans',
+    question: 'Can I switch plans mid-billing cycle?',
+    answer:
+      'Yes. You can upgrade your plan at any time and the change takes effect immediately. If you upgrade mid-cycle, you will be charged a prorated amount for the remainder of the billing period. Downgrades take effect at the start of your next billing period.',
+  },
+  {
+    id: 'extra-seats',
+    question: 'How do extra seats work?',
+    answer:
+      'Each plan includes a set number of users. Launch, Core, and Professional can add seats beyond the included count at the per-user monthly rate shown on the pricing page ($39 / $29 / $19 per user per month respectively). The Consultant plan is a single-user workspace.',
+  },
+  {
+    id: 'free-trial',
+    question: 'Is there a free trial?',
+    answer:
+      'We offer a free account to get started and explore the platform. For Launch and Core plans, a 14-day trial may be available at checkout depending on current promotions. Enterprise trials are arranged directly with our sales team.',
+  },
+  {
+    id: 'annual-billing',
+    question: 'How does annual billing work?',
+    answer:
+      'When you choose annual billing, you pay for the full year upfront at a discounted rate compared to paying monthly (the savings vary by plan). Your subscription renews annually unless you cancel before the renewal date. You can switch from monthly to annual at any time.',
+  },
+  {
+    id: 'payment-methods',
+    question: 'What payment methods do you accept?',
+    answer:
+      'We accept all major credit and debit cards (Visa, Mastercard, American Express) through our secure Stripe checkout. Enterprise customers can also pay via invoice or ACH transfer. All prices are in USD.',
+  },
   // General FAQs
   {
     id: 'services',

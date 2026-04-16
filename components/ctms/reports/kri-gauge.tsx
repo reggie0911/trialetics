@@ -1,6 +1,17 @@
 'use client';
 
-import type { KriStatus } from '@/lib/types/ctms';
+import { KRI_CATEGORY_LABEL, type KriCategory, type KriStatus } from '@/lib/types/ctms';
+
+function kriCategoryLabel(category: string): string {
+  if (category in KRI_CATEGORY_LABEL) {
+    return KRI_CATEGORY_LABEL[category as KriCategory];
+  }
+  return category
+    .split('_')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
 
 const statusColor: Record<KriStatus, string> = {
   green: 'bg-green-500',
@@ -41,7 +52,7 @@ export function KriGauge({ name, category, value, status, thresholdYellow, thres
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-xs font-medium truncate">{name}</p>
-          <p className="text-[10px] text-muted-foreground">{category}</p>
+          <p className="text-[10px] text-muted-foreground">{kriCategoryLabel(category)}</p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <div className={`h-2.5 w-2.5 rounded-full ${statusColor[status]}`} />

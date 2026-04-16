@@ -1,421 +1,893 @@
 "use client";
-import {
-  Activity,
-  AlertTriangle,
-  ArrowRight,
-  BarChart3,
-  Bell,
-  Brain,
-  Building2,
-  Calendar,
-  Check,
-  ChevronDown,
-  ClipboardList,
-  CreditCard,
-  DollarSign,
-  FileText,
-  FolderOpen,
-  GanttChart,
-  HardDrive,
-  Headphones,
-  Heart,
-  Layers,
-  LayoutGrid,
-  LineChart,
-  LucideIcon,
-  MessageSquare,
-  Minus,
-  RefreshCw,
-  Rocket,
-  ShieldCheck,
-  Sparkles,
-  Upload,
-  User,
-  UserPlus,
-  Users,
-  Workflow,
-  Zap,
-} from "lucide-react";
-import { Fragment, useState } from "react";
 
+import { useState, useCallback, useEffect, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+import { toast } from "sonner";
+import {
+  Check,
+  Minus,
+  User,
+  Rocket,
+  Layers,
+  Building2,
+  Stethoscope,
+  Users,
+  Sparkles,
+  ChevronDown,
+} from "lucide-react";
+
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  PLAN_CONFIGS,
+  type BillingInterval,
+  type SubscriptionPlan,
+} from "@/lib/types/ctms";
 import { cn } from "@/lib/utils";
 
-import { Button } from "@/components/ui/button";
+/** Plans shown on the public pricing page (Enterprise remains in `PLAN_CONFIGS` for billing/backend). */
+const PRICING_PAGE_PLAN_ORDER = [
+  "independent_consultant",
+  "launch",
+  "core",
+  "professional",
+] as const satisfies readonly SubscriptionPlan[];
 
-interface FeatureItem {
-  icon: LucideIcon;
-  text: string;
-}
+type PricingPagePlan = (typeof PRICING_PAGE_PLAN_ORDER)[number];
 
-interface PricingPlan {
-  name: string;
-  price: string;
-  billingNote: string;
-  description: string;
-  features: FeatureItem[];
-  mostPopular?: boolean;
-  isAddOn?: boolean;
-  cta: {
-    text: string;
-    href: string;
-  };
-}
+const AI_FEATURE_INTRO =
+  /^(Basic AI:|Enhanced AI:|AI:|Advanced AI:|Governed AI workflows with enterprise controls)\s*/i;
 
-const PLANS: PricingPlan[] = [
+// ---------------------------------------------------------------------------
+// Data
+// ---------------------------------------------------------------------------
+
+type ComparisonRow = {
+  feature: string;
+  values: Record<SubscriptionPlan, string>;
+};
+
+type ComparisonCategory = {
+  label: string;
+  rows: ComparisonRow[];
+};
+
+const comparisonCategories: ComparisonCategory[] = [
   {
-    name: "Indie",
-    price: "$99",
-    billingNote: "per user / Billed monthly",
-    description: "Perfect for independent CRAs, site monitors, and consultants running single studies.",
-    features: [
-      { icon: User, text: "Single User License" },
-      { icon: Layers, text: "1 Active Study" },
-      { icon: ClipboardList, text: "Study Startup Tracker" },
-      { icon: Building2, text: "Site Activation & Feasibility" },
-      { icon: Activity, text: "Monitoring Visit Tracker" },
-      { icon: ShieldCheck, text: "Protocol Deviation Tracker" },
-      { icon: UserPlus, text: "Patient Enrollment Tracker" },
-      { icon: Brain, text: "AI Assistant (basic drafting)" },
-      { icon: Bell, text: "Alerts & Notifications" },
-      { icon: Headphones, text: "Email Support" },
+    label: "Usage & seats",
+    rows: [
+      {
+        feature: "Users included",
+        values: {
+          independent_consultant: "1",
+          launch: "10",
+          core: "25",
+          professional: "50",
+          enterprise: "150+",
+        },
+      },
+      {
+        feature: "Extra seat (per user / mo)",
+        values: {
+          independent_consultant: "—",
+          launch: "$39",
+          core: "$29",
+          professional: "$19",
+          enterprise: "Custom",
+        },
+      },
     ],
-    cta: {
-      text: "Get Started",
-      href: "https://www.linkedin.com/company/trialetics-io",
-    },
   },
   {
-    name: "Growth",
-    mostPopular: true,
-    price: "$399",
-    billingNote: "per user / Billed monthly",
-    description: "Designed for sponsors, CROs, startup companies, and growing study teams managing multiple trials.",
-    features: [
-      { icon: Sparkles, text: "Everything in Indie, plus:" },
-      { icon: Layers, text: "3 Active Studies" },
-      { icon: LayoutGrid, text: "CTMS & eTMF Core System" },
-      { icon: FolderOpen, text: "Document Management & Version Control" },
-      { icon: ClipboardList, text: "Query Management Tracker" },
-      { icon: Heart, text: "Safety Event / AE Tracker" },
-      { icon: DollarSign, text: "Budget & Invoice Tracker" },
-      { icon: FileText, text: "TMF/eTMF Document Tracker" },
-      { icon: CreditCard, text: "Site Contracts & Payments" },
-      { icon: Calendar, text: "Calendar & Site Visit Scheduling" },
-      { icon: Upload, text: "Data Imports (CSV/Excel)" },
-      { icon: BarChart3, text: "Dashboards & Analytics" },
-      { icon: Users, text: "Role-Based Permissions" },
-      { icon: HardDrive, text: "Secure Cloud Storage (50GB)" },
-      { icon: Brain, text: "AI Assistant (full drafting)" },
-      { icon: LineChart, text: "AI-Powered Analytics & Insights" },
-      { icon: MessageSquare, text: "Natural Language Data Queries" },
-      { icon: MessageSquare, text: "Email + Chat Support" },
+    label: "Core modules",
+    rows: [
+      {
+        feature: "Consultant Workspace",
+        values: { independent_consultant: "Yes", launch: "No", core: "No", professional: "No", enterprise: "No" },
+      },
+      {
+        feature: "CTMS",
+        values: { independent_consultant: "No", launch: "Yes", core: "Yes", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "eISF",
+        values: { independent_consultant: "No", launch: "Yes", core: "Yes", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "eTMF",
+        values: { independent_consultant: "No", launch: "No", core: "Yes", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "Inventory Management",
+        values: { independent_consultant: "No", launch: "No", core: "Yes", professional: "Yes", enterprise: "Yes" },
+      },
     ],
-    cta: {
-      text: "Get Started",
-      href: "https://www.linkedin.com/company/trialetics-io",
-    },
   },
   {
-    name: "Scale",
-    price: "$1,299",
-    billingNote: "Billed monthly",
-    description: "Enterprise-grade for Pharma/Biotech companies with unlimited users and studies.",
-    features: [
-      { icon: Sparkles, text: "Everything in Growth, plus:" },
-      { icon: Layers, text: "Unlimited Active Studies" },
-      { icon: Users, text: "Unlimited Users (no per-seat charges)" },
-      { icon: Building2, text: "Multi-Department Management" },
-      { icon: BarChart3, text: "Advanced Analytics & Reporting" },
-      { icon: Layers, text: "Cross-Study Portfolio Views" },
-      { icon: ShieldCheck, text: "Department-Level Permissions" },
-      { icon: ShieldCheck, text: "Audit Trail & Compliance Portal" },
-      { icon: HardDrive, text: "Secure Cloud Storage (100GB)" },
-      { icon: AlertTriangle, text: "AI Risk Detection & Predictions" },
-      { icon: Workflow, text: "AI-Driven Workflow Automation" },
-      { icon: Headphones, text: "Priority Support" },
+    label: "Operations",
+    rows: [
+      {
+        feature: "Travel",
+        values: { independent_consultant: "Yes", launch: "Yes", core: "Yes", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "Expense Management",
+        values: { independent_consultant: "Yes", launch: "Yes", core: "Yes", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "Timesheets",
+        values: { independent_consultant: "Yes", launch: "Yes", core: "Yes", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "Invoicing",
+        values: { independent_consultant: "Yes", launch: "No", core: "No", professional: "No", enterprise: "Yes" },
+      },
+      {
+        feature: "Site Payments",
+        values: { independent_consultant: "No", launch: "No", core: "Yes", professional: "Yes", enterprise: "Yes" },
+      },
     ],
-    cta: {
-      text: "Get Started",
-      href: "https://www.linkedin.com/company/trialetics-io",
-    },
   },
   {
-    name: "Custom Build",
-    price: "Contact Us",
-    billingNote: "Flat Fee",
-    isAddOn: true,
-    description: "Transform legacy trackers into automation. Perfect for teams ready to future-proof operations.",
-    features: [
-      { icon: Sparkles, text: "Bundled with any monthly plan" },
-      { icon: RefreshCw, text: "Excel-to-SaaS Conversion (custom trackers)" },
-      { icon: LayoutGrid, text: "Integrated into CTMS & eTMF workflows" },
-      { icon: Workflow, text: "Custom Workflow Automation" },
-      { icon: Rocket, text: "API Access & 3rd-Party Integrations" },
-      { icon: Users, text: "Dedicated Onboarding & Validation" },
-      { icon: Headphones, text: "Premium Support (priority)" },
-      { icon: Zap, text: "Future-Proof Guarantee" },
+    label: "Compliance & quality",
+    rows: [
+      {
+        feature: "LMS / Training",
+        values: { independent_consultant: "No", launch: "No", core: "No", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "QMS",
+        values: { independent_consultant: "No", launch: "No", core: "No", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "Regulatory / RIM Lite",
+        values: { independent_consultant: "No", launch: "No", core: "No", professional: "Yes", enterprise: "Yes" },
+      },
     ],
-    cta: {
-      text: "Contact Us",
-      href: "https://www.linkedin.com/company/trialetics-io",
-    },
+  },
+  {
+    label: "Intelligence",
+    rows: [
+      {
+        feature: "AI Trial Operations Copilot",
+        values: { independent_consultant: "No", launch: "No", core: "No", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "Advanced Analytics / BI",
+        values: {
+          independent_consultant: "No",
+          launch: "Basic",
+          core: "Standard",
+          professional: "Advanced",
+          enterprise: "Advanced",
+        },
+      },
+    ],
+  },
+  {
+    label: "Innovative capabilities",
+    rows: [
+      {
+        feature: "Multi-client work management",
+        values: { independent_consultant: "Yes", launch: "No", core: "No", professional: "No", enterprise: "Yes" },
+      },
+      {
+        feature: "Study launch templates",
+        values: { independent_consultant: "No", launch: "Yes", core: "Yes", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "Site readiness scoring",
+        values: { independent_consultant: "No", launch: "Yes", core: "Yes", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "Cross-module workflows",
+        values: { independent_consultant: "No", launch: "Limited", core: "Yes", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "Operational risk flags",
+        values: { independent_consultant: "No", launch: "Limited", core: "Yes", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "Unified site intelligence view",
+        values: { independent_consultant: "No", launch: "No", core: "Yes", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "AI-generated work summaries",
+        values: { independent_consultant: "Yes", launch: "No", core: "No", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "Predictive risk insights",
+        values: { independent_consultant: "No", launch: "No", core: "Limited", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "Portfolio command center",
+        values: { independent_consultant: "No", launch: "No", core: "No", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "Inspection readiness dashboard",
+        values: { independent_consultant: "No", launch: "No", core: "No", professional: "Yes", enterprise: "Yes" },
+      },
+      {
+        feature: "Financial forecasting",
+        values: { independent_consultant: "No", launch: "No", core: "No", professional: "Yes", enterprise: "Yes" },
+      },
+    ],
+  },
+  {
+    label: "Platform & support",
+    rows: [
+      {
+        feature: "API access",
+        values: { independent_consultant: "No", launch: "No", core: "No", professional: "Limited", enterprise: "Yes" },
+      },
+      {
+        feature: "SSO / SAML",
+        values: { independent_consultant: "No", launch: "No", core: "No", professional: "Optional", enterprise: "Yes" },
+      },
+      {
+        feature: "Support",
+        values: {
+          independent_consultant: "Email",
+          launch: "Email",
+          core: "Email",
+          professional: "Priority + onboarding",
+          enterprise: "Dedicated CS + SLA options",
+        },
+      },
+    ],
   },
 ];
 
-// Feature comparison data
-interface FeatureComparison {
-  category: string;
-  features: {
-    name: string;
-    indie: boolean | string;
-    growth: boolean | string;
-    scale: boolean | string;
-    enterprise: boolean | string;
-  }[];
-}
+const planIcons: Record<PricingPagePlan, ReactNode> = {
+  independent_consultant: <User className="h-6 w-6" />,
+  launch: <Rocket className="h-6 w-6" />,
+  core: <Layers className="h-6 w-6" />,
+  professional: <Building2 className="h-6 w-6" />,
+};
 
-const FEATURE_COMPARISONS: FeatureComparison[] = [
+const planHeaders: Record<PricingPagePlan, string> = {
+  independent_consultant: "Consultant",
+  launch: "Launch",
+  core: "Core",
+  professional: "Professional",
+};
+
+const valueProps = [
   {
-    category: "Study Management",
-    features: [
-      { name: "Active Study Limit", indie: "1 Study", growth: "3 Studies", scale: "Unlimited", enterprise: "Add-on" },
-      { name: "Study Startup Tracker", indie: true, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "Site Activation & Feasibility", indie: true, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "Patient Enrollment Tracker", indie: true, growth: true, scale: true, enterprise: "Add-on" },
-    ],
+    icon: <Stethoscope className="h-8 w-8 stroke-1" />,
+    title: "Built for Clinical Ops",
+    description: "Purpose-built for clinical operations teams — not adapted from generic project management tools.",
   },
   {
-    category: "Monitoring & Compliance",
-    features: [
-      { name: "Monitoring Visit Tracker", indie: true, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "Protocol Deviation Tracker", indie: true, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "Query Management Tracker", indie: false, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "Safety Event / AE Tracker", indie: false, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "Audit Trail & Compliance Portal", indie: false, growth: false, scale: true, enterprise: "Add-on" },
-    ],
+    icon: <Users className="h-8 w-8 stroke-1" />,
+    title: "From Solo to Enterprise",
+    description: "Scales seamlessly from a single consultant to 150+ user enterprise deployments.",
   },
   {
-    category: "Document & Data",
-    features: [
-      { name: "CTMS & eTMF Core System Access", indie: false, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "Document Management & Version Control", indie: false, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "TMF/eTMF Document Tracker", indie: false, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "Data Imports (CSV/Excel)", indie: false, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "Secure Cloud Storage", indie: false, growth: "50GB", scale: "100GB", enterprise: "Add-on" },
-    ],
-  },
-  {
-    category: "Finance & Scheduling",
-    features: [
-      { name: "Budget & Invoice Tracker", indie: false, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "Site Contracts & Payments", indie: false, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "Calendar & Site Visit Scheduling", indie: false, growth: true, scale: true, enterprise: "Add-on" },
-    ],
-  },
-  {
-    category: "AI Features",
-    features: [
-      { name: "AI Assistant (Document Drafting)", indie: "Basic", growth: "Full", scale: "Full", enterprise: "Add-on" },
-      { name: "AI-Powered Analytics & Insights", indie: false, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "Natural Language Data Queries", indie: false, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "AI Risk Detection & Predictions", indie: false, growth: false, scale: true, enterprise: "Add-on" },
-      { name: "AI-Driven Workflow Automation", indie: false, growth: false, scale: true, enterprise: "Add-on" },
-    ],
-  },
-  {
-    category: "Team & Access",
-    features: [
-      { name: "User License", indie: "1 User", growth: "Per User", scale: "Unlimited", enterprise: "Add-on" },
-      { name: "Role-Based Permissions", indie: false, growth: true, scale: true, enterprise: "Add-on" },
-      { name: "Multi-Department Management", indie: false, growth: false, scale: true, enterprise: "Add-on" },
-      { name: "Department-Level Permissions", indie: false, growth: false, scale: true, enterprise: "Add-on" },
-    ],
-  },
-  {
-    category: "Support & Onboarding",
-    features: [
-      { name: "Email Support", indie: true, growth: true, scale: true, enterprise: true },
-      { name: "Chat Support", indie: false, growth: true, scale: true, enterprise: true },
-      { name: "Priority Support", indie: false, growth: false, scale: true, enterprise: true },
-      { name: "Dedicated Onboarding", indie: false, growth: false, scale: false, enterprise: true },
-      { name: "Premium Support", indie: false, growth: false, scale: false, enterprise: true },
-    ],
-  },
-  {
-    category: "Integrations & Automation",
-    features: [
-      { name: "Excel-to-SaaS Conversion", indie: false, growth: false, scale: false, enterprise: true },
-      { name: "Custom Workflow Automation", indie: false, growth: false, scale: false, enterprise: true },
-      { name: "API Access", indie: false, growth: false, scale: false, enterprise: true },
-      { name: "Future-Proof Guarantee", indie: false, growth: false, scale: false, enterprise: true },
-    ],
+    icon: <Sparkles className="h-8 w-8 stroke-1" />,
+    title: "AI-Powered Workflows",
+    description: "AI drafts trip reports, summaries, follow-up letters, and action items so you can focus on oversight.",
   },
 ];
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function annualSavings(monthlyPrice: number | null, annualTotalPrice: number | null): number | null {
+  if (monthlyPrice === null || annualTotalPrice === null) return null;
+  return monthlyPrice * 12 - annualTotalPrice;
+}
+
+function ComparisonCellValue({ value }: { value: string }) {
+  if (value === "Yes") return <Check className="mx-auto h-4 w-4 text-green-600" />;
+  if (value === "No") return <Minus className="mx-auto h-4 w-4 text-muted-foreground/40" />;
+  return <span>{value}</span>;
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 interface Pricing32Props {
   className?: string;
+  isLoggedIn?: boolean;
 }
 
-const Pricing32 = ({ className }: Pricing32Props) => {
-  const [showComparison, setShowComparison] = useState(false);
+const Pricing32 = ({
+  className,
+  isLoggedIn = false,
+}: Pricing32Props) => {
+  const searchParams = useSearchParams();
+  const initialInterval: BillingInterval =
+    searchParams.get("interval") === "year" ? "year" : "month";
+  const [interval, setInterval] = useState<BillingInterval>(initialInterval);
+
+  // Auto-trigger checkout when user arrives from email-confirmed signup
+  // (?checkout=1&plan=launch&interval=month is set by the sign-up redirect).
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const checkoutParam = searchParams.get("checkout");
+    const planParam = searchParams.get("plan");
+    const intervalParam = searchParams.get("interval") ?? "month";
+    if (checkoutParam !== "1" || !planParam) return;
+    const safeInterval: BillingInterval = intervalParam === "year" ? "year" : "month";
+    fetch("/api/stripe/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan: planParam, interval: safeInterval }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.url) window.location.href = data.url;
+      })
+      .catch(() => {
+        // If auto-checkout fails, user can click Subscribe manually
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <section className={cn("py-32", className)}>
-      <div className="container">
-        <div className="flex flex-col items-center justify-center gap-9.5">
-          <h1 className="text-center text-4xl font-medium tracking-tighter text-foreground md:text-5xl lg:text-6xl">
-            AI-Powered Clinical Trial Management
+    <section className={cn("relative z-10 py-20", className)}>
+      <div className="container space-y-20">
+        {/* ----------------------------------------------------------------- */}
+        {/* HERO                                                              */}
+        {/* ----------------------------------------------------------------- */}
+        <div className="mx-auto max-w-3xl text-center space-y-5">
+          <Badge variant="secondary" className="mx-auto">
+            Clinical-grade pricing. No credit card required.
+          </Badge>
+
+          <h1 className="text-4xl font-medium tracking-tighter text-foreground md:text-5xl lg:text-6xl">
+            Pricing built for clinical teams at{" "}
+            <span className="relative inline-block">
+              every stage
+              <svg
+                className="absolute -bottom-1 left-0 w-full"
+                viewBox="0 0 200 8"
+                fill="none"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M1 5.5C40 2 80 2 100 4C120 6 160 6 199 3"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  className="text-primary"
+                />
+              </svg>
+            </span>
           </h1>
-          <p className="text-muted-foreground mt-4 max-w-2xl text-center text-lg leading-relaxed">
-            Choose the plan that fits your needs. From independent monitors to enterprise pharma companies.
+
+          <p className="text-muted-foreground text-lg">
+            Monthly or annual billing. Annual plans are discounted versus monthly (varies by plan).
+            Prices in USD — tax may apply at checkout.
           </p>
-          <div className="mt-6 grid w-full grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-4">
-            {PLANS.map((plan, index) => (
-              <PlanCard
-                key={index}
-                plan={plan}
+
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+            <span className="text-sm font-medium text-foreground">Bill me:</span>
+            <button
+              type="button"
+              onClick={() => setInterval("month")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
+                interval === "month"
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-background text-foreground hover:bg-muted",
+              )}
+            >
+              <span
+                className={cn(
+                  "inline-block h-3 w-3 rounded-full border-2",
+                  interval === "month" ? "border-background bg-background" : "border-muted-foreground",
+                )}
               />
+              Monthly
+            </button>
+            <button
+              type="button"
+              onClick={() => setInterval("year")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors",
+                interval === "year"
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border bg-background text-foreground hover:bg-muted",
+              )}
+            >
+              <span
+                className={cn(
+                  "inline-block h-3 w-3 rounded-full border-2",
+                  interval === "year" ? "border-background bg-background" : "border-muted-foreground",
+                )}
+              />
+              Annually
+            </button>
+            {interval === "year" && (
+              <Badge variant="success">SAVE ON ANNUAL</Badge>
+            )}
+          </div>
+        </div>
+
+        {/* ----------------------------------------------------------------- */}
+        {/* PLAN CARDS                                                        */}
+        {/* ----------------------------------------------------------------- */}
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+          {PRICING_PAGE_PLAN_ORDER.map((plan) => {
+            const config = PLAN_CONFIGS[plan];
+            const isCore = plan === "core";
+            const savings = annualSavings(config.monthlyPrice, config.annualTotalPrice);
+
+            const aiFeature = config.features.find((f) =>
+              f.toLowerCase().startsWith("basic ai") ||
+              f.toLowerCase().startsWith("enhanced ai") ||
+              f.toLowerCase().startsWith("ai:") ||
+              f.toLowerCase().startsWith("advanced ai") ||
+              f.toLowerCase().startsWith("governed ai"),
+            );
+            const aiFeatureDetail = aiFeature?.replace(AI_FEATURE_INTRO, "").trim() ?? "";
+            const nonAiFeatures = config.features.filter((f) => f !== aiFeature);
+
+            return (
+              <article
+                key={plan}
+                className={cn(
+                  "relative flex flex-col rounded-xl border p-6 space-y-5 transition-shadow bg-background",
+                  isCore && "border-primary shadow-md ring-1 ring-primary/20",
+                )}
+              >
+                {isCore && (
+                  <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2">
+                    MOST POPULAR
+                  </Badge>
+                )}
+
+                <div className="space-y-3">
+                  <div className="text-muted-foreground">
+                    {planIcons[plan]}
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-lg font-semibold">{config.name}</p>
+                    <p
+                      className={cn(
+                        "text-xs leading-relaxed min-h-[5rem]",
+                        "text-muted-foreground",
+                      )}
+                    >
+                      {config.description}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  {config.monthlyPrice === null ? (
+                    <p className="text-3xl font-bold">Custom</p>
+                  ) : interval === "month" ? (
+                    <p className="text-3xl font-bold">
+                      ${config.monthlyPrice.toLocaleString()}
+                      <span className="text-sm font-normal text-muted-foreground">
+                        {" "}/month
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-3xl font-bold">
+                      ${(config.annualMonthlyPrice ?? config.monthlyPrice).toLocaleString()}
+                      <span className="text-sm font-normal text-muted-foreground">
+                        {" "}/month
+                      </span>
+                    </p>
+                  )}
+                  {interval === "year" && savings !== null && savings > 0 && (
+                    <p className="text-xs font-medium text-green-600">
+                      Save ${savings.toLocaleString()}/yr
+                    </p>
+                  )}
+                  {config.monthlyPrice === null && (
+                    <p className="text-xs text-muted-foreground">
+                      Contact sales
+                    </p>
+                  )}
+                </div>
+
+                <PricingPlanCta
+                  plan={plan}
+                  interval={interval}
+                  isCore={isCore}
+                  selfServe={config.selfServe}
+                  isLoggedIn={isLoggedIn}
+                />
+
+                <div className="text-xs space-y-1 text-muted-foreground">
+                  <p>
+                    {config.seatsIncluded === 1 && config.additionalUserPrice === null
+                      ? "1 user included"
+                      : `${config.seatsIncluded}+ users included`}
+                    {config.additionalUserPrice !== null ? ` (+$${config.additionalUserPrice}/user/mo)` : ""}
+                  </p>
+                  <p>
+                    {config.maxActiveStudies === null
+                      ? "Unlimited active studies"
+                      : `Up to ${config.maxActiveStudies} active studies`}
+                  </p>
+                </div>
+
+                <div className="flex-1">
+                  {plan === "launch" && (
+                    <p className="mb-3 text-xs font-semibold text-foreground">Launch includes:</p>
+                  )}
+                  {plan === "core" && (
+                    <p className="mb-3 text-xs font-semibold text-foreground">
+                      Everything in {planHeaders.launch}, plus:
+                    </p>
+                  )}
+                  {plan === "professional" && (
+                    <p className="mb-3 text-xs font-semibold text-foreground">
+                      Everything in {planHeaders.core}, plus:
+                    </p>
+                  )}
+                  <ul className="space-y-2">
+                    {nonAiFeatures
+                      .filter((f) => !f.startsWith("Everything in "))
+                      .map((feature) => (
+                        <li key={feature} className="flex items-start gap-2 text-xs text-muted-foreground">
+                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-green-600" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+
+                {config.recommendedAddOns && config.recommendedAddOns.length > 0 && (
+                  <div className="rounded-lg border border-border bg-muted/25 p-3 space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      Optional add-ons
+                    </p>
+                    <ul className="space-y-2">
+                      {config.recommendedAddOns.map((addOn) => (
+                        <li key={addOn.name} className="text-xs leading-snug">
+                          <span className="font-medium text-foreground">
+                            {addOn.name}
+                          </span>
+                          <span className="text-primary">
+                            {" "}
+                            · {addOn.price}
+                          </span>
+                          {addOn.note ? (
+                            <span className="mt-0.5 block text-muted-foreground">
+                              {addOn.note}
+                            </span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {aiFeature && (
+                  <div
+                    className={cn(
+                      "rounded-lg p-3 flex flex-col gap-2",
+                      plan === "professional"
+                        ? "bg-gradient-to-br from-violet-500/10 to-blue-500/10"
+                        : "bg-muted/50",
+                    )}
+                  >
+                    <p
+                      className={cn(
+                        "inline-flex items-center gap-1.5 text-xs font-semibold leading-none",
+                        plan === "professional"
+                          ? "text-violet-700 dark:text-violet-400"
+                          : "",
+                      )}
+                    >
+                      <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      {plan === "professional" ? "Advanced AI" : "AI capabilities"}
+                    </p>
+                    {aiFeatureDetail ? (
+                      <p className="text-xs leading-snug text-muted-foreground">
+                        {aiFeatureDetail}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+
+        {/* ----------------------------------------------------------------- */}
+        {/* COMPARISON TABLE                                                  */}
+        {/* ----------------------------------------------------------------- */}
+        <div className="space-y-8">
+          <div className="mx-auto max-w-2xl text-center space-y-2">
+            <h2 className="text-3xl font-medium tracking-tight md:text-4xl">
+              Compare features across plans
+            </h2>
+            <p className="text-muted-foreground">
+              Choose the plan that best fits your clinical operations needs.
+            </p>
+          </div>
+
+          <div className="rounded-xl border bg-background overflow-x-auto">
+            {/* Sticky header */}
+            <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur-sm supports-[backdrop-filter]:bg-background/80">
+              <div
+                className="grid min-w-[736px]"
+                style={{ gridTemplateColumns: "minmax(240px, 1fr) repeat(4, 1fr)" }}
+              >
+                <div className="flex flex-col gap-3 border-r border-border/70 p-4 pr-5">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Features
+                    </p>
+                    <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                      Billing period applies to all plans in this table.
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-start gap-2">
+                    <div
+                      className="inline-flex w-full max-w-[220px] rounded-lg border border-border/80 bg-muted/35 p-0.5"
+                      role="group"
+                      aria-label="Comparison table billing period"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setInterval("month")}
+                        className={cn(
+                          "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                          interval === "month"
+                            ? "bg-background text-foreground shadow-sm"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        Monthly
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInterval("year")}
+                        className={cn(
+                          "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+                          interval === "year"
+                            ? "bg-foreground text-background shadow-sm"
+                            : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        Annually
+                      </button>
+                    </div>
+                    {interval === "year" && (
+                      <Badge variant="success" className="shrink-0 text-[10px] font-semibold tracking-wide">
+                        SAVE ON ANNUAL
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                {PRICING_PAGE_PLAN_ORDER.map((plan) => {
+                  const config = PLAN_CONFIGS[plan];
+                  const price =
+                    config.monthlyPrice === null
+                      ? "Custom"
+                      : interval === "month"
+                        ? `$${config.monthlyPrice.toLocaleString()}`
+                        : `$${(config.annualMonthlyPrice ?? config.monthlyPrice).toLocaleString()}`;
+                  return (
+                    <div key={plan} className="p-4 text-center">
+                      <p className="text-sm font-semibold">{planHeaders[plan]}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {price}
+                        {config.monthlyPrice !== null && <span className="text-xs"> /mo</span>}
+                      </p>
+                      <Button
+                        size="xs"
+                        variant={plan === "core" ? "default" : "outline"}
+                        className="mt-2 w-full"
+                        render={
+                          <a
+                            href={
+                              config.selfServe
+                                ? "/auth/sign-up"
+                                : "https://www.trialetics.io/contact"
+                            }
+                          />
+                        }
+                      >
+                        {config.selfServe ? "Start free" : "Contact sales"}
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Collapsible categories */}
+            <div className="min-w-[736px]">
+              <Accordion type="multiple" defaultValue={comparisonCategories.map((c) => c.label)}>
+                {comparisonCategories.map((cat) => (
+                  <AccordionItem key={cat.label} value={cat.label} className="border-b-0">
+                    <div
+                      className="grid border-b bg-muted/30"
+                      style={{ gridTemplateColumns: "minmax(240px, 1fr) repeat(4, 1fr)" }}
+                    >
+                      <AccordionTrigger className="px-4 py-3 text-sm font-semibold hover:no-underline [&>svg]:hidden">
+                        <span className="flex items-center gap-1.5">
+                          {cat.label}
+                          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                        </span>
+                      </AccordionTrigger>
+                      {PRICING_PAGE_PLAN_ORDER.map((plan) => (
+                        <div key={plan} className="p-3" />
+                      ))}
+                    </div>
+                    <AccordionContent className="pb-0">
+                      {cat.rows.map((row) => (
+                        <div
+                          key={row.feature}
+                          className="grid border-b last:border-b-0"
+                          style={{ gridTemplateColumns: "minmax(240px, 1fr) repeat(4, 1fr)" }}
+                        >
+                          <div className="p-3 pl-6 text-sm text-muted-foreground">
+                            {row.feature}
+                          </div>
+                          {PRICING_PAGE_PLAN_ORDER.map((plan) => (
+                            <div key={plan} className="p-3 text-center text-sm">
+                              <ComparisonCellValue value={row.values[plan]} />
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </div>
+          </div>
+        </div>
+
+        {/* ----------------------------------------------------------------- */}
+        {/* VALUE PROPS                                                       */}
+        {/* ----------------------------------------------------------------- */}
+        <div className="space-y-8">
+          <h2 className="text-center text-3xl font-medium tracking-tight md:text-4xl">
+            Why teams choose Trialetics
+          </h2>
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+            {valueProps.map((prop) => (
+              <div
+                key={prop.title}
+                className="rounded-xl border bg-background p-6 space-y-3"
+              >
+                <div className="text-muted-foreground">{prop.icon}</div>
+                <h3 className="text-lg font-semibold">{prop.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {prop.description}
+                </p>
+              </div>
             ))}
           </div>
         </div>
-        
-        {/* Compare Plans Button */}
-        <div className="mt-12 flex items-center justify-center">
-          <Button 
-            size="lg" 
-            variant="outline" 
-            onClick={() => setShowComparison(!showComparison)}
-            className="gap-2"
-          >
-            Compare all plans
-            <ChevronDown className={cn("size-4 transition-transform duration-300", showComparison && "rotate-180")} />
-          </Button>
-        </div>
 
-        {/* Feature Comparison Table */}
-        <div className={cn(
-          "overflow-hidden transition-all duration-500 ease-in-out",
-          showComparison ? "mt-12 max-h-[5000px] opacity-100" : "max-h-0 opacity-0"
-        )}>
-          <div className="rounded-lg border bg-background overflow-x-auto">
-            <table className="w-full min-w-[800px]">
-              <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="p-4 text-left font-semibold">Features</th>
-                  <th className="p-4 text-center font-semibold">Indie</th>
-                  <th className="p-4 text-center font-semibold bg-primary/5 border-x border-primary/20">
-                    <span className="text-primary">Growth</span>
-                  </th>
-                  <th className="p-4 text-center font-semibold">Scale</th>
-                  <th className="p-4 text-center font-semibold">Custom Build</th>
-                </tr>
-              </thead>
-              <tbody>
-                {FEATURE_COMPARISONS.map((category, catIndex) => (
-                  <Fragment key={`category-${catIndex}`}>
-                    <tr className="border-b bg-muted/30">
-                      <td colSpan={5} className="p-3 font-semibold text-foreground">
-                        {category.category}
-                      </td>
-                    </tr>
-                    {category.features.map((feature, featIndex) => (
-                      <tr key={`feat-${catIndex}-${featIndex}`} className="border-b hover:bg-muted/20 transition-colors">
-                        <td className="p-4 text-sm text-muted-foreground">{feature.name}</td>
-                        <td className="p-4 text-center">
-                          <FeatureValue value={feature.indie} />
-                        </td>
-                        <td className="p-4 text-center bg-primary/5 border-x border-primary/10">
-                          <FeatureValue value={feature.growth} highlight />
-                        </td>
-                        <td className="p-4 text-center">
-                          <FeatureValue value={feature.scale} />
-                        </td>
-                        <td className="p-4 text-center">
-                          <FeatureValue value={feature.enterprise} />
-                        </td>
-                      </tr>
-                    ))}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
+        {/* ----------------------------------------------------------------- */}
+        {/* BILLING & COMMERCIAL POLICY (condensed)                           */}
+        {/* ----------------------------------------------------------------- */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="rounded-xl border bg-background p-6 space-y-2">
+            <h3 className="text-base font-semibold">Billing structure</h3>
+            <p className="text-sm text-muted-foreground">Monthly or annual subscription billing.</p>
+            <p className="text-sm text-muted-foreground">
+              Annual pricing is discounted compared to paying monthly; the exact savings depend on the plan.
+            </p>
+            <p className="text-sm text-muted-foreground">User overages are charged above included seats where applicable.</p>
+            <p className="text-sm text-muted-foreground">
+              All self-serve plans include unlimited active studies; module access and seats vary by tier.
+            </p>
           </div>
-        </div>
-
-        {/* Contact CTA */}
-        <div className="mt-12 flex items-center justify-center">
-          <Button size="lg" variant="outline" render={<a href="https://www.linkedin.com/company/trialetics-io" target="_blank" rel="noopener noreferrer" />}>
-            Have questions? Connect with us
-          </Button>
+          <div className="rounded-xl border bg-background p-6 space-y-2">
+            <h3 className="text-base font-semibold">Commercial policy</h3>
+            <p className="text-sm text-muted-foreground">
+              Custom deployments, volume pricing, or invoicing may be available — contact sales.
+            </p>
+            <p className="text-sm text-muted-foreground">Coupons are managed by Trialetics and are not publicly self-serve.</p>
+            <p className="text-sm text-muted-foreground">Existing contracts may retain legacy pricing through grandfathered Stripe prices.</p>
+            <p className="text-sm text-muted-foreground">Trial terms, if offered, are applied in Stripe checkout settings.</p>
+          </div>
         </div>
       </div>
     </section>
   );
 };
 
-// Feature value display component
-const FeatureValue = ({ value, highlight }: { value: boolean | string; highlight?: boolean }) => {
-  if (typeof value === "string") {
-    return <span className={cn("text-sm font-medium", highlight && "text-primary")}>{value}</span>;
-  }
-  if (value === true) {
-    return <Check className={cn("mx-auto size-5", highlight ? "text-primary" : "text-green-600")} />;
-  }
-  return <Minus className="mx-auto size-5 text-muted-foreground/40" />;
-};
-
-const PlanCard = ({
+function PricingPlanCta({
   plan,
+  interval,
+  isCore,
+  selfServe,
+  isLoggedIn,
 }: {
-  plan: PricingPlan;
-}) => {
-  return (
-    <div
-      className={cn(
-        "relative h-full w-full rounded-lg border px-6 py-5 bg-background",
-        plan?.mostPopular && "border-primary",
-        plan?.isAddOn && "border-dashed"
-      )}
-    >
-      {plan.isAddOn && (
-        <div className="absolute top-0 left-1/2 w-fit -translate-x-1/2 -translate-y-1/2 rounded-full bg-muted px-4 py-1 text-xs font-medium text-muted-foreground border">
-          Add-on
-        </div>
-      )}
-      <div className="text-2xl font-semibold">{plan.name}</div>
-      <div className="mt-2">
-        <span className="text-[34px] font-bold">{plan.price}</span>
-      </div>
-      <div className="text-sm text-muted-foreground mt-1">
-        {plan.billingNote}
-      </div>
-      <div className="mt-4 mb-6 text-sm text-muted-foreground leading-relaxed">
-        {plan.description}
-      </div>
+  plan: SubscriptionPlan;
+  interval: BillingInterval;
+  isCore: boolean;
+  selfServe: boolean;
+  isLoggedIn: boolean;
+}) {
+  const [loading, setLoading] = useState(false);
+
+  const handleCheckout = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan, interval }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        console.error("[checkout]", res.status, data);
+      }
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+      if (data.contactUrl) {
+        window.location.href = data.contactUrl;
+        return;
+      }
+      if (data.upgraded) {
+        window.location.href = "/protected/settings/billing/success";
+        return;
+      }
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        toast.error("No checkout URL returned. Please try again.");
+      }
+    } catch (err) {
+      console.error("[checkout] fetch failed", err);
+      toast.error("Failed to start checkout");
+    } finally {
+      setLoading(false);
+    }
+  }, [plan, interval]);
+
+  if (!selfServe) {
+    return (
       <Button
         className="w-full"
-        variant={plan.mostPopular ? "default" : "outline"}
-        size="lg"
-        render={<a href={plan.cta.href} target={plan.cta.href.startsWith("http") ? "_blank" : undefined} rel={plan.cta.href.startsWith("http") ? "noopener noreferrer" : undefined} />}
+        variant="outline"
+        render={<a href="https://www.trialetics.io/contact" />}
       >
-        {plan.cta.text}
-        <ArrowRight />
+        Contact sales
       </Button>
-      <div className="mt-6 flex flex-col gap-3">
-        {plan.features.map((feature, index) => (
-          <div key={index} className="flex items-start gap-3 text-sm text-foreground">
-            <feature.icon className="size-4 shrink-0 mt-0.5 stroke-[1.5]" />
-            <span>{feature.text}</span>
-          </div>
-        ))}
-      </div>
-      {plan.mostPopular && (
-        <div className="absolute top-0 left-1/2 w-fit -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary px-4 py-1 text-xs font-medium text-primary-foreground">
-          Most popular
-        </div>
-      )}
-    </div>
+    );
+  }
+
+  if (isLoggedIn) {
+    return (
+      <Button
+        className="w-full"
+        variant={isCore ? "default" : "outline"}
+        onClick={() => void handleCheckout()}
+        disabled={loading}
+      >
+        {loading ? "Redirecting..." : "Subscribe"}
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      className="w-full"
+      variant={isCore ? "default" : "outline"}
+      render={<a href={`/auth/sign-up?plan=${plan}&interval=${interval}`} />}
+    >
+      Start free account
+    </Button>
   );
-};
+}
 
 export { Pricing32 };

@@ -1,0 +1,21 @@
+---
+description: Core Next.js, TypeScript, and UI conventions for Trialetics
+alwaysApply: true
+---
+
+# Trialetics core conventions
+
+- **App Router**: Use the Next.js App Router under `app/`. Default to Server Components; add `'use client'` only when hooks, browser APIs, or event handlers require it.
+- **Imports**: Prefer the `@/` path alias (e.g. `@/components/...`, `@/lib/...`).
+- **Language**: TypeScript throughout; avoid `any` unless unavoidable; prefer explicit types for public APIs and form values.
+- **Forms**: Use **react-hook-form** with **zod** schemas via `@hookform/resolvers/zod`. Colocate small schemas with the component or a nearby `*-schema.ts` when reused.
+- **Styling**: Tailwind CSS 4 + existing component primitives (Radix/Base UI patterns already in the repo). Match spacing and typography of neighboring components.
+- **Data fetching (client)**: Use **TanStack React Query** where the codebase already does; keep query keys consistent and colocated with the feature.
+- **Dates / i18n**: Use `date-fns` and existing locale/country helpers (e.g. `i18n-iso-countries`) when touching country or date display.
+
+```tsx
+// Prefer typed forms with Zod
+const schema = z.object({ name: z.string().min(1) });
+type FormValues = z.infer<typeof schema>;
+const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { name: '' } });
+```

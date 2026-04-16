@@ -38,9 +38,11 @@ import { SITE_STATUS_OPTIONS } from '@/lib/types/ctms';
 
 interface SiteListProps {
   sites: StudySiteWithStudy[];
+  /** When set, row navigation uses study-scoped URLs and the Study column is hidden. */
+  studyId?: string;
 }
 
-export function SiteList({ sites }: SiteListProps) {
+export function SiteList({ sites, studyId }: SiteListProps) {
   const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,8 +59,8 @@ export function SiteList({ sites }: SiteListProps) {
           s.site_number.toLowerCase().includes(q) ||
           (s.pi_name?.toLowerCase().includes(q) ?? false) ||
           (s.city?.toLowerCase().includes(q) ?? false) ||
-          s.studies?.title.toLowerCase().includes(q) ||
-          s.studies?.protocol_number.toLowerCase().includes(q)
+          (s.studies?.title.toLowerCase().includes(q) ?? false) ||
+          (s.studies?.protocol_number.toLowerCase().includes(q) ?? false)
       );
     }
 
@@ -105,15 +107,19 @@ export function SiteList({ sites }: SiteListProps) {
           <span className="max-w-[200px] truncate block">{row.getValue('name')}</span>
         ),
       },
-      {
-        id: 'study',
-        header: 'Study',
-        cell: ({ row }) => (
-          <span className="text-muted-foreground text-xs">
-            {row.original.studies?.protocol_number ?? '—'}
-          </span>
-        ),
-      },
+      ...(!studyId
+        ? ([
+            {
+              id: 'study',
+              header: 'Study',
+              cell: ({ row }) => (
+                <span className="text-muted-foreground text-xs">
+                  {row.original.studies?.protocol_number ?? '—'}
+                </span>
+              ),
+            },
+          ] as ColumnDef<StudySiteWithStudy>[])
+        : []),
       {
         id: 'country',
         header: 'Country',
@@ -159,7 +165,7 @@ export function SiteList({ sites }: SiteListProps) {
         ),
       },
     ],
-    []
+    [studyId]
   );
 
   const table = useReactTable({
@@ -242,7 +248,11 @@ export function SiteList({ sites }: SiteListProps) {
                 <TableRow
                   key={row.id}
                   className="cursor-pointer"
-                  onClick={() => router.push(`/protected/sites/${row.original.id}`)}
+                  onClick={() =>
+                    router.push(
+                      `/protected/studies/${studyId ?? row.original.study_id}/sites/${row.original.id}`
+                    )
+                  }
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>

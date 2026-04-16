@@ -84,6 +84,10 @@ export interface StudySite {
   nearest_hotel_name: string | null;
   nearest_hotel_address: string | null;
   travel_notes: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  geocode_status: string | null;
+  geocoded_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1082,7 +1086,14 @@ export const REPORT_TYPE_OPTIONS: { value: ReportType; label: string }[] = [
 // Subscriptions
 // =====================================================
 
-export type SubscriptionPlan = 'basic' | 'pro' | 'enterprise';
+export type SubscriptionPlan =
+  | 'independent_consultant'
+  | 'launch'
+  | 'core'
+  | 'professional'
+  | 'enterprise';
+
+export type BillingInterval = 'month' | 'year';
 
 export type SubscriptionStatus = 'active' | 'past_due' | 'cancelled' | 'trialing' | 'incomplete';
 
@@ -1102,64 +1113,305 @@ export interface Subscription {
   updated_at: string;
 }
 
+export interface PlanRecommendedAddOn {
+  name: string;
+  price: string;
+  note?: string;
+}
+
+/** Base plan recurring prices (`month` / `year`) plus optional per-seat add-on prices (same billing cadence). */
+export type PlanStripePriceIds = Partial<Record<BillingInterval, string>> & {
+  seatAddonMonth?: string;
+  seatAddonYear?: string;
+};
+
 export interface PlanConfig {
   name: string;
   description: string;
-  price: number;
-  seats: number;
+  positioning: string;
+  monthlyPrice: number | null;
+  annualMonthlyPrice: number | null;
+  annualTotalPrice: number | null;
+  seatsIncluded: number;
+  additionalUserPrice: number | null;
+  maxActiveStudies: number | null;
   features: string[];
-  stripePriceId: string;
+  limits: string[];
+  stripePriceIds: PlanStripePriceIds;
+  selfServe: boolean;
+  /** Optional modules shown on marketing pricing cards (not enforced in app logic). */
+  recommendedAddOns?: PlanRecommendedAddOn[];
 }
 
 export const PLAN_CONFIGS: Record<SubscriptionPlan, PlanConfig> = {
-  basic: {
-    name: 'Basic',
-    description: 'For small teams getting started with clinical trials.',
-    price: 99,
-    seats: 3,
+  independent_consultant: {
+    name: 'Consultant',
+    description: 'For independent clinical trial consultants managing their own business.',
+    positioning: 'Run your consulting business in one place.',
+    monthlyPrice: 149,
+    annualMonthlyPrice: 131,
+    annualTotalPrice: 1572,
+    seatsIncluded: 1,
+    additionalUserPrice: null,
+    maxActiveStudies: null,
     features: [
-      'Up to 3 studies',
-      '3 team seats',
-      'Core study management',
-      'Subject tracking',
+      'Consultant Workspace',
+      'Travel activity tracking',
+      'Expense Management',
+      'Timesheets',
+      'Invoicing',
+      'Document Vault',
+      'Basic Reporting',
+      'Multi-client workspace',
+      'Assignment dashboard',
+      'Personal business analytics',
+      'AI activity recap',
+      'Smart invoice draft creation',
+      'Credential expiry alerts',
+      'Cross-client workload heatmap',
+      'Basic AI: summaries, email drafting, and operational writing assistance',
       'Email support',
     ],
-    stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_BASIC ?? '',
-  },
-  pro: {
-    name: 'Pro',
-    description: 'For growing organizations managing multiple trials.',
-    price: 299,
-    seats: 10,
-    features: [
-      'Unlimited studies',
-      '10 team seats',
-      'All Basic features',
-      'Financial management',
-      'KRI dashboards',
-      'Visit monitoring',
-      'Priority support',
+    limits: [
+      'Solo user (no extra seats)',
+      'No CTMS, eISF, or eTMF (see Launch and above)',
+      'No API access or SSO',
     ],
-    stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO ?? '',
+    stripePriceIds: {
+      month: process.env.NEXT_PUBLIC_STRIPE_PRICE_INDEPENDENT_CONSULTANT_MONTHLY ?? '',
+      year: process.env.NEXT_PUBLIC_STRIPE_PRICE_INDEPENDENT_CONSULTANT_ANNUAL ?? '',
+    },
+    selfServe: true,
+    recommendedAddOns: [
+      { name: 'Onboarding Package', price: '$1,500 one-time', note: 'Setup, configuration, admin training' },
+      { name: 'Premium Support', price: '$399/mo', note: 'Faster SLA and priority response' },
+      { name: 'Data Migration Package', price: 'Custom', note: 'Based on source system and volume' },
+    ],
+  },
+  launch: {
+    name: 'Launch',
+    description:
+      'For new sponsors or medtech startups needing operational control without full enterprise complexity.',
+    positioning: 'Start strong with the core modules that matter.',
+    monthlyPrice: 499,
+    annualMonthlyPrice: 439,
+    annualTotalPrice: 5268,
+    seatsIncluded: 10,
+    additionalUserPrice: 39,
+    maxActiveStudies: null,
+    features: [
+      'CTMS',
+      'eISF',
+      'Travel',
+      'Expense Management',
+      'Timesheets',
+      'Basic Reporting',
+      'Study launch checklist templates',
+      'Site readiness scoring',
+      'Auto-reminders for missing startup documents and pending approvals',
+      'Operational command view for study health',
+      'Enhanced AI: visit summaries, follow-up emails, report drafting, simple workflow assistance',
+    ],
+    limits: [
+      'No eTMF or full inventory (see Core)',
+      'No site payments or LMS/QMS (see Professional)',
+    ],
+    stripePriceIds: {
+      month: process.env.NEXT_PUBLIC_STRIPE_PRICE_LAUNCH_MONTHLY ?? '',
+      year: process.env.NEXT_PUBLIC_STRIPE_PRICE_LAUNCH_ANNUAL ?? '',
+      seatAddonMonth:
+        process.env.NEXT_PUBLIC_STRIPE_PRICE_LAUNCH_SEAT_ADDON_MONTHLY ??
+        process.env.STRIPE_PRICE_LAUNCH_SEAT_ADDON_MONTHLY ??
+        '',
+      seatAddonYear:
+        process.env.NEXT_PUBLIC_STRIPE_PRICE_LAUNCH_SEAT_ADDON_ANNUAL ??
+        process.env.STRIPE_PRICE_LAUNCH_SEAT_ADDON_ANNUAL ??
+        '',
+    },
+    selfServe: true,
+    recommendedAddOns: [
+      { name: 'Advanced Analytics', price: '$299/mo', note: 'Deeper metrics and executive dashboards' },
+      { name: 'Onboarding Package', price: '$1,500 one-time', note: 'Setup, configuration, admin training' },
+    ],
+  },
+  core: {
+    name: 'Core',
+    description:
+      'For teams actively running studies and needing stronger document control and supply oversight.',
+    positioning: 'Operate studies with connected workflows.',
+    monthlyPrice: 1299,
+    annualMonthlyPrice: 1143,
+    annualTotalPrice: 13716,
+    seatsIncluded: 25,
+    additionalUserPrice: 29,
+    maxActiveStudies: null,
+    features: [
+      'Everything in Launch',
+      'eTMF',
+      'Inventory Management',
+      'Site Payments',
+      'Standard Reporting',
+      'Operational risk flags',
+      'Unified site intelligence view',
+      'Smart reconciliation support',
+      'Connected workflow automation',
+      'AI: report drafting, summaries, action items, workflow recommendations, operational writing',
+    ],
+    limits: [
+      'No LMS, QMS, or Regulatory / RIM Lite (see Professional)',
+      'No dedicated onboarding manager',
+      'No SSO/SAML by default',
+    ],
+    stripePriceIds: {
+      month: process.env.NEXT_PUBLIC_STRIPE_PRICE_CORE_MONTHLY ?? '',
+      year: process.env.NEXT_PUBLIC_STRIPE_PRICE_CORE_ANNUAL ?? '',
+      seatAddonMonth:
+        process.env.NEXT_PUBLIC_STRIPE_PRICE_CORE_SEAT_ADDON_MONTHLY ??
+        process.env.STRIPE_PRICE_CORE_SEAT_ADDON_MONTHLY ??
+        '',
+      seatAddonYear:
+        process.env.NEXT_PUBLIC_STRIPE_PRICE_CORE_SEAT_ADDON_ANNUAL ??
+        process.env.STRIPE_PRICE_CORE_SEAT_ADDON_ANNUAL ??
+        '',
+    },
+    selfServe: true,
+    recommendedAddOns: [
+      { name: 'Advanced Analytics', price: '$299/mo', note: 'Deeper metrics and executive dashboards' },
+      { name: 'Onboarding Package', price: '$1,500 one-time', note: 'Setup, configuration, admin training' },
+    ],
+  },
+  professional: {
+    name: 'Professional',
+    description:
+      'For organizations that want a modern clinical trial platform with compliance, intelligence, forecasting, and advanced oversight built in.',
+    positioning: 'Scale with intelligence, quality, and compliance.',
+    monthlyPrice: 2999,
+    annualMonthlyPrice: 2639,
+    annualTotalPrice: 31668,
+    seatsIncluded: 50,
+    additionalUserPrice: 19,
+    maxActiveStudies: null,
+    features: [
+      'Everything in Core',
+      'LMS / Training Management',
+      'QMS',
+      'Regulatory / RIM Lite',
+      'AI Trial Operations Copilot',
+      'Advanced Analytics / BI',
+      'Inspection readiness command center',
+      'Predictive startup and site risk signals',
+      'Financial forecasting engine',
+      'Portfolio command dashboard',
+      'Next-best-action recommendations',
+      'Sandbox or testing environment',
+      'Priority support; onboarding assistance',
+      'Advanced AI: monitoring insights, document drafting, study summaries, workflow acceleration',
+    ],
+    limits: [
+      'Enterprise tier adds volume pricing, custom integrations, and advanced governance — contact sales.',
+    ],
+    stripePriceIds: {
+      month: process.env.NEXT_PUBLIC_STRIPE_PRICE_PROFESSIONAL_MONTHLY ?? '',
+      year: process.env.NEXT_PUBLIC_STRIPE_PRICE_PROFESSIONAL_ANNUAL ?? '',
+      seatAddonMonth:
+        process.env.NEXT_PUBLIC_STRIPE_PRICE_PROFESSIONAL_SEAT_ADDON_MONTHLY ??
+        process.env.STRIPE_PRICE_PROFESSIONAL_SEAT_ADDON_MONTHLY ??
+        '',
+      seatAddonYear:
+        process.env.NEXT_PUBLIC_STRIPE_PRICE_PROFESSIONAL_SEAT_ADDON_ANNUAL ??
+        process.env.STRIPE_PRICE_PROFESSIONAL_SEAT_ADDON_ANNUAL ??
+        '',
+    },
+    selfServe: true,
+    recommendedAddOns: [
+      { name: 'SSO / Enterprise Security', price: '$599/mo', note: 'Usually bundled with Enterprise' },
+      { name: 'White-Label Branding', price: '$199/mo', note: 'Sponsor/client branding' },
+      { name: 'Premium Support', price: '$399/mo', note: 'Faster SLA and priority response' },
+      { name: 'Data Migration Package', price: 'Custom', note: 'Based on source system and volume' },
+    ],
   },
   enterprise: {
     name: 'Enterprise',
-    description: 'For large CROs and pharmaceutical companies.',
-    price: 799,
-    seats: 50,
+    description:
+      'For large orgs needing governance, integrations, security, and tailored implementation — everything in Professional, plus volume and custom deployment options.',
+    positioning: 'A fully configurable Trialetics deployment for organizations that need scale and governance.',
+    monthlyPrice: null,
+    annualMonthlyPrice: null,
+    annualTotalPrice: null,
+    seatsIncluded: 150,
+    additionalUserPrice: null,
+    maxActiveStudies: null,
     features: [
-      'Unlimited everything',
-      '50 team seats',
-      'All Pro features',
-      'AI-powered analytics',
-      'Custom KRI definitions',
-      'Advanced reporting',
-      'Dedicated support',
-      'SSO integration',
+      'Everything in Professional',
+      '150+ users or custom seat bundles',
+      'Unlimited or custom study volume',
+      'SSO / SAML; advanced permission architecture',
+      'Enterprise audit and compliance controls',
+      'Custom onboarding and implementation',
+      'Dedicated customer success support; SLA options',
+      'Custom integrations; API access; data migration support',
+      'Private training sessions',
+      'Advanced reporting packages',
+      'White-label or sponsor branding options',
+      'Governed AI workflows with enterprise controls',
     ],
-    stripePriceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE ?? '',
+    limits: [],
+    stripePriceIds: {},
+    selfServe: false,
+    recommendedAddOns: [
+      { name: 'Custom modules & integrations', price: 'Quote', note: 'Scoped in your agreement with sales.' },
+      { name: 'Implementation & migration', price: 'Quote', note: 'Onboarding, data migration, training.' },
+      { name: 'SLA & customer success', price: 'Quote', note: 'Dedicated CS and optional SLA.' },
+    ],
   },
 };
+
+export const SUBSCRIPTION_PLAN_ORDER: SubscriptionPlan[] = [
+  'independent_consultant',
+  'launch',
+  'core',
+  'professional',
+  'enterprise',
+];
+
+const LEGACY_PLAN_ALIAS: Record<string, SubscriptionPlan> = {
+  basic: 'independent_consultant',
+  pro: 'professional',
+  enterprise: 'enterprise',
+};
+
+export function normalizeSubscriptionPlan(plan: string | null | undefined): SubscriptionPlan {
+  if (!plan) return 'independent_consultant';
+  if (plan in PLAN_CONFIGS) return plan as SubscriptionPlan;
+  return LEGACY_PLAN_ALIAS[plan] ?? 'independent_consultant';
+}
+
+export function getPlanRank(plan: string | null | undefined): number {
+  return SUBSCRIPTION_PLAN_ORDER.indexOf(normalizeSubscriptionPlan(plan));
+}
+
+export function planMeetsTier(
+  plan: string | null | undefined,
+  minimum: SubscriptionPlan,
+): boolean {
+  return getPlanRank(plan) >= getPlanRank(minimum);
+}
+
+export function getPlanPriceId(
+  plan: SubscriptionPlan,
+  interval: BillingInterval,
+): string {
+  return PLAN_CONFIGS[plan].stripePriceIds[interval] ?? '';
+}
+
+/** Per-seat add-on Stripe price for the plan's billing cadence (Launch/Core/Professional only). */
+export function getSeatAddonPriceId(
+  plan: SubscriptionPlan,
+  interval: BillingInterval,
+): string {
+  const ids = PLAN_CONFIGS[plan].stripePriceIds;
+  return interval === 'year' ? (ids.seatAddonYear ?? '') : (ids.seatAddonMonth ?? '');
+}
 
 export const SUBSCRIPTION_STATUS_LABEL: Record<SubscriptionStatus, string> = {
   active: 'Active',
@@ -1168,6 +1420,35 @@ export const SUBSCRIPTION_STATUS_LABEL: Record<SubscriptionStatus, string> = {
   trialing: 'Trial',
   incomplete: 'Incomplete',
 };
+
+/** Maps subscription status to `Badge` variants in `components/ui/badge.tsx`. */
+export type SubscriptionStatusBadgeVariant =
+  | 'success'
+  | 'info'
+  | 'warning'
+  | 'destructive'
+  | 'secondary';
+
+export function subscriptionStatusBadgeVariant(
+  status: SubscriptionStatus,
+): SubscriptionStatusBadgeVariant {
+  switch (status) {
+    case 'active':
+      return 'success';
+    case 'trialing':
+      return 'info';
+    case 'past_due':
+      return 'warning';
+    case 'incomplete':
+      return 'secondary';
+    case 'cancelled':
+      return 'destructive';
+    default: {
+      const _exhaustive: never = status;
+      return _exhaustive;
+    }
+  }
+}
 
 export interface DashboardStats {
   totalStudies: number;

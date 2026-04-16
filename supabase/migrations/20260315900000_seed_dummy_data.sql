@@ -8,6 +8,8 @@ DO $$
 DECLARE
   v_company_id UUID := 'dfb18287-1162-41ad-9443-8e6d927ff823';
   v_profile_id UUID := 'c3f8f582-8bc1-42b6-8c7e-a5c72f210535';
+  -- Auth user for v_profile_id (profiles.user_id); not for real login—dummy seed only
+  v_seed_user_id UUID := 'a1b2c3d4-e5f6-47a0-bcde-f12345678901';
 
   -- Studies
   v_study_onc UUID;
@@ -102,7 +104,79 @@ DECLARE
   v_kri_visit UUID;
   v_kri_budget UUID;
 
+  v_auto_company_id UUID;
+
 BEGIN
+
+-- =====================================================
+-- M1: Bootstrap company + auth user + profile (required on fresh DBs)
+-- =====================================================
+-- Migrations cannot ALTER auth.users triggers on hosted Supabase. Insert user so handle_new_user creates a
+-- temporary company/profile, then delete those rows and insert deterministic seed IDs.
+IF NOT EXISTS (SELECT 1 FROM public.companies WHERE id = v_company_id) THEN
+  INSERT INTO auth.users (
+    instance_id,
+    id,
+    aud,
+    role,
+    email,
+    encrypted_password,
+    email_confirmed_at,
+    raw_app_meta_data,
+    raw_user_meta_data,
+    created_at,
+    updated_at,
+    confirmation_token,
+    email_change,
+    email_change_token_new,
+    recovery_token,
+    is_sso_user,
+    is_anonymous
+  )
+  VALUES (
+    '00000000-0000-0000-0000-000000000000',
+    v_seed_user_id,
+    'authenticated',
+    'authenticated',
+    'seed.dummy@trialetics.local',
+    -- bcrypt('password') — seed account is not intended for login; avoids pgcrypto in migrations
+    '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+    now(),
+    '{}',
+    '{}',
+    now(),
+    now(),
+    '',
+    '',
+    '',
+    '',
+    false,
+    false
+  );
+
+  SELECT company_id INTO v_auto_company_id FROM public.profiles WHERE user_id = v_seed_user_id LIMIT 1;
+  DELETE FROM public.profiles WHERE user_id = v_seed_user_id;
+  DELETE FROM public.companies WHERE id = v_auto_company_id;
+
+  INSERT INTO public.companies (id, company_id, name, settings)
+  VALUES (
+    v_company_id,
+    'seed-pharma-dynamics',
+    'Pharma Dynamics',
+    '{}'::jsonb
+  );
+
+  INSERT INTO public.profiles (id, user_id, company_id, role, first_name, last_name, email)
+  VALUES (
+    v_profile_id,
+    v_seed_user_id,
+    v_company_id,
+    'admin',
+    'Reginald',
+    'Walton',
+    'seed.dummy@trialetics.local'
+  );
+END IF;
 
 -- =====================================================
 -- M2: STUDIES

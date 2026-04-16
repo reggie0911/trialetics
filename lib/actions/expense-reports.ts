@@ -2,14 +2,16 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertStudyWritable, assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import type { TimeExpenseSubmissionStatus } from '@/lib/types/time-expense';
 
 function revalidateExpenses(studyId?: string) {
   revalidatePath('/protected/time-expenses');
   revalidatePath('/protected/time-expenses/expenses');
   revalidatePath('/protected/time-expenses/approvals');
-  if (studyId) revalidatePath(`/protected/studies/${studyId}`);
+  if (studyId) revalidateStudyCtmsLayout(studyId);
 }
 
 export type ExpenseReportRow = {
@@ -105,6 +107,9 @@ export async function createExpenseReportDraft(input: {
   const { data: study } = await supabase.from('studies').select('company_id').eq('id', input.studyId).single();
   if (!study || study.company_id !== profile.company_id) return { data: null, error: 'Study not found.' };
 
+  const { error: writeGuard } = await assertStudyWritable(supabase, input.studyId, profile.company_id);
+  if (writeGuard) return { data: null, error: writeGuard };
+
   const { data: tpl } = await supabase
     .from('time_expense_approval_templates')
     .select('id')
@@ -161,6 +166,9 @@ export async function upsertExpenseLine(input: {
     return { error: 'locked', userMessage: 'This report is no longer editable.' };
   }
 
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, report.study_id);
+  if (writeGuard) return { error: writeGuard, userMessage: writeGuard };
+
   const payload = {
     report_id: input.reportId,
     expense_date: input.expenseDate,
@@ -193,6 +201,10 @@ export async function upsertExpenseLine(input: {
 export async function deleteExpenseLine(lineId: string, reportId: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
   const { data: report } = await supabase.from('expense_reports').select('study_id, version').eq('id', reportId).single();
+  if (report?.study_id) {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, report.study_id);
+    if (writeGuard) return { error: writeGuard };
+  }
   const { error } = await supabase.from('expense_lines').delete().eq('id', lineId);
   if (error) return { error: error.message };
   if (report) {
@@ -229,6 +241,9 @@ export async function submitExpenseReport(
   if (report.version !== expectedVersion) {
     return { error: 'stale', userMessage: 'This report was updated elsewhere. Refresh and try again.' };
   }
+
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, report.study_id);
+  if (writeGuard) return { error: writeGuard, userMessage: writeGuard };
 
   const { count } = await supabase
     .from('expense_lines')
@@ -282,6 +297,10 @@ export async function expenseReportRecordDecisionRpc(
 ): Promise<{ error: string | null; userMessage?: string; ok?: boolean }> {
   const supabase = await createClient();
   const { data: report } = await supabase.from('expense_reports').select('study_id').eq('id', reportId).single();
+  if (report?.study_id) {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, report.study_id);
+    if (writeGuard) return { error: writeGuard, userMessage: writeGuard };
+  }
   const { data, error } = await supabase.rpc('expense_report_record_decision', {
     p_report_id: reportId,
     p_decision: decision,
@@ -314,18 +333,26 @@ export async function uploadExpenseReceipt(formData: FormData): Promise<{ error:
 
   const { data: line } = await supabase
     .from('expense_lines')
-    .select('id, report_id, expense_reports!inner(profile_id, company_id, status)')
+    .select('id, report_id, expense_reports!inner(profile_id, company_id, status, study_id)')
     .eq('id', lineId)
     .eq('report_id', reportId)
     .maybeSingle();
 
-  const er = line?.expense_reports as unknown as { profile_id: string; company_id: string; status: string } | undefined;
+  const er = line?.expense_reports as unknown as {
+    profile_id: string;
+    company_id: string;
+    status: string;
+    study_id: string;
+  } | undefined;
   if (!er || er.profile_id !== profile.id || er.company_id !== profile.company_id) {
     return { error: 'Invalid line or report.' };
   }
   if (!['draft', 'changes_requested'].includes(er.status)) {
     return { error: 'Report is not editable.' };
   }
+
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, er.study_id);
+  if (writeGuard) return { error: writeGuard };
 
   const origName = (file as File).name || 'receipt';
   const safeName = origName.replace(/[^a-zA-Z0-9._-]/g, '_');

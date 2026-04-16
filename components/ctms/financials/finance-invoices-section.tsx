@@ -68,6 +68,8 @@ import { InvoiceBudgetAllocationDialog } from '@/components/ctms/financials/invo
 import { InvoiceDetailSheet } from '@/components/ctms/financials/invoice-detail-sheet';
 import { createClient } from '@/lib/client';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
 
 function formatCurrency(amount: number, currency: string = 'USD') {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
@@ -138,6 +140,8 @@ interface FinanceInvoicesSectionProps {
   invoiceListScope?: 'study' | 'site';
   /** Scroll into view and highlight this invoice row (e.g. site deep-link). */
   highlightInvoiceId?: string;
+  /** When true (e.g. study deactivated), invoice mutations are disabled. */
+  readOnly?: boolean;
 }
 
 export function FinanceInvoicesSection({
@@ -150,6 +154,7 @@ export function FinanceInvoicesSection({
   fixedSiteId,
   invoiceListScope = 'study',
   highlightInvoiceId,
+  readOnly = false,
 }: FinanceInvoicesSectionProps) {
   const [, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -331,11 +336,34 @@ export function FinanceInvoicesSection({
             Submit invoices for approval. Upload a PDF and let AI extract the details.
           </p>
         </div>
-        <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) resetForm(); }}>
-          <DialogTrigger render={<Button size="sm" className="text-xs inline-flex items-center gap-1" />}>
-            <Plus className="h-3.5 w-3.5" />
-            Submit invoice
-          </DialogTrigger>
+        <Dialog
+          open={open}
+          onOpenChange={(o) => {
+            if (readOnly && o) return;
+            setOpen(o);
+            if (!o) resetForm();
+          }}
+        >
+          {readOnly ? (
+            <Tooltip>
+              <TooltipTrigger render={<span className="inline-flex" />}>
+                <DialogTrigger
+                  render={<Button size="sm" className="text-xs inline-flex items-center gap-1" disabled aria-label="Submit invoice" />}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Submit invoice
+                </DialogTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                {STUDY_DEACTIVATED_TOOLTIP}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <DialogTrigger render={<Button size="sm" className="text-xs inline-flex items-center gap-1" />}>
+              <Plus className="h-3.5 w-3.5" />
+              Submit invoice
+            </DialogTrigger>
+          )}
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle className="text-base">New invoice draft</DialogTitle>
@@ -518,6 +546,7 @@ export function FinanceInvoicesSection({
                     inv={inv}
                     studyId={studyId}
                     highlighted={highlightInvoiceId === inv.id}
+                    readOnly={readOnly}
                     onChanged={onChanged}
                     onReject={(id) => { setRejectInvoiceId(id); setRejectReason(''); }}
                     onOpenBudgetLines={(row) => setBudgetAllocInvoice(row)}
@@ -598,6 +627,7 @@ function InvoiceRow({
   inv,
   studyId,
   highlighted,
+  readOnly,
   onChanged,
   onReject,
   onOpenBudgetLines,
@@ -606,6 +636,7 @@ function InvoiceRow({
   inv: FinanceInvoiceWithRelations;
   studyId: string;
   highlighted?: boolean;
+  readOnly?: boolean;
   onChanged: () => void;
   onReject: (id: string) => void;
   onOpenBudgetLines: (inv: FinanceInvoiceWithRelations) => void;
@@ -654,6 +685,8 @@ function InvoiceRow({
   const handleViewDocument = () => {
     onOpenDetail(inv);
   };
+
+  const ro = readOnly === true;
 
   return (
     <>
@@ -707,14 +740,27 @@ function InvoiceRow({
             </Button>
           )}
           {inv.site_id && inv.status !== 'rejected' && inv.entity_type === 'site' && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-xs h-7 shrink-0 px-3 font-normal"
-              onClick={() => onOpenBudgetLines(inv)}
-            >
-              Budget lines
-            </Button>
+            ro ? (
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <Button size="sm" variant="outline" className="text-xs h-7 shrink-0 px-3 font-normal" disabled>
+                    Budget lines
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  {STUDY_DEACTIVATED_TOOLTIP}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs h-7 shrink-0 px-3 font-normal"
+                onClick={() => onOpenBudgetLines(inv)}
+              >
+                Budget lines
+              </Button>
+            )
           )}
           <Button
               size="sm"
@@ -730,157 +776,226 @@ function InvoiceRow({
               {historyOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
             </Button>
           {inv.status === 'draft' && (
-            <AlertDialog>
-              <AlertDialogTrigger render={<Button size="sm" variant="default" className="text-xs h-7 shrink-0 px-3" />}>
-                Submit
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Submit for Approval</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Submit invoice {inv.external_invoice_id} for approval? It will enter the review queue and cannot be edited.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      startTransition(async () => {
-                        const { error } = await submitFinanceInvoice(inv.id, studyId);
-                        if (error) toast.error(error);
-                        else {
-                          toast.success('Submitted for approval.');
-                          onChanged();
-                        }
-                      });
-                    }}
-                  >
+            ro ? (
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <Button size="sm" variant="default" className="text-xs h-7 shrink-0 px-3" disabled>
                     Submit
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
-          {inv.status === 'rejected' && (
-            <AlertDialog>
-              <AlertDialogTrigger render={<Button size="sm" variant="default" className="text-xs h-7 shrink-0 px-3" />}>
-                Resubmit
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Resubmit for approval</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Send invoice {inv.external_invoice_id} back to the approval queue? It will start again at step 1.
-                    Previous decisions stay in the activity history for audit.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      startTransition(async () => {
-                        const { error, userMessage } = await resubmitRejectedFinanceInvoice(inv.id, studyId);
-                        if (error) toast.error(userMessage ?? error);
-                        else {
-                          toast.success('Invoice resubmitted for approval.');
-                          onChanged();
-                        }
-                      });
-                    }}
-                  >
-                    Resubmit
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
-          {(inv.status === 'submitted' || inv.status === 'under_review') && (
-            <>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  {STUDY_DEACTIVATED_TOOLTIP}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
               <AlertDialog>
-                <AlertDialogTrigger
-                  render={
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-xs h-7 shrink-0 px-3 border-emerald-600 bg-emerald-600 text-white shadow-xs hover:bg-emerald-700 hover:border-emerald-700 hover:text-white dark:border-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:hover:border-emerald-500"
-                    />
-                  }
-                >
-                  Approve step
+                <AlertDialogTrigger render={<Button size="sm" variant="default" className="text-xs h-7 shrink-0 px-3" />}>
+                  Submit
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Approve Invoice Step</AlertDialogTitle>
+                    <AlertDialogTitle>Submit for Approval</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Approve invoice {inv.external_invoice_id} ({formatCurrency(inv.amount, inv.currency)})? This action is recorded permanently.
+                      Submit invoice {inv.external_invoice_id} for approval? It will enter the review queue and cannot be edited.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      className="bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-600/30 dark:bg-emerald-600 dark:hover:bg-emerald-500"
                       onClick={() => {
                         startTransition(async () => {
-                          const { error, userMessage } = await financeInvoiceRecordDecisionRpc(inv.id, studyId, 'approved', '');
-                          if (error) toast.error(userMessage ?? error);
+                          const { error } = await submitFinanceInvoice(inv.id, studyId);
+                          if (error) toast.error(error);
                           else {
-                            toast.success('Recorded approval step.');
+                            toast.success('Submitted for approval.');
                             onChanged();
                           }
                         });
                       }}
                     >
-                      Approve
+                      Submit
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-xs h-7 shrink-0 px-3 text-destructive hover:bg-destructive/10"
-                onClick={() => onReject(inv.id)}
-              >
-                Reject
-              </Button>
-            </>
+            )
+          )}
+          {inv.status === 'rejected' && (
+            ro ? (
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <Button size="sm" variant="default" className="text-xs h-7 shrink-0 px-3" disabled>
+                    Resubmit
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  {STUDY_DEACTIVATED_TOOLTIP}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <AlertDialog>
+                <AlertDialogTrigger render={<Button size="sm" variant="default" className="text-xs h-7 shrink-0 px-3" />}>
+                  Resubmit
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Resubmit for approval</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Send invoice {inv.external_invoice_id} back to the approval queue? It will start again at step 1.
+                      Previous decisions stay in the activity history for audit.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        startTransition(async () => {
+                          const { error, userMessage } = await resubmitRejectedFinanceInvoice(inv.id, studyId);
+                          if (error) toast.error(userMessage ?? error);
+                          else {
+                            toast.success('Invoice resubmitted for approval.');
+                            onChanged();
+                          }
+                        });
+                      }}
+                    >
+                      Resubmit
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )
+          )}
+          {(inv.status === 'submitted' || inv.status === 'under_review') && (
+            ro ? (
+              <>
+                <Tooltip>
+                  <TooltipTrigger render={<span className="inline-flex" />}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7 shrink-0 px-3 border-emerald-600 bg-emerald-600 text-white shadow-xs"
+                      disabled
+                    >
+                      Approve step
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs text-xs">
+                    {STUDY_DEACTIVATED_TOOLTIP}
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger render={<span className="inline-flex" />}>
+                    <Button size="sm" variant="ghost" className="text-xs h-7 shrink-0 px-3 text-destructive" disabled>
+                      Reject
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs text-xs">
+                    {STUDY_DEACTIVATED_TOOLTIP}
+                  </TooltipContent>
+                </Tooltip>
+              </>
+            ) : (
+              <>
+                <AlertDialog>
+                  <AlertDialogTrigger
+                    render={
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-7 shrink-0 px-3 border-emerald-600 bg-emerald-600 text-white shadow-xs hover:bg-emerald-700 hover:border-emerald-700 hover:text-white dark:border-emerald-600 dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:hover:border-emerald-500"
+                      />
+                    }
+                  >
+                    Approve step
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Approve Invoice Step</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Approve invoice {inv.external_invoice_id} ({formatCurrency(inv.amount, inv.currency)})? This action is recorded permanently.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-emerald-600 text-white hover:bg-emerald-700 focus-visible:ring-emerald-600/30 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+                        onClick={() => {
+                          startTransition(async () => {
+                            const { error, userMessage } = await financeInvoiceRecordDecisionRpc(inv.id, studyId, 'approved', '');
+                            if (error) toast.error(userMessage ?? error);
+                            else {
+                              toast.success('Recorded approval step.');
+                              onChanged();
+                            }
+                          });
+                        }}
+                      >
+                        Approve
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-xs h-7 shrink-0 px-3 text-destructive hover:bg-destructive/10"
+                  onClick={() => onReject(inv.id)}
+                >
+                  Reject
+                </Button>
+              </>
+            )
           )}
           {inv.status === 'approved' && (
-            <AlertDialog>
-              <AlertDialogTrigger render={<Button size="sm" variant="default" className="text-xs h-7 shrink-0 px-3" />}>
-                Mark paid
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Record Payment</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Record payment of {formatCurrency(inv.amount, inv.currency)} and mark invoice {inv.external_invoice_id} as paid?
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      startTransition(async () => {
-                        const { error } = await recordFinancePaymentForInvoice({
-                          studyId,
-                          invoiceId: inv.id,
-                          amount: inv.amount,
-                          currency: inv.currency,
+            ro ? (
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <Button size="sm" variant="default" className="text-xs h-7 shrink-0 px-3" disabled>
+                    Mark paid
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  {STUDY_DEACTIVATED_TOOLTIP}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <AlertDialog>
+                <AlertDialogTrigger render={<Button size="sm" variant="default" className="text-xs h-7 shrink-0 px-3" />}>
+                  Mark paid
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Record Payment</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Record payment of {formatCurrency(inv.amount, inv.currency)} and mark invoice {inv.external_invoice_id} as paid?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        startTransition(async () => {
+                          const { error } = await recordFinancePaymentForInvoice({
+                            studyId,
+                            invoiceId: inv.id,
+                            amount: inv.amount,
+                            currency: inv.currency,
+                          });
+                          if (error) toast.error(error);
+                          else {
+                            toast.success('Payment recorded; invoice marked paid.');
+                            onChanged();
+                          }
                         });
-                        if (error) toast.error(error);
-                        else {
-                          toast.success('Payment recorded; invoice marked paid.');
-                          onChanged();
-                        }
-                      });
-                    }}
-                  >
-                    Confirm Payment
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+                      }}
+                    >
+                      Confirm Payment
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )
           )}
           </span>
         </TableCell>

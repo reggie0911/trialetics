@@ -90,7 +90,7 @@ export const docsRegistry: DocEntry[] = [
     order: 2,
     roles: ['admin', 'user'],
     lastUpdated: '2026-04-09',
-    moduleRoute: '/protected/inventory-management',
+    moduleRoute: '/protected/studies',
   },
   {
     slug: 'ae-metrics',
@@ -187,7 +187,7 @@ export const docsRegistry: DocEntry[] = [
     order: 2,
     roles: ['admin', 'user'],
     lastUpdated: '2026-03-31',
-    moduleRoute: '/protected/financials/approvals',
+    moduleRoute: '/protected/studies',
   },
   {
     slug: 'platform-admin',

@@ -1,7 +1,8 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidateStudyCtmsLayout, revalidateTaskHubLegacyPaths } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import type { Task, TaskWithRelations, TaskComment, TaskCommentWithAuthor, TaskStatus } from '@/lib/types/tasks';
 
 async function getProfileId(): Promise<string> {
@@ -113,8 +114,8 @@ export async function getTaskDashboardCounts(studyId?: string, assignedToMe?: bo
   return { total, not_started, in_progress, completed, blocked };
 }
 
-export async function getMyTasks(): Promise<TaskWithRelations[]> {
-  return getAllTasks({ assignedToMe: true });
+export async function getMyTasks(studyId?: string): Promise<TaskWithRelations[]> {
+  return getAllTasks({ assignedToMe: true, ...(studyId ? { studyId } : {}) });
 }
 
 export interface CreateTaskInput {
@@ -136,6 +137,9 @@ export async function createTask(
 ): Promise<{ data: Task | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.study_id);
+    if (writeGuard) return { data: null, error: writeGuard };
+
     const profileId = await getProfileId();
     const { data, error } = await supabase
       .from('tasks')
@@ -156,8 +160,8 @@ export async function createTask(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath('/protected/tasks');
-    revalidatePath('/protected/my-tasks');
+    revalidateStudyCtmsLayout(input.study_id);
+    revalidateTaskHubLegacyPaths();
     return { data: data as unknown as Task, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -180,6 +184,9 @@ export async function createGroupTask(
 ): Promise<{ data: { milestoneId: string }; error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.study_id);
+    if (writeGuard) return { data: { milestoneId: '' }, error: writeGuard };
+
     const { data: milestone, error: milestoneError } = await supabase
       .from('study_milestones')
       .insert({
@@ -219,7 +226,8 @@ export async function createGroupTask(
       return { data: { milestoneId: '' }, error: tasksError.message };
     }
 
-    revalidatePath('/protected/tasks');
+    revalidateStudyCtmsLayout(input.study_id);
+    revalidateTaskHubLegacyPaths();
     return { data: { milestoneId: milestone.id }, error: null };
   } catch (err) {
     return {
@@ -247,6 +255,13 @@ export async function updateTask(
 ): Promise<{ data: Task | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const { data: existingTask } = await supabase.from('tasks').select('study_id').eq('id', id).maybeSingle();
+    const sid = (existingTask as { study_id: string } | null)?.study_id;
+    if (sid) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, sid);
+      if (writeGuard) return { data: null, error: writeGuard };
+    }
+
     const payload: Record<string, unknown> = {};
     if (input.status != null) payload.status = input.status;
     if (input.priority != null) payload.priority = input.priority;
@@ -268,8 +283,9 @@ export async function updateTask(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath('/protected/tasks');
-    revalidatePath('/protected/my-tasks');
+    const studyId = (data as unknown as { study_id: string }).study_id;
+    revalidateStudyCtmsLayout(studyId);
+    revalidateTaskHubLegacyPaths();
     return { data: data as unknown as Task, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -281,7 +297,7 @@ export async function deleteTask(id: string): Promise<{ error: string | null }> 
   try {
     const { data: task, error: fetchError } = await supabase
       .from('tasks')
-      .select('created_by')
+      .select('created_by, study_id')
       .eq('id', id)
       .single();
     if (fetchError || !task) return { error: 'Task not found.' };
@@ -298,10 +314,16 @@ export async function deleteTask(id: string): Promise<{ error: string | null }> 
       return { error: 'You can only delete tasks you created, or ask an admin.' };
     }
 
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(
+      supabase,
+      (task as { study_id: string }).study_id
+    );
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase.from('tasks').delete().eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath('/protected/tasks');
-    revalidatePath('/protected/my-tasks');
+    revalidateStudyCtmsLayout((task as { study_id: string }).study_id);
+    revalidateTaskHubLegacyPaths();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -327,6 +349,13 @@ export async function addTaskComment(
 ): Promise<{ data: TaskComment | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const { data: parentPre } = await supabase.from('tasks').select('study_id').eq('id', taskId).maybeSingle();
+    const preSid = (parentPre as { study_id: string } | null)?.study_id;
+    if (preSid) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, preSid);
+      if (writeGuard) return { data: null, error: writeGuard };
+    }
+
     const authorId = await getProfileId();
     const { data, error } = await supabase
       .from('task_comments')
@@ -334,7 +363,15 @@ export async function addTaskComment(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath('/protected/tasks');
+    const { data: parent } = await supabase
+      .from('tasks')
+      .select('study_id')
+      .eq('id', taskId)
+      .single();
+    if (parent?.study_id) {
+      revalidateStudyCtmsLayout((parent as { study_id: string }).study_id);
+    }
+    revalidateTaskHubLegacyPaths();
     return { data: data as unknown as TaskComment, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };

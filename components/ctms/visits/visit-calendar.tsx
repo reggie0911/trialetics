@@ -14,6 +14,7 @@ import {
 
 import type { MonitoringVisitWithRelations, MonitoringVisitStatus } from '@/lib/types/ctms';
 import { VISIT_TYPE_LABEL, MONITORING_VISIT_STATUS_LABEL } from '@/lib/types/ctms';
+import { ctmsStudyPath } from '@/lib/nav/ctms-study-paths';
 
 const STATUS_COLOR: Record<MonitoringVisitStatus, { bg: string; text: string; border: string }> = {
   planned:   { bg: 'bg-blue-100 dark:bg-blue-900/40',   text: 'text-blue-700 dark:text-blue-300',   border: 'border-blue-300 dark:border-blue-700' },
@@ -26,13 +27,18 @@ const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 interface VisitCalendarProps {
   visits: MonitoringVisitWithRelations[];
+  /** When set, visit links use study-scoped URLs. */
+  scopeStudyId?: string;
 }
 
-export function VisitCalendar({ visits }: VisitCalendarProps) {
+export function VisitCalendar({ visits, scopeStudyId }: VisitCalendarProps) {
   const [currentDate, setCurrentDate] = useState(() => new Date());
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
+
+  const visitHref = (visit: MonitoringVisitWithRelations) =>
+    ctmsStudyPath(scopeStudyId ?? visit.study_id, 'visits', visit.id);
 
   const visitsByDate = useMemo(() => {
     const map = new Map<string, MonitoringVisitWithRelations[]>();
@@ -168,7 +174,7 @@ export function VisitCalendar({ visits }: VisitCalendarProps) {
                         <Tooltip key={v.id}>
                           <TooltipTrigger render={<div />} className="w-full">
                             <Link
-                              href={`/protected/visits/${v.id}`}
+                              href={visitHref(v)}
                               className={`
                                 block w-full rounded px-1 py-0.5 text-[9px] leading-tight truncate border
                                 ${colors.bg} ${colors.text} ${colors.border}

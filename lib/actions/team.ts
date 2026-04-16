@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertStudyWritable, assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import { createAdminClient } from '@/lib/server-admin';
 import { resend, getInviteEmailHtml } from '@/lib/email';
 import type {
@@ -82,6 +84,7 @@ export async function createTeamRole(
       return { data: null, error: error.message };
     }
     revalidatePath('/protected/team');
+    revalidatePath('/protected/studies', 'layout');
     return { data: data as unknown as TeamRole, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -94,6 +97,7 @@ export async function deleteTeamRole(id: string): Promise<{ error: string | null
     const { error } = await supabase.from('team_roles').delete().eq('id', id);
     if (error) return { error: error.message };
     revalidatePath('/protected/team');
+    revalidatePath('/protected/studies', 'layout');
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -142,6 +146,9 @@ export async function addTeamMember(
 ): Promise<{ data: StudyTeamMember | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.study_id);
+    if (writeGuard) return { data: null, error: writeGuard };
+
     const { data, error } = await supabase
       .from('study_team_members')
       .insert({
@@ -166,7 +173,7 @@ export async function addTeamMember(
       return { data: null, error: error.message };
     }
 
-    revalidatePath(`/protected/studies/${input.study_id}`);
+    revalidateStudyCtmsLayout(input.study_id);
     revalidatePath('/protected/team');
     return { data: data as unknown as StudyTeamMember, error: null };
   } catch (err) {
@@ -190,6 +197,9 @@ export async function updateTeamMember(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.study_id);
+    if (writeGuard) return { error: writeGuard };
+
     const { id, study_id, ...updates } = input;
     const cleanUpdates: Record<string, unknown> = {};
 
@@ -211,7 +221,7 @@ export async function updateTeamMember(
       return { error: error.message };
     }
 
-    revalidatePath(`/protected/studies/${study_id}`);
+    revalidateStudyCtmsLayout(study_id);
     revalidatePath('/protected/team');
     return { error: null };
   } catch (err) {
@@ -225,6 +235,9 @@ export async function removeTeamMember(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase
       .from('study_team_members')
       .delete()
@@ -232,7 +245,7 @@ export async function removeTeamMember(
 
     if (error) return { error: error.message };
 
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     revalidatePath('/protected/team');
     return { error: null };
   } catch (err) {
@@ -324,6 +337,7 @@ export async function updateProfile(
     if (error) return { error: error.message };
 
     revalidatePath('/protected/team');
+    revalidatePath('/protected/studies', 'layout');
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -453,6 +467,9 @@ export async function inviteUser(
       return { data: null, error: 'Invalid study selected.' };
     }
 
+    const { error: writeGuard } = await assertStudyWritable(supabaseCheck, study_id, profile.company_id);
+    if (writeGuard) return { data: null, error: writeGuard };
+
     const resendApiKey = process.env.RESEND_API_KEY;
     const fromEmail = process.env.RESEND_FROM_EMAIL || 'Trialetics <noreply@trialetics.io>';
     if (!resendApiKey) {
@@ -525,6 +542,7 @@ export async function inviteUser(
       return { data: null, error: 'Failed to send invite email. Please try again.' };
     }
 
+    revalidateStudyCtmsLayout(study_id);
     revalidatePath('/protected/team');
     return { data: { invited: true }, error: null };
   } catch (err) {
@@ -619,6 +637,7 @@ export async function resendInvite(invitationId: string): Promise<{ error: strin
       .eq('company_id', profile.company_id);
 
     revalidatePath('/protected/team');
+    revalidatePath('/protected/studies', 'layout');
     return { error: null };
   } catch (err) {
     return {
@@ -717,6 +736,8 @@ export async function createJoinLink(
       if (studyErr || !studyRow) {
         return { data: null, error: 'Invalid study selected.' };
       }
+      const { error: writeGuard } = await assertStudyWritable(supabase, studyId, profile.company_id);
+      if (writeGuard) return { data: null, error: writeGuard };
     }
 
     const { data, error } = await supabase
@@ -736,7 +757,9 @@ export async function createJoinLink(
 
     if (error) return { data: null, error: error.message };
 
+    if (studyId) revalidateStudyCtmsLayout(studyId);
     revalidatePath('/protected/team');
+    revalidatePath('/protected/studies', 'layout');
     return { data: data as JoinLink, error: null };
   } catch (err) {
     return {
@@ -774,6 +797,18 @@ export async function revokeJoinLink(linkId: string): Promise<{ error: string | 
     }
 
     const supabase = await createClient();
+    const { data: linkRow } = await supabase
+      .from('company_join_links')
+      .select('study_id')
+      .eq('id', linkId)
+      .eq('company_id', profile.company_id)
+      .maybeSingle();
+    const linkStudyId = (linkRow as { study_id?: string | null } | null)?.study_id;
+    if (linkStudyId) {
+      const { error: writeGuard } = await assertStudyWritable(supabase, linkStudyId, profile.company_id);
+      if (writeGuard) return { error: writeGuard };
+    }
+
     const { error } = await supabase
       .from('company_join_links')
       .update({ is_active: false })
@@ -783,6 +818,7 @@ export async function revokeJoinLink(linkId: string): Promise<{ error: string | 
     if (error) return { error: error.message };
 
     revalidatePath('/protected/team');
+    revalidatePath('/protected/studies', 'layout');
     return { error: null };
   } catch (err) {
     return {

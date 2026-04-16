@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useOnboardingChrome } from '@/components/onboarding/onboarding-chrome-context';
 import { AIAssistantPanel } from './ai-assistant-panel';
 
@@ -53,14 +54,23 @@ export function AIAssistantInlineButton() {
 
   return (
     <>
-      <Button
-        onClick={() => setIsOpen(true)}
-        variant="ghost"
-        size="icon"
-        className="h-9 w-9"
-      >
-        <Sparkles className="h-4 w-4" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              onClick={() => setIsOpen(true)}
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+            />
+          }
+        >
+          <Sparkles className="h-4 w-4" />
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-xs text-xs">
+          Open the assistant for help with navigation and tasks in this workspace.
+        </TooltipContent>
+      </Tooltip>
       <AIAssistantPanel open={isOpen} onOpenChange={setIsOpen} />
     </>
   );

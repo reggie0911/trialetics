@@ -31,6 +31,7 @@ import type { StudyCountry, CountryStatus, RegulatoryStatus } from '@/lib/types/
 import { COUNTRY_STATUS_OPTIONS, REGULATORY_STATUS_OPTIONS } from '@/lib/types/ctms';
 import { COUNTRIES, countriesForSelectList } from '@/lib/data/countries';
 import { addStudyCountry, updateStudyCountry } from '@/lib/actions/countries';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const addSchema = z.object({
   country_code: z.string().min(1, 'Please select a country'),
@@ -48,6 +49,10 @@ interface CountryFormDialogProps {
   existingCodes: string[];
   country?: StudyCountry;
   onSuccess: () => void;
+  /** When true, the trigger is disabled (e.g. study deactivated). */
+  disabled?: boolean;
+  /** Shown on hover when `disabled` is true. */
+  disabledTooltip?: string;
 }
 
 export function CountryFormDialog({
@@ -55,6 +60,8 @@ export function CountryFormDialog({
   existingCodes,
   country,
   onSuccess,
+  disabled = false,
+  disabledTooltip,
 }: CountryFormDialogProps) {
   const [open, setOpen] = useState(false);
   const isEdit = !!country;
@@ -115,26 +122,44 @@ export function CountryFormDialog({
     onSuccess();
   };
 
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          isEdit ? (
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" />
-          ) : (
-            <Button size="sm" />
-          )
-        }
-      >
-        {isEdit ? (
-          <Pencil className="h-3.5 w-3.5" />
+  const handleOpenChange = (next: boolean) => {
+    if (disabled && next) return;
+    setOpen(next);
+  };
+
+  const trigger = (
+    <DialogTrigger
+      render={
+        isEdit ? (
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={disabled} />
         ) : (
-          <>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Country
-          </>
-        )}
-      </DialogTrigger>
+          <Button size="sm" disabled={disabled} />
+        )
+      }
+    >
+      {isEdit ? (
+        <Pencil className="h-3.5 w-3.5" />
+      ) : (
+        <>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Country
+        </>
+      )}
+    </DialogTrigger>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {disabled && disabledTooltip ? (
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>{trigger}</TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            {disabledTooltip}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        trigger
+      )}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Country' : 'Add Country'}</DialogTitle>

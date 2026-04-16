@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import type {
   Subject,
   Study,
@@ -13,6 +15,18 @@ import type {
   VisitStatus,
   EnrollmentFunnelData,
 } from '@/lib/types/ctms';
+
+async function getStudyIdForSubject(supabase: Awaited<ReturnType<typeof createClient>>, subjectId: string) {
+  const { data: row } = await supabase.from('subjects').select('study_id').eq('id', subjectId).maybeSingle();
+  return (row as { study_id: string } | null)?.study_id ?? null;
+}
+
+async function revalidateSubjectCachesForStudySubject(subjectId: string) {
+  const supabase = await createClient();
+  const { data: row } = await supabase.from('subjects').select('study_id').eq('id', subjectId).maybeSingle();
+  if (row?.study_id) revalidateStudyCtmsLayout((row as { study_id: string }).study_id);
+  revalidatePath(`/protected/subjects/${subjectId}`);
+}
 
 // --------------- Subjects ---------------
 
@@ -165,6 +179,9 @@ export async function createSubject(
   const supabase = await createClient();
 
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.study_id);
+    if (writeGuard) return { data: null, error: writeGuard };
+
     const { data, error } = await supabase
       .from('subjects')
       .insert({
@@ -188,7 +205,7 @@ export async function createSubject(
     }
 
     revalidatePath('/protected');
-    revalidatePath(`/protected/studies/${input.study_id}`);
+    revalidateStudyCtmsLayout(input.study_id);
     revalidatePath(`/protected/sites/${input.site_id}`);
     return { data: data as unknown as Subject, error: null };
   } catch (err) {
@@ -219,6 +236,9 @@ export async function updateSubject(
   const supabase = await createClient();
 
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.study_id);
+    if (writeGuard) return { error: writeGuard };
+
     const { id, study_id, revalidateSiteId, ...updates } = input;
     const cleanUpdates: Record<string, unknown> = {};
 
@@ -240,7 +260,7 @@ export async function updateSubject(
       return { error: error.message };
     }
 
-    revalidatePath(`/protected/studies/${study_id}`);
+    revalidateStudyCtmsLayout(study_id);
     revalidatePath(`/protected/subjects/${id}`);
     const updatedSiteId = cleanUpdates.site_id;
     if (typeof revalidateSiteId === 'string') {
@@ -262,6 +282,9 @@ export async function deleteSubject(
   const supabase = await createClient();
 
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase
       .from('subjects')
       .delete()
@@ -269,7 +292,7 @@ export async function deleteSubject(
 
     if (error) return { error: error.message };
 
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     if (siteId) revalidatePath(`/protected/sites/${siteId}`);
     return { error: null };
   } catch (err) {
@@ -298,6 +321,12 @@ export async function addSubjectVisit(
   const supabase = await createClient();
 
   try {
+    const studyId = await getStudyIdForSubject(supabase, subjectId);
+    if (studyId) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+      if (writeGuard) return { data: null, error: writeGuard };
+    }
+
     const { data, error } = await supabase
       .from('subject_visits')
       .insert({
@@ -316,7 +345,7 @@ export async function addSubjectVisit(
 
     if (error) return { data: null, error: error.message };
 
-    revalidatePath(`/protected/subjects/${subjectId}`);
+    await revalidateSubjectCachesForStudySubject(subjectId);
     return { data: data as unknown as SubjectVisit, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -331,6 +360,12 @@ export async function updateSubjectVisit(
   const supabase = await createClient();
 
   try {
+    const studyId = await getStudyIdForSubject(supabase, subjectId);
+    if (studyId) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+      if (writeGuard) return { error: writeGuard };
+    }
+
     const cleanUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (value !== undefined) {
@@ -345,7 +380,7 @@ export async function updateSubjectVisit(
 
     if (error) return { error: error.message };
 
-    revalidatePath(`/protected/subjects/${subjectId}`);
+    await revalidateSubjectCachesForStudySubject(subjectId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -359,6 +394,12 @@ export async function deleteSubjectVisit(
   const supabase = await createClient();
 
   try {
+    const studyId = await getStudyIdForSubject(supabase, subjectId);
+    if (studyId) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+      if (writeGuard) return { error: writeGuard };
+    }
+
     const { error } = await supabase
       .from('subject_visits')
       .delete()
@@ -366,7 +407,7 @@ export async function deleteSubjectVisit(
 
     if (error) return { error: error.message };
 
-    revalidatePath(`/protected/subjects/${subjectId}`);
+    await revalidateSubjectCachesForStudySubject(subjectId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };

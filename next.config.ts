@@ -24,10 +24,9 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "randomuser.me",
       },
-      {
-        protocol: "https",
-        hostname: "wbeqxqzwtgspkotlpgzw.supabase.co",
-      },
+      ...(process.env.NEXT_PUBLIC_SUPABASE_URL
+        ? [{ protocol: "https" as const, hostname: new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname }]
+        : [{ protocol: "https" as const, hostname: "wbeqxqzwtgspkotlpgzw.supabase.co" }]),
     ],
   },
   // Suppress hydration warnings caused by browser extensions and dev tools

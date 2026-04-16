@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   useReactTable,
@@ -11,7 +12,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, Search, X } from 'lucide-react';
+import { ArrowUpDown, Archive, ExternalLink, Pencil, Plus, RotateCcw, Search, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,16 +33,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import type { Study } from '@/lib/types/ctms';
 import { STUDY_STATUS_OPTIONS, STUDY_PHASE_OPTIONS } from '@/lib/types/ctms';
-import { StudyFormDialog } from '@/components/ctms/studies/study-form-dialog';
 
 interface StudyListProps {
   studies: Study[];
+  /** When false, hides the toolbar link to `/protected/studies/new`. Default true. */
+  showNewStudyButton?: boolean;
+  /** When true, Actions column includes Open, Edit, and optional Deactivate for admins. */
+  showEditDeactivate?: boolean;
+  isAdmin?: boolean;
+  /** Called when user clicks Deactivate (parent should confirm). */
+  onDeactivateRequest?: (study: Study) => void;
+  /** Called when admin clicks Reactivate on a closed study (parent should confirm). */
+  onReactivateRequest?: (study: Study) => void;
 }
 
-export function StudyList({ studies }: StudyListProps) {
+export function StudyList({
+  studies,
+  showNewStudyButton = true,
+  showEditDeactivate = false,
+  isAdmin = false,
+  onDeactivateRequest,
+  onReactivateRequest,
+}: StudyListProps) {
   const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -158,25 +175,90 @@ export function StudyList({ studies }: StudyListProps) {
         },
       },
       {
-        id: 'open',
-        header: 'Actions',
+        id: 'actions',
+        header: () => <span className="block w-full text-center">Actions</span>,
         enableSorting: false,
-        cell: ({ row }) => (
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs"
-            onClick={(e) => {
-              e.stopPropagation();
-              router.push(`/protected/studies/${row.original.id}`);
-            }}
-          >
-            Open
-          </Button>
-        ),
+        cell: ({ row }) => {
+          const study = row.original;
+          return (
+            <div className="flex flex-wrap items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    render={<Link href={`/protected/studies/${study.id}`} />}
+                    nativeButton={false}
+                    aria-label="Open study"
+                  >
+                    <ExternalLink className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Open study</TooltipContent>
+              </Tooltip>
+              {showEditDeactivate && (
+                <>
+                  <Tooltip>
+                    <TooltipTrigger render={<span className="inline-flex" />}>
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        disabled={study.status === 'closed'}
+                        render={
+                          study.status === 'closed' ? undefined : (
+                            <Link href={`/protected/studies/${study.id}/edit`} />
+                          )
+                        }
+                        nativeButton={study.status === 'closed'}
+                        aria-label={study.status === 'closed' ? 'Edit study (deactivated)' : 'Edit study'}
+                      >
+                        <Pencil className="size-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {study.status === 'closed' ? 'Study is deactivated' : 'Edit study'}
+                    </TooltipContent>
+                  </Tooltip>
+                  {isAdmin && study.status !== 'closed' && onDeactivateRequest && (
+                    <Tooltip>
+                      <TooltipTrigger render={<span className="inline-flex" />}>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon-sm"
+                          aria-label="Deactivate study"
+                          onClick={() => onDeactivateRequest(study)}
+                        >
+                          <Archive className="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Deactivate study</TooltipContent>
+                    </Tooltip>
+                  )}
+                  {isAdmin && study.status === 'closed' && onReactivateRequest && (
+                    <Tooltip>
+                      <TooltipTrigger render={<span className="inline-flex" />}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label="Reactivate study"
+                          onClick={() => onReactivateRequest(study)}
+                        >
+                          <RotateCcw className="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">Reactivate study</TooltipContent>
+                    </Tooltip>
+                  )}
+                </>
+              )}
+            </div>
+          );
+        },
       },
     ],
-    [router]
+    [showEditDeactivate, isAdmin, onDeactivateRequest, onReactivateRequest]
   );
 
   const table = useReactTable({
@@ -193,7 +275,8 @@ export function StudyList({ studies }: StudyListProps) {
   const hasActiveFilters = searchQuery || statusFilter !== 'all' || phaseFilter !== 'all';
 
   return (
-    <div className="space-y-4">
+    <TooltipProvider delay={200}>
+      <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex flex-1 items-center gap-2 flex-wrap">
           <div className="relative w-full sm:w-72">
@@ -254,7 +337,21 @@ export function StudyList({ studies }: StudyListProps) {
             </Button>
           )}
         </div>
-        <StudyFormDialog onSuccess={() => router.refresh()} />
+        {showNewStudyButton ? (
+          <Tooltip>
+            <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
+              <Button
+                render={<Link href="/protected/studies/new" />}
+                nativeButton={false}
+                aria-label="Create a new study"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New Study
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Create a new study</TooltipContent>
+          </Tooltip>
+        ) : null}
       </div>
 
       <div className="rounded-md border">
@@ -263,7 +360,10 @@ export function StudyList({ studies }: StudyListProps) {
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead
+                    key={header.id}
+                    className={header.column.id === 'actions' ? 'text-center' : undefined}
+                  >
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -281,7 +381,10 @@ export function StudyList({ studies }: StudyListProps) {
                   onClick={() => router.push(`/protected/studies/${row.original.id}`)}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell
+                      key={cell.id}
+                      className={cell.column.id === 'actions' ? 'text-center' : undefined}
+                    >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -329,6 +432,7 @@ export function StudyList({ studies }: StudyListProps) {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }

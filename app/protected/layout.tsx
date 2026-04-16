@@ -4,7 +4,7 @@ import { createClient } from '@/lib/server';
 import { TopNavbar } from '@/components/ctms/top-navbar';
 import { OnboardingProvider } from '@/components/onboarding/onboarding-provider';
 import { parseOnboardingState, readOnboardingAutoStartFromEnv, type OnboardingFlow } from '@/lib/onboarding';
-import type { SubscriptionPlan } from '@/lib/types/ctms';
+import { normalizeSubscriptionPlan, type SubscriptionPlan } from '@/lib/types/ctms';
 import type { Json } from '@/lib/types/database.types';
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -86,13 +86,22 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   const { data: subscription } = await supabase
     .from('subscriptions')
-    .select('plan, status')
+    .select('plan, status, current_period_end, cancel_at_period_end')
     .eq('company_id', profile.company_id)
     .single();
 
-  const currentPlan: SubscriptionPlan = (subscription?.status === 'active' || subscription?.status === 'trialing')
-    ? (subscription.plan as SubscriptionPlan)
-    : 'basic';
+  const isCanceledButStillInPaidPeriod =
+    subscription?.status === 'cancelled' &&
+    !!subscription?.current_period_end &&
+    new Date(subscription.current_period_end).getTime() > Date.now();
+  const statusKeepsPaidAccess =
+    subscription?.status === 'active' ||
+    subscription?.status === 'trialing' ||
+    subscription?.status === 'past_due' ||
+    isCanceledButStillInPaidPeriod;
+  const currentPlan: SubscriptionPlan = statusKeepsPaidAccess
+    ? normalizeSubscriptionPlan(subscription?.plan)
+    : 'independent_consultant';
 
   const userName = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || profile.email || 'User';
   const userEmail = profile.email || data.user.email || '';
@@ -125,6 +134,17 @@ export default async function ProtectedLayout({ children }: { children: React.Re
           avatarUrl={profile.avatar_url}
           currentPlan={currentPlan}
         />
+        {subscription?.status === 'past_due' && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2 text-xs text-amber-900 dark:text-amber-200">
+            Billing issue detected. Your team still has access while payment retries run. Update payment details in Billing to avoid interruption.
+          </div>
+        )}
+        {subscription?.status === 'cancelled' && isCanceledButStillInPaidPeriod && (
+          <div className="bg-blue-500/10 border-b border-blue-500/20 px-4 py-2 text-xs text-blue-900 dark:text-blue-200">
+            Your subscription is set to cancel at period end. Access remains active until{' '}
+            {new Date(subscription.current_period_end!).toLocaleDateString('en-US')}.
+          </div>
+        )}
         <main className="flex-1 pt-14" suppressHydrationWarning>
           {children}
         </main>

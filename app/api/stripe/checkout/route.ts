@@ -1,10 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type Stripe from 'stripe';
 import { createClient } from '@/lib/server';
 import { stripe } from '@/lib/stripe';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
-import { PLAN_CONFIGS, type SubscriptionPlan } from '@/lib/types/ctms';
+import {
+  getPlanPriceId,
+  getSeatAddonPriceId,
+  normalizeSubscriptionPlan,
+  PLAN_CONFIGS,
+  SUBSCRIPTION_PLAN_ORDER,
+  type BillingInterval,
+  type SubscriptionPlan,
+} from '@/lib/types/ctms';
 
-const PLAN_RANK: SubscriptionPlan[] = ['basic', 'pro', 'enterprise'];
+const CHECKOUT_COOLDOWN_SECONDS = 60;
+const ENTERPRISE_CONTACT_URL =
+  process.env.NEXT_PUBLIC_ENTERPRISE_CONTACT_URL ??
+  'https://www.trialetics.io/contact';
+
+function getTrialDays(plan: SubscriptionPlan): number | undefined {
+  const raw = process.env.STRIPE_SELF_SERVE_TRIAL_DAYS ?? '0';
+  const trialDays = Number(raw);
+  if (!Number.isFinite(trialDays) || trialDays <= 0) return undefined;
+  return (plan === 'launch' || plan === 'core') ? trialDays : undefined;
+}
 
 export async function POST(request: NextRequest) {
   const supabaseAdmin = createAdminClient(
@@ -29,10 +48,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No company found' }, { status: 400 });
     }
 
-    const { plan } = (await request.json()) as { plan: SubscriptionPlan };
-    const planConfig = PLAN_CONFIGS[plan];
-    if (!planConfig || !planConfig.stripePriceId) {
+    const { plan, interval = 'month' } = (await request.json()) as {
+      plan: SubscriptionPlan;
+      interval?: BillingInterval;
+    };
+    const safePlan = normalizeSubscriptionPlan(plan);
+    const safeInterval: BillingInterval = interval === 'year' ? 'year' : 'month';
+    const priceId = getPlanPriceId(safePlan, safeInterval);
+    if (!priceId && safePlan !== 'enterprise') {
       return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
+    }
+    if (safePlan === 'enterprise') {
+      return NextResponse.json(
+        {
+          error: 'Enterprise is configured through sales. Contact us for a custom quote.',
+          contactUrl: ENTERPRISE_CONTACT_URL,
+        },
+        { status: 400 },
+      );
     }
 
     const { data: subscription } = await supabase
@@ -51,9 +84,9 @@ export async function POST(request: NextRequest) {
       try {
         const stripeSub = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id!);
         if (stripeSub.status === 'active' || stripeSub.status === 'trialing') {
-          const currentPlan = (subscription.plan as SubscriptionPlan) ?? 'basic';
-          const fromIdx = PLAN_RANK.indexOf(currentPlan);
-          const toIdx = PLAN_RANK.indexOf(plan);
+          const currentPlan = normalizeSubscriptionPlan(subscription.plan);
+          const fromIdx = SUBSCRIPTION_PLAN_ORDER.indexOf(currentPlan);
+          const toIdx = SUBSCRIPTION_PLAN_ORDER.indexOf(safePlan);
           if (toIdx <= fromIdx) {
             return NextResponse.json(
               {
@@ -63,14 +96,78 @@ export async function POST(request: NextRequest) {
               { status: 400 },
             );
           }
-          const itemId = stripeSub.items.data[0]?.id;
-          if (!itemId) {
+          const monthId = getPlanPriceId(currentPlan, 'month');
+          const yearId = getPlanPriceId(currentPlan, 'year');
+          const baseItem =
+            stripeSub.items.data.find(
+              (i) => i.price?.id && (i.price.id === monthId || i.price.id === yearId),
+            ) ?? stripeSub.items.data[0];
+          if (!baseItem?.id) {
             return NextResponse.json({ error: 'Could not update subscription' }, { status: 400 });
           }
+
+          const billingInterval: BillingInterval =
+            baseItem.price?.recurring?.interval === 'year' ? 'year' : 'month';
+          const oldFloor = PLAN_CONFIGS[currentPlan].seatsIncluded;
+          const newFloor = PLAN_CONFIGS[safePlan].seatsIncluded;
+
+          const addonPriceIds = new Set(
+            [
+              getSeatAddonPriceId('launch', billingInterval),
+              getSeatAddonPriceId('core', billingInterval),
+              getSeatAddonPriceId('professional', billingInterval),
+            ].filter(Boolean),
+          );
+          const addonItem = stripeSub.items.data.find(
+            (i) => i.price?.id && addonPriceIds.has(i.price.id),
+          );
+
+          let totalSeats: number;
+          if (addonItem) {
+            totalSeats = oldFloor + (addonItem.quantity ?? 0);
+          } else if ((baseItem.quantity ?? 1) > 1) {
+            totalSeats = baseItem.quantity ?? oldFloor;
+          } else {
+            totalSeats = oldFloor;
+          }
+
+          const newExtra = Math.max(0, totalSeats - newFloor);
+          const newAddonPriceId = getSeatAddonPriceId(safePlan, billingInterval);
+
+          if (newExtra > 0 && !newAddonPriceId) {
+            return NextResponse.json(
+              {
+                error:
+                  'Seat add-on prices are not configured. Run pnpm stripe:seed-test-prices and add NEXT_PUBLIC_STRIPE_PRICE_*_SEAT_ADDON_* to .env.local.',
+              },
+              { status: 400 },
+            );
+          }
+
+          const items: NonNullable<Stripe.SubscriptionUpdateParams['items']> = [
+            { id: baseItem.id, price: priceId, quantity: 1 },
+          ];
+
+          if (newExtra > 0 && newAddonPriceId) {
+            if (addonItem?.id) {
+              items.push({ id: addonItem.id, price: newAddonPriceId, quantity: newExtra });
+            } else {
+              items.push({ price: newAddonPriceId, quantity: newExtra });
+            }
+          } else if (addonItem?.id) {
+            items.push({ id: addonItem.id, deleted: true });
+          }
+
           await stripe.subscriptions.update(subscription.stripe_subscription_id!, {
-            items: [{ id: itemId, price: planConfig.stripePriceId }],
+            items,
             proration_behavior: 'create_prorations',
           });
+
+          await supabaseAdmin
+            .from('subscriptions')
+            .update({ seats_included: newFloor + newExtra })
+            .eq('company_id', profile.company_id);
+
           return NextResponse.json({ upgraded: true });
         }
       } catch (e) {
@@ -101,27 +198,74 @@ export async function POST(request: NextRequest) {
         .upsert({
           company_id: profile.company_id,
           stripe_customer_id: customerId,
-          plan: 'basic',
+          plan: safePlan,
           status: 'incomplete',
-          seats_included: planConfig.seats,
+          seats_included: PLAN_CONFIGS[safePlan].seatsIncluded,
         }, { onConflict: 'company_id' });
     }
 
+    // Prevent accidental duplicate checkout creation from repeated clicks/retries.
+    if (customerId) {
+      const existingSessions = await stripe.checkout.sessions.list({
+        customer: customerId,
+        limit: 5,
+      });
+      const now = Math.floor(Date.now() / 1000);
+      const recentSession = existingSessions.data.find((session) =>
+        session.mode === 'subscription' &&
+        session.status === 'open' &&
+        now - session.created < CHECKOUT_COOLDOWN_SECONDS,
+      );
+      if (recentSession?.url) {
+        return NextResponse.json({ url: recentSession.url });
+      }
+    }
+
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const trialDays = getTrialDays(safePlan);
+
+    try {
+      await stripe.prices.retrieve(priceId);
+    } catch (priceErr) {
+      console.error('[stripe/checkout] Price not found in Stripe', { priceId, plan: safePlan, interval: safeInterval, error: priceErr });
+      return NextResponse.json(
+        { error: `Stripe price not found: ${priceId}. Run pnpm stripe:seed-test-prices to create test prices.` },
+        { status: 400 },
+      );
+    }
+
+    console.log('[stripe/checkout] Creating session', { plan: safePlan, interval: safeInterval, priceId, customerId });
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
-      line_items: [{ price: planConfig.stripePriceId, quantity: 1 }],
-      success_url: `${origin}/protected/settings/billing?success=true`,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${origin}/protected/settings/billing/success`,
       cancel_url: `${origin}/protected/settings/billing?cancelled=true`,
+      allow_promotion_codes: false,
+      subscription_data: {
+        metadata: {
+          company_id: profile.company_id,
+          plan: safePlan,
+          interval: safeInterval,
+        },
+        ...(trialDays ? { trial_period_days: trialDays } : {}),
+      },
       metadata: {
         company_id: profile.company_id,
+        plan: safePlan,
+        interval: safeInterval,
       },
     });
 
+    if (!session.url) {
+      console.error('[stripe/checkout] Stripe returned no checkout URL', { sessionId: session.id });
+      return NextResponse.json({ error: 'Stripe did not return a checkout URL. Please try again.' }, { status: 502 });
+    }
+
     return NextResponse.json({ url: session.url });
   } catch (err) {
+    console.error('[stripe/checkout] Unexpected error', err);
     const message = err instanceof Error ? err.message : 'An unexpected error occurred';
     return NextResponse.json({ error: message }, { status: 500 });
   }
