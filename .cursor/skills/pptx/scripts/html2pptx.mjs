@@ -1,7 +1,9 @@
 /**
  * html2pptx - Convert HTML slide to pptxgenjs slide with positioned elements
  *
- * USAGE:
+ * USAGE (ES module):
+ *   import pptxgen from 'pptxgenjs';
+ *   import html2pptx from './html2pptx.mjs';
  *   const pptx = new pptxgen();
  *   pptx.layout = 'LAYOUT_16x9';  // Must match HTML body dimensions
  *
@@ -25,9 +27,8 @@
  *   { slide, placeholders } where placeholders is an array of { id, x, y, w, h }
  */
 
-const { chromium } = require('playwright');
-const path = require('path');
-const sharp = require('sharp');
+import { chromium } from 'playwright';
+import path from 'node:path';
 
 const PT_PER_PX = 0.75;
 const PX_PER_IN = 96;
@@ -976,4 +977,4 @@ async function html2pptx(htmlFile, pres, options = {}) {
   }
 }
 
-module.exports = html2pptx;
+export default html2pptx;

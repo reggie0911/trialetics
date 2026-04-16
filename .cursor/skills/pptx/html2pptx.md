@@ -1,6 +1,6 @@
 # HTML to PowerPoint Guide
 
-Convert HTML slides to PowerPoint presentations with accurate positioning using the `html2pptx.js` library.
+Convert HTML slides to PowerPoint presentations with accurate positioning using the `html2pptx.mjs` library.
 
 ## Table of Contents
 
@@ -192,8 +192,8 @@ These libraries have been globally installed and are available to use:
 ### Basic Usage
 
 ```javascript
-const pptxgen = require('pptxgenjs');
-const html2pptx = require('./html2pptx');
+import pptxgen from 'pptxgenjs';
+import html2pptx from './html2pptx.mjs';
 
 const pptx = new pptxgen();
 pptx.layout = 'LAYOUT_16x9';  // Must match HTML body dimensions
@@ -260,8 +260,8 @@ slide.addChart(pptx.charts.LINE, data, chartArea);
 ### Complete Example
 
 ```javascript
-const pptxgen = require('pptxgenjs');
-const html2pptx = require('./html2pptx');
+import pptxgen from 'pptxgenjs';
+import html2pptx from './html2pptx.mjs';
 
 async function createPresentation() {
     const pptx = new pptxgen();
