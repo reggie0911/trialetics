@@ -1,18 +1,6 @@
-import { getAllCountries } from '@/lib/actions/countries';
-import { CountryList } from '@/components/ctms/countries/country-list';
+import { redirect } from 'next/navigation';
 
-export default async function CountriesPage() {
-  const countries = await getAllCountries();
-
-  return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Countries</h1>
-        <p className="text-muted-foreground">
-          Country-level regulatory tracking across all studies.
-        </p>
-      </div>
-      <CountryList countries={countries} />
-    </div>
-  );
+/** Legacy URL: countries are opened from a study. */
+export default function CountriesPage() {
+  redirect('/protected/studies?studyRequired=1');
 }

@@ -3,14 +3,9 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard,
-  FlaskConical,
-  Building2,
-  Users,
-  Globe,
-  UsersRound,
-  ClipboardCheck,
   DollarSign,
   BarChart3,
   Calendar,
@@ -61,52 +56,103 @@ import { ProfileSettingsModal } from '@/components/profile/profile-settings-moda
 import { createClient } from '@/lib/client';
 import { studyTrackerNavItems } from '@/lib/nav/study-trackers';
 import type { StudyTrackerNavItem } from '@/lib/nav/study-trackers';
-import type { SubscriptionPlan } from '@/lib/types/ctms';
+import { normalizeSubscriptionPlan, planMeetsTier, type SubscriptionPlan } from '@/lib/types/ctms';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { parseStudyIdFromPathname } from '@/lib/nav/ctms-study-paths';
 
-const ctmsNavItems = [
-  { label: 'Dashboard', href: '/protected', icon: LayoutDashboard, exact: true },
-  { label: 'Studies', href: '/protected/studies', icon: FlaskConical },
-  { label: 'Sites', href: '/protected/sites', icon: Building2 },
-  { label: 'Subjects', href: '/protected/subjects', icon: Users },
-  { label: 'Countries', href: '/protected/countries', icon: Globe },
-  { label: 'Team', href: '/protected/team', icon: UsersRound },
+type CtmsNavItemDef =
+  | {
+      label: string;
+      icon: LucideIcon;
+      exact?: boolean;
+      fixedHref: string;
+      minPlan?: SubscriptionPlan;
+    }
+  | {
+      label: string;
+      icon: LucideIcon;
+      studySegment: string;
+      minPlan?: SubscriptionPlan;
+    };
+
+const ctmsNavItems: CtmsNavItemDef[] = [
+  { label: 'Dashboard', icon: LayoutDashboard, exact: true, fixedHref: '/protected' },
   {
     label: 'Contacts & Organizations',
-    href: '/protected/directory',
     icon: ContactRound,
+    fixedHref: '/protected/directory',
   },
-  { label: 'Visits', href: '/protected/visits', icon: ClipboardCheck },
-  { label: 'Trip Reports', href: '/protected/trip-reports', icon: FileText },
-  { label: 'My Tasks', href: '/protected/my-tasks', icon: CheckSquare },
-  { label: 'Project Team Tasks', href: '/protected/tasks', icon: ListTodo },
-  { label: 'Financials', href: '/protected/financials', icon: DollarSign },
-  { label: 'Invoice approvals', href: '/protected/financials/approvals', icon: FilePenLine },
-  { label: 'Reports', href: '/protected/reports', icon: BarChart3 },
+  { label: 'Trip Reports', icon: FileText, studySegment: 'trip-reports' },
+  { label: 'My Tasks', icon: CheckSquare, studySegment: 'my-tasks' },
+  { label: 'Project Team Tasks', icon: ListTodo, studySegment: 'tasks' },
+  { label: 'Financials', icon: DollarSign, studySegment: 'financials', minPlan: 'core' },
+  {
+    label: 'Invoice approvals',
+    icon: FilePenLine,
+    studySegment: 'financials/approvals',
+    minPlan: 'core',
+  },
+  { label: 'Reports & Analytics', icon: BarChart3, studySegment: 'reports', minPlan: 'core' },
   {
     label: 'Inventory management',
-    href: '/protected/inventory-management',
     icon: Package,
+    studySegment: 'inventory-management',
+    minPlan: 'core',
   },
 ];
 
-function buildCtmsNavItems(isCompanyAdmin: boolean) {
-  type NavItem = (typeof ctmsNavItems)[number];
-  const out: NavItem[] = [...ctmsNavItems];
+function resolveCtmsNavHref(pathname: string, item: CtmsNavItemDef): string {
+  if ('fixedHref' in item) return item.fixedHref;
+  const studyId = parseStudyIdFromPathname(pathname);
+  /** No study in URL: unified CTMS dashboard to pick a study. */
+  if (!studyId) return '/protected/studies';
+  return `/protected/studies/${studyId}/${item.studySegment}`;
+}
+
+function pathMatchesHref(pathname: string, href: string, exact?: boolean): boolean {
+  if (exact) return pathname === href;
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/**
+ * Whether a CTMS dropdown / mobile row should show as the current location.
+ * Dashboard matches both `/protected` and `/protected/studies` (unified CTMS dashboard).
+ * Study-scoped items do not all highlight on the dashboard hub (same href for every row when no study in URL).
+ */
+function isCtmsNavItemActive(pathname: string, item: CtmsNavItemDef, href: string): boolean {
+  if ('fixedHref' in item && item.exact && item.fixedHref === '/protected') {
+    return pathname === '/protected' || pathname === '/protected/studies';
+  }
+  if ('studySegment' in item) {
+    if (!parseStudyIdFromPathname(pathname) && (pathname === '/protected/studies' || pathname === '/protected/studies/catalog')) {
+      return false;
+    }
+    return pathMatchesHref(pathname, href, false);
+  }
+  if ('fixedHref' in item) {
+    return pathMatchesHref(pathname, href, item.exact);
+  }
+  return pathMatchesHref(pathname, href, false);
+}
+
+function buildCtmsNavItems(isCompanyAdmin: boolean): CtmsNavItemDef[] {
+  const out: CtmsNavItemDef[] = [...ctmsNavItems];
   if (isCompanyAdmin) {
-    const idx = out.findIndex((x) => x.href === '/protected/financials');
+    const idx = out.findIndex((x) => 'studySegment' in x && x.studySegment === 'financials');
     if (idx >= 0) {
       out.splice(idx + 1, 0, {
         label: 'Approval templates',
-        href: '/protected/financials/approval-templates',
         icon: ListOrdered,
+        fixedHref: '/protected/financials/approval-templates',
+        minPlan: 'core',
       });
     }
   }
   return out;
 }
 
-const proFeatureRoutes = [
+const coreFeatureRoutes = [
   '/protected/financials',
   '/protected/financials/approvals',
   '/protected/financials/approval-templates',
@@ -142,6 +188,8 @@ interface TopNavbarProps {
 }
 
 function getPageName(pathname: string, customNames: CustomTrackerNavItem[]): string {
+  if (pathname === '/protected/studies') return 'Studies';
+  if (pathname === '/protected/studies/new') return 'New study';
   if (pathname.startsWith('/protected/financials/approval-templates')) return 'Approval templates';
   if (pathname.startsWith('/protected/brand-forge')) return 'BrandForge';
   if (pathname.startsWith('/protected/eisf')) return 'eISF';
@@ -153,13 +201,17 @@ function getPageName(pathname: string, customNames: CustomTrackerNavItem[]): str
     }
   }
   if (pathname.startsWith('/protected/custom-trackers')) return 'Custom trackers';
-  const allItems = [...ctmsNavItems, ...studyTrackerNavItems];
-  for (const item of allItems) {
+  const ctmsAll = buildCtmsNavItems(true);
+  for (const item of ctmsAll) {
+    const href = resolveCtmsNavHref(pathname, item);
     if ('exact' in item && item.exact) {
-      if (pathname === item.href) return item.label;
-    } else {
-      if (pathname === item.href || pathname.startsWith(`${item.href}/`)) return item.label;
+      if (pathname === href) return item.label;
+    } else if (pathname === href || pathname.startsWith(`${href}/`)) {
+      return item.label;
     }
+  }
+  for (const item of studyTrackerNavItems) {
+    if (pathname === item.href || pathname.startsWith(`${item.href}/`)) return item.label;
   }
   if (pathname.startsWith('/protected/settings')) return 'Settings';
   return 'Dashboard';
@@ -185,8 +237,18 @@ export function TopNavbar({
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const normalizedPlan = normalizeSubscriptionPlan(currentPlan);
 
   const ctmsNavResolved = useMemo(() => buildCtmsNavItems(isCompanyAdmin), [isCompanyAdmin]);
+
+  const ctmsNavWithHref = useMemo(
+    () =>
+      ctmsNavResolved.map((item) => ({
+        item,
+        href: resolveCtmsNavHref(pathname, item),
+      })),
+    [ctmsNavResolved, pathname]
+  );
 
   const studyTrackerMenuItems = useMemo(
     () => studyTrackerNavItems.filter((i) => studyTrackerMenuKeys.includes(i.key)),
@@ -204,13 +266,26 @@ export function TopNavbar({
   };
 
   const isLocked = (href: string) => {
-    const requiresPro = proFeatureRoutes.some((r) => href === r || href.startsWith(`${r}/`));
+    const requiresCore = coreFeatureRoutes.some((r) => href === r || href.startsWith(`${r}/`));
     const requiresEnterprise = enterpriseFeatureRoutes.some((r) => href === r || href.startsWith(`${r}/`));
-    return (requiresPro && currentPlan === 'basic') || (requiresEnterprise && currentPlan !== 'enterprise');
+    return (requiresCore && !planMeetsTier(normalizedPlan, 'core')) || (requiresEnterprise && normalizedPlan !== 'enterprise');
+  };
+
+  const isCtmsItemLocked = (item: CtmsNavItemDef) =>
+    (item.minPlan ? !planMeetsTier(normalizedPlan, item.minPlan) : false);
+
+  const planBadgeLabel: Record<SubscriptionPlan, string | null> = {
+    independent_consultant: null,
+    launch: 'LCH',
+    core: 'CORE',
+    professional: 'PRO',
+    enterprise: 'ENT',
   };
 
   const isCtmsActive =
-    hasCtmsAccess && ctmsNavResolved.some((item) => isActive(item.href, item.exact));
+    hasCtmsAccess &&
+    (ctmsNavWithHref.some(({ item, href }) => isCtmsNavItemActive(pathname, item, href)) ||
+      pathname.startsWith('/protected/studies/'));
   const isEtmfActive = pathname === '/protected/etmf' || pathname.startsWith('/protected/etmf/');
   const isEisfActive = pathname === '/protected/eisf' || pathname.startsWith('/protected/eisf/');
   const isCustomActive =
@@ -248,29 +323,40 @@ export function TopNavbar({
           <div className="hidden lg:flex items-center gap-1">
             {/* CTMS — always shown (like eTMF); menu items only when licensed */}
             <DropdownMenu>
-              <DropdownMenuTrigger
-                className={cn(
-                  'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
-                  hasCtmsAccess
-                    ? isCtmsActive
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                )}
-              >
-                CTMS
-                <ChevronDown className="h-3 w-3" />
-              </DropdownMenuTrigger>
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <DropdownMenuTrigger
+                    className={cn(
+                      'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
+                      hasCtmsAccess
+                        ? isCtmsActive
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                    )}
+                  >
+                    CTMS
+                    <ChevronDown className="h-3 w-3" />
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  Clinical operations: dashboard, studies, directory, tasks, and related CTMS tools.
+                </TooltipContent>
+              </Tooltip>
               <DropdownMenuContent align="end" sideOffset={8} className="min-w-48">
                 {hasCtmsAccess ? (
-                  ctmsNavResolved.map((item) => {
-                    const locked = isLocked(item.href);
+                  ctmsNavWithHref.map(({ item, href }) => {
+                    const locked = isCtmsItemLocked(item);
+                    const navActive = isCtmsNavItemActive(pathname, item, href);
                     return (
                       <DropdownMenuItem
-                        key={item.href}
-                        className={cn('cursor-pointer', locked && 'opacity-50')}
-                        data-onboarding={item.href === '/protected/studies' ? 'nav-studies' : undefined}
-                        onClick={() => router.push(locked ? '/protected/settings/billing' : item.href)}
+                        key={`${item.label}-${href}`}
+                        className={cn(
+                          'cursor-pointer',
+                          locked && 'opacity-50',
+                          navActive && 'bg-primary/10 text-primary font-medium',
+                        )}
+                        onClick={() => router.push(locked ? '/protected/settings/billing' : href)}
                       >
                         <item.icon className="mr-2 h-4 w-4" />
                         {item.label}
@@ -286,19 +372,26 @@ export function TopNavbar({
 
             {/* eTMF */}
             <DropdownMenu>
-              <DropdownMenuTrigger
-                className={cn(
-                  'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
-                  hasEtmfAccess
-                    ? isEtmfActive
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                )}
-              >
-                eTMF
-                <ChevronDown className="h-3 w-3" />
-              </DropdownMenuTrigger>
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <DropdownMenuTrigger
+                    className={cn(
+                      'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
+                      hasEtmfAccess
+                        ? isEtmfActive
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                    )}
+                  >
+                    eTMF
+                    <ChevronDown className="h-3 w-3" />
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  Electronic Trial Master File: library, expected documents, and bulk upload.
+                </TooltipContent>
+              </Tooltip>
               <DropdownMenuContent align="end" sideOffset={8} className="min-w-48">
                 {hasEtmfAccess ? (
                   <>
@@ -331,19 +424,26 @@ export function TopNavbar({
 
             {/* eISF */}
             <DropdownMenu>
-              <DropdownMenuTrigger
-                className={cn(
-                  'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
-                  hasEisfAccess
-                    ? isEisfActive
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                )}
-              >
-                eISF
-                <ChevronDown className="h-3 w-3" />
-              </DropdownMenuTrigger>
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <DropdownMenuTrigger
+                    className={cn(
+                      'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
+                      hasEisfAccess
+                        ? isEisfActive
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                    )}
+                  >
+                    eISF
+                    <ChevronDown className="h-3 w-3" />
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  Investigator Site File: site folders, requests, and required document rules.
+                </TooltipContent>
+              </Tooltip>
               <DropdownMenuContent align="end" sideOffset={8} className="min-w-52">
                 {hasEisfAccess ? (
                   <>
@@ -373,15 +473,22 @@ export function TopNavbar({
             {/* Custom (study trackers + custom definitions) */}
             {hasTrackerAccess && (
               <DropdownMenu>
-                <DropdownMenuTrigger
-                  className={cn(
-                    'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
-                    isCustomActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                  )}
-                >
-                  Custom
-                  <ChevronDown className="h-3 w-3" />
-                </DropdownMenuTrigger>
+                <Tooltip>
+                  <TooltipTrigger render={<span className="inline-flex" />}>
+                    <DropdownMenuTrigger
+                      className={cn(
+                        'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
+                        isCustomActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                      )}
+                    >
+                      Custom
+                      <ChevronDown className="h-3 w-3" />
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs text-xs">
+                    Study trackers and custom definitions enabled for your organization.
+                  </TooltipContent>
+                </Tooltip>
                 <DropdownMenuContent align="end" sideOffset={8} className="min-w-48 max-h-[min(24rem,70vh)] overflow-y-auto">
                   {studyTrackerMenuItems.length > 0 ? (
                     <>
@@ -426,10 +533,17 @@ export function TopNavbar({
 
             {/* Modules — includes platform admin entry when entitled */}
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal text-muted-foreground hover:text-foreground hover:bg-muted transition-colors whitespace-nowrap outline-none border border-border">
-                Modules
-                <ChevronDown className="h-3 w-3" />
-              </DropdownMenuTrigger>
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <DropdownMenuTrigger className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal text-muted-foreground hover:text-foreground hover:bg-muted transition-colors whitespace-nowrap outline-none border border-border">
+                    Modules
+                    <ChevronDown className="h-3 w-3" />
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  Extra modules: time and expenses, BrandForge, and platform tools (when available).
+                </TooltipContent>
+              </Tooltip>
               <DropdownMenuContent align="end" sideOffset={8} className="min-w-52 max-h-[min(24rem,70vh)] overflow-y-auto">
                 {hasCtmsAccess && (
                   <>
@@ -502,34 +616,57 @@ export function TopNavbar({
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Link
-              href="/protected/docs"
-              className={cn(
-                'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap border border-border',
-                pathname.startsWith('/protected/docs')
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-              )}
-            >
-              <BookOpen className="h-3 w-3" />
-              Docs
-            </Link>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Link
+                    href="/protected/docs"
+                    className={cn(
+                      'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap border border-border',
+                      pathname.startsWith('/protected/docs')
+                        ? 'bg-primary/10 text-primary'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                    )}
+                  />
+                }
+              >
+                <BookOpen className="h-3 w-3" />
+                Docs
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                Product documentation and in-app help articles.
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           {hasCtmsAccess && <AIAssistantInlineButton />}
-          <ThemeToggle className="h-9 w-9" />
+          <Tooltip>
+            <TooltipTrigger render={<span className="inline-flex" />}>
+              <ThemeToggle className="h-9 w-9" />
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              Switch between light and dark theme.
+            </TooltipContent>
+          </Tooltip>
 
             <DropdownMenu>
-              <DropdownMenuTrigger
-                className="flex items-center gap-2 rounded-md px-2 py-1 outline-none hover:bg-muted transition-colors"
-                data-onboarding="nav-profile-menu"
-              >
-                <Avatar className="h-7 w-7 !rounded-md after:!rounded-md">
-                {avatarUrl && <AvatarImage src={avatarUrl} alt={userName} className="rounded-md" />}
-                <AvatarFallback className="text-[10px] rounded-md">{initials}</AvatarFallback>
-              </Avatar>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={8} className="min-w-48">
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <DropdownMenuTrigger
+                    className="flex items-center gap-2 rounded-md px-2 py-1 outline-none hover:bg-muted transition-colors"
+                    data-onboarding="nav-profile-menu"
+                  >
+                    <Avatar className="h-7 w-7 !rounded-md after:!rounded-md">
+                      {avatarUrl && <AvatarImage src={avatarUrl} alt={userName} className="rounded-md" />}
+                      <AvatarFallback className="text-[10px] rounded-md">{initials}</AvatarFallback>
+                    </Avatar>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  Account: settings, billing, and sign out.
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end" sideOffset={8} className="min-w-48">
               <div className="px-2 py-1.5">
                 <p className="text-sm font-medium">{userName}</p>
                 <p className="text-xs text-muted-foreground">{userEmail}</p>
@@ -560,9 +697,9 @@ export function TopNavbar({
               <DropdownMenuItem onClick={() => router.push('/protected/settings/billing')} className="cursor-pointer">
                 <CreditCard className="mr-2 h-4 w-4" />
                 Billing
-                {currentPlan !== 'basic' && (
+                {planBadgeLabel[normalizedPlan] && (
                   <Badge variant="outline" className="ml-auto text-[8px] px-1 py-0 h-3.5">
-                    {currentPlan === 'enterprise' ? 'ENT' : 'PRO'}
+                    {planBadgeLabel[normalizedPlan]}
                   </Badge>
                 )}
               </DropdownMenuItem>
@@ -597,14 +734,13 @@ export function TopNavbar({
           <div className="flex flex-col py-2 overflow-y-auto max-h-[calc(100vh-60px)]">
             <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">CTMS</p>
             {hasCtmsAccess ? (
-              ctmsNavResolved.map((item) => {
-                const locked = isLocked(item.href);
-                const active = isActive(item.href, item.exact);
+              ctmsNavWithHref.map(({ item, href }) => {
+                const locked = isCtmsItemLocked(item);
+                const active = isCtmsNavItemActive(pathname, item, href);
                 return (
                   <Link
-                    key={item.href}
-                    href={locked ? '/protected/settings/billing' : item.href}
-                    data-onboarding={item.href === '/protected/studies' ? 'nav-studies' : undefined}
+                    key={`${item.label}-${href}`}
+                    href={locked ? '/protected/settings/billing' : href}
                     onClick={() => setMobileOpen(false)}
                     className={cn(
                       'flex items-center gap-2 px-4 py-2 text-sm transition-colors',

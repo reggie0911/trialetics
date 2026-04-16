@@ -14,139 +14,99 @@ import {
 } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-const platformLogos = [
-  {
-    name: 'G2',
-    src: 'https://logo.clearbit.com/g2.com',
-    alt: 'G2',
-  },
-  {
-    name: 'Airtable',
-    src: 'https://logo.clearbit.com/airtable.com',
-    alt: 'Airtable',
-  },
-  {
-    name: 'Trustpilot',
-    src: 'https://logo.clearbit.com/trustpilot.com',
-    alt: 'Trustpilot',
-  },
-  {
-    name: 'GetApp',
-    src: 'https://logo.clearbit.com/getapp.com',
-    alt: 'GetApp',
-  },
-  {
-    name: 'Software Advice',
-    src: 'https://logo.clearbit.com/softwareadvice.com',
-    alt: 'Software Advice',
-  },
-];
+/** Text wordmarks only — Clearbit logo URLs often fail in production (blocked, deprecated, or empty). */
+const reviewPlatformLabels = ['G2', 'Trustpilot', 'Capterra', 'GetApp', 'Software Advice'] as const;
 
 const testimonials = [
   {
     id: '1',
-    name: 'Sarah Mitchell',
-    title: 'Head of Product',
-    company: 'Nike',
+    name: 'Dr. Sarah Mitchell',
+    title: 'VP Clinical Operations',
+    company: 'Parexel',
     image:
       'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&crop=face',
-    companyLogo: {
-      src: '/images/logos/nike.png',
-      width: 67.5,
-      height: 24,
-    },
     testimonial:
-      'Lumen has completely changed the way we present our project workflows. We can create visual boards, share tasks instantly, and demo progress live.',
+      'Trialetics has completely changed the way we manage monitoring visits. Trip reports that used to take hours are drafted in minutes with the AI, and our CRAs can focus on what matters.',
   },
   {
     id: '2',
     name: 'Alex Chen',
-    title: 'Senior Designer',
-    company: 'Spotify',
+    title: 'Clinical Research Associate',
+    company: 'ICON',
     image:
       'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face',
     testimonial:
-      "Lumen was the missing layer between our product and engineering teams. We've never had this much clarity in how tasks move through the pipeline and deliver results.",
+      'Trialetics is the layer we were missing between our study teams and site coordinators. Visit tracking, follow-up letters, and task ownership are all in one place now.',
   },
   {
     id: '3',
     name: 'Marcus Johnson',
-    title: 'VP Product',
-    company: 'T-Mobile',
+    title: 'Study Director',
+    company: 'Medpace',
     image:
       'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop&crop=face',
     testimonial:
-      'We used to lose track of deliverables every week. With Lumen, task ownership is crystal clear and timelines are actually realistic for our team.',
+      'We used to lose track of site deliverables every week. With Trialetics, task ownership is clear and study milestones are actually realistic across all our active trials.',
   },
   {
     id: '4',
     name: 'Emily Davis',
-    title: 'Product Manager',
-    company: 'Booking',
+    title: 'Clinical Project Manager',
+    company: 'PPD',
     image:
       'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop&crop=face',
     testimonial:
-      'Lumen blended perfectly into our design-to-dev process. We organize prototypes, handoffs, and sprints without switching tools constantly.',
+      'Trialetics fits perfectly into our clinical workflow. We organize site visits, manage subject enrollment, and generate audit-ready reports without switching tools.',
   },
   {
     id: '5',
     name: 'Ben Parker',
-    title: 'Engineering Lead',
-    company: 'IBM',
+    title: 'Director of Site Management',
+    company: 'Syneos Health',
     image:
       'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop&crop=face',
     testimonial:
-      "Since adopting Lumen, our feedback cycles became shorter and much more effective. It's a must-have for any growing product team today.",
+      'Since adopting Trialetics, our site coordination cycles became faster and more reliable. The study dashboard gives me real-time visibility across 20+ active trials.',
   },
   {
     id: '6',
     name: 'Samantha Lee',
-    title: 'Design Director',
-    company: 'Logitech',
+    title: 'Clinical Operations Lead',
+    company: 'Covance',
     image:
       'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&h=400&fit=crop&crop=face',
     testimonial:
-      "Lumen makes it incredibly easy to manage cross-functional work. We've cut coordination time in half and deliver with better insights.",
+      "Trialetics makes cross-study coordination so much easier. We've cut report turnaround time in half and our sponsors are impressed by the quality.",
   },
   {
     id: '7',
     name: 'David Kim',
-    title: 'CTO',
-    company: 'Fortinet',
+    title: 'Head of Clinical Systems',
+    company: 'Worldwide Clinical Trials',
     image:
       'https://images.unsplash.com/photo-1507591064344-4c6ce005b128?w=400&h=400&fit=crop&crop=face',
     testimonial:
-      'We use Lumen across all departments — from tech to support. Creating shared workflows has drastically improved internal communication.',
+      'We use Trialetics across all our study teams — from monitoring to financials. Having one platform for tasks, trips, and reports has transformed our operations.',
   },
   {
     id: '8',
-    name: 'Rachel Green',
-    title: 'Product Designer',
-    company: 'Zapier',
+    name: 'Rachel Torres',
+    title: 'Sr. Clinical Research Associate',
+    company: 'Labcorp Drug Development',
     image:
       'https://images.unsplash.com/photo-1489424731084-a5d8b219a5bb?w=400&h=400&fit=crop&crop=face',
-    companyLogo: {
-      src: '/images/logos/zapiar.png',
-      width: 105,
-      height: 28,
-    },
     testimonial:
-      'Lumen has completely transformed how we approach daily project planning and execution. Before switching, we constantly missed deadlines due to misalignment. Our productivity skyrocketed.',
+      'Trialetics has completely transformed how we approach monitoring visit preparation and follow-up. Before switching, we constantly missed findings deadlines. Our efficiency skyrocketed.',
   },
   {
     id: '9',
-    name: 'Mike Johnson',
-    title: 'Startup Founder',
-    company: 'Tailwind CSS',
+    name: 'Mike Andersen',
+    title: 'Independent Clinical Monitor',
+    company: 'Independent',
     image:
       'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=400&h=400&fit=crop&crop=face',
-    companyLogo: {
-      src: '/images/logos/tailwindcss.png',
-      width: 130,
-      height: 20,
-    },
     testimonial:
-      "I created a workspace, invited my co-founder, and started assigning tasks in 45 seconds. That's how fast Lumen works for our team.",
+      "I set up my workspace, imported my study contacts, and authored my first trip report in under 10 minutes. That's how fast Trialetics works as a solo consultant.",
   },
 ];
 
@@ -156,39 +116,42 @@ const TestimonialsMarquee = () => {
       <Noise />
       <div className="container">
         {/* Reviews Section */}
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          {/* 5 Star Rating */}
-          <div className="flex items-center gap-1">
-            {[...Array(5)].map((_, i) => (
-              <Star
-                key={i}
-                className="size-3 fill-yellow-400 text-yellow-400"
-              />
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <div className="flex shrink-0 items-center gap-1">
+              {[...Array(5)].map((_, i) => (
+                <Star
+                  key={i}
+                  className="size-3 fill-yellow-400 text-yellow-400"
+                />
+              ))}
+            </div>
+            <span className="text-muted-foreground text-xs font-medium leading-none">
+              25,000+ reviews from
+            </span>
+          </div>
+          <div
+            className="flex flex-wrap items-center gap-x-2 gap-y-1 sm:border-l sm:border-border sm:pl-3"
+            aria-label="Review platforms"
+          >
+            {reviewPlatformLabels.map((label) => (
+              <span
+                key={label}
+                className="text-[10px] font-semibold uppercase leading-none tracking-wide text-muted-foreground"
+              >
+                {label}
+              </span>
             ))}
           </div>
-          <span className="text-muted-foreground text-xs font-medium">
-            25,000+ reviews from
-          </span>
-
-          {/* Platform Logos */}
-          {platformLogos.map((logo) => (
-            <Image
-              key={logo.name}
-              src={logo.src}
-              alt={logo.alt}
-              width={12}
-              height={12}
-            />
-          ))}
         </div>
 
         <div className="max-w-4xl space-y-3 lg:space-y-4">
           <h2 className="text-4xl tracking-tight lg:text-5xl">
-            Why teams are leaving Monday for Lumen
+            Teams love what we built
           </h2>
           <p className="text-muted-foreground text-lg leading-snug">
-            Hear how teams are moving faster, collaborating better, and finally
-            loving their workflow with Lumen.
+            See why clinical operations teams are managing studies, visits, and
+            reports faster with Trialetics.
           </p>
         </div>
       </div>

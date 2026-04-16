@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
 import { assertIpMinTier } from '@/lib/server/ip-access';
 import type { IpCategory } from '@/lib/types/ip-management';
@@ -282,5 +283,6 @@ export async function bulkUploadInventory(
   }
 
   revalidatePath(IP_PATH);
+  revalidateStudyCtmsLayout(studyId);
   return result;
 }

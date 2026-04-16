@@ -32,15 +32,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-import type { SubjectStatus } from '@/lib/types/ctms';
+import type { SubjectStatus, SubjectWithSite } from '@/lib/types/ctms';
 import { SUBJECT_STATUS_OPTIONS } from '@/lib/types/ctms';
 import type { SubjectWithStudySite } from '@/lib/actions/subjects';
 
+type SubjectListRow = SubjectWithStudySite | SubjectWithSite;
+
 interface SubjectListProps {
-  subjects: SubjectWithStudySite[];
+  subjects: SubjectListRow[];
+  /** When set, row links and layout use study-scoped CTMS URLs. */
+  studyId?: string;
 }
 
-export function SubjectList({ subjects }: SubjectListProps) {
+export function SubjectList({ subjects, studyId }: SubjectListProps) {
   const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -51,14 +55,19 @@ export function SubjectList({ subjects }: SubjectListProps) {
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(
-        (s) =>
+      result = result.filter((s) => {
+        const studyProto =
+          'studies' in s && s.studies?.protocol_number
+            ? s.studies.protocol_number.toLowerCase().includes(q)
+            : false;
+        return (
           s.subject_number.toLowerCase().includes(q) ||
           (s.screening_number?.toLowerCase().includes(q) ?? false) ||
           (s.randomization_number?.toLowerCase().includes(q) ?? false) ||
           s.study_sites?.name.toLowerCase().includes(q) ||
-          s.studies?.protocol_number.toLowerCase().includes(q)
-      );
+          studyProto
+        );
+      });
     }
 
     if (statusFilter !== 'all') {
@@ -68,7 +77,7 @@ export function SubjectList({ subjects }: SubjectListProps) {
     return result;
   }, [subjects, searchQuery, statusFilter]);
 
-  const columns: ColumnDef<SubjectWithStudySite>[] = useMemo(
+  const columns: ColumnDef<SubjectListRow>[] = useMemo(
     () => [
       {
         accessorKey: 'subject_number',
@@ -87,15 +96,21 @@ export function SubjectList({ subjects }: SubjectListProps) {
           <span className="font-medium">{row.getValue('subject_number')}</span>
         ),
       },
-      {
-        id: 'study',
-        header: 'Study',
-        cell: ({ row }) => (
-          <span className="text-muted-foreground text-xs">
-            {row.original.studies?.protocol_number ?? '—'}
-          </span>
-        ),
-      },
+      ...(!studyId
+        ? ([
+            {
+              id: 'study',
+              header: 'Study',
+              cell: ({ row }: { row: { original: SubjectListRow } }) => (
+                <span className="text-muted-foreground text-xs">
+                  {'studies' in row.original && row.original.studies
+                    ? row.original.studies.protocol_number
+                    : '—'}
+                </span>
+              ),
+            },
+          ] as ColumnDef<SubjectListRow>[])
+        : []),
       {
         id: 'site',
         header: 'Site',
@@ -141,7 +156,7 @@ export function SubjectList({ subjects }: SubjectListProps) {
         },
       },
     ],
-    []
+    [studyId]
   );
 
   const table = useReactTable({
@@ -224,7 +239,11 @@ export function SubjectList({ subjects }: SubjectListProps) {
                 <TableRow
                   key={row.id}
                   className="cursor-pointer"
-                  onClick={() => router.push(`/protected/subjects/${row.original.id}`)}
+                  onClick={() =>
+                    router.push(
+                      `/protected/studies/${studyId ?? row.original.study_id}/subjects/${row.original.id}`
+                    )
+                  }
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>

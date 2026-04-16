@@ -67,6 +67,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useStudyHub } from '@/components/ctms/study-hub-context';
+import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
 
 import type {
   TeamMemberWithStudies,
@@ -93,6 +96,7 @@ import {
   type PendingInvitation,
   type JoinLink,
 } from '@/lib/actions/team';
+import { scopeTeamMembersToStudy } from '@/lib/team/scope-team-members';
 
 /** Readable title for study selects (title case per word). */
 function formatStudyTitleLabel(title: string): string {
@@ -120,13 +124,27 @@ interface TeamDirectoryProps {
   pendingInvitations?: PendingInvitation[];
   joinLinks?: JoinLink[];
   isAdmin?: boolean;
+  /** When set, only members with assignments on this study are shown (assignments filtered to this study). */
+  studyContextId?: string;
 }
 
 type AssignmentStatusFilter = 'all' | 'has_assignments' | 'no_assignments';
 type AppRoleFilter = 'all' | 'admin' | 'user';
 
-export function TeamDirectory({ members: initialMembers, studies, teamRoles, pendingInvitations = [], joinLinks: initialJoinLinks = [], isAdmin }: TeamDirectoryProps) {
-  const [members, setMembers] = useState(initialMembers);
+export function TeamDirectory({
+  members: initialMembers,
+  studies,
+  teamRoles,
+  pendingInvitations = [],
+  joinLinks: initialJoinLinks = [],
+  isAdmin,
+  studyContextId,
+}: TeamDirectoryProps) {
+  const [members, setMembers] = useState(() => scopeTeamMembersToStudy(initialMembers, studyContextId));
+
+  useEffect(() => {
+    setMembers(scopeTeamMembersToStudy(initialMembers, studyContextId));
+  }, [initialMembers, studyContextId]);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<AssignmentStatusFilter>('all');
@@ -141,6 +159,7 @@ export function TeamDirectory({ members: initialMembers, studies, teamRoles, pen
   const [activeTab, setActiveTab] = useState<'members' | 'pending'>('members');
   const [, startTransition] = useTransition();
   const router = useRouter();
+  const readOnly = useStudyHub()?.isStudyReadOnly ?? false;
 
   const handleResendInvite = async (invitationId: string) => {
     setPendingActionId(invitationId);
@@ -176,12 +195,12 @@ export function TeamDirectory({ members: initialMembers, studies, teamRoles, pen
     startTransition(async () => {
       try {
         const data = await getTeamDirectory();
-        setMembers(data);
+        setMembers(scopeTeamMembersToStudy(data, studyContextId));
       } catch {
         toast.error('Failed to refresh team data');
       }
     });
-  }, [startTransition]);
+  }, [startTransition, studyContextId]);
 
   const filteredMembers = useMemo(() => {
     return members.filter((m) => {
@@ -303,20 +322,62 @@ export function TeamDirectory({ members: initialMembers, studies, teamRoles, pen
           <div className="flex items-center gap-2">
             {isAdmin && (
               <>
-                <Button variant="outline" size="sm" onClick={() => setJoinLinkDialogOpen(true)}>
-                  <Link2 className="mr-2 h-4 w-4" />
-                  Join Links
-                </Button>
-                <Button variant="default" size="sm" onClick={() => setInviteDialogOpen(true)}>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Invite User
-                </Button>
+                {readOnly ? (
+                  <Tooltip>
+                    <TooltipTrigger render={<span className="inline-flex" />}>
+                      <Button variant="outline" size="sm" disabled aria-label="Join links">
+                        <Link2 className="mr-2 h-4 w-4" />
+                        Join Links
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs text-xs">
+                      {STUDY_DEACTIVATED_TOOLTIP}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => setJoinLinkDialogOpen(true)}>
+                    <Link2 className="mr-2 h-4 w-4" />
+                    Join Links
+                  </Button>
+                )}
+                {readOnly ? (
+                  <Tooltip>
+                    <TooltipTrigger render={<span className="inline-flex" />}>
+                      <Button variant="default" size="sm" disabled aria-label="Invite user">
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Invite User
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs text-xs">
+                      {STUDY_DEACTIVATED_TOOLTIP}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Button variant="default" size="sm" onClick={() => setInviteDialogOpen(true)}>
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Invite User
+                  </Button>
+                )}
               </>
             )}
-            <Button variant="outline" size="sm" onClick={exportCsv}>
-              <Download className="mr-2 h-4 w-4" />
-              Export CSV
-            </Button>
+            {readOnly ? (
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <Button variant="outline" size="sm" disabled aria-label="Export CSV">
+                    <Download className="mr-2 h-4 w-4" />
+                    Export CSV
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  {STUDY_DEACTIVATED_TOOLTIP}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button variant="outline" size="sm" onClick={exportCsv}>
+                <Download className="mr-2 h-4 w-4" />
+                Export CSV
+              </Button>
+            )}
           </div>
         </div>
 
@@ -416,6 +477,7 @@ export function TeamDirectory({ members: initialMembers, studies, teamRoles, pen
                     initials={initials}
                     isExpanded={isExpanded}
                     activeCount={activeCount}
+                    readOnly={readOnly}
                     onToggleExpand={() => toggleExpanded(member.profile_id)}
                     onEditMember={() => setEditingMember(member)}
                     onEditAssignment={(assignment) => setEditingAssignment({ member, assignment })}
@@ -487,45 +549,83 @@ export function TeamDirectory({ members: initialMembers, studies, teamRoles, pen
                             {isAdmin && (
                               <TableCell className="whitespace-nowrap">
                                 <div className="flex items-center gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0"
-                                    onClick={() => handleResendInvite(inv.id)}
-                                    disabled={isActioning}
-                                    title="Resend invite"
-                                  >
-                                    <RefreshCw className={`h-3.5 w-3.5 ${isActioning ? 'animate-spin' : ''}`} />
-                                  </Button>
-                                  <AlertDialog>
-                                    <AlertDialogTrigger
-                                      render={
+                                  {readOnly ? (
+                                    <Tooltip>
+                                      <TooltipTrigger render={<span className="inline-flex" />}>
                                         <Button
                                           variant="ghost"
                                           size="sm"
                                           className="h-7 w-7 p-0"
-                                          disabled={isActioning}
-                                          title="Revoke invite"
+                                          disabled
+                                          aria-label="Resend invite"
+                                        >
+                                          <RefreshCw className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" className="max-w-xs text-xs">
+                                        {STUDY_DEACTIVATED_TOOLTIP}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0"
+                                      onClick={() => handleResendInvite(inv.id)}
+                                      disabled={isActioning}
+                                      title="Resend invite"
+                                    >
+                                      <RefreshCw className={`h-3.5 w-3.5 ${isActioning ? 'animate-spin' : ''}`} />
+                                    </Button>
+                                  )}
+                                  {readOnly ? (
+                                    <Tooltip>
+                                      <TooltipTrigger render={<span className="inline-flex" />}>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 w-7 p-0"
+                                          disabled
+                                          aria-label="Revoke invite"
                                         >
                                           <Trash2 className="h-3.5 w-3.5 text-destructive" />
                                         </Button>
-                                      }
-                                    />
-                                    <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>Revoke Invitation</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                          Revoke the invitation for {inv.email}? They will no longer be able to join using the invite link.
-                                        </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handleRevokeInvite(inv.id)}>
-                                          Revoke
-                                        </AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                  </AlertDialog>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="bottom" className="max-w-xs text-xs">
+                                        {STUDY_DEACTIVATED_TOOLTIP}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <AlertDialog>
+                                      <AlertDialogTrigger
+                                        render={
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-7 w-7 p-0"
+                                            disabled={isActioning}
+                                            title="Revoke invite"
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                          </Button>
+                                        }
+                                      />
+                                      <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>Revoke Invitation</AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Revoke the invitation for {inv.email}? They will no longer be able to join using the invite link.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                          <AlertDialogAction onClick={() => handleRevokeInvite(inv.id)}>
+                                            Revoke
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    </AlertDialog>
+                                  )}
                                 </div>
                               </TableCell>
                             )}
@@ -607,6 +707,7 @@ function MemberRows({
   initials,
   isExpanded,
   activeCount,
+  readOnly,
   onToggleExpand,
   onEditMember,
   onEditAssignment,
@@ -618,6 +719,7 @@ function MemberRows({
   initials: string;
   isExpanded: boolean;
   activeCount: number;
+  readOnly: boolean;
   onToggleExpand: () => void;
   onEditMember: () => void;
   onEditAssignment: (a: TeamMemberWithStudies['assignments'][number]) => void;
@@ -661,14 +763,27 @@ function MemberRows({
           )}
         </TableCell>
         <TableCell className="whitespace-nowrap">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0"
-            onClick={(e) => { e.stopPropagation(); onEditMember(); }}
-          >
-            <Pencil className="h-3 w-3" />
-          </Button>
+          {readOnly ? (
+            <Tooltip>
+              <TooltipTrigger render={<span className="inline-flex" onClick={(e) => e.stopPropagation()} />}>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled aria-label="Edit member">
+                  <Pencil className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                {STUDY_DEACTIVATED_TOOLTIP}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={(e) => { e.stopPropagation(); onEditMember(); }}
+            >
+              <Pencil className="h-3 w-3" />
+            </Button>
+          )}
         </TableCell>
       </TableRow>
 
@@ -678,10 +793,24 @@ function MemberRows({
             <div className="px-6 py-3 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-muted-foreground">Study Assignments</p>
-                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onAddAssignment}>
-                  <Plus className="mr-1 h-3 w-3" />
-                  Add Assignment
-                </Button>
+                {readOnly ? (
+                  <Tooltip>
+                    <TooltipTrigger render={<span className="inline-flex" />}>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" disabled>
+                        <Plus className="mr-1 h-3 w-3" />
+                        Add Assignment
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs text-xs">
+                      {STUDY_DEACTIVATED_TOOLTIP}
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onAddAssignment}>
+                    <Plus className="mr-1 h-3 w-3" />
+                    Add Assignment
+                  </Button>
+                )}
               </div>
               {member.assignments.length === 0 ? (
                 <p className="text-xs text-muted-foreground py-2">No assignments yet.</p>
@@ -725,35 +854,61 @@ function MemberRows({
                           </TableCell>
                           <TableCell className="py-1">
                             <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0"
-                                onClick={() => onEditAssignment(a)}
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger
-                                  render={<Button variant="ghost" size="sm" className="h-6 w-6 p-0" />}
+                              {readOnly ? (
+                                <Tooltip>
+                                  <TooltipTrigger render={<span className="inline-flex" />}>
+                                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" disabled aria-label="Edit assignment">
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom" className="max-w-xs text-xs">
+                                    {STUDY_DEACTIVATED_TOOLTIP}
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => onEditAssignment(a)}
                                 >
-                                  <Trash2 className="h-3 w-3 text-destructive" />
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Remove Assignment</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Remove this team member from &ldquo;{a.study_title}&rdquo;?
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => onDeleteAssignment(a.id, a.study_id)}>
-                                      Remove
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              )}
+                              {readOnly ? (
+                                <Tooltip>
+                                  <TooltipTrigger render={<span className="inline-flex" />}>
+                                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" disabled aria-label="Remove assignment">
+                                      <Trash2 className="h-3 w-3 text-destructive" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="bottom" className="max-w-xs text-xs">
+                                    {STUDY_DEACTIVATED_TOOLTIP}
+                                  </TooltipContent>
+                                </Tooltip>
+                              ) : (
+                                <AlertDialog>
+                                  <AlertDialogTrigger
+                                    render={<Button variant="ghost" size="sm" className="h-6 w-6 p-0" />}
+                                  >
+                                    <Trash2 className="h-3 w-3 text-destructive" />
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Remove Assignment</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Remove this team member from &ldquo;{a.study_title}&rdquo;?
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => onDeleteAssignment(a.id, a.study_id)}>
+                                        Remove
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>

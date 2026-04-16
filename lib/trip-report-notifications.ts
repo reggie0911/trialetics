@@ -14,9 +14,10 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function tripReportLink(visitId: string): string {
+function tripReportLink(visitId: string, studyId: string): string {
   const base = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-  return `${base.replace(/\/$/, '')}/protected/trip-reports/${visitId}/author`;
+  const root = base.replace(/\/$/, '');
+  return `${root}/protected/studies/${studyId}/trip-reports/${visitId}/author`;
 }
 
 async function profileEmailsForStudyRoles(
@@ -67,7 +68,7 @@ export async function notifyReportSubmitted(params: {
     const rEmail = await profileEmail(reviewerId);
     if (rEmail) emails.push(rEmail);
   }
-  const link = tripReportLink(visitId);
+  const link = tripReportLink(visitId, studyId);
   const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;">
     <p>A trip report has been submitted for review.</p>
     <p><a href="${escapeHtml(link)}">Open report</a></p>
@@ -78,9 +79,10 @@ export async function notifyReportSubmitted(params: {
 export async function notifyReportReturnedToAuthor(params: {
   authorProfileId: string;
   visitId: string;
+  studyId: string;
 }): Promise<void> {
   const email = await profileEmail(params.authorProfileId);
-  const link = tripReportLink(params.visitId);
+  const link = tripReportLink(params.visitId, params.studyId);
   const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;">
     <p>Your trip report was returned for corrections.</p>
     <p><a href="${escapeHtml(link)}">Open report</a></p>
@@ -99,7 +101,7 @@ export async function notifyReportApproved(params: {
     ...(authorEmail ? [authorEmail] : []),
     ...cpms.map((p) => p.email).filter(Boolean),
   ] as string[];
-  const link = tripReportLink(params.visitId);
+  const link = tripReportLink(params.visitId, params.studyId);
   const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;">
     <p>A trip report has been approved and signed.</p>
     <p><a href="${escapeHtml(link)}">View report</a></p>
@@ -110,9 +112,10 @@ export async function notifyReportApproved(params: {
 export async function notifyReviewerAssigned(params: {
   reviewerProfileId: string;
   visitId: string;
+  studyId: string;
 }): Promise<void> {
   const email = await profileEmail(params.reviewerProfileId);
-  const link = tripReportLink(params.visitId);
+  const link = tripReportLink(params.visitId, params.studyId);
   const html = `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;">
     <p>You have been assigned as reviewer for a trip report.</p>
     <p><a href="${escapeHtml(link)}">Open report</a></p>

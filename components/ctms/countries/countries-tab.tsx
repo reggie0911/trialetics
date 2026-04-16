@@ -2,8 +2,6 @@
 
 import { useState, useCallback, useTransition } from 'react';
 import {
-  Plus,
-  Pencil,
   Trash2,
   ChevronDown,
   ChevronRight,
@@ -46,6 +44,10 @@ import {
   deleteSubmission,
 } from '@/lib/actions/countries';
 
+import { useStudyHub } from '@/components/ctms/study-hub-context';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
+
 import { CountryFormDialog } from './country-form-dialog';
 import { SubmissionFormDialog } from './submission-form-dialog';
 
@@ -62,9 +64,13 @@ interface CountriesTabProps {
 }
 
 export function CountriesTab({ studyId, initialCountries }: CountriesTabProps) {
+  const studyHub = useStudyHub();
+  const readOnly = studyHub?.isStudyReadOnly ?? false;
+  const disabledTooltip = readOnly ? STUDY_DEACTIVATED_TOOLTIP : undefined;
+
   const [countries, setCountries] = useState(initialCountries);
   const [expandedCountries, setExpandedCountries] = useState<Set<string>>(new Set());
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const refreshCountries = useCallback(() => {
     startTransition(async () => {
@@ -133,6 +139,8 @@ export function CountriesTab({ studyId, initialCountries }: CountriesTabProps) {
           studyId={studyId}
           existingCodes={existingCodes}
           onSuccess={refreshCountries}
+          disabled={readOnly}
+          disabledTooltip={disabledTooltip}
         />
       </div>
 
@@ -213,34 +221,56 @@ export function CountriesTab({ studyId, initialCountries }: CountriesTabProps) {
                         existingCodes={existingCodes}
                         country={country}
                         onSuccess={refreshCountries}
+                        disabled={readOnly}
+                        disabledTooltip={disabledTooltip}
                       />
-                      <AlertDialog>
-                        <AlertDialogTrigger
-                          render={
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" />
-                          }
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Remove Country</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will remove {country.country_name} and all associated
-                              regulatory submissions from this study. This action cannot be
-                              undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleRemoveCountry(country.id)}
+                      {readOnly ? (
+                        <Tooltip>
+                          <TooltipTrigger render={<span className="inline-flex" />}>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              disabled
+                              aria-label="Remove country"
                             >
-                              Remove
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-xs text-xs">
+                            {STUDY_DEACTIVATED_TOOLTIP}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <AlertDialog>
+                          <AlertDialogTrigger
+                            render={
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" />
+                            }
+                          >
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Remove Country</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will remove {country.country_name} and all associated
+                                regulatory submissions from this study. This action cannot be
+                                undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleRemoveCountry(country.id)}
+                              >
+                                Remove
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
@@ -257,6 +287,8 @@ export function CountriesTab({ studyId, initialCountries }: CountriesTabProps) {
                           studyId={studyId}
                           studyCountryId={country.id}
                           onSuccess={refreshCountries}
+                          disabled={readOnly}
+                          disabledTooltip={disabledTooltip}
                         />
                       </div>
 
@@ -288,6 +320,7 @@ export function CountriesTab({ studyId, initialCountries }: CountriesTabProps) {
                                   formatDate={formatDate}
                                   onDelete={handleDeleteSubmission}
                                   onSuccess={refreshCountries}
+                                  readOnly={readOnly}
                                 />
                               ))}
                             </TableBody>
@@ -313,6 +346,7 @@ function SubmissionRow({
   formatDate,
   onDelete,
   onSuccess,
+  readOnly,
 }: {
   submission: RegulatorySubmission;
   studyId: string;
@@ -320,7 +354,9 @@ function SubmissionRow({
   formatDate: (d: string | null) => string;
   onDelete: (id: string) => void;
   onSuccess: () => void;
+  readOnly: boolean;
 }) {
+  const disabledTooltip = readOnly ? STUDY_DEACTIVATED_TOOLTIP : undefined;
   return (
     <TableRow>
       <TableCell className="text-xs font-medium">
@@ -342,30 +378,52 @@ function SubmissionRow({
             studyCountryId={studyCountryId}
             submission={submission}
             onSuccess={onSuccess}
+            disabled={readOnly}
+            disabledTooltip={disabledTooltip}
           />
-          <AlertDialog>
-            <AlertDialogTrigger
-              render={<Button variant="ghost" size="sm" className="h-7 w-7 p-0" />}
-            >
-              <Trash2 className="h-3 w-3 text-destructive" />
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Submission</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete this{' '}
-                  {submissionTypeLabel[submission.submission_type]} submission. This action
-                  cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => onDelete(submission.id)}>
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {readOnly ? (
+            <Tooltip>
+              <TooltipTrigger render={<span className="inline-flex" />}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  disabled
+                  aria-label="Delete submission"
+                >
+                  <Trash2 className="h-3 w-3 text-destructive" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                {STUDY_DEACTIVATED_TOOLTIP}
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <AlertDialog>
+              <AlertDialogTrigger
+                render={<Button variant="ghost" size="sm" className="h-7 w-7 p-0" />}
+              >
+                <Trash2 className="h-3 w-3 text-destructive" />
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Submission</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete this{' '}
+                    {submissionTypeLabel[submission.submission_type]} submission. This action
+                    cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => onDelete(submission.id)}>
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
         </div>
       </TableCell>
     </TableRow>

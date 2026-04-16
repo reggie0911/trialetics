@@ -18,6 +18,9 @@ import { getSubjectById } from '@/lib/actions/subjects';
 import type { SubjectWithDetails } from '@/lib/types/ctms';
 import type { Study } from '@/lib/types/ctms';
 
+import { useStudyHub } from '@/components/ctms/study-hub-context';
+import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
+
 import { SubjectFormDialog } from './subject-form-dialog';
 import { VisitsPanel } from './visits-panel';
 
@@ -35,9 +38,19 @@ interface SubjectDetailTabsProps {
   study: Pick<Study, 'id' | 'title' | 'protocol_number'>;
   sites: { id: string; site_number: string; name: string }[];
   isAdmin: boolean;
+  /** When set, back navigation targets the study subject list (study-scoped CTMS routes). */
+  studyId?: string;
 }
 
-export function SubjectDetailTabs({ subject: initialSubject, study, sites, isAdmin }: SubjectDetailTabsProps) {
+export function SubjectDetailTabs({
+  subject: initialSubject,
+  study,
+  sites,
+  isAdmin,
+  studyId,
+}: SubjectDetailTabsProps) {
+  const readOnly = useStudyHub()?.isStudyReadOnly ?? false;
+  const disabledTooltip = readOnly ? STUDY_DEACTIVATED_TOOLTIP : undefined;
   const [subject, setSubject] = useState(initialSubject);
   const [, startTransition] = useTransition();
 
@@ -69,7 +82,15 @@ export function SubjectDetailTabs({ subject: initialSubject, study, sites, isAdm
             <Button
               variant="ghost"
               size="sm"
-              render={<Link href={`/protected/studies/${study.id}`} />}
+              render={
+                <Link
+                  href={
+                    studyId
+                      ? `/protected/studies/${study.id}/subjects`
+                      : `/protected/studies/${study.id}`
+                  }
+                />
+              }
               nativeButton={false}
               className="-ml-2"
             >
@@ -92,6 +113,8 @@ export function SubjectDetailTabs({ subject: initialSubject, study, sites, isAdm
             sites={sites}
             subject={subject}
             onSuccess={refreshSubject}
+            disabled={readOnly}
+            disabledTooltip={disabledTooltip}
           />
         </div>
       </div>

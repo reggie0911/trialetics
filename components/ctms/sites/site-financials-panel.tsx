@@ -233,6 +233,8 @@ interface SiteFinancialsPanelProps {
   /** Human-readable labels for exports (falls back to IDs). */
   siteLabel?: string;
   studyLabel?: string;
+  /** Site detail URL for invoice deep-links (default study-scoped site detail). */
+  siteDetailPath?: string;
 }
 
 const SITE_FIN_SUB_TABS = new Set([
@@ -260,7 +262,9 @@ export function SiteFinancialsPanel({
   studyBudgetOptions = [],
   siteLabel: siteLabelProp,
   studyLabel: studyLabelProp,
+  siteDetailPath,
 }: SiteFinancialsPanelProps) {
+  const siteDetailHrefBase = siteDetailPath ?? `/protected/studies/${studyId}/sites/${siteId}`;
   const router = useRouter();
   const [proposed, setProposed] = useState(() =>
     siteBudget ? normalizeBudgetAmountInput(String(siteBudget.proposed_amount)) : ''
@@ -1498,7 +1502,7 @@ export function SiteFinancialsPanel({
                                       {refs.map((r) => (
                                         <li key={r.invoice_id} className="min-w-0">
                                           <Link
-                                            href={`/protected/sites/${siteId}?tab=financials&siteFinTab=invoices&invoice=${encodeURIComponent(r.invoice_id)}`}
+                                            href={`${siteDetailHrefBase}?tab=financials&siteFinTab=invoices&invoice=${encodeURIComponent(r.invoice_id)}`}
                                             className="text-primary hover:underline truncate block w-full text-center"
                                             title={`View invoice ${r.external_invoice_id}`}
                                           >

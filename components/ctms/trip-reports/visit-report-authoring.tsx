@@ -237,6 +237,8 @@ interface VisitReportAuthoringProps {
   reportSignerNames?: { author: string | null; approver: string | null };
   /** Set when opening for review failed (from author page redirect). */
   claimReviewError?: string | null;
+  /** List + navigation base, e.g. `/protected/studies/{id}/trip-reports`. */
+  tripReportsBasePath?: string;
 }
 
 const RESPONSE_OPTIONS = ['yes', 'no', 'na'] as const;
@@ -269,6 +271,7 @@ export function VisitReportAuthoring({
   auditEvents = [],
   reportSignerNames = { author: null, approver: null },
   claimReviewError = null,
+  tripReportsBasePath = '/protected/studies',
 }: VisitReportAuthoringProps) {
   const visit = visitProp as VisitReportAuthoringVisit;
   const report = reportProp as VisitReportAuthoringReport | null;
@@ -513,7 +516,7 @@ export function VisitReportAuthoring({
   useEffect(() => {
     if (!claimReviewError) return;
     toast.error(claimReviewError);
-    router.replace(`/protected/trip-reports/${visitId}/author`);
+    router.replace(`${tripReportsBasePath}/${visitId}/author`);
   }, [claimReviewError, visitId, router]);
 
   const handleApproveReport = () => {
@@ -805,7 +808,7 @@ export function VisitReportAuthoring({
   if (!report) {
     return (
       <div className="space-y-6">
-        <Link href="/protected/trip-reports" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}>
+        <Link href={tripReportsBasePath} className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}>
           <ArrowLeft className="h-4 w-4 mr-1" />
           Trip Report Summary
         </Link>
@@ -852,7 +855,7 @@ export function VisitReportAuthoring({
           <div className="sticky top-20 flex flex-col gap-3 max-h-[calc(100vh-6rem)] overflow-y-auto">
             {/* Actions */}
             <div className="flex flex-col gap-1.5">
-              <Link href="/protected/trip-reports" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'justify-start text-xs')}>
+              <Link href={tripReportsBasePath} className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), 'justify-start text-xs')}>
                 <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
                 Trip Report Summary
               </Link>
@@ -1138,7 +1141,7 @@ export function VisitReportAuthoring({
       <div className="flex-1 min-w-0 space-y-4 [--border:oklch(0.46_0_0)] [--input:oklch(0.46_0_0)] dark:[--border:oklch(0.4_0_0)] dark:[--input:oklch(0.4_0_0)]">
         {/* Responsive action bar (visible when sidebars hidden) */}
         <div className="xl:hidden flex flex-wrap items-center gap-2 pb-4 print:hidden" aria-label="Report actions">
-          <Link href="/protected/trip-reports" className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}>
+          <Link href={tripReportsBasePath} className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }))}>
             <ArrowLeft className="h-4 w-4 mr-1" />
             Trip Report Summary
           </Link>

@@ -3,17 +3,10 @@
 import { useState, useCallback, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  Plus,
-  Trash2,
-  Building2,
-  MapPin,
-  User,
-  Target,
-} from 'lucide-react';
+import { Plus, Trash2, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import {
@@ -36,6 +29,10 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
+import { useStudyHub } from '@/components/ctms/study-hub-context';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
+
 import type { StudySite } from '@/lib/types/ctms';
 import { getStudySites, deleteSite } from '@/lib/actions/sites';
 
@@ -46,6 +43,7 @@ interface SitesTabProps {
 
 export function SitesTab({ studyId, initialSites }: SitesTabProps) {
   const router = useRouter();
+  const readOnly = useStudyHub()?.isStudyReadOnly ?? false;
   const [sites, setSites] = useState(initialSites);
   const [, startTransition] = useTransition();
 
@@ -79,14 +77,28 @@ export function SitesTab({ studyId, initialSites }: SitesTabProps) {
             Manage investigator sites participating in this study.
           </p>
         </div>
-        <Button
-          size="sm"
-          render={<Link href={`/protected/sites/new?studyId=${studyId}`} />}
-          nativeButton={false}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Site
-        </Button>
+        {readOnly ? (
+          <Tooltip>
+            <TooltipTrigger render={<span className="inline-flex" />}>
+              <Button size="sm" disabled aria-label="Add site">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Site
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              {STUDY_DEACTIVATED_TOOLTIP}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button
+            size="sm"
+            render={<Link href={`/protected/studies/${studyId}/sites/new`} />}
+            nativeButton={false}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Site
+          </Button>
+        )}
       </div>
 
       {sites.length === 0 ? (
@@ -118,7 +130,7 @@ export function SitesTab({ studyId, initialSites }: SitesTabProps) {
                 <TableRow
                   key={site.id}
                   className="cursor-pointer h-[40px]"
-                  onClick={() => router.push(`/protected/sites/${site.id}`)}
+                  onClick={() => router.push(`/protected/studies/${studyId}/sites/${site.id}`)}
                 >
                   <TableCell className="text-xs font-medium">
                     {site.site_number}
@@ -137,33 +149,53 @@ export function SitesTab({ studyId, initialSites }: SitesTabProps) {
                     {site.target_enrollment}
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    <AlertDialog>
-                      <AlertDialogTrigger
-                        render={
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" />
-                        }
-                      >
-                        <Trash2 className="h-3 w-3 text-destructive" />
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Site</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will permanently delete {site.name} ({site.site_number})
-                            and all associated contacts and checklist items. This action
-                            cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDelete(site.id)}
+                    {readOnly ? (
+                      <Tooltip>
+                        <TooltipTrigger render={<span className="inline-flex" />}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            disabled
+                            aria-label="Delete site"
                           >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-xs text-xs">
+                          {STUDY_DEACTIVATED_TOOLTIP}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <AlertDialog>
+                        <AlertDialogTrigger
+                          render={
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" />
+                          }
+                        >
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Site</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will permanently delete {site.name} ({site.site_number})
+                              and all associated contacts and checklist items. This action
+                              cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDelete(site.id)}
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

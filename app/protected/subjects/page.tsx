@@ -1,18 +1,6 @@
-import { getAllSubjects } from '@/lib/actions/subjects';
-import { SubjectList } from '@/components/ctms/subjects/subject-list';
+import { redirect } from 'next/navigation';
 
-export default async function SubjectsPage() {
-  const subjects = await getAllSubjects();
-
-  return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Subjects</h1>
-        <p className="text-muted-foreground">
-          All enrolled subjects across your studies.
-        </p>
-      </div>
-      <SubjectList subjects={subjects} />
-    </div>
-  );
+/** Legacy URL: subjects are opened from a study. */
+export default function SubjectsPage() {
+  redirect('/protected/studies?studyRequired=1');
 }

@@ -1,8 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertStudyWritable, assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import { syncInstitutionForStudySite, syncSiteContactToDirectory } from '@/lib/actions/site-directory-sync';
+import { geocodeSiteAddress } from '@/lib/maps/geocoding';
 import {
   SITE_CONTACT_ROLE_PRINCIPAL_INVESTIGATOR,
   type StudySite,
@@ -25,6 +28,46 @@ async function getCompanyId(): Promise<string> {
     .single();
   if (!profile?.company_id) throw new Error('No company found');
   return profile.company_id;
+}
+
+async function updateSiteGeocoding(params: {
+  siteId: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+}): Promise<void> {
+  const supabase = await createClient();
+  const geocoded = await geocodeSiteAddress({
+    address: params.address,
+    city: params.city,
+    state: params.state,
+    postalCode: params.postalCode,
+  });
+
+  if (geocoded.status === 'success') {
+    await supabase
+      .from('study_sites')
+      .update({
+        latitude: geocoded.latitude,
+        longitude: geocoded.longitude,
+        geocode_status: geocoded.status,
+        geocoded_at: new Date().toISOString(),
+      })
+      .eq('id', params.siteId);
+    return;
+  }
+
+  const clearCoordinates = geocoded.status === 'missing_address';
+  await supabase
+    .from('study_sites')
+    .update({
+      latitude: clearCoordinates ? null : undefined,
+      longitude: clearCoordinates ? null : undefined,
+      geocode_status: geocoded.status,
+      geocoded_at: null,
+    })
+    .eq('id', params.siteId);
 }
 
 /**
@@ -172,6 +215,8 @@ export async function createSite(
   const supabase = await createClient();
   try {
     const companyId = await getCompanyId();
+    const { error: writeGuard } = await assertStudyWritable(supabase, input.study_id, companyId);
+    if (writeGuard) return { data: null, error: writeGuard };
 
     const { data, error } = await supabase
       .from('study_sites')
@@ -190,6 +235,7 @@ export async function createSite(
         status: input.status || 'identified',
         activation_date: input.activation_date || null,
         target_enrollment: input.target_enrollment ?? 0,
+        geocode_status: 'pending',
       })
       .select()
       .single();
@@ -210,10 +256,21 @@ export async function createSite(
       pi_email: input.pi_email,
       pi_directory_contact_id: input.pi_directory_contact_id ?? null,
     });
+    try {
+      await updateSiteGeocoding({
+        siteId: row.id,
+        address: row.address,
+        city: row.city,
+        state: row.state,
+        postalCode: row.postal_code,
+      });
+    } catch {
+      // Geocoding is best-effort and should not fail site creation.
+    }
 
     revalidatePath('/protected');
     revalidatePath('/protected/sites');
-    revalidatePath(`/protected/studies/${input.study_id}`);
+    revalidateStudyCtmsLayout(input.study_id);
     revalidatePath(`/protected/sites/${row.id}`);
     return { data: row, error: null };
   } catch (err) {
@@ -251,8 +308,12 @@ export async function updateSite(
 ): Promise<{ data: StudySite | null; error: string | null }> {
   const supabase = await createClient();
   try {
-    const companyId = await getCompanyId();
     const { id, study_id, ...updates } = input;
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, study_id);
+    if (writeGuard) return { data: null, error: writeGuard };
+    const shouldRegeocode = (
+      ['address', 'city', 'state', 'postal_code'] as const
+    ).some((key) => updates[key] !== undefined);
     const cleanUpdates: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(updates)) {
@@ -283,11 +344,24 @@ export async function updateSite(
       pi_email: row.pi_email,
       pi_directory_contact_id: row.pi_directory_contact_id,
     });
+    if (shouldRegeocode) {
+      try {
+        await updateSiteGeocoding({
+          siteId: id,
+          address: row.address,
+          city: row.city,
+          state: row.state,
+          postalCode: row.postal_code,
+        });
+      } catch {
+        // Geocoding is best-effort and should not block site updates.
+      }
+    }
 
     revalidatePath('/protected');
     revalidatePath('/protected/sites');
     revalidatePath(`/protected/sites/${id}`);
-    revalidatePath(`/protected/studies/${study_id}`);
+    revalidateStudyCtmsLayout(study_id);
     return { data: row, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -300,6 +374,9 @@ export async function deleteSite(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase
       .from('study_sites')
       .delete()
@@ -309,7 +386,7 @@ export async function deleteSite(
 
     revalidatePath('/protected');
     revalidatePath('/protected/sites');
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -335,6 +412,9 @@ export async function addSiteContact(
   const supabase = await createClient();
   try {
     const companyId = await getCompanyId();
+    const { error: writeGuard } = await assertStudyWritable(supabase, studyId, companyId);
+    if (writeGuard) return { data: null, error: writeGuard };
+
     const { data, error } = await supabase
       .from('site_contacts')
       .insert({
@@ -370,6 +450,16 @@ export async function updateSiteContact(
   const supabase = await createClient();
   try {
     const companyId = await getCompanyId();
+    let resolvedStudyId = studyId;
+    if (!resolvedStudyId) {
+      const { data: ss } = await supabase.from('study_sites').select('study_id').eq('id', siteId).maybeSingle();
+      resolvedStudyId = ss?.study_id;
+    }
+    if (resolvedStudyId) {
+      const { error: writeGuard } = await assertStudyWritable(supabase, resolvedStudyId, companyId);
+      if (writeGuard) return { error: writeGuard };
+    }
+
     const cleanUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (value !== undefined) {
@@ -383,12 +473,6 @@ export async function updateSiteContact(
       .eq('id', id);
 
     if (error) return { error: error.message };
-
-    let resolvedStudyId = studyId;
-    if (!resolvedStudyId) {
-      const { data: ss } = await supabase.from('study_sites').select('study_id').eq('id', siteId).maybeSingle();
-      resolvedStudyId = ss?.study_id;
-    }
 
     if (resolvedStudyId) {
       const { data: row } = await supabase.from('site_contacts').select('*').eq('id', id).single();
@@ -410,6 +494,12 @@ export async function deleteSiteContact(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { data: ss } = await supabase.from('study_sites').select('study_id').eq('id', siteId).maybeSingle();
+    if (ss?.study_id) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, ss.study_id);
+      if (writeGuard) return { error: writeGuard };
+    }
+
     const { error } = await supabase
       .from('site_contacts')
       .delete()

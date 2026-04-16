@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/server';
+import { assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import type {
   EtmfDocument,
   EtmfExpectedDocument,
@@ -191,6 +192,9 @@ export async function initializeStudyEdl(studyId: string): Promise<{ success: bo
   const ctx = await getProfileContext();
   if (!ctx.ok) return { success: false, error: ctx.error };
 
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(ctx.supabase, studyId);
+  if (writeGuard) return { success: false, error: writeGuard };
+
   const { data, error } = await ctx.supabase.rpc('etmf_initialize_study_edl', { p_study_id: studyId });
   if (error) return { success: false, error: error.message };
 
@@ -204,6 +208,9 @@ export async function toggleEdl(input: { study_id: string; tmf_ref_id: string; f
 
   const ctx = await getProfileContext();
   if (!ctx.ok) return { success: false, error: ctx.error };
+
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(ctx.supabase, input.study_id);
+  if (writeGuard) return { success: false, error: writeGuard };
 
   const { error } = await ctx.supabase
     .from('etmf_expected_documents')
@@ -323,6 +330,9 @@ export async function toggleStaffEdl(input: { site_id: string; tmf_ref_id: strin
 
   if (!site) return { success: false, error: 'Site not found' };
 
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(ctx.supabase, site.study_id);
+  if (writeGuard) return { success: false, error: writeGuard };
+
   const { data: existing } = await ctx.supabase
     .from('etmf_staff_expected_documents')
     .select('id')
@@ -440,6 +450,9 @@ export async function createEtmfDocument(input: {
   const ctx = await getProfileContext();
   if (!ctx.ok) return { success: false, error: ctx.error };
 
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(ctx.supabase, input.study_id);
+  if (writeGuard) return { success: false, error: writeGuard };
+
   const { data, error } = await ctx.supabase
     .from('etmf_documents')
     .insert({
@@ -489,6 +502,12 @@ export async function updateEtmfDocument(input: {
     .eq('id', input.id)
     .single();
 
+  const studyId = (oldDoc as { study_id?: string } | null)?.study_id;
+  if (studyId) {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(ctx.supabase, studyId);
+    if (writeGuard) return { success: false, error: writeGuard };
+  }
+
   const { id, ...updateData } = input;
   const { error } = await ctx.supabase
     .from('etmf_documents')
@@ -526,6 +545,12 @@ export async function updateEtmfDocumentStatus(input: {
     .select('*')
     .eq('id', input.id)
     .single();
+
+  const studyId = (oldDoc as { study_id?: string } | null)?.study_id;
+  if (studyId) {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(ctx.supabase, studyId);
+    if (writeGuard) return { success: false, error: writeGuard };
+  }
 
   const updateData: Record<string, unknown> = {
     document_status: input.document_status,
@@ -577,6 +602,12 @@ export async function deleteEtmfDocument(documentId: string): Promise<{ success:
 
   if (!doc) return { success: false, error: 'Document not found' };
 
+  const studyId = (doc as { study_id?: string }).study_id;
+  if (studyId) {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(ctx.supabase, studyId);
+    if (writeGuard) return { success: false, error: writeGuard };
+  }
+
   await ctx.supabase.from('etmf_audit_log').insert({
     company_id: ctx.profile.company_id,
     etmf_document_id: documentId,
@@ -605,6 +636,13 @@ export async function uploadEtmfDocumentFile(documentId: string, formData: FormD
 
   const file = formData.get('file') as File;
   if (!file) return { success: false, error: 'No file provided' };
+
+  const { data: docRow } = await ctx.supabase.from('etmf_documents').select('study_id').eq('id', documentId).maybeSingle();
+  const uploadStudyId = (docRow as { study_id?: string } | null)?.study_id;
+  if (uploadStudyId) {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(ctx.supabase, uploadStudyId);
+    if (writeGuard) return { success: false, error: writeGuard };
+  }
 
   const fileName = `${Date.now()}_${file.name}`;
   const storagePath = `${ctx.profile.company_id}/${documentId}/${fileName}`;
@@ -686,6 +724,9 @@ export async function addEtmfSite(input: { study_id: string; study_country_id: s
   const ctx = await getProfileContext();
   if (!ctx.ok) return { success: false, error: ctx.error };
 
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(ctx.supabase, input.study_id);
+  if (writeGuard) return { success: false, error: writeGuard };
+
   const { data, error } = await ctx.supabase
     .from('study_sites')
     .insert({
@@ -714,6 +755,9 @@ export async function addEtmfStaffMember(input: { study_id: string; site_id: str
 
   const ctx = await getProfileContext();
   if (!ctx.ok) return { success: false, error: ctx.error };
+
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(ctx.supabase, input.study_id);
+  if (writeGuard) return { success: false, error: writeGuard };
 
   const { data, error } = await ctx.supabase
     .from('study_team_members')

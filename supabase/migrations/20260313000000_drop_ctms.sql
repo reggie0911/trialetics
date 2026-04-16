@@ -197,5 +197,6 @@ DROP VIEW IF EXISTS public.protocol_cost_summary CASCADE;
 DROP VIEW IF EXISTS public.protocol_training_summary CASCADE;
 DROP VIEW IF EXISTS public.region_training_summary CASCADE;
 DROP VIEW IF EXISTS public.risk_register_summary CASCADE;
-DROP VIEW IF EXISTS public.sdv_merged_view CASCADE;
+-- sdv_merged_view is a materialized view (see 20260101000001_trackers.sql); DROP VIEW fails on it.
+DROP MATERIALIZED VIEW IF EXISTS public.sdv_merged_view CASCADE;
 DROP VIEW IF EXISTS public.site_financial_summary CASCADE;

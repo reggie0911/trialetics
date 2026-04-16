@@ -1,6 +1,14 @@
 -- Fix 5 SDV RPC functions that still reference the dropped sdv_merged_view.
 -- Rewrite them using the same inline CTE pattern already used by
 -- get_sdv_site_summary, get_sdv_aggregations, and get_sdv_filter_options.
+--
+-- Return TABLE shapes differ from 20260101000001_trackers.sql; Postgres cannot
+-- change OUT column types with CREATE OR REPLACE alone.
+DROP FUNCTION IF EXISTS public.get_sdv_subject_summary(UUID, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.get_sdv_event_summary(UUID, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.get_sdv_form_summary(UUID, TEXT, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.get_sdv_item_details(UUID, TEXT, TEXT, TEXT, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.get_sdv_cascading_filter_options(UUID, TEXT, TEXT, TEXT);
 
 -- 1. get_sdv_subject_summary
 CREATE OR REPLACE FUNCTION public.get_sdv_subject_summary(

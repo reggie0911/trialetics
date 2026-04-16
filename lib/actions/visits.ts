@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import type {
   MonitoringVisit,
   MonitoringVisitWithRelations,
@@ -28,6 +30,24 @@ async function getProfileId(): Promise<string> {
   return profile.id;
 }
 
+async function getStudyIdForVisit(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  visitId: string
+): Promise<string | null> {
+  const { data } = await supabase.from('monitoring_visits').select('study_id').eq('id', visitId).maybeSingle();
+  return (data as { study_id: string } | null)?.study_id ?? null;
+}
+
+async function getStudyIdForTripReport(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  reportId: string
+): Promise<string | null> {
+  const { data: tr } = await supabase.from('trip_reports').select('visit_id').eq('id', reportId).maybeSingle();
+  const vid = (tr as { visit_id: string } | null)?.visit_id;
+  if (!vid) return null;
+  return getStudyIdForVisit(supabase, vid);
+}
+
 // =====================================================
 // Monitoring Visits
 // =====================================================
@@ -43,12 +63,14 @@ export async function getStudyVisits(studyId: string): Promise<MonitoringVisitWi
   return (data as unknown as MonitoringVisitWithRelations[]) ?? [];
 }
 
-export async function getAllVisits(): Promise<MonitoringVisitWithRelations[]> {
+export async function getAllVisits(studyId?: string): Promise<MonitoringVisitWithRelations[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from('monitoring_visits')
     .select('*, study_sites(site_number, name), profiles(first_name, last_name), studies(title, protocol_number), trip_reports(*)')
     .order('planned_date', { ascending: true, nullsFirst: false });
+  if (studyId) query = query.eq('study_id', studyId);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data as unknown as MonitoringVisitWithRelations[]) ?? [];
 }
@@ -80,6 +102,9 @@ export async function createVisit(
 ): Promise<{ data: MonitoringVisit | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.study_id);
+    if (writeGuard) return { data: null, error: writeGuard };
+
     const { data, error } = await supabase
       .from('monitoring_visits')
       .insert({
@@ -95,7 +120,7 @@ export async function createVisit(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath(`/protected/studies/${input.study_id}`);
+    revalidateStudyCtmsLayout(input.study_id);
     revalidatePath('/protected/visits');
     return { data: data as unknown as MonitoringVisit, error: null };
   } catch (err) {
@@ -120,6 +145,9 @@ export async function updateVisit(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.study_id);
+    if (writeGuard) return { error: writeGuard };
+
     const { id, study_id, ...updates } = input;
     const cleanUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
@@ -129,7 +157,7 @@ export async function updateVisit(
     }
     const { error } = await supabase.from('monitoring_visits').update(cleanUpdates).eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${study_id}`);
+    revalidateStudyCtmsLayout(study_id);
     revalidatePath('/protected/visits');
     revalidatePath(`/protected/visits/${id}`);
     return { error: null };
@@ -141,9 +169,12 @@ export async function updateVisit(
 export async function deleteVisit(id: string, studyId: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase.from('monitoring_visits').delete().eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     revalidatePath('/protected/visits');
     return { error: null };
   } catch (err) {
@@ -175,6 +206,12 @@ export async function createTripReport(
 ): Promise<{ data: TripReport | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const studyId = await getStudyIdForVisit(supabase, visitId);
+    if (studyId) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+      if (writeGuard) return { data: null, error: writeGuard };
+    }
+
     const profileId = await getProfileId();
     const { data, error } = await supabase
       .from('trip_reports')
@@ -199,6 +236,12 @@ export async function updateTripReport(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const studyId = await getStudyIdForTripReport(supabase, id);
+    if (studyId) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+      if (writeGuard) return { error: writeGuard };
+    }
+
     const cleanUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (value !== undefined) {
@@ -250,6 +293,12 @@ export async function createFinding(
 ): Promise<{ data: TripReportFinding | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const studyId = await getStudyIdForTripReport(supabase, input.trip_report_id);
+    if (studyId) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+      if (writeGuard) return { data: null, error: writeGuard };
+    }
+
     const { data, error } = await supabase
       .from('trip_report_findings')
       .insert({
@@ -273,6 +322,16 @@ export async function updateFinding(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { data: f } = await supabase.from('trip_report_findings').select('trip_report_id').eq('id', id).maybeSingle();
+    const rid = (f as { trip_report_id: string } | null)?.trip_report_id;
+    if (rid) {
+      const studyId = await getStudyIdForTripReport(supabase, rid);
+      if (studyId) {
+        const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+        if (writeGuard) return { error: writeGuard };
+      }
+    }
+
     const cleanUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (value !== undefined) {
@@ -293,6 +352,16 @@ export async function updateFinding(
 export async function deleteFinding(id: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { data: f } = await supabase.from('trip_report_findings').select('trip_report_id').eq('id', id).maybeSingle();
+    const rid = (f as { trip_report_id: string } | null)?.trip_report_id;
+    if (rid) {
+      const studyId = await getStudyIdForTripReport(supabase, rid);
+      if (studyId) {
+        const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+        if (writeGuard) return { error: writeGuard };
+      }
+    }
+
     const { error } = await supabase.from('trip_report_findings').delete().eq('id', id);
     if (error) return { error: error.message };
     return { error: null };
@@ -324,6 +393,12 @@ export async function createFollowUp(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const studyId = await getStudyIdForTripReport(supabase, tripReportId);
+    if (studyId) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+      if (writeGuard) return { error: writeGuard };
+    }
+
     const { error } = await supabase
       .from('follow_up_items')
       .insert({
@@ -345,6 +420,16 @@ export async function updateFollowUp(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { data: row } = await supabase.from('follow_up_items').select('trip_report_id').eq('id', id).maybeSingle();
+    const trid = (row as { trip_report_id: string } | null)?.trip_report_id;
+    if (trid) {
+      const studyId = await getStudyIdForTripReport(supabase, trid);
+      if (studyId) {
+        const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+        if (writeGuard) return { error: writeGuard };
+      }
+    }
+
     const cleanUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
       if (value !== undefined) {
@@ -365,6 +450,16 @@ export async function updateFollowUp(
 export async function deleteFollowUp(id: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { data: row } = await supabase.from('follow_up_items').select('trip_report_id').eq('id', id).maybeSingle();
+    const trid = (row as { trip_report_id: string } | null)?.trip_report_id;
+    if (trid) {
+      const studyId = await getStudyIdForTripReport(supabase, trid);
+      if (studyId) {
+        const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+        if (writeGuard) return { error: writeGuard };
+      }
+    }
+
     const { error } = await supabase.from('follow_up_items').delete().eq('id', id);
     if (error) return { error: error.message };
     return { error: null };

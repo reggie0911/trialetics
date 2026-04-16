@@ -1,7 +1,11 @@
 'use server';
 
 import { createClient } from '@/lib/server';
-import type { Subscription, SubscriptionPlan } from '@/lib/types/ctms';
+import {
+  normalizeSubscriptionPlan,
+  type Subscription,
+  type SubscriptionPlan,
+} from '@/lib/types/ctms';
 
 async function getCompanyId(): Promise<string> {
   const supabase = await createClient();
@@ -43,7 +47,7 @@ export async function getCompanyMemberCount(): Promise<number> {
 
 export async function getCurrentPlan(): Promise<SubscriptionPlan> {
   const sub = await getSubscription();
-  if (!sub) return 'basic';
-  if (sub.status === 'cancelled') return 'basic';
-  return sub.plan;
+  if (!sub) return 'independent_consultant';
+  if (sub.status === 'cancelled') return 'independent_consultant';
+  return normalizeSubscriptionPlan(sub.plan);
 }

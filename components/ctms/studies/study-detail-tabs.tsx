@@ -1,11 +1,9 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Pencil,
-  Archive,
   ArrowLeft,
   Globe,
   Building2,
@@ -20,31 +18,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { toast } from 'sonner';
-
-import { closeStudy } from '@/lib/actions/studies';
-import type { Study, StudyCountryWithSubmissions, StudySite, SubjectWithSite, EnrollmentFunnelData, StudyTeamMemberWithProfile, TeamRole, MonitoringVisitWithRelations, StudyBudgetWithItems, SitePaymentWithSite, FinancialSummary, FinanceInvoiceWithRelations, KriValueWithDefinition, EnrollmentDataPoint, FinanceApprovalTemplateOption } from '@/lib/types/ctms';
+import type { Study, StudyCountryWithSubmissions, StudySite, SubjectWithSite, EnrollmentFunnelData, TeamRole, TeamMemberWithStudies, MonitoringVisitWithRelations, StudyBudgetWithItems, SitePaymentWithSite, FinancialSummary, FinanceInvoiceWithRelations, KriValueWithDefinition, EnrollmentDataPoint, FinanceApprovalTemplateOption } from '@/lib/types/ctms';
+import type { JoinLink, PendingInvitation } from '@/lib/actions/team';
 import { TRIP_REPORT_DAYS_BASIS_LABELS } from '@/lib/types/visit-reports';
 import { studyOverviewHasDisplayableContent } from '@/lib/validation/study-overview';
 import { CountriesTab } from '@/components/ctms/countries/countries-tab';
 import { SitesTab } from '@/components/ctms/sites/sites-tab';
 import { SubjectsTab } from '@/components/ctms/subjects/subjects-tab';
-import { TeamTab } from '@/components/ctms/team/team-tab';
+import { TeamStudyPanel } from '@/components/ctms/team/team-study-panel';
 import { VisitsTab } from '@/components/ctms/visits/visits-tab';
 import { FinancialsTab } from '@/components/ctms/financials/financials-tab';
 import { KriGauge } from '@/components/ctms/reports/kri-gauge';
 import { EnrollmentChart } from '@/components/ctms/reports/enrollment-chart';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const STUDY_TAB_VALUES = [
   'overview',
@@ -58,6 +44,16 @@ const STUDY_TAB_VALUES = [
 
 type StudyTabValue = (typeof STUDY_TAB_VALUES)[number];
 
+const STUDY_TAB_TOOLTIPS: Record<StudyTabValue, string> = {
+  overview: 'Study summary, protocol fields, enrollment curve, and key risk indicators.',
+  countries: 'Country-level regulatory tracking and submissions for this study.',
+  sites: 'Investigator sites, locations, and site-level actions.',
+  subjects: 'Enrolled subjects, screening, and randomization.',
+  team: 'Team members, roles, and site assignments for this study.',
+  visits: 'Monitoring visits: schedule visits, table and calendar views, and trip reports.',
+  financials: 'Budgets, invoices, and payments for this study.',
+};
+
 function isStudyTab(v: string | null): v is StudyTabValue {
   return v !== null && (STUDY_TAB_VALUES as readonly string[]).includes(v);
 }
@@ -69,8 +65,12 @@ export interface StudyDetailTabsProps {
   sites: StudySite[];
   subjects: SubjectWithSite[];
   funnel: EnrollmentFunnelData;
-  teamMembers: StudyTeamMemberWithProfile[];
+  teamTabCount: number;
+  teamDirectoryMembers: TeamMemberWithStudies[];
+  teamStudies: Study[];
   teamRoles: TeamRole[];
+  pendingTeamInvitations: PendingInvitation[];
+  joinTeamLinks: JoinLink[];
   monitoringVisits: MonitoringVisitWithRelations[];
   budgets: StudyBudgetWithItems[];
   payments: SitePaymentWithSite[];
@@ -99,8 +99,12 @@ export function StudyDetailTabs({
   sites,
   subjects,
   funnel,
-  teamMembers,
+  teamTabCount,
+  teamDirectoryMembers,
+  teamStudies,
   teamRoles,
+  pendingTeamInvitations,
+  joinTeamLinks,
   monitoringVisits,
   budgets,
   payments,
@@ -114,20 +118,15 @@ export function StudyDetailTabs({
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const defaultTab: StudyTabValue = isStudyTab(tabParam) ? tabParam : 'overview';
-  const [isClosing, setIsClosing] = useState(false);
+  const activeTab: StudyTabValue = isStudyTab(tabParam) ? tabParam : 'overview';
 
-  const handleClose = async () => {
-    setIsClosing(true);
-    const { error } = await closeStudy(study.id);
-    if (error) {
-      toast.error(error);
-      setIsClosing(false);
-      return;
-    }
-    toast.success('Study closed');
-    router.push('/protected/studies');
+  /** Keeps address bar in sync without a new history entry per tab switch. */
+  const handleStudyTabChange = (next: string) => {
+    if (!isStudyTab(next)) return;
+    router.replace(`/protected/studies/${study.id}?tab=${next}`, { scroll: false });
   };
+
+  const isStudyReadOnly = study.status === 'closed';
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return null;
@@ -157,68 +156,99 @@ export function StudyDetailTabs({
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" size="sm" render={<Link href={`/protected/studies/${study.id}/edit`} />} nativeButton={false}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Edit
-          </Button>
-          {isAdmin && (
-            <AlertDialog>
-              <AlertDialogTrigger render={<Button variant="outline" size="sm" disabled={isClosing} />}>
-                <Archive className="mr-2 h-4 w-4" />
-                Close Study
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Close Study</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will mark &ldquo;{study.title}&rdquo; as closed. The study will no longer be
-                    active, but all associated data will be preserved.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleClose} disabled={isClosing}>
-                    Close Study
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={isStudyReadOnly}
+                  render={
+                    isStudyReadOnly ? undefined : <Link href={`/protected/studies/${study.id}/edit`} />
+                  }
+                  nativeButton={isStudyReadOnly}
+                />
+              }
+            >
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              {isStudyReadOnly
+                ? 'Study is deactivated; editing is disabled until the study is reactivated.'
+                : 'Edit study metadata, overview fields, and configuration.'}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
       <Tabs
         tabsId={`study-detail-${study.id}`}
-        key={`${study.id}-${defaultTab}`}
-        defaultValue={defaultTab}
+        value={activeTab}
+        onValueChange={handleStudyTabChange}
         className="space-y-4"
       >
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="countries">
-            <Globe className="mr-1 h-3.5 w-3.5" />
-            Countries ({counts.countries})
-          </TabsTrigger>
-          <TabsTrigger value="sites">
-            <Building2 className="mr-1 h-3.5 w-3.5" />
-            Sites ({counts.sites})
-          </TabsTrigger>
-          <TabsTrigger value="subjects">
-            <Users className="mr-1 h-3.5 w-3.5" />
-            Subjects ({subjects.length})
-          </TabsTrigger>
-          <TabsTrigger value="team">
-            <UsersRound className="mr-1 h-3.5 w-3.5" />
-            Team ({teamMembers.length})
-          </TabsTrigger>
-          <TabsTrigger value="visits">
-            <ClipboardCheck className="mr-1 h-3.5 w-3.5" />
-            Visits ({monitoringVisits.length})
-          </TabsTrigger>
-          <TabsTrigger value="financials">
-            <DollarSign className="mr-1 h-3.5 w-3.5" />
-            Financials
-          </TabsTrigger>
+        <TabsList className="flex w-full min-w-0 flex-wrap justify-start gap-y-1">
+          <Tooltip>
+            <TooltipTrigger render={<TabsTrigger value="overview" />}>Overview</TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              {STUDY_TAB_TOOLTIPS.overview}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={<TabsTrigger value="countries" />}>
+              <Globe className="mr-1 h-3.5 w-3.5" />
+              Countries ({counts.countries})
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              {STUDY_TAB_TOOLTIPS.countries}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={<TabsTrigger value="sites" />}>
+              <Building2 className="mr-1 h-3.5 w-3.5" />
+              Sites ({counts.sites})
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              {STUDY_TAB_TOOLTIPS.sites}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={<TabsTrigger value="subjects" />}>
+              <Users className="mr-1 h-3.5 w-3.5" />
+              Subjects ({subjects.length})
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              {STUDY_TAB_TOOLTIPS.subjects}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={<TabsTrigger value="team" />}>
+              <UsersRound className="mr-1 h-3.5 w-3.5" />
+              Team ({teamTabCount})
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              {STUDY_TAB_TOOLTIPS.team}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={<TabsTrigger value="visits" />}>
+              <ClipboardCheck className="mr-1 h-3.5 w-3.5" />
+              Visits ({monitoringVisits.length})
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              {STUDY_TAB_TOOLTIPS.visits}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={<TabsTrigger value="financials" />}>
+              <DollarSign className="mr-1 h-3.5 w-3.5" />
+              Financials
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              {STUDY_TAB_TOOLTIPS.financials}
+            </TooltipContent>
+          </Tooltip>
         </TabsList>
 
         <TabsContent value="overview">
@@ -495,21 +525,26 @@ export function StudyDetailTabs({
           />
         </TabsContent>
 
-        <TabsContent value="team">
-          <TeamTab
+        <TabsContent value="team" forceMount>
+          <TeamStudyPanel
             studyId={study.id}
-            initialMembers={teamMembers}
+            teamDirectoryMembers={teamDirectoryMembers}
+            studies={teamStudies}
             teamRoles={teamRoles}
-            sites={sites.map((s) => ({ id: s.id, site_number: s.site_number, name: s.name }))}
+            pendingInvitations={pendingTeamInvitations}
+            joinLinks={joinTeamLinks}
+            isAdmin={isAdmin}
           />
         </TabsContent>
 
-        <TabsContent value="visits">
-          <VisitsTab
-            studyId={study.id}
-            initialVisits={monitoringVisits}
-            sites={sites.map((s) => ({ id: s.id, site_number: s.site_number, name: s.name }))}
-          />
+        <TabsContent value="visits" forceMount>
+          <div data-onboarding="page-visits">
+            <VisitsTab
+              studyId={study.id}
+              initialVisits={monitoringVisits}
+              sites={sites.map((s) => ({ id: s.id, site_number: s.site_number, name: s.name }))}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="financials">

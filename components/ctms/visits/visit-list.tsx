@@ -43,17 +43,20 @@ import {
   MONITORING_VISIT_STATUS_OPTIONS,
   VISIT_TYPE_LABEL,
 } from '@/lib/types/ctms';
+import { ctmsStudyPath } from '@/lib/nav/ctms-study-paths';
 
 interface VisitListProps {
   visits: MonitoringVisitWithRelations[];
   studies: Pick<Study, 'id' | 'title'>[];
+  /** When set, list is scoped to one study (URLs and filters). */
+  scopeStudyId?: string;
 }
 
-export function VisitList({ visits, studies }: VisitListProps) {
+export function VisitList({ visits, studies, scopeStudyId }: VisitListProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [studyFilter, setStudyFilter] = useState<string>('all');
+  const [studyFilter, setStudyFilter] = useState<string>(() => scopeStudyId ?? 'all');
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '—';
@@ -77,6 +80,9 @@ export function VisitList({ visits, studies }: VisitListProps) {
     }
     return true;
   });
+
+  const visitDetailHref = (visit: MonitoringVisitWithRelations) =>
+    ctmsStudyPath(scopeStudyId ?? visit.study_id, 'visits', visit.id);
 
   const counts = {
     total: visits.length,
@@ -159,7 +165,7 @@ export function VisitList({ visits, studies }: VisitListProps) {
             ))}
           </SelectContent>
         </Select>
-        {studies.length > 1 && (
+        {!scopeStudyId && studies.length > 1 && (
           <Select value={studyFilter} onValueChange={setStudyFilter}>
             <SelectTrigger className="w-[180px]">
               <SelectValue
@@ -209,7 +215,7 @@ export function VisitList({ visits, studies }: VisitListProps) {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs">Type</TableHead>
-                    <TableHead className="text-xs">Study</TableHead>
+                    {!scopeStudyId && <TableHead className="text-xs">Study</TableHead>}
                     <TableHead className="text-xs">Site</TableHead>
                     <TableHead className="text-xs">Monitor</TableHead>
                     <TableHead className="text-xs">Planned Date</TableHead>
@@ -229,11 +235,13 @@ export function VisitList({ visits, studies }: VisitListProps) {
                             {VISIT_TYPE_LABEL[visit.visit_type]}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground truncate max-w-[120px]">
-                          <Link href={`/protected/studies/${visit.study_id}`} className="hover:underline">
-                            {visit.studies?.title ?? '—'}
-                          </Link>
-                        </TableCell>
+                        {!scopeStudyId && (
+                          <TableCell className="text-xs text-muted-foreground truncate max-w-[120px]">
+                            <Link href={`/protected/studies/${visit.study_id}`} className="hover:underline">
+                              {visit.studies?.title ?? '—'}
+                            </Link>
+                          </TableCell>
+                        )}
                         <TableCell className="text-xs font-medium">
                           {visit.study_sites?.name ?? '—'}
                         </TableCell>
@@ -264,7 +272,7 @@ export function VisitList({ visits, studies }: VisitListProps) {
                             variant="ghost"
                             size="sm"
                             className="h-7 w-7 p-0"
-                            render={<Link href={`/protected/visits/${visit.id}`} />}
+                            render={<Link href={visitDetailHref(visit)} />}
                             nativeButton={false}
                           >
                             <ExternalLink className="h-3 w-3" />
@@ -280,7 +288,7 @@ export function VisitList({ visits, studies }: VisitListProps) {
         </TabsContent>
 
         <TabsContent value="calendar">
-          <VisitCalendar visits={filteredVisits} />
+          <VisitCalendar visits={filteredVisits} scopeStudyId={scopeStudyId} />
         </TabsContent>
       </Tabs>
     </div>

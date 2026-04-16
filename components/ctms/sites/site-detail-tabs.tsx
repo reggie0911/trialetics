@@ -165,6 +165,8 @@ interface SiteDetailTabsProps {
   studySitesForSubjects: Pick<StudySite, 'id' | 'site_number' | 'name'>[];
   financeApprovalTemplateOptions: FinanceApprovalTemplateOption[];
   studyBudgetOptions?: SiteBudgetStudyOption[];
+  /** Study id for study-scoped CTMS URLs (sites list, edit). */
+  ctmsStudyRouteId?: string;
 }
 
 export function SiteDetailTabs({
@@ -187,12 +189,17 @@ export function SiteDetailTabs({
   studySitesForSubjects,
   financeApprovalTemplateOptions,
   studyBudgetOptions = [],
+  ctmsStudyRouteId,
 }: SiteDetailTabsProps) {
   const isClient = useIsClient();
   const searchParams = useSearchParams();
   const [mainTab, setMainTab] = useState('overview');
   const [emailCopied, setEmailCopied] = useState(false);
-  const [siteCoords, setSiteCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [siteCoords, setSiteCoords] = useState<{ lat: number; lng: number } | null>(
+    site.latitude != null && site.longitude != null
+      ? { lat: site.latitude, lng: site.longitude }
+      : null
+  );
   const [airportDirections, setAirportDirections] = useState<DirectionsInfo | null>(null);
   const [hotelDirections, setHotelDirections] = useState<DirectionsInfo | null>(null);
   const router = useRouter();
@@ -247,6 +254,13 @@ export function SiteDetailTabs({
     []
   );
 
+  const studyBackHref = ctmsStudyRouteId
+    ? `/protected/studies/${ctmsStudyRouteId}/sites`
+    : `/protected/studies/${study.id}`;
+  const siteEditHref = ctmsStudyRouteId
+    ? `/protected/studies/${ctmsStudyRouteId}/sites/${site.id}/edit`
+    : `/protected/studies/${study.id}/sites/${site.id}/edit`;
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -255,7 +269,7 @@ export function SiteDetailTabs({
             <Button
               variant="ghost"
               size="sm"
-              render={<Link href={`/protected/studies/${study.id}`} />}
+              render={<Link href={studyBackHref} />}
               nativeButton={false}
               className="-ml-2"
             >
@@ -269,7 +283,7 @@ export function SiteDetailTabs({
           <Button
             variant="outline"
             size="sm"
-            render={<Link href={`/protected/sites/${site.id}/edit`} />}
+            render={<Link href={siteEditHref} />}
             nativeButton={false}
           >
             <Pencil className="mr-2 h-4 w-4" />
@@ -499,6 +513,11 @@ export function SiteDetailTabs({
           <SiteFinancialsPanel
             studyId={study.id}
             siteId={site.id}
+            siteDetailPath={
+              ctmsStudyRouteId
+                ? `/protected/studies/${ctmsStudyRouteId}/sites/${site.id}`
+                : undefined
+            }
             companyId={study.company_id}
             siteLabel={site.name ?? (site.site_number != null ? `Site ${site.site_number}` : site.id)}
             studyLabel={study.title ?? study.protocol_number ?? study.id}

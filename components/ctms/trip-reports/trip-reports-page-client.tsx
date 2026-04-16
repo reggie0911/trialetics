@@ -80,6 +80,7 @@ import {
 import { TRIP_REPORT_CLAIM_REVIEW_PATH } from '@/lib/constants/visit-reports';
 import type { VisitReportStatus, VisitReportTemplate } from '@/lib/types/visit-reports';
 import type { Study } from '@/lib/types/ctms';
+import { ctmsStudyPath } from '@/lib/nav/ctms-study-paths';
 import { Badge } from '@/components/ui/badge';
 import { CreateSiteVisitModal } from './create-site-visit-modal';
 import { AddEditTemplateModal } from './add-edit-template-modal';
@@ -127,6 +128,8 @@ interface TripReportsPageClientProps {
   trackerRows: TripReportTrackerRow[];
   trackerMetrics: TrackerComplianceMetrics;
   initialReviewQueue: TripReportReviewQueueRow[];
+  /** When set, links stay under `/protected/studies/{id}/trip-reports/...`. */
+  studyId?: string | null;
 }
 
 export function TripReportsPageClient({
@@ -137,7 +140,24 @@ export function TripReportsPageClient({
   trackerRows,
   trackerMetrics,
   initialReviewQueue,
+  studyId = null,
 }: TripReportsPageClientProps) {
+  const portfolioStudyFallback =
+    studyId ??
+    studies[0]?.id ??
+    initialSummaryList[0]?.study_id ??
+    trackerRows[0]?.study_id ??
+    initialReviewQueue[0]?.study_id ??
+    null;
+
+  const tripBaseForRow = (rowStudyId: string) => ctmsStudyPath(studyId ?? rowStudyId, 'trip-reports');
+
+  const tripBaseForTemplate = (t: TemplateWithQuestionCount) => {
+    const sid = studyId ?? t.study_id ?? portfolioStudyFallback;
+    if (!sid) return '/protected/studies';
+    return ctmsStudyPath(sid, 'trip-reports');
+  };
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<string>('summary');
@@ -450,7 +470,7 @@ export function TripReportsPageClient({
                                 <Link
                                   href={
                                     row.report_id && row.can_view_report
-                                      ? `/protected/trip-reports/${row.visit_id}/author`
+                                      ? `${tripBaseForRow(row.study_id)}/${row.visit_id}/author`
                                       : '#'
                                   }
                                   className={`flex w-full items-center gap-2 px-2 py-1.5 ${!row.report_id || !row.can_view_report ? 'pointer-events-none opacity-50' : ''}`}
@@ -463,7 +483,7 @@ export function TripReportsPageClient({
                                 <Link
                                   href={
                                     row.report_id && row.can_edit_report
-                                      ? `/protected/trip-reports/${row.visit_id}/author`
+                                      ? `${tripBaseForRow(row.study_id)}/${row.visit_id}/author`
                                       : '#'
                                   }
                                   className={`flex w-full items-center gap-2 px-2 py-1.5 ${!row.report_id || !row.can_edit_report ? 'pointer-events-none opacity-50' : ''}`}
@@ -476,7 +496,7 @@ export function TripReportsPageClient({
                                 <Link
                                   href={
                                     row.report_id && row.can_review_report
-                                      ? `/protected/trip-reports/${row.visit_id}${TRIP_REPORT_CLAIM_REVIEW_PATH}`
+                                      ? `${tripBaseForRow(row.study_id)}/${row.visit_id}${TRIP_REPORT_CLAIM_REVIEW_PATH}`
                                       : '#'
                                   }
                                   className={`flex w-full items-center gap-2 px-2 py-1.5 ${!row.report_id || !row.can_review_report ? 'pointer-events-none opacity-50' : ''}`}
@@ -816,7 +836,7 @@ export function TripReportsPageClient({
                                   <Link
                                     href={
                                       row.report_id && row.can_review_report
-                                        ? `/protected/trip-reports/${row.visit_id}${TRIP_REPORT_CLAIM_REVIEW_PATH}`
+                                        ? `${tripBaseForRow(row.study_id)}/${row.visit_id}${TRIP_REPORT_CLAIM_REVIEW_PATH}`
                                         : '#'
                                     }
                                     className={`flex w-full items-center gap-2 px-2 py-1.5 ${!row.report_id || !row.can_review_report ? 'pointer-events-none opacity-50' : ''}`}
@@ -830,7 +850,7 @@ export function TripReportsPageClient({
                                 <Link
                                   href={
                                     row.report_id && row.can_view_report
-                                      ? `/protected/trip-reports/${row.visit_id}/author`
+                                      ? `${tripBaseForRow(row.study_id)}/${row.visit_id}/author`
                                       : '#'
                                   }
                                   className={`flex w-full items-center gap-2 px-2 py-1.5 ${!row.report_id || !row.can_view_report ? 'pointer-events-none opacity-50' : ''}`}
@@ -843,7 +863,7 @@ export function TripReportsPageClient({
                                 <Link
                                   href={
                                     row.report_id && row.can_edit_report
-                                      ? `/protected/trip-reports/${row.visit_id}/author`
+                                      ? `${tripBaseForRow(row.study_id)}/${row.visit_id}/author`
                                       : '#'
                                   }
                                   className={`flex w-full items-center gap-2 px-2 py-1.5 ${!row.report_id || !row.can_edit_report ? 'pointer-events-none opacity-50' : ''}`}
@@ -856,7 +876,7 @@ export function TripReportsPageClient({
                                 <Link
                                   href={
                                     row.report_id && row.can_review_report
-                                      ? `/protected/trip-reports/${row.visit_id}${TRIP_REPORT_CLAIM_REVIEW_PATH}`
+                                      ? `${tripBaseForRow(row.study_id)}/${row.visit_id}${TRIP_REPORT_CLAIM_REVIEW_PATH}`
                                       : '#'
                                   }
                                   className={`flex w-full items-center gap-2 px-2 py-1.5 ${!row.report_id || !row.can_review_report ? 'pointer-events-none opacity-50' : ''}`}
@@ -927,7 +947,7 @@ export function TripReportsPageClient({
                         <TableCell className="text-xs">{row.report_author ?? '—'}</TableCell>
                         <TableCell>
                           <Link
-                            href={`/protected/trip-reports/${row.visit_id}${TRIP_REPORT_CLAIM_REVIEW_PATH}`}
+                            href={`${tripBaseForRow(row.study_id)}/${row.visit_id}${TRIP_REPORT_CLAIM_REVIEW_PATH}`}
                             className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'h-8 text-xs')}
                           >
                             Open
@@ -998,7 +1018,7 @@ export function TripReportsPageClient({
                         <TableCell className="px-1.5 py-1">
                           <div className="flex items-center gap-1.5">
                             <Link
-                              href={`/protected/trip-reports/templates/${t.id}`}
+                              href={`${tripBaseForTemplate(t)}/templates/${t.id}`}
                               className={cn(
                                 buttonVariants({ variant: 'ghost', size: 'icon' }),
                                 'flex h-auto flex-col gap-0.5 p-1 text-muted-foreground hover:text-foreground'
@@ -1009,7 +1029,7 @@ export function TripReportsPageClient({
                               <span className="text-[10px] font-normal leading-none">Edit</span>
                             </Link>
                             <Link
-                              href={`/protected/trip-reports/templates/${t.id}?mode=view`}
+                              href={`${tripBaseForTemplate(t)}/templates/${t.id}?mode=view`}
                               className={cn(
                                 buttonVariants({ variant: 'ghost', size: 'icon' }),
                                 'flex h-auto flex-col gap-0.5 p-1 text-muted-foreground hover:text-foreground'
@@ -1071,6 +1091,7 @@ export function TripReportsPageClient({
           templates={initialTemplates}
           initialTemplateId={searchParams.get('templateId')}
           onSuccess={refresh}
+          defaultStudyId={studyId ?? undefined}
         />
         <AddEditTemplateModal
           open={createTemplateOpen || !!editTemplate}

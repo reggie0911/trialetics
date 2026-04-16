@@ -111,11 +111,21 @@ interface IpManagementPageClientProps {
   studies: Study[];
   profileRole: string;
   isPlatformAdmin: boolean;
+  /** When opening from a study-scoped route, pre-select this study. */
+  initialStudyId?: string;
 }
 
-export function IpManagementPageClient({ studies, profileRole, isPlatformAdmin }: IpManagementPageClientProps) {
+export function IpManagementPageClient({
+  studies,
+  profileRole,
+  isPlatformAdmin,
+  initialStudyId,
+}: IpManagementPageClientProps) {
   const { toast } = useToast();
-  const [studyId, setStudyId] = useState<string>(() => studies[0]?.id ?? '');
+  const [studyId, setStudyId] = useState<string>(() => {
+    if (initialStudyId && studies.some((s) => s.id === initialStudyId)) return initialStudyId;
+    return studies[0]?.id ?? '';
+  });
   const [siteId, setSiteId] = useState<string>('__all_sites__');
   const [category, setCategory] = useState<string>('investigational_drug');
   const [tab, setTab] = useState<'summary' | 'logs' | 'analytics'>('summary');

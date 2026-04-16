@@ -44,6 +44,8 @@ import {
   saveStudyBudgetWizardMetadata,
   regenerateStudyBudgetFromWizard,
 } from '@/lib/actions/study-budget-templates';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
 
 const STEP_LABELS = [
   'Study Inputs',
@@ -60,6 +62,8 @@ interface BudgetWizardDialogProps {
   mode?: 'create' | 'edit';
   /** Required when mode is `edit` (study financials). */
   existingBudgetId?: string;
+  disabled?: boolean;
+  disabledTooltip?: string;
 }
 
 export function BudgetWizardDialog({
@@ -69,6 +73,8 @@ export function BudgetWizardDialog({
   onSuccess,
   mode = 'create',
   existingBudgetId,
+  disabled = false,
+  disabledTooltip,
 }: BudgetWizardDialogProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
@@ -234,19 +240,38 @@ export function BudgetWizardDialog({
       </>
     );
 
+  const handleRootOpenChange = (next: boolean) => {
+    if (disabled && next) return;
+    setOpen(next);
+  };
+
+  const trigger = (
+    <DialogTrigger
+      render={
+        <Button
+          variant="outline"
+          size="sm"
+          className={isEdit ? 'text-xs h-8' : 'text-xs gap-1.5 h-8'}
+          disabled={disabled}
+        />
+      }
+    >
+      {triggerLabel}
+    </DialogTrigger>
+  );
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button
-            variant="outline"
-            size="sm"
-            className={isEdit ? 'text-xs h-8' : 'text-xs gap-1.5 h-8'}
-          />
-        }
-      >
-        {triggerLabel}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleRootOpenChange}>
+      {disabled && disabledTooltip ? (
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>{trigger}</TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            {disabledTooltip}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        trigger
+      )}
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-base">{dialogTitle}</DialogTitle>

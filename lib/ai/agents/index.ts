@@ -1,4 +1,33 @@
 import type { AgentConfig } from '../types';
+import { parseStudyIdFromPathname } from '@/lib/nav/ctms-study-paths';
+
+/** Map `/protected/studies/{uuid}/sites/...` to `/protected/sites/...` for module-context matching. */
+function normalizePagePathForAgent(pagePath: string): string {
+  const studyId = parseStudyIdFromPathname(pagePath);
+  if (!studyId) return pagePath;
+  const prefix = `/protected/studies/${studyId}`;
+  if (!pagePath.startsWith(prefix)) return pagePath;
+  const rest = pagePath.slice(prefix.length).replace(/^\//, '');
+  if (!rest) return '/protected/studies';
+  const [first, ...more] = rest.split('/');
+  const map: Record<string, string> = {
+    sites: '/protected/sites',
+    subjects: '/protected/subjects',
+    visits: '/protected/visits',
+    'trip-reports': '/protected/trip-reports',
+    tasks: '/protected/tasks',
+    'my-tasks': '/protected/my-tasks',
+    financials: '/protected/financials',
+    reports: '/protected/reports',
+    team: '/protected/team',
+    countries: '/protected/countries',
+    'inventory-management': '/protected/inventory-management',
+  };
+  const legacyPrefix = map[first];
+  if (!legacyPrefix) return '/protected/studies';
+  const tail = more.join('/');
+  return tail ? `${legacyPrefix}/${tail}` : legacyPrefix;
+}
 
 type AgentLoader = () => Promise<AgentConfig>;
 
@@ -123,12 +152,13 @@ const moduleContextMap: Record<string, string[]> = {
 };
 
 export function findAgentIdForPage(pagePath: string): string | null {
+  const normalized = normalizePagePathForAgent(pagePath);
   let bestMatch: { agentId: string; length: number } | null = null;
 
   for (const [agentId, contexts] of Object.entries(moduleContextMap)) {
     if (agentId === 'dashboard-narrator') continue;
     for (const ctx of contexts) {
-      if (pagePath.startsWith(ctx) && ctx.length > (bestMatch?.length ?? 0)) {
+      if (normalized.startsWith(ctx) && ctx.length > (bestMatch?.length ?? 0)) {
         bestMatch = { agentId, length: ctx.length };
       }
     }

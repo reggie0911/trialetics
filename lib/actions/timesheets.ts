@@ -1,14 +1,16 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertStudyWritable, assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import type { TimeExpenseSubmissionStatus } from '@/lib/types/time-expense';
 
 function revalidateTimesheets(studyId?: string) {
   revalidatePath('/protected/time-expenses');
   revalidatePath('/protected/time-expenses/timesheets');
   revalidatePath('/protected/time-expenses/approvals');
-  if (studyId) revalidatePath(`/protected/studies/${studyId}`);
+  if (studyId) revalidateStudyCtmsLayout(studyId);
 }
 
 export type TimesheetPeriodRow = {
@@ -135,6 +137,9 @@ export async function ensureTimesheetPeriod(input: {
     return { data: null, error: 'Study not found.' };
   }
 
+  const { error: writeGuard } = await assertStudyWritable(supabase, input.studyId, profile.company_id);
+  if (writeGuard) return { data: null, error: writeGuard };
+
   const { data: existing } = await supabase
     .from('timesheet_periods')
     .select('id')
@@ -205,6 +210,9 @@ export async function upsertTimesheetEntry(input: {
     return { error: 'locked', userMessage: 'This timesheet is no longer editable.' };
   }
 
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, period.study_id);
+  if (writeGuard) return { error: writeGuard, userMessage: writeGuard };
+
   const payload = {
     period_id: input.periodId,
     work_date: input.workDate,
@@ -240,6 +248,10 @@ export async function upsertTimesheetEntry(input: {
 export async function deleteTimesheetEntry(entryId: string, periodId: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
   const { data: period } = await supabase.from('timesheet_periods').select('study_id, version').eq('id', periodId).single();
+  if (period?.study_id) {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, period.study_id);
+    if (writeGuard) return { error: writeGuard };
+  }
   const { error } = await supabase.from('timesheet_entries').delete().eq('id', entryId);
   if (error) return { error: error.message };
   if (period) {
@@ -276,6 +288,9 @@ export async function submitTimesheetPeriod(
   if (period.version !== expectedVersion) {
     return { error: 'stale', userMessage: 'This timesheet was updated elsewhere. Refresh and try again.' };
   }
+
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, period.study_id);
+  if (writeGuard) return { error: writeGuard, userMessage: writeGuard };
 
   const { error } = await supabase
     .from('timesheet_periods')
@@ -327,6 +342,10 @@ export async function timesheetPeriodRecordDecisionRpc(
 ): Promise<{ error: string | null; userMessage?: string; ok?: boolean }> {
   const supabase = await createClient();
   const { data: period } = await supabase.from('timesheet_periods').select('study_id').eq('id', periodId).single();
+  if (period?.study_id) {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, period.study_id);
+    if (writeGuard) return { error: writeGuard, userMessage: writeGuard };
+  }
   const { data, error } = await supabase.rpc('timesheet_period_record_decision', {
     p_period_id: periodId,
     p_decision: decision,

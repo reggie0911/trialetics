@@ -35,9 +35,9 @@ const tripReports: OnboardingStepDef = {
   id: 'trip_reports',
   title: 'Trip reports',
   body:
-    'Use the Trip Report Admin tab to build visit report templates and manage template lifecycle. Templates can be linked to your studies.',
+    'Open a study, open Trip reports, then use the Admin tab to build visit report templates and manage template lifecycle.',
   kind: 'coach',
-  routePrefix: '/protected/trip-reports',
+  routePrefix: '/protected/studies',
   routeSearch: 'tab=admin',
   anchor: 'page-trip-reports',
   nextId: 'team',
@@ -48,9 +48,9 @@ const team: OnboardingStepDef = {
   id: 'team',
   title: 'Team',
   body:
-    'Invite colleagues and manage who can access each study. Company administrators can manage invitations from this directory.',
+    'Invite colleagues and manage who can access each study from the Team item under a study. Company administrators can also use the directory for company-wide contacts.',
   kind: 'coach',
-  routePrefix: '/protected/team',
+  routePrefix: '/protected/studies',
   anchor: 'page-team',
   nextId: 'complete',
   requiresCtms: true,

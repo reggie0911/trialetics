@@ -33,6 +33,8 @@ interface ProcedureCostGridProps {
   /** Actual enrolled subject count (from subjects table) */
   enrollmentActual?: number | null;
   isAdmin?: boolean;
+  /** When true (e.g. study deactivated), grid is view-only. */
+  readOnly?: boolean;
   onChanged: () => void;
 }
 
@@ -52,8 +54,10 @@ export function ProcedureCostGrid({
   plannedEnrollment,
   enrollmentActual,
   isAdmin = false,
+  readOnly = false,
   onChanged,
 }: ProcedureCostGridProps) {
+  const canMutate = isAdmin && !readOnly;
   const [, startTransition] = useTransition();
 
   // Local optimistic state for cells being edited
@@ -93,7 +97,7 @@ export function ProcedureCostGrid({
   // ─── Cell editing ──────────────────────────────────────────────────────────
 
   const startEditing = (procedure: string, visitId: string) => {
-    if (!isAdmin) return;
+    if (!canMutate) return;
     const key = `${procedure}__${visitId}`;
     const cell = grid.cells[key];
     setEditingCell({ procedure, visitId });
@@ -201,7 +205,7 @@ export function ProcedureCostGrid({
         <p className="text-xs text-muted-foreground text-center py-4">
           No visit schedule defined. Add visit columns and procedure rows to build the grid.
         </p>
-        {isAdmin && (
+        {canMutate && (
           <div className="flex flex-wrap gap-2">
             <AddVisitInput
               value={newVisitName}
@@ -238,7 +242,7 @@ export function ProcedureCostGrid({
                     {visit.timepoint_days != null && (
                       <span className="text-[10px] text-muted-foreground">Day {visit.timepoint_days}</span>
                     )}
-                    {isAdmin && (
+                    {canMutate && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -252,7 +256,7 @@ export function ProcedureCostGrid({
                   </div>
                 </TableHead>
               ))}
-              {isAdmin && (
+              {canMutate && (
                 <TableHead className="text-xs min-w-[120px]">
                   <AddVisitInput
                     value={newVisitName}
@@ -270,7 +274,7 @@ export function ProcedureCostGrid({
               <TableRow key={proc}>
                 <TableCell className="text-xs font-medium sticky left-0 bg-background z-10">
                   <div className="flex items-center gap-1 min-w-0">
-                    {isAdmin && (
+                    {canMutate && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -333,10 +337,10 @@ export function ProcedureCostGrid({
                             cell?.is_applicable
                               ? 'text-foreground'
                               : 'text-muted-foreground/40'
-                          } ${isAdmin ? 'hover:bg-muted/60 cursor-pointer' : 'cursor-default'}`}
+                          } ${canMutate ? 'hover:bg-muted/60 cursor-pointer' : 'cursor-default'}`}
                           onClick={() => startEditing(proc, visit.id)}
-                          disabled={!isAdmin}
-                          title={isAdmin ? 'Click to edit' : undefined}
+                          disabled={!canMutate}
+                          title={canMutate ? 'Click to edit' : undefined}
                         >
                           {cell?.is_applicable
                             ? formatCurrency(Number(cell.unit_cost), currency)
@@ -346,7 +350,7 @@ export function ProcedureCostGrid({
                     </TableCell>
                   );
                 })}
-                {isAdmin && <TableCell />}
+                {canMutate && <TableCell />}
               </TableRow>
             ))}
 
@@ -360,7 +364,7 @@ export function ProcedureCostGrid({
                   {formatCurrency(costPerVisit[visit.id] ?? 0, currency)}
                 </TableCell>
               ))}
-              {isAdmin && <TableCell />}
+              {canMutate && <TableCell />}
             </TableRow>
           </TableBody>
         </Table>
@@ -391,7 +395,7 @@ export function ProcedureCostGrid({
       </div>
 
       {/* Add procedure row */}
-      {isAdmin && (
+      {canMutate && (
         <AddProcedureInput
           value={newProcedureName}
           onChange={setNewProcedureName}

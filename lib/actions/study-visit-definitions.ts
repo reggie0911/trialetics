@@ -1,7 +1,8 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import type {
   StudyVisitDefinition,
   ProcedureVisitCost,
@@ -33,6 +34,9 @@ export async function createStudyVisitDefinition(
 ): Promise<{ data: StudyVisitDefinition | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { data: null, error: writeGuard };
+
     const { data, error } = await supabase
       .from('study_visit_definitions')
       .insert({
@@ -45,7 +49,7 @@ export async function createStudyVisitDefinition(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { data: data as unknown as StudyVisitDefinition, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'Unexpected error.' };
@@ -64,13 +68,16 @@ export async function updateStudyVisitDefinition(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase
       .from('study_visit_definitions')
       .update(updates)
       .eq('id', id)
       .eq('study_id', studyId);
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unexpected error.' };
@@ -83,13 +90,16 @@ export async function deleteStudyVisitDefinition(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase
       .from('study_visit_definitions')
       .delete()
       .eq('id', id)
       .eq('study_id', studyId);
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unexpected error.' };
@@ -102,6 +112,9 @@ export async function reorderStudyVisitDefinitions(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const updates = orderedIds.map((id, idx) =>
       supabase
         .from('study_visit_definitions')
@@ -110,7 +123,7 @@ export async function reorderStudyVisitDefinitions(
         .eq('study_id', studyId)
     );
     await Promise.all(updates);
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unexpected error.' };
@@ -143,6 +156,9 @@ export async function upsertProcedureVisitCost(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase.from('study_procedure_visit_costs').upsert(
       {
         section_id: sectionId,
@@ -155,7 +171,7 @@ export async function upsertProcedureVisitCost(
       { onConflict: 'section_id,procedure_name,visit_definition_id' }
     );
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unexpected error.' };
@@ -169,13 +185,16 @@ export async function deleteProcedureRow(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
     const { error } = await supabase
       .from('study_procedure_visit_costs')
       .delete()
       .eq('section_id', sectionId)
       .eq('procedure_name', procedureName);
     if (error) return { error: error.message };
-    revalidatePath(`/protected/studies/${studyId}`);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unexpected error.' };

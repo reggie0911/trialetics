@@ -1,18 +1,6 @@
-import { getAllSites } from '@/lib/actions/sites';
-import { SiteList } from '@/components/ctms/sites/site-list';
+import { redirect } from 'next/navigation';
 
-export default async function SitesPage() {
-  const sites = await getAllSites();
-
-  return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Sites</h1>
-        <p className="text-muted-foreground">
-          All investigator sites across your studies.
-        </p>
-      </div>
-      <SiteList sites={sites} />
-    </div>
-  );
+/** Legacy URL: sites are opened from a study. */
+export default function SitesPage() {
+  redirect('/protected/studies?studyRequired=1');
 }

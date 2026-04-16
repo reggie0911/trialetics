@@ -1,5 +1,4 @@
 'use client';
-import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ReactNode } from 'react';
@@ -9,11 +8,11 @@ import Noise from '@/components/noise';
 import Logo from './logo';
 import { NAV_LINKS } from './navbar';
 
-// Custom X (Twitter) icon
+// Custom X (Twitter) icon — fill follows parent text color for light/dark mode
 const XIcon = ({ className }: { className?: string }) => (
   <svg
     viewBox="0 0 24 24"
-    fill="#000000"
+    fill="currentColor"
     className={className}
     aria-hidden="true"
   >
@@ -25,7 +24,7 @@ const XIcon = ({ className }: { className?: string }) => (
 const LinkedInIcon = ({ className }: { className?: string }) => (
   <svg
     viewBox="0 0 24 24"
-    fill="#000000"
+    fill="currentColor"
     className={className}
     aria-hidden="true"
   >
@@ -37,7 +36,7 @@ const LinkedInIcon = ({ className }: { className?: string }) => (
 const YouTubeIcon = ({ className }: { className?: string }) => (
   <svg
     viewBox="0 0 24 24"
-    fill="#000000"
+    fill="currentColor"
     className={className}
     aria-hidden="true"
   >
@@ -164,7 +163,7 @@ const Footer = () => {
                 <Link
                   key={index}
                   href={link.href}
-                  className="text-muted-foreground hover:text-foreground flex items-center justify-center size-9 rounded-full border border-input transition-colors hover:bg-accent"
+                  className="flex size-9 items-center justify-center rounded-full border border-border bg-background/50 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground dark:border-border dark:bg-background/30 dark:hover:bg-accent"
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label={link.name}

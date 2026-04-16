@@ -33,8 +33,8 @@ export function FinancialsStudyCharts({ summary, financeInvoices, currency }: Fi
           Open invoices include draft through approved (not yet marked paid in Financials).
         </p>
       </CardHeader>
-      <CardContent className="h-[260px]">
-        <ResponsiveContainer width="100%" height="100%">
+      <CardContent className="h-[260px] w-full min-w-0">
+        <ResponsiveContainer width="100%" height={260}>
           <BarChart data={data} layout="vertical" margin={{ top: 8, right: 24, left: 8, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
             <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => formatCurrency(Number(v), currency)} />

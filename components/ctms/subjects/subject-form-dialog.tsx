@@ -30,6 +30,7 @@ import {
 import type { Subject, SubjectStatus, StudySite } from '@/lib/types/ctms';
 import { SUBJECT_STATUS_OPTIONS } from '@/lib/types/ctms';
 import { createSubject, updateSubject } from '@/lib/actions/subjects';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 const subjectSchema = z.object({
   subject_number: z.string().min(1, 'Subject number is required'),
@@ -52,6 +53,8 @@ interface SubjectFormDialogProps {
   defaultSiteIdWhenCreate?: string;
   /** Hide site selector; site is fixed (uses subject site when editing, default when creating) */
   lockSiteSelection?: boolean;
+  disabled?: boolean;
+  disabledTooltip?: string;
 }
 
 export function SubjectFormDialog({
@@ -61,6 +64,8 @@ export function SubjectFormDialog({
   onSuccess,
   defaultSiteIdWhenCreate,
   lockSiteSelection = false,
+  disabled = false,
+  disabledTooltip,
 }: SubjectFormDialogProps) {
   const [open, setOpen] = useState(false);
   const isEdit = !!subject;
@@ -117,6 +122,7 @@ export function SubjectFormDialog({
   };
 
   const handleOpenChange = (next: boolean) => {
+    if (disabled && next) return;
     setOpen(next);
     if (next) {
       resetFormForDialog();
@@ -165,26 +171,39 @@ export function SubjectFormDialog({
       : undefined;
   const showSiteSelect = !lockSiteSelection;
 
+  const trigger = (
+    <DialogTrigger
+      render={
+        isEdit ? (
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={disabled} />
+        ) : (
+          <Button size="sm" disabled={disabled} />
+        )
+      }
+    >
+      {isEdit ? (
+        <Pencil className="h-3.5 w-3.5" />
+      ) : (
+        <>
+          <Plus className="mr-2 h-4 w-4" />
+          Enroll Subject
+        </>
+      )}
+    </DialogTrigger>
+  );
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger
-        render={
-          isEdit ? (
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" />
-          ) : (
-            <Button size="sm" />
-          )
-        }
-      >
-        {isEdit ? (
-          <Pencil className="h-3.5 w-3.5" />
-        ) : (
-          <>
-            <Plus className="mr-2 h-4 w-4" />
-            Enroll Subject
-          </>
-        )}
-      </DialogTrigger>
+      {disabled && disabledTooltip ? (
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>{trigger}</TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            {disabledTooltip}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        trigger
+      )}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{isEdit ? 'Edit Subject' : 'Enroll Subject'}</DialogTitle>

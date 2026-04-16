@@ -1,7 +1,8 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidateStudyCtmsLayout, revalidateTaskHubLegacyPaths } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import type { StudyMilestone, StudyMilestoneWithProgress } from '@/lib/types/tasks';
 
 async function getCompanyId(): Promise<string> {
@@ -156,6 +157,9 @@ export async function createMilestone(
 ): Promise<{ data: StudyMilestone | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.study_id);
+    if (writeGuard) return { data: null, error: writeGuard };
+
     const { data, error } = await supabase
       .from('study_milestones')
       .insert({
@@ -170,8 +174,8 @@ export async function createMilestone(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath('/protected/tasks');
-    revalidatePath(`/protected/studies/${input.study_id}`);
+    revalidateStudyCtmsLayout(input.study_id);
+    revalidateTaskHubLegacyPaths();
     return { data: data as unknown as StudyMilestone, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -184,6 +188,13 @@ export async function updateMilestone(
 ): Promise<{ data: StudyMilestone | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const { data: msRow } = await supabase.from('study_milestones').select('study_id').eq('id', id).maybeSingle();
+    const sid = (msRow as { study_id: string } | null)?.study_id;
+    if (sid) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, sid);
+      if (writeGuard) return { data: null, error: writeGuard };
+    }
+
     const { data, error } = await supabase
       .from('study_milestones')
       .update({
@@ -199,7 +210,9 @@ export async function updateMilestone(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidatePath('/protected/tasks');
+    const studyId = (data as unknown as { study_id: string }).study_id;
+    revalidateStudyCtmsLayout(studyId);
+    revalidateTaskHubLegacyPaths();
     return { data: data as unknown as StudyMilestone, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -209,9 +222,19 @@ export async function updateMilestone(
 export async function deleteMilestone(id: string): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { data: row } = await supabase.from('study_milestones').select('study_id').eq('id', id).maybeSingle();
+    const sid = (row as { study_id: string } | null)?.study_id;
+    if (sid) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, sid);
+      if (writeGuard) return { error: writeGuard };
+    }
+
     const { error } = await supabase.from('study_milestones').delete().eq('id', id);
     if (error) return { error: error.message };
-    revalidatePath('/protected/tasks');
+    if (row?.study_id) {
+      revalidateStudyCtmsLayout((row as { study_id: string }).study_id);
+    }
+    revalidateTaskHubLegacyPaths();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };

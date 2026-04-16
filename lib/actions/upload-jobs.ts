@@ -1,7 +1,6 @@
 'use server';
 
 import { createClient } from '@/lib/server';
-import { TablesInsert } from '@/lib/types/database.types';
 import { revalidatePath } from 'next/cache';
 
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
@@ -35,7 +34,7 @@ export async function createUploadJob(
   try {
     const supabase = await createClient();
 
-    const jobInsert: TablesInsert<'upload_jobs'> = {
+    const jobInsert = {
       company_id: companyId,
       created_by: createdBy,
       job_type: jobType,

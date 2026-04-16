@@ -39,6 +39,8 @@ interface FinancialsOverviewProps {
   totals: FinancialSummary & { invoiceOpenAmount: number };
   monthlySpend: PortfolioMonthlySpendPoint[];
   monthlySpendByStudyId: Record<string, PortfolioMonthlySpendPoint[]>;
+  /** When set, the overview is locked to this study (no study picker). */
+  lockToStudyId?: string;
 }
 
 export function FinancialsOverview({
@@ -46,8 +48,11 @@ export function FinancialsOverview({
   totals,
   monthlySpend,
   monthlySpendByStudyId,
+  lockToStudyId,
 }: FinancialsOverviewProps) {
-  const [selectedStudyId, setSelectedStudyId] = useState<string>(ALL_STUDIES);
+  const [selectedStudyId, setSelectedStudyId] = useState<string>(
+    lockToStudyId ?? ALL_STUDIES
+  );
 
   const sortedStudies = useMemo(
     () => [...studies].sort((a, b) => a.title.localeCompare(b.title)),
@@ -87,7 +92,7 @@ export function FinancialsOverview({
 
   return (
     <div className="space-y-6">
-      {sortedStudies.length > 0 && (
+      {sortedStudies.length > 0 && !lockToStudyId && (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1.5 w-full sm:max-w-xs">
             <Label htmlFor="financials-study-filter" className="text-xs">

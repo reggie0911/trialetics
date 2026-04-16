@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useMemo, useCallback, useTransition } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, X, Users, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -45,6 +44,10 @@ import {
   getEnrollmentFunnelForSite,
   deleteSubject,
 } from '@/lib/actions/subjects';
+import { useStudyHub } from '@/components/ctms/study-hub-context';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
+
 import { EnrollmentFunnel } from './enrollment-funnel';
 import { SubjectFormDialog } from './subject-form-dialog';
 
@@ -65,6 +68,8 @@ export function SubjectsTab({
   siteScopeId,
 }: SubjectsTabProps) {
   const router = useRouter();
+  const readOnly = useStudyHub()?.isStudyReadOnly ?? false;
+  const disabledTooltip = readOnly ? STUDY_DEACTIVATED_TOOLTIP : undefined;
   const [subjects, setSubjects] = useState(initialSubjects);
   const [funnel, setFunnel] = useState(initialFunnel);
   const [searchQuery, setSearchQuery] = useState('');
@@ -163,6 +168,8 @@ export function SubjectsTab({
           onSuccess={refreshData}
           defaultSiteIdWhenCreate={siteScopeId}
           lockSiteSelection={Boolean(siteScopeId)}
+          disabled={readOnly}
+          disabledTooltip={disabledTooltip}
         />
       </div>
 
@@ -262,7 +269,9 @@ export function SubjectsTab({
                 <TableRow
                   key={subject.id}
                   className="cursor-pointer"
-                  onClick={() => router.push(`/protected/subjects/${subject.id}`)}
+                  onClick={() =>
+                    router.push(`/protected/studies/${studyId}/subjects/${subject.id}`)
+                  }
                 >
                   <TableCell className="text-xs font-medium">
                     {subject.subject_number}
@@ -286,32 +295,52 @@ export function SubjectsTab({
                     {formatDate(subject.randomization_date)}
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    <AlertDialog>
-                      <AlertDialogTrigger
-                        render={
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" />
-                        }
-                      >
-                        <Trash2 className="h-3 w-3 text-destructive" />
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Subject</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will permanently delete subject {subject.subject_number}
-                            and all associated visits and milestones.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDelete(subject.id, subject.site_id)}
+                    {readOnly ? (
+                      <Tooltip>
+                        <TooltipTrigger render={<span className="inline-flex" />}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            disabled
+                            aria-label="Delete subject"
                           >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="max-w-xs text-xs">
+                          {STUDY_DEACTIVATED_TOOLTIP}
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : (
+                      <AlertDialog>
+                        <AlertDialogTrigger
+                          render={
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" />
+                          }
+                        >
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Subject</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will permanently delete subject {subject.subject_number}
+                              and all associated visits and milestones.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDelete(subject.id, subject.site_id)}
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

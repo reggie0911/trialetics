@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import type {
   SiteBudgetRow,
   SiteBudgetPaymentInfo,
@@ -13,6 +15,21 @@ import type {
   InvoiceBudgetAllocationListRow,
   InvoiceBudgetLineAllocationRef,
 } from '@/lib/types/ctms';
+
+async function getStudyIdForSiteBudgetLineItem(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  lineItemId: string
+): Promise<string | null> {
+  const { data: li } = await supabase
+    .from('site_budget_line_items')
+    .select('site_budget_id')
+    .eq('id', lineItemId)
+    .maybeSingle();
+  const sbid = (li as { site_budget_id: string } | null)?.site_budget_id;
+  if (!sbid) return null;
+  const { data: sb } = await supabase.from('site_budgets').select('study_id').eq('id', sbid).maybeSingle();
+  return (sb as { study_id: string } | null)?.study_id ?? null;
+}
 
 export async function getSiteBudgetForSite(
   studyId: string,
@@ -40,6 +57,9 @@ export async function upsertSiteBudget(input: {
   notes?: string | null;
 }): Promise<{ error: string | null }> {
   const supabase = await createClient();
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.studyId);
+  if (writeGuard) return { error: writeGuard };
+
   const { error } = await supabase.from('site_budgets').upsert(
     {
       study_id: input.studyId,
@@ -56,7 +76,7 @@ export async function upsertSiteBudget(input: {
   );
   if (error) return { error: error.message };
   revalidatePath(`/protected/sites/${input.siteId}`);
-  revalidatePath(`/protected/studies/${input.studyId}`);
+  revalidateStudyCtmsLayout(input.studyId);
   return { error: null };
 }
 
@@ -83,6 +103,9 @@ export async function updateSiteBudgetExtras(input: {
   paymentInfo?: SiteBudgetPaymentInfo | null;
 }): Promise<{ error: string | null }> {
   const supabase = await createClient();
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.studyId);
+  if (writeGuard) return { error: writeGuard };
+
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (input.documentPath !== undefined) updates.document_path = input.documentPath;
   if (input.overheadRate !== undefined) updates.overhead_rate = input.overheadRate;
@@ -107,12 +130,16 @@ export async function applySiteDefaultOverheadToLineItems(
   const supabase = await createClient();
   const { data: budget, error: bErr } = await supabase
     .from('site_budgets')
-    .select('id')
+    .select('id, study_id')
     .eq('id', siteBudgetId)
     .eq('site_id', siteId)
     .maybeSingle();
   if (bErr) return { updated: 0, error: bErr.message };
   if (!budget) return { updated: 0, error: 'Site budget not found.' };
+
+  const sid = (budget as { study_id: string }).study_id;
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, sid);
+  if (writeGuard) return { updated: 0, error: writeGuard };
 
   const { count, error: cErr } = await supabase
     .from('site_budget_line_items')
@@ -146,6 +173,13 @@ export async function addSiteBudgetLineItem(
   }
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
+  const { data: sb } = await supabase.from('site_budgets').select('study_id').eq('id', siteBudgetId).maybeSingle();
+  const sid = (sb as { study_id: string } | null)?.study_id;
+  if (sid) {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, sid);
+    if (writeGuard) return { error: writeGuard };
+  }
+
   const { error } = await supabase.from('site_budget_line_items').insert({
     site_budget_id: siteBudgetId,
     section: input.section,
@@ -180,6 +214,13 @@ export async function bulkInsertSiteBudgetLineItems(
 ): Promise<{ error: string | null }> {
   if (items.length === 0) return { error: null };
   const supabase = await createClient();
+  const { data: sb } = await supabase.from('site_budgets').select('study_id').eq('id', siteBudgetId).maybeSingle();
+  const sid = (sb as { study_id: string } | null)?.study_id;
+  if (sid) {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, sid);
+    if (writeGuard) return { error: writeGuard };
+  }
+
   const rows = items.map((item, i) => ({
     site_budget_id: siteBudgetId,
     section: item.section,
@@ -215,6 +256,12 @@ export async function updateSiteBudgetLineItem(
   }
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
+  const studyId = await getStudyIdForSiteBudgetLineItem(supabase, id);
+  if (studyId) {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+  }
+
   const clean: Record<string, unknown> = {};
   if (updates.section !== undefined) clean.section = updates.section;
   if (updates.description !== undefined) clean.description = updates.description;
@@ -238,6 +285,12 @@ export async function deleteSiteBudgetLineItem(
   siteId: string
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
+  const studyId = await getStudyIdForSiteBudgetLineItem(supabase, id);
+  if (studyId) {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+  }
+
   const { error } = await supabase.from('site_budget_line_items').delete().eq('id', id);
   if (error) return { error: error.message };
   revalidatePath(`/protected/sites/${siteId}`);
@@ -260,6 +313,9 @@ export async function createSiteBudgetAmendment(
   siteId: string
 ): Promise<{ data: { id: string } | null; error: string | null }> {
   const supabase = await createClient();
+
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+  if (writeGuard) return { data: null, error: writeGuard };
 
   const { data: current, error: fetchErr } = await supabase
     .from('site_budgets')
@@ -372,6 +428,13 @@ export async function upsertInvoiceBudgetAllocation(input: {
   siteId: string;
 }): Promise<{ error: string | null }> {
   const supabase = await createClient();
+  const { data: inv } = await supabase.from('finance_invoices').select('study_id').eq('id', input.invoiceId).maybeSingle();
+  const stid = (inv as { study_id: string } | null)?.study_id;
+  if (stid) {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, stid);
+    if (writeGuard) return { error: writeGuard };
+  }
+
   const { error } = await supabase.from('invoice_budget_allocations').upsert(
     {
       invoice_id: input.invoiceId,
@@ -511,6 +574,9 @@ export async function replaceInvoiceBudgetAllocations(input: {
     return { error: 'Site budget does not match this site.' };
   }
 
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.studyId);
+  if (writeGuard) return { error: writeGuard };
+
   const { data: lineRows, error: lineErr } = await supabase
     .from('site_budget_line_items')
     .select('id, cost_with_overhead')
@@ -574,7 +640,7 @@ export async function replaceInvoiceBudgetAllocations(input: {
   }
 
   revalidatePath(`/protected/sites/${input.siteId}`);
-  revalidatePath(`/protected/studies/${input.studyId}`);
+  revalidateStudyCtmsLayout(input.studyId);
   revalidatePath('/protected/financials');
   return { error: null };
 }

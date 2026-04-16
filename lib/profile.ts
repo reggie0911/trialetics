@@ -6,8 +6,9 @@ type Profile = Tables<'profiles'>;
 type ProfileWithCompany = Tables<'profiles'> & {
   companies: Tables<'companies'> | null;
 };
-type UserModuleWithDetails = Tables<'user_modules'> & {
-  modules: Tables<'modules'> | null;
+/** Join shape from `user_modules` + `modules(*)` — not in generated Database types */
+type UserModuleWithDetails = Record<string, unknown> & {
+  modules: Record<string, unknown> | null;
 };
 
 /**

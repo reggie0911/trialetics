@@ -1,0 +1,27 @@
+---
+description: Study-scoped routes and CTMS patterns under app/protected/studies
+globs: app/protected/studies/**/*.tsx
+alwaysApply: false
+---
+
+# Study-scoped pages (`/protected/studies/[id]/...`)
+
+- **Params**: Dynamic routes use `params: Promise<{ id: string; ... }>` — **`await params`** before reading `id` or nested segments (Next.js 15+ pattern used in this repo).
+- **Auth**: Mirror sibling pages: `createClient` from `@/lib/server`, `getUser()`, `redirect('/auth/login')` if unauthenticated; load `profiles` role when the page already does for access patterns.
+- **Data**: Prefer existing **`lib/actions/*`** helpers (`getStudyById`, sites, subjects, visits, financials, etc.) instead of duplicating raw Supabase queries on the page unless adding a genuinely new query.
+- **UI**: Reuse **`components/ctms/**`** study components and tab/shell patterns already on study pages so navigation and layout stay consistent.
+- **IDs**: Treat study and entity IDs as opaque strings from the URL; validate format only when the codebase already does (e.g. UUID checks in actions).
+
+```tsx
+interface PageProps {
+  params: Promise<{ id: string }>;
+}
+
+export default async function Page({ params }: PageProps) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/auth/login');
+  // ...
+}
+```

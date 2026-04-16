@@ -225,9 +225,9 @@ const TabsContent = React.forwardRef<HTMLDivElement, ScopedProps<TabsContentProp
             data-orientation={context.orientation}
             role="tabpanel"
             aria-labelledby={triggerId}
-            hidden={!present}
+            hidden={!isSelected}
             id={contentId}
-            tabIndex={0}
+            tabIndex={isSelected ? 0 : -1}
             suppressHydrationWarning
             className={cn('flex-1 outline-none', className)}
             {...contentProps}
