@@ -10,11 +10,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Lock, Building2, Compass } from 'lucide-react';
+import { User, Lock, Building2 } from 'lucide-react';
 import { PersonalInfoForm } from './personal-info-form';
 import { PasswordChangeForm } from './password-change-form';
 import { CompanySettingsForm } from './company-settings-form';
-import { GuidedSetupForm } from './guided-setup-form';
 
 interface ProfileSettingsModalProps {
   open: boolean;
@@ -66,7 +65,7 @@ export function ProfileSettingsModal({ open, onOpenChange, onDataSaved }: Profil
         )}
 
         <Tabs tabsId="profile-settings" value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1 p-1">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 h-auto gap-1 p-1">
             <TabsTrigger value="personal" className="gap-1.5 text-xs sm:text-sm py-2 px-2">
               <User className="h-4 w-4 shrink-0" />
               <span className="truncate">Personal</span>
@@ -78,10 +77,6 @@ export function ProfileSettingsModal({ open, onOpenChange, onDataSaved }: Profil
             <TabsTrigger value="security" className="gap-1.5 text-xs sm:text-sm py-2 px-2">
               <Lock className="h-4 w-4 shrink-0" />
               <span className="truncate">Security</span>
-            </TabsTrigger>
-            <TabsTrigger value="guided" className="gap-1.5 text-xs sm:text-sm py-2 px-2">
-              <Compass className="h-4 w-4 shrink-0" />
-              <span className="truncate">Guided setup</span>
             </TabsTrigger>
           </TabsList>
 
@@ -101,10 +96,6 @@ export function ProfileSettingsModal({ open, onOpenChange, onDataSaved }: Profil
             <PasswordChangeForm 
               onSuccess={() => handleSuccess('Password updated successfully!')} 
             />
-          </TabsContent>
-
-          <TabsContent value="guided" className="mt-6">
-            <GuidedSetupForm onUpdated={() => onDataSaved?.()} />
           </TabsContent>
         </Tabs>
       </DialogContent>

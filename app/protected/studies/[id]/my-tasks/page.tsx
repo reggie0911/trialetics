@@ -30,7 +30,7 @@ export default async function StudyMyTasksPage({ params }: PageProps) {
 
   return (
     <div className="p-6 space-y-6">
-      <div data-onboarding="page-my-tasks">
+      <div>
         <h1 className="text-2xl font-semibold tracking-tight">My Tasks</h1>
         <p className="text-sm text-muted-foreground">Tasks assigned to you for this study.</p>
       </div>

@@ -36,17 +36,24 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
-import type { SubjectWithSite, EnrollmentFunnelData, StudySite } from '@/lib/types/ctms';
+import type {
+  SubjectWithSite,
+  EnrollmentFunnelData,
+  StudySite,
+  SubjectStatus,
+} from '@/lib/types/ctms';
 import { SUBJECT_STATUS_OPTIONS } from '@/lib/types/ctms';
 import {
   getStudySubjects,
   getEnrollmentFunnel,
   getEnrollmentFunnelForSite,
   deleteSubject,
+  createSubject,
 } from '@/lib/actions/subjects';
 import { useStudyHub } from '@/components/ctms/study-hub-context';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
+import { CopilotImportTrigger } from '@/components/copilot/tables/copilot-import-trigger';
 
 import { EnrollmentFunnel } from './enrollment-funnel';
 import { SubjectFormDialog } from './subject-form-dialog';
@@ -122,6 +129,59 @@ export function SubjectsTab({
     return result;
   }, [subjects, searchQuery, statusFilter, siteFilter, siteScopeId]);
 
+  // Bulk-create subjects from accepted Copilot proposals. We resolve site
+  // references against the available sites first (Copilot may return a
+  // site_number, name, or label instead of the canonical UUID), then call
+  // the existing audited `createSubject` action per row.
+  const handleCopilotImport = async (
+    rows: { rowIndex: number; values: Record<string, unknown>; op: 'insert' | 'update' }[]
+  ) => {
+    let createdCount = 0;
+    let failedCount = 0;
+    for (const row of rows) {
+      if (row.op !== 'insert') continue;
+      const v = row.values as Record<string, unknown>;
+
+      const rawSite = v.site_id;
+      const targetSiteId = (() => {
+        if (typeof rawSite !== 'string' || !rawSite) {
+          return siteScopeId ?? '';
+        }
+        if (sites.some(s => s.id === rawSite)) return rawSite;
+        const byNumber = sites.find(s => s.site_number.toLowerCase() === rawSite.toLowerCase());
+        if (byNumber) return byNumber.id;
+        const byName = sites.find(s => s.name.toLowerCase() === rawSite.toLowerCase());
+        if (byName) return byName.id;
+        return '';
+      })();
+
+      if (!targetSiteId) {
+        failedCount += 1;
+        continue;
+      }
+
+      const status = (typeof v.status === 'string' && v.status
+        ? v.status
+        : 'pre_screening') as SubjectStatus;
+
+      const { error } = await createSubject({
+        study_id: studyId,
+        site_id: targetSiteId,
+        subject_number: String(v.subject_number ?? '').trim(),
+        screening_number: (v.screening_number as string | undefined) || undefined,
+        randomization_number: (v.randomization_number as string | undefined) || undefined,
+        status,
+        screening_date: (v.screening_date as string | undefined) || undefined,
+        randomization_date: (v.randomization_date as string | undefined) || undefined,
+      });
+      if (error) failedCount += 1;
+      else createdCount += 1;
+    }
+    if (createdCount > 0) toast.success(`${createdCount} subject${createdCount === 1 ? '' : 's'} enrolled`);
+    if (failedCount > 0) toast.error(`${failedCount} row${failedCount === 1 ? '' : 's'} couldn\u2019t be enrolled`);
+    refreshData();
+  };
+
   const handleDelete = async (id: string, subjectSiteId: string | null) => {
     const { error } = await deleteSubject(
       id,
@@ -162,15 +222,44 @@ export function SubjectsTab({
             {siteScopeId ? 'at this site.' : 'enrolled in this study.'}
           </p>
         </div>
-        <SubjectFormDialog
-          studyId={studyId}
-          sites={sites}
-          onSuccess={refreshData}
-          defaultSiteIdWhenCreate={siteScopeId}
-          lockSiteSelection={Boolean(siteScopeId)}
-          disabled={readOnly}
-          disabledTooltip={disabledTooltip}
-        />
+        <div className="flex items-center gap-2">
+          {!readOnly ? (
+            <CopilotImportTrigger
+              tableId="ctms.subject"
+              tableLabel="Subjects"
+              studyId={studyId}
+              scope={{ kind: 'study', id: studyId }}
+              duplicateKey="subject_number"
+              existingRows={subjects.map(s => ({
+                id: s.id,
+                values: {
+                  subject_number: s.subject_number,
+                  screening_number: s.screening_number,
+                  randomization_number: s.randomization_number,
+                },
+              }))}
+              targetFields={[
+                { path: 'subject_number', label: 'Subject number' },
+                { path: 'site_id', label: 'Site' },
+                { path: 'screening_number', label: 'Screening number' },
+                { path: 'randomization_number', label: 'Randomization number' },
+                { path: 'status', label: 'Status' },
+                { path: 'screening_date', label: 'Screening date' },
+                { path: 'randomization_date', label: 'Randomization date' },
+              ]}
+              onApplied={handleCopilotImport}
+            />
+          ) : null}
+          <SubjectFormDialog
+            studyId={studyId}
+            sites={sites}
+            onSuccess={refreshData}
+            defaultSiteIdWhenCreate={siteScopeId}
+            lockSiteSelection={Boolean(siteScopeId)}
+            disabled={readOnly}
+            disabledTooltip={disabledTooltip}
+          />
+        </div>
       </div>
 
       <div className="flex flex-1 items-center gap-2 flex-wrap">

@@ -21,7 +21,10 @@ import { Button } from '@/components/ui/button';
 import type { Study, StudyCountryWithSubmissions, StudySite, SubjectWithSite, EnrollmentFunnelData, TeamRole, TeamMemberWithStudies, MonitoringVisitWithRelations, StudyBudgetWithItems, SitePaymentWithSite, FinancialSummary, FinanceInvoiceWithRelations, KriValueWithDefinition, EnrollmentDataPoint, FinanceApprovalTemplateOption } from '@/lib/types/ctms';
 import type { JoinLink, PendingInvitation } from '@/lib/actions/team';
 import { TRIP_REPORT_DAYS_BASIS_LABELS } from '@/lib/types/visit-reports';
-import { studyOverviewHasDisplayableContent } from '@/lib/validation/study-overview';
+import {
+  formatStudyOverviewRegionsForDisplay,
+  studyOverviewHasDisplayableContent,
+} from '@/lib/validation/study-overview';
 import { CountriesTab } from '@/components/ctms/countries/countries-tab';
 import { SitesTab } from '@/components/ctms/sites/sites-tab';
 import { SubjectsTab } from '@/components/ctms/subjects/subjects-tab';
@@ -86,7 +89,7 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
   return (
     <div className="grid grid-cols-3 gap-4 py-2">
       <dt className="text-sm font-medium text-muted-foreground">{label}</dt>
-      <dd className="col-span-2 text-sm">{value || '—'}</dd>
+      <dd className="col-span-2 text-sm whitespace-pre-wrap break-words">{value || '—'}</dd>
     </div>
   );
 }
@@ -137,6 +140,8 @@ export function StudyDetailTabs({
     });
   };
 
+  const headingName = study.study_name?.trim() || study.title;
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -147,7 +152,7 @@ export function StudyDetailTabs({
               Studies
             </Button>
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight">{study.title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{headingName}</h1>
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <span>{study.protocol_number}</span>
             <span>&middot;</span>
@@ -260,7 +265,8 @@ export function StudyDetailTabs({
               <CardContent>
                 <dl className="divide-y">
                   <DetailRow label="Protocol Number" value={study.protocol_number} />
-                  <DetailRow label="Study Title" value={study.title} />
+                  <DetailRow label="Study name" value={study.study_name} />
+                  <DetailRow label="Study title" value={study.title} />
                   <DetailRow label="Phase" value={study.phase} />
                   <DetailRow label="Status" value={study.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} />
                   <DetailRow label="Therapeutic Area" value={study.therapeutic_area} />
@@ -381,7 +387,7 @@ export function StudyDetailTabs({
             )}
 
             {study.overview?.study_sites &&
-              (study.overview.study_sites.regions ||
+              (((study.overview.study_sites.regions?.length ?? 0) > 0) ||
                 study.overview.study_sites.site_count_summary ||
                 study.overview.study_sites.site_types) && (
               <Card className="lg:col-span-2">
@@ -390,38 +396,13 @@ export function StudyDetailTabs({
                 </CardHeader>
                 <CardContent>
                   <dl className="divide-y">
-                    <DetailRow label="Regions" value={study.overview.study_sites.regions} />
+                    <DetailRow
+                      label="Countries"
+                      value={formatStudyOverviewRegionsForDisplay(study.overview.study_sites.regions)}
+                    />
                     <DetailRow label="Number of sites" value={study.overview.study_sites.site_count_summary} />
                     <DetailRow label="Site type" value={study.overview.study_sites.site_types} />
                   </dl>
-                </CardContent>
-              </Card>
-            )}
-
-            {study.overview?.monitoring &&
-              (study.overview.monitoring.monitoring_type ||
-                study.overview.monitoring.sdv ||
-                (study.overview.monitoring.visit_types && study.overview.monitoring.visit_types.length > 0)) && (
-              <Card className="lg:col-span-2">
-                <CardHeader>
-                  <CardTitle>Monitoring plan</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <dl className="divide-y">
-                    <DetailRow label="Monitoring type" value={study.overview.monitoring.monitoring_type} />
-                    <DetailRow label="SDV" value={study.overview.monitoring.sdv} />
-                  </dl>
-                  {study.overview.monitoring.visit_types &&
-                    study.overview.monitoring.visit_types.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground">Visit types</p>
-                      <ul className="mt-1 list-disc space-y-1 pl-5">
-                        {study.overview.monitoring.visit_types.map((line) => (
-                          <li key={line}>{line}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             )}
@@ -538,7 +519,7 @@ export function StudyDetailTabs({
         </TabsContent>
 
         <TabsContent value="visits" forceMount>
-          <div data-onboarding="page-visits">
+          <div>
             <VisitsTab
               studyId={study.id}
               initialVisits={monitoringVisits}

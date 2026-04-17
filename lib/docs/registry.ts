@@ -54,19 +54,6 @@ export const DOC_CATEGORY_ORDER: DocCategory[] = [
 
 export const docsRegistry: DocEntry[] = [
   {
-    slug: 'onboarding',
-    title: 'Guided setup',
-    description:
-      'In-app tour for admins and users: welcome dialog, coach marks on Studies and related areas, and Profile settings controls.',
-    category: 'getting-started',
-    iconKey: 'rocket',
-    filePath: 'docs/user-manuals/onboarding.md',
-    order: 1,
-    roles: ['admin', 'user'],
-    lastUpdated: '2026-03-26',
-    moduleRoute: '/protected',
-  },
-  {
     slug: 'dashboard-home',
     title: 'Dashboard (Home)',
     description:

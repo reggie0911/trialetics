@@ -78,6 +78,24 @@ const agentLoaders: Record<string, AgentLoader> = {
   'retention-engagement': () => import('./retention-engagement').then(m => m.retentionEngagementAgent),
   'docs-assistant': () => import('./docs-assistant').then(m => m.docsAssistantAgent),
   'brandforge-strategist': () => import('./brandforge-strategist').then(m => m.brandforgeStrategistAgent),
+  // Phase 3: Copilot meta-agents
+  'briefing-curator': () => import('./briefing-curator').then(m => m.briefingCuratorAgent),
+  'memory-keeper': () => import('./memory-keeper').then(m => m.memoryKeeperAgent),
+  // Phase 4: Operational meta-agents
+  'playbook-runner': () => import('./playbook-runner').then(m => m.playbookRunnerAgent),
+  'scenario-modeler': () => import('./scenario-modeler').then(m => m.scenarioModelerAgent),
+  'nl-report-builder': () => import('./nl-report-builder').then(m => m.nlReportBuilderAgent),
+  'inspection-readiness': () => import('./inspection-readiness').then(m => m.inspectionReadinessAgent),
+  // Phase 5: Coordination + drafting
+  'copilot-coordinator': () => import('./copilot-coordinator').then(m => m.copilotCoordinatorAgent),
+  'draft-author': () => import('./draft-author').then(m => m.draftAuthorAgent),
+  // Phase 6: Document intelligence
+  'document-router': () => import('./document-router').then(m => m.documentRouterAgent),
+  // Phase 7: Form filling, table updates, template completion
+  'form-filler': () => import('./form-filler').then(m => m.formFillerAgent),
+  'table-mapper': () => import('./table-mapper').then(m => m.tableMapperAgent),
+  'template-completer': () => import('./template-completer').then(m => m.templateCompleterAgent),
+  'field-suggester': () => import('./field-suggester').then(m => m.fieldSuggesterAgent),
 };
 
 const agentCache: Record<string, AgentConfig> = {};
@@ -149,6 +167,28 @@ const moduleContextMap: Record<string, string[]> = {
   'retention-engagement': ['/protected/patient-engagement'],
   'docs-assistant': ['/protected/docs'],
   'brandforge-strategist': ['/protected/brand-forge'],
+  // Phase 3: Copilot meta-agents — surface only on the Copilot routes.
+  'briefing-curator': ['/protected/copilot/briefing'],
+  'memory-keeper': ['/protected/copilot/memory'],
+  // Phase 4: Operational meta-agents
+  'playbook-runner': ['/protected/copilot/playbooks'],
+  'scenario-modeler': ['/protected/copilot/scenarios'],
+  'nl-report-builder': ['/protected/copilot/reports'],
+  'inspection-readiness': ['/protected/copilot/inspection-readiness'],
+  // Phase 5: Coordination + drafting
+  'copilot-coordinator': ['/protected/copilot/collab'],
+  'draft-author': ['/protected/copilot/drafts'],
+  // Phase 6: Document intelligence
+  'document-router': ['/protected/copilot/documents'],
+  // Phase 7: Form filling, table updates, template completion. The
+  // form-filler / table-mapper / template-completer / field-suggester are
+  // surfaced through the inline buttons + Copilot Forms page rather than
+  // being page-default agents — they sit under the Forms workspace so the
+  // Agents directory still discovers them.
+  'form-filler': ['/protected/copilot/forms'],
+  'table-mapper': ['/protected/copilot/forms'],
+  'template-completer': ['/protected/copilot/forms'],
+  'field-suggester': ['/protected/copilot/forms'],
 };
 
 export function findAgentIdForPage(pagePath: string): string | null {

@@ -19,6 +19,7 @@ function mapStudyRow(data: unknown): Study {
   const row = data as Study & { overview?: unknown };
   return {
     ...row,
+    study_name: row.study_name ?? null,
     overview: parseStudyOverview(row.overview) ?? null,
     finance_approval_template_id: row.finance_approval_template_id ?? null,
   };
@@ -26,6 +27,7 @@ function mapStudyRow(data: unknown): Study {
 
 export interface CreateStudyInput {
   protocol_number: string;
+  study_name: string;
   title: string;
   phase: StudyPhase;
   therapeutic_area?: string;
@@ -140,7 +142,7 @@ export async function getStudies(filters?: StudyFilters): Promise<Study[]> {
 
   if (filters?.search) {
     query = query.or(
-      `title.ilike.%${filters.search}%,protocol_number.ilike.%${filters.search}%,sponsor.ilike.%${filters.search}%,therapeutic_area.ilike.%${filters.search}%`
+      `title.ilike.%${filters.search}%,study_name.ilike.%${filters.search}%,protocol_number.ilike.%${filters.search}%,sponsor.ilike.%${filters.search}%,therapeutic_area.ilike.%${filters.search}%`
     );
   }
 
@@ -186,6 +188,7 @@ export async function createStudy(input: CreateStudyInput): Promise<{ data: Stud
       .insert({
         company_id: companyId,
         protocol_number: input.protocol_number,
+        study_name: input.study_name.trim() || null,
         title: input.title,
         phase: input.phase,
         therapeutic_area: input.therapeutic_area || null,

@@ -25,7 +25,7 @@ export function TeamStudyPanel({
 }: TeamStudyPanelProps) {
   return (
     <div className="space-y-6">
-      <div data-onboarding="page-team">
+      <div>
         <h1 className="text-2xl font-semibold tracking-tight">Team</h1>
         <p className="text-sm text-muted-foreground">
           Members and study assignments for this trial (company directory filtered to this study).

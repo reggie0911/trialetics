@@ -83,6 +83,8 @@ import {
 } from '@/lib/actions/visits';
 import { useStudyHub } from '@/components/ctms/study-hub-context';
 import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
+import { CopilotImportTrigger } from '@/components/copilot/tables/copilot-import-trigger';
+import { CopilotFillTrigger } from '@/components/copilot/forms/copilot-fill-trigger';
 
 interface VisitsTabProps {
   studyId: string;
@@ -117,6 +119,54 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
       return;
     }
     toast.success('Visit deleted');
+    refreshVisits();
+  };
+
+  // Bulk-create monitoring visits from accepted Copilot proposals.
+  // Site references may arrive as site_number / name — resolve them
+  // against the available sites before calling the audited createVisit.
+  const handleCopilotImport = async (
+    rows: { rowIndex: number; values: Record<string, unknown>; op: 'insert' | 'update' }[]
+  ) => {
+    let createdCount = 0;
+    let failedCount = 0;
+    for (const row of rows) {
+      if (row.op !== 'insert') continue;
+      const v = row.values as Record<string, unknown>;
+      const rawSite = v.site_id;
+      const targetSiteId = (() => {
+        if (typeof rawSite !== 'string' || !rawSite) return '';
+        if (sites.some(s => s.id === rawSite)) return rawSite;
+        const byNumber = sites.find(s => s.site_number.toLowerCase() === rawSite.toLowerCase());
+        if (byNumber) return byNumber.id;
+        const byName = sites.find(s => s.name.toLowerCase() === rawSite.toLowerCase());
+        if (byName) return byName.id;
+        return '';
+      })();
+      if (!targetSiteId) {
+        failedCount += 1;
+        continue;
+      }
+      const visitType = (typeof v.visit_type === 'string' && v.visit_type
+        ? v.visit_type
+        : 'routine') as MonitoringVisitType;
+      const status = (typeof v.status === 'string' && v.status
+        ? v.status
+        : 'planned') as MonitoringVisitStatus;
+      const { error } = await createVisit({
+        study_id: studyId,
+        site_id: targetSiteId,
+        visit_type: visitType,
+        status,
+        planned_date: (v.planned_date as string | undefined) || undefined,
+        actual_date: (v.actual_date as string | undefined) || undefined,
+        notes: (v.notes as string | undefined) || undefined,
+      });
+      if (error) failedCount += 1;
+      else createdCount += 1;
+    }
+    if (createdCount > 0) toast.success(`${createdCount} visit${createdCount === 1 ? '' : 's'} scheduled`);
+    if (failedCount > 0) toast.error(`${failedCount} row${failedCount === 1 ? '' : 's'} couldn\u2019t be scheduled`);
     refreshVisits();
   };
 
@@ -223,6 +273,32 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
               ))}
             </SelectContent>
           </Select>
+          {!readOnly ? (
+            <CopilotImportTrigger
+              tableId="ctms.visit-schedule"
+              tableLabel="Visits"
+              studyId={studyId}
+              scope={{ kind: 'study', id: studyId }}
+              duplicateKey="planned_date"
+              existingRows={visits.map(v => ({
+                id: v.id,
+                values: {
+                  site_id: v.site_id,
+                  visit_type: v.visit_type,
+                  planned_date: v.planned_date,
+                },
+              }))}
+              targetFields={[
+                { path: 'site_id', label: 'Site' },
+                { path: 'visit_type', label: 'Visit type' },
+                { path: 'planned_date', label: 'Planned date' },
+                { path: 'actual_date', label: 'Actual date' },
+                { path: 'status', label: 'Status' },
+                { path: 'notes', label: 'Notes' },
+              ]}
+              onApplied={handleCopilotImport}
+            />
+          ) : null}
           <VisitFormDialog
             studyId={studyId}
             sites={sites}
@@ -515,6 +591,39 @@ function VisitFormDialog({
           <DialogTitle>{isEdit ? 'Edit Visit' : 'Schedule Monitoring Visit'}</DialogTitle>
           <DialogDescription>{isEdit ? 'Update visit details.' : 'Plan a new monitoring visit for a site.'}</DialogDescription>
         </DialogHeader>
+        {!isEdit ? (
+          <div className="flex justify-end pb-1">
+            <CopilotFillTrigger
+              schemaId="ctms.visit-schedule"
+              schemaLabel="Visit schedule"
+              scope={{ kind: 'study', id: studyId }}
+              studyId={studyId}
+              currentValues={form.getValues() as Record<string, unknown>}
+              onApplied={(values) => {
+                for (const [path, value] of Object.entries(values)) {
+                  // site_id from a document might be a site_number — try to map it.
+                  if (path === 'site_id' && typeof value === 'string') {
+                    const direct = sites.find(s => s.id === value);
+                    const byNumber = direct
+                      ? null
+                      : sites.find(s => s.site_number.toLowerCase() === value.toLowerCase());
+                    const byName = direct || byNumber
+                      ? null
+                      : sites.find(s => s.name.toLowerCase() === value.toLowerCase());
+                    const resolved = direct?.id ?? byNumber?.id ?? byName?.id ?? null;
+                    if (resolved) form.setValue('site_id', resolved, { shouldDirty: true, shouldValidate: true });
+                    continue;
+                  }
+                  form.setValue(path as keyof VisitFormValues, value as never, {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: true,
+                  });
+                }
+              }}
+            />
+          </div>
+        ) : null}
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="space-y-2">
             <Label>Site</Label>

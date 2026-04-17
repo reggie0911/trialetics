@@ -31,6 +31,7 @@ import type { Subject, SubjectStatus, StudySite } from '@/lib/types/ctms';
 import { SUBJECT_STATUS_OPTIONS } from '@/lib/types/ctms';
 import { createSubject, updateSubject } from '@/lib/actions/subjects';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { CopilotFillTrigger } from '@/components/copilot/forms/copilot-fill-trigger';
 
 const subjectSchema = z.object({
   subject_number: z.string().min(1, 'Subject number is required'),
@@ -216,6 +217,38 @@ export function SubjectFormDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {!isEdit ? (
+          <div className="flex justify-end pb-1">
+            <CopilotFillTrigger
+              schemaId="ctms.subject"
+              schemaLabel="Subject"
+              scope={{ kind: 'study', id: studyId }}
+              studyId={studyId}
+              currentValues={form.getValues() as Record<string, unknown>}
+              onApplied={(values) => {
+                for (const [path, value] of Object.entries(values)) {
+                  if (path === 'site_id' && typeof value === 'string') {
+                    const direct = sites.find(s => s.id === value);
+                    const byNumber = direct
+                      ? null
+                      : sites.find(s => s.site_number.toLowerCase() === value.toLowerCase());
+                    const byName = direct || byNumber
+                      ? null
+                      : sites.find(s => s.name.toLowerCase() === value.toLowerCase());
+                    const resolved = direct?.id ?? byNumber?.id ?? byName?.id ?? null;
+                    if (resolved) form.setValue('site_id', resolved, { shouldDirty: true, shouldValidate: true });
+                    continue;
+                  }
+                  form.setValue(path as keyof SubjectFormValues, value as never, {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: true,
+                  });
+                }
+              }}
+            />
+          </div>
+        ) : null}
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">

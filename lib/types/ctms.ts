@@ -14,6 +14,8 @@ export interface Study {
   id: string;
   company_id: string;
   protocol_number: string;
+  /** Optional short or display name; full official title is `title`. */
+  study_name: string | null;
   title: string;
   phase: StudyPhase;
   therapeutic_area: string | null;

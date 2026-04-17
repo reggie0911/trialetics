@@ -6,6 +6,20 @@ const tripReportTimingSchema = z.object({
   days_basis: z.enum(['calendar', 'business']).optional(),
 });
 
+/** Normalize legacy string or array to a string array for `study_sites.regions`. */
+export function normalizeStudyRegionsInput(val: unknown): string[] | undefined {
+  if (val == null || val === '') return undefined;
+  if (Array.isArray(val)) {
+    const a = val.map((x) => (x == null ? '' : String(x).trim())).filter(Boolean);
+    return a.length ? a : undefined;
+  }
+  if (typeof val === 'string') {
+    const parts = val.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+    return parts.length ? parts : undefined;
+  }
+  return undefined;
+}
+
 export const studyOverviewSchema = z.object({
   study_type: z.string().optional(),
   design: z.string().optional(),
@@ -16,7 +30,7 @@ export const studyOverviewSchema = z.object({
   secondary_objectives: z.array(z.string()).optional(),
   study_sites: z
     .object({
-      regions: z.string().optional(),
+      regions: z.preprocess(normalizeStudyRegionsInput, z.array(z.string()).optional()),
       site_count_summary: z.string().optional(),
       site_types: z.string().optional(),
     })
@@ -105,12 +119,13 @@ function overviewHasContent(o: StudyOverview): boolean {
   if (o.study_duration_months != null && o.study_duration_months > 0) return true;
   if (o.secondary_objectives?.some((s) => isNonEmptyString(s))) return true;
   const ss = o.study_sites;
-  if (ss && (isNonEmptyString(ss.regions) || isNonEmptyString(ss.site_count_summary) || isNonEmptyString(ss.site_types))) {
-    return true;
-  }
-  const m = o.monitoring;
-  if (m && (isNonEmptyString(m.monitoring_type) || isNonEmptyString(m.sdv) || (m.visit_types?.some((s) => isNonEmptyString(s)) ?? false))) {
-    return true;
+  if (ss) {
+    const regs = ss.regions;
+    const hasRegions =
+      Array.isArray(regs) && regs.some(isNonEmptyString);
+    if (hasRegions || isNonEmptyString(ss.site_count_summary) || isNonEmptyString(ss.site_types)) {
+      return true;
+    }
   }
   const t = o.trip_report_timing;
   if (t) {
@@ -120,6 +135,19 @@ function overviewHasContent(o: StudyOverview): boolean {
     if (t.days_basis === 'business' || t.days_basis === 'calendar') return true;
   }
   return false;
+}
+
+/** Format `study_sites.regions` for read-only display (string or string[] from older rows). */
+export function formatStudyOverviewRegionsForDisplay(
+  regions: string | string[] | undefined | null,
+): string | null {
+  if (regions == null) return null;
+  if (Array.isArray(regions)) {
+    const s = regions.map((x) => String(x).trim()).filter(Boolean);
+    return s.length ? s.join(', ') : null;
+  }
+  const t = String(regions).trim();
+  return t || null;
 }
 
 /** Coerce parsed overview to JSON-ready object or null if empty. */

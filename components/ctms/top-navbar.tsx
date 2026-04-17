@@ -33,7 +33,8 @@ import {
 
 import Logo from '@/components/layout/logo';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { AIAssistantInlineButton } from '@/components/ai-assistant';
+import { CopilotInlineButton } from '@/components/copilot/copilot-button';
+import { CopilotBriefingPill } from '@/components/copilot/briefing-pill';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -639,7 +640,8 @@ export function TopNavbar({
             </Tooltip>
           </div>
 
-          {hasCtmsAccess && <AIAssistantInlineButton />}
+          {hasCtmsAccess && <CopilotBriefingPill />}
+          {hasCtmsAccess && <CopilotInlineButton />}
           <Tooltip>
             <TooltipTrigger render={<span className="inline-flex" />}>
               <ThemeToggle className="h-9 w-9" />
@@ -654,7 +656,6 @@ export function TopNavbar({
                 <TooltipTrigger render={<span className="inline-flex" />}>
                   <DropdownMenuTrigger
                     className="flex items-center gap-2 rounded-md px-2 py-1 outline-none hover:bg-muted transition-colors"
-                    data-onboarding="nav-profile-menu"
                   >
                     <Avatar className="h-7 w-7 !rounded-md after:!rounded-md">
                       {avatarUrl && <AvatarImage src={avatarUrl} alt={userName} className="rounded-md" />}
@@ -716,7 +717,6 @@ export function TopNavbar({
             variant="ghost"
             size="icon"
             className="lg:hidden h-9 w-9"
-            data-onboarding="nav-mobile-menu"
             onClick={() => setMobileOpen(true)}
           >
             <Menu className="h-5 w-5" />

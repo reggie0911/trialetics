@@ -1,17 +1,15 @@
-import type { ToolDefinition, UserContext } from './types';
+import type { ToolDefinition } from './types';
 
-function requireCompany(ctx: UserContext): string {
-  if (!ctx.companyId) throw new Error('No company context available');
-  return ctx.companyId;
-}
-
-function requireWriteAccess(ctx: UserContext): void {
-  if (ctx.userRole === 'viewer') {
-    throw new Error('Insufficient permissions. Viewers cannot create or modify data.');
-  }
-}
-
+/**
+ * Tracker / non-CTMS write tools live here. CTMS write tools live in
+ * `lib/ai/ctms-tools.ts` (`ctmsWriteTools`). Both registries are merged
+ * into the orchestrator via `lib/ai/tool-registry.ts`.
+ *
+ * Every write tool *must* call `assertToolAllowedForRole(ctx.userRole, name)`
+ * inside its handler. The orchestrator pre-filters by role too, but the
+ * handler-level check is the GxP-grade enforcement point — it survives
+ * orchestrator bypass (direct invocation, future tool APIs).
+ */
 export const writeToolDefinitions: Record<string, ToolDefinition> = {
-  // Placeholder - no write tools for minimal CTMS reset
-  // Add tracker-related write tools here as needed
+  // Placeholder - no tracker write tools yet for the minimal CTMS reset
 };

@@ -53,23 +53,17 @@ export default async function ProtectedPage() {
 
   if (!hasCtmsAccess) {
     return (
-      <div data-onboarding="page-dashboard" className="contents">
-        <ModulesDashboardContent
-          firstName={profile.first_name}
-          hasEtmfAccess={hasEtmfAccess}
-          hasEisfAccess={hasEisfAccess}
-          studyTrackerMenuKeys={studyTrackerMenuKeys}
-          customTrackers={customTrackers}
-        />
-      </div>
+      <ModulesDashboardContent
+        firstName={profile.first_name}
+        hasEtmfAccess={hasEtmfAccess}
+        hasEisfAccess={hasEisfAccess}
+        studyTrackerMenuKeys={studyTrackerMenuKeys}
+        customTrackers={customTrackers}
+      />
     );
   }
 
   const dashboardProps = await getCtmsDashboardProps(supabase, profile);
 
-  return (
-    <div data-onboarding="page-dashboard" className="contents">
-      <DashboardContent {...dashboardProps} />
-    </div>
-  );
+  return <DashboardContent {...dashboardProps} />;
 }

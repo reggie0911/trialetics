@@ -5421,8 +5421,6 @@ export type Database = {
           is_active: boolean
           is_platform_admin: boolean
           last_name: string | null
-          onboarding_completed_at: string | null
-          onboarding_state: Json
           role: string
           subscription_status: string | null
           updated_at: string | null
@@ -5439,8 +5437,6 @@ export type Database = {
           is_active?: boolean
           is_platform_admin?: boolean
           last_name?: string | null
-          onboarding_completed_at?: string | null
-          onboarding_state?: Json
           role?: string
           subscription_status?: string | null
           updated_at?: string | null
@@ -5457,8 +5453,6 @@ export type Database = {
           is_active?: boolean
           is_platform_admin?: boolean
           last_name?: string | null
-          onboarding_completed_at?: string | null
-          onboarding_state?: Json
           role?: string
           subscription_status?: string | null
           updated_at?: string | null
@@ -6469,6 +6463,7 @@ export type Database = {
           sponsor_institution_id: string | null
           start_date: string | null
           status: string
+          study_name: string | null
           therapeutic_area: string | null
           title: string
           updated_at: string
@@ -6487,6 +6482,7 @@ export type Database = {
           sponsor?: string | null
           sponsor_institution_id?: string | null
           start_date?: string | null
+          study_name?: string | null
           status?: string
           therapeutic_area?: string | null
           title: string
@@ -6507,6 +6503,7 @@ export type Database = {
           sponsor_institution_id?: string | null
           start_date?: string | null
           status?: string
+          study_name?: string | null
           therapeutic_area?: string | null
           title?: string
           updated_at?: string

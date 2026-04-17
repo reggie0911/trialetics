@@ -12,6 +12,10 @@ import { identifyModule } from './context-builder';
 import { getAgent, findAgentForPage, getAllAgents } from './agents';
 import { createSSEStream } from './stream';
 import { getAgentOverride } from '@/lib/actions/ai-agent-overrides';
+import { scrub } from '@/lib/copilot/scrub';
+import { wrapUntrusted, UNTRUSTED_CONTENT_INSTRUCTION } from '@/lib/copilot/untrusted';
+import { modelForPurpose, resolveModel } from './model-tier';
+import { isToolAllowedForRole } from './role-allowlist';
 
 const FALLBACK_AGENT_ID = 'dashboard-narrator';
 
@@ -59,19 +63,23 @@ async function buildSystemAndMessages(
   }
 
   systemContent += `\n\n--- Session Context ---\n${contextSummary}`;
+  systemContent += `\n\n--- Untrusted content handling ---\n${UNTRUSTED_CONTENT_INSTRUCTION}`;
 
   const messages: ModelMessage[] = [];
 
   for (const msg of request.messages) {
     if (msg.attachments && msg.attachments.length > 0) {
+      // Attachment text is always treated as untrusted content (potential
+      // prompt-injection vector) and PHI-scrubbed before reaching the model.
       const docTexts = msg.attachments
         .filter(a => a.type === 'document' && a.textContent)
-        .map(a => `[Attached file: ${a.filename}]\n${a.textContent}`)
+        .map(a => wrapUntrusted(scrub(a.textContent ?? ''), { source: a.filename }))
         .join('\n\n');
 
+      const userText = scrub(msg.content);
       const textContent = docTexts
-        ? `${docTexts}\n\n${msg.content}`
-        : msg.content;
+        ? `${docTexts}\n\n${userText}`
+        : userText;
 
       const contentParts: Array<TextPart | ImagePart> = [
         { type: 'text', text: textContent },
@@ -83,10 +91,9 @@ async function buildSystemAndMessages(
         }
       }
 
-      // Attachments are only sent from user messages in this app
       messages.push({ role: 'user', content: contentParts });
     } else {
-      messages.push({ role: msg.role, content: msg.content });
+      messages.push({ role: msg.role, content: scrub(msg.content) });
     }
   }
 
@@ -104,9 +111,13 @@ async function* runAgent(
   const eventQueue: StreamEvent[] = [];
   const emitEvent = (event: StreamEvent) => eventQueue.push(event);
 
-  // Build AI SDK tools from agent's tool definitions
+  // Build AI SDK tools from agent's tool definitions, gated by role.
+  // Belt and suspenders: the UI already hides chips the user can't run, but
+  // we re-check inside the orchestrator so a model can't smuggle a write
+  // past the allowlist via a chat tool call.
   const tools: Record<string, Tool<Record<string, unknown>, unknown>> = {};
   for (const toolDef of agent.tools) {
+    if (!isToolAllowedForRole(ctx.userRole, toolDef.name)) continue;
     const capturedDef = toolDef;
     tools[capturedDef.name] = tool({
       description: capturedDef.description,
@@ -155,7 +166,7 @@ async function* runAgent(
   const hasTools = Object.keys(tools).length > 0;
 
   const result = streamText({
-    model: openai(agent.model ?? 'gpt-4o'),
+    model: openai(agent.model ? resolveModel(agent.model) : modelForPurpose('chat')),
     system,
     messages,
     tools: hasTools ? tools : undefined,

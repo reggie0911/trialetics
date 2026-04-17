@@ -34,7 +34,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
 
 import type { StudySite } from '@/lib/types/ctms';
-import { getStudySites, deleteSite } from '@/lib/actions/sites';
+import { getStudySites, deleteSite, createSite } from '@/lib/actions/sites';
+import { CopilotImportTrigger } from '@/components/copilot/tables/copilot-import-trigger';
 
 interface SitesTabProps {
   studyId: string;
@@ -68,6 +69,58 @@ export function SitesTab({ studyId, initialSites }: SitesTabProps) {
     refreshSites();
   };
 
+  // Bulk-create sites from accepted Copilot proposals. We loop sequentially
+  // so a single bad row surfaces a clear error, then refresh the table.
+  // Update ops are skipped here for now — the existing per-site detail
+  // page is the audited path for edits; an "update existing site" mode can
+  // layer on later by wiring updateSite() against the matched id.
+  const handleCopilotImport = async (
+    rows: { rowIndex: number; values: Record<string, unknown>; op: 'insert' | 'update' }[]
+  ) => {
+    let createdCount = 0;
+    let failedCount = 0;
+    for (const row of rows) {
+      if (row.op !== 'insert') continue;
+      const v = row.values as Record<string, unknown>;
+      const targetEnrollmentRaw = v.target_enrollment;
+      const targetEnrollment =
+        typeof targetEnrollmentRaw === 'number'
+          ? targetEnrollmentRaw
+          : Number.isFinite(Number(targetEnrollmentRaw))
+            ? Number(targetEnrollmentRaw)
+            : 0;
+      const status = (v.status as
+        | 'identified'
+        | 'selected'
+        | 'initiated'
+        | 'activated'
+        | 'enrolling'
+        | 'closed'
+        | undefined) ?? 'identified';
+      const result = await createSite({
+        study_id: studyId,
+        site_number: String(v.site_number ?? '').trim(),
+        name: String(v.name ?? '').trim(),
+        study_country_id: (v.study_country_id as string | undefined) || undefined,
+        address: (v.address as string | undefined) || undefined,
+        city: (v.city as string | undefined) || undefined,
+        state: (v.state as string | undefined) || undefined,
+        postal_code: (v.postal_code as string | undefined) || undefined,
+        pi_name: (v.pi_name as string | undefined) || undefined,
+        pi_email: (v.pi_email as string | undefined) || undefined,
+        pi_directory_contact_id: null,
+        status,
+        activation_date: (v.activation_date as string | undefined) || undefined,
+        target_enrollment: targetEnrollment,
+      });
+      if (result.error) failedCount += 1;
+      else createdCount += 1;
+    }
+    if (createdCount > 0) toast.success(`${createdCount} site${createdCount === 1 ? '' : 's'} created`);
+    if (failedCount > 0) toast.error(`${failedCount} row${failedCount === 1 ? '' : 's'} couldn\u2019t be created`);
+    refreshSites();
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -90,14 +143,46 @@ export function SitesTab({ studyId, initialSites }: SitesTabProps) {
             </TooltipContent>
           </Tooltip>
         ) : (
-          <Button
-            size="sm"
-            render={<Link href={`/protected/studies/${studyId}/sites/new`} />}
-            nativeButton={false}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Site
-          </Button>
+          <div className="flex items-center gap-2">
+            <CopilotImportTrigger
+              tableId="ctms.site-activation"
+              tableLabel="Sites"
+              studyId={studyId}
+              scope={{ kind: 'study', id: studyId }}
+              duplicateKey="site_number"
+              existingRows={sites.map(s => ({
+                id: s.id,
+                values: {
+                  site_number: s.site_number,
+                  name: s.name,
+                  pi_email: s.pi_email,
+                },
+              }))}
+              targetFields={[
+                { path: 'site_number', label: 'Site number' },
+                { path: 'name', label: 'Site name' },
+                { path: 'study_country_id', label: 'Country' },
+                { path: 'address', label: 'Address' },
+                { path: 'city', label: 'City' },
+                { path: 'state', label: 'State / Province' },
+                { path: 'postal_code', label: 'Postal code' },
+                { path: 'pi_name', label: 'PI name' },
+                { path: 'pi_email', label: 'PI email' },
+                { path: 'status', label: 'Status' },
+                { path: 'activation_date', label: 'Activation date' },
+                { path: 'target_enrollment', label: 'Target enrollment' },
+              ]}
+              onApplied={handleCopilotImport}
+            />
+            <Button
+              size="sm"
+              render={<Link href={`/protected/studies/${studyId}/sites/new`} />}
+              nativeButton={false}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Site
+            </Button>
+          </div>
         )}
       </div>
 
