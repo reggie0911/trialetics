@@ -11,6 +11,7 @@
     "test": "vitest run",
     "stripe:seed-test-prices": "node scripts/stripe-seed-test-prices.mjs",
     "seed:ip-dummy": "node scripts/seed-ip-inventory-dummy.mjs",
+    "seed:copilot-demo": "node scripts/seed-copilot-demo.mjs",
     "backfill:site-coordinates": "node scripts/backfill-site-coordinates.mjs"
   },
   "dependencies": {
@@ -67,9 +68,12 @@
     "i18n-iso-countries": "^7.14.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.562.0",
+    "mailparser": "^3.9.8",
+    "mammoth": "^1.12.0",
     "motion": "^12.25.0",
     "next": "^16.2.2",
     "next-themes": "^0.4.6",
+    "officeparser": "^6.1.0",
     "openai": "^6.22.0",
     "papaparse": "^5.5.3",
     "pdf-parse": "^2.4.5",
@@ -99,6 +103,7 @@
     "@tailwindcss/postcss": "^4",
     "@tailwindcss/typography": "^0.5.19",
     "@types/google.maps": "^3.58.1",
+    "@types/mailparser": "^3.4.6",
     "@types/node": "^20.19.30",
     "@types/papaparse": "^5.5.2",
     "@types/react": "^19",
@@ -106,7 +111,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.1",
-    "supabase": "^2.89.1",
+    "supabase": "^2.92.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^4.1.3"

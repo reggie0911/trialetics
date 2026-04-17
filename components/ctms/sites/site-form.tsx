@@ -30,6 +30,7 @@ import { toast } from 'sonner';
 import { createSite, updateSite } from '@/lib/actions/sites';
 import { SITE_STATUS_OPTIONS } from '@/lib/types/ctms';
 import type { StudySite, StudyCountry } from '@/lib/types/ctms';
+import { CopilotFillTrigger } from '@/components/copilot/forms/copilot-fill-trigger';
 
 const DIRECTORY_LINK_NONE = '__none__';
 
@@ -144,12 +145,36 @@ export function SiteForm({
     }
   }
 
+  // When the user accepts proposals from the Copilot fill review card, write
+  // the values into RHF without dirtying fields the user already filled.
+  // We mark the touched fields so dirty-state tracking still reflects an
+  // AI-assisted edit (matters for the form's "unsaved changes" guard).
+  const handleCopilotApply = (values: Record<string, unknown>) => {
+    for (const [path, value] of Object.entries(values)) {
+      form.setValue(path as keyof SiteFormValues, value as never, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    }
+  };
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
             <CardTitle>Site Information</CardTitle>
+            {mode === 'create' ? (
+              <CopilotFillTrigger
+                schemaId="ctms.site-activation"
+                schemaLabel="Site activation"
+                scope={{ kind: 'study', id: studyId }}
+                studyId={studyId}
+                currentValues={form.getValues()}
+                onApplied={handleCopilotApply}
+              />
+            ) : null}
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <FormField

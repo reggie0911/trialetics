@@ -3,12 +3,8 @@ import { ArrowLeft } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { StudyForm } from '@/components/ctms/studies/study-form';
-import { listInstitutions } from '@/lib/actions/directory-institutions';
 
 export default async function NewStudyPage() {
-  const { data: institutions } = await listInstitutions({ limit: 100 });
-  const institutionOptions = (institutions ?? []).map((i) => ({ id: i.id, name: i.name }));
-
   return (
     <div className="p-6 space-y-6 max-w-4xl">
       <div className="space-y-1">
@@ -22,7 +18,7 @@ export default async function NewStudyPage() {
         </p>
       </div>
 
-      <StudyForm mode="create" institutionOptions={institutionOptions} />
+      <StudyForm mode="create" />
     </div>
   );
 }

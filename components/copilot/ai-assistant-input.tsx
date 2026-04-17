@@ -1,9 +1,10 @@
 'use client';
 
 import { useRef, useCallback } from 'react';
-import { Send, Square, Paperclip, X, FileText, Image as ImageIcon, Mic } from 'lucide-react';
+import { Send, Square, Paperclip, X, FileText, Image as ImageIcon, Mic, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 
 export interface PendingFile {
   id: string;
@@ -21,6 +22,13 @@ interface AIAssistantInputProps {
   onFilesAdd?: (files: File[]) => void;
   onFileRemove?: (id: string) => void;
   onVoiceMode?: () => void;
+  /**
+   * `narrow` — original side-panel composer with `border-t` + `Paperclip`.
+   * `fullscreen` — ChatGPT-style floating composer (rounded-2xl, shadow,
+   * `Plus` attach button on the left, no top border) used inside the
+   * fullscreen shell.
+   */
+  variant?: 'narrow' | 'fullscreen';
 }
 
 const ACCEPTED_TYPES = 'image/jpeg,image/png,image/gif,image/webp,application/pdf,text/csv,.csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -35,8 +43,10 @@ export function AIAssistantInput({
   onFilesAdd,
   onFileRemove,
   onVoiceMode,
+  variant = 'narrow',
 }: AIAssistantInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fullscreen = variant === 'fullscreen';
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -70,11 +80,25 @@ export function AIAssistantInput({
   const hasContent = value.trim() || pendingFiles.length > 0;
 
   return (
-    <div className="border-t bg-background p-3">
+    <div
+      className={cn(
+        fullscreen
+          ? 'bg-transparent px-4 pb-6 pt-2'
+          : 'border-t bg-background p-3'
+      )}
+    >
       {pendingFiles.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-2">
+        <div
+          className={cn(
+            'flex flex-wrap gap-1.5',
+            fullscreen ? 'mx-auto mb-2 max-w-[760px]' : 'mb-2'
+          )}
+        >
           {pendingFiles.map(pf => (
-            <div key={pf.id} className="relative group flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted text-[10px] max-w-[140px]">
+            <div
+              key={pf.id}
+              className="relative group flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted text-[11px] max-w-[160px]"
+            >
               {pf.previewUrl ? (
                 <img src={pf.previewUrl} alt="" className="h-5 w-5 rounded object-cover flex-shrink-0" />
               ) : pf.file.type.startsWith('image/') ? (
@@ -94,7 +118,13 @@ export function AIAssistantInput({
         </div>
       )}
 
-      <div className="relative flex items-center gap-1">
+      <div
+        className={cn(
+          'relative flex items-center gap-1',
+          fullscreen &&
+            'mx-auto max-w-[760px] gap-2 rounded-2xl border bg-card px-2 py-1.5 shadow-[0_4px_24px_rgba(0,0,0,0.04)]'
+        )}
+      >
         <input
           ref={fileInputRef}
           type="file"
@@ -106,12 +136,12 @@ export function AIAssistantInput({
         <Button
           variant="ghost"
           size="icon-sm"
-          className="flex-shrink-0"
+          className={cn('flex-shrink-0', fullscreen && 'h-8 w-8 rounded-full')}
           onClick={() => fileInputRef.current?.click()}
           disabled={isStreaming}
           title="Attach files"
         >
-          <Paperclip className="h-3.5 w-3.5" />
+          {fullscreen ? <Plus className="h-4 w-4" /> : <Paperclip className="h-3.5 w-3.5" />}
         </Button>
 
         <Input
@@ -119,8 +149,12 @@ export function AIAssistantInput({
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder="Ask me anything..."
-          className="flex-1 text-xs h-8"
+          placeholder={fullscreen ? 'Ask anything' : 'Ask me anything...'}
+          className={cn(
+            fullscreen
+              ? 'h-9 flex-1 border-0 bg-transparent text-sm shadow-none focus-visible:border-0 focus-visible:ring-0'
+              : 'flex-1 text-xs h-8'
+          )}
           disabled={isStreaming}
         />
 
@@ -128,33 +162,33 @@ export function AIAssistantInput({
           <Button
             variant="ghost"
             size="icon-sm"
-            className="flex-shrink-0"
+            className={cn('flex-shrink-0', fullscreen && 'h-8 w-8 rounded-full')}
             onClick={onVoiceMode}
             disabled={isStreaming}
             title="Voice mode"
           >
-            <Mic className="h-3.5 w-3.5" />
+            <Mic className={cn(fullscreen ? 'h-4 w-4' : 'h-3.5 w-3.5')} />
           </Button>
         )}
 
         {isStreaming ? (
           <Button
-            variant="ghost"
+            variant={fullscreen ? 'default' : 'ghost'}
             size="icon-sm"
-            className="flex-shrink-0"
+            className={cn('flex-shrink-0', fullscreen && 'h-8 w-8 rounded-full')}
             onClick={onStop}
           >
-            <Square className="h-3.5 w-3.5" />
+            <Square className={cn(fullscreen ? 'h-3.5 w-3.5' : 'h-3.5 w-3.5')} />
           </Button>
         ) : (
           <Button
-            variant="ghost"
+            variant={fullscreen ? 'default' : 'ghost'}
             size="icon-sm"
-            className="flex-shrink-0"
+            className={cn('flex-shrink-0', fullscreen && 'h-8 w-8 rounded-full')}
             onClick={onSubmit}
             disabled={!hasContent}
           >
-            <Send className="h-3.5 w-3.5" />
+            <Send className={cn(fullscreen ? 'h-4 w-4' : 'h-3.5 w-3.5')} />
           </Button>
         )}
       </div>

@@ -14,10 +14,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
 import type { ChatMessage, ChatMessageAttachment, StreamEvent, ConfirmActionPayload } from '@/lib/ai/types';
 import type { PendingFile } from './ai-assistant-input';
 
-interface AgentInfo {
+export interface AgentInfo {
   id: string;
   name: string;
   description: string;
@@ -100,9 +101,36 @@ interface AIAssistantChatProps {
   sessionId?: string | null;
   onSessionChange?: (id: string | null) => void;
   onVoiceMode?: () => void;
+  /**
+   * Layout variant.
+   *   - `narrow` (default): the original 384-520px side-panel layout.
+   *   - `fullscreen`: ChatGPT-style — drops the welcome hero, hides the
+   *     internal agent selector (rendered by the shell header instead),
+   *     uses `text-sm` density, and shows persistent suggested prompts
+   *     directly above the floating composer.
+   */
+  variant?: 'narrow' | 'fullscreen';
+  /**
+   * Optional controlled agent selection. When provided, the chat does not
+   * render its own selector and emits changes via `onSelectedAgentChange`.
+   * The shell uses this in fullscreen so the picker can live in the header.
+   */
+  selectedAgent?: string | undefined;
+  onSelectedAgentChange?: (id: string | undefined) => void;
+  /** Notified when `/api/ai/chat` returns the agent list. */
+  onAgentsLoaded?: (agents: AgentInfo[]) => void;
 }
 
-export function AIAssistantChat({ sessionId, onSessionChange, onVoiceMode }: AIAssistantChatProps = {}) {
+export function AIAssistantChat({
+  sessionId,
+  onSessionChange,
+  onVoiceMode,
+  variant = 'narrow',
+  selectedAgent: controlledAgent,
+  onSelectedAgentChange,
+  onAgentsLoaded,
+}: AIAssistantChatProps = {}) {
+  const fullscreen = variant === 'fullscreen';
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const protocolId = searchParams.get('protocolId') ?? searchParams.get('projectId') ?? undefined;
@@ -112,11 +140,43 @@ export function AIAssistantChat({ sessionId, onSessionChange, onVoiceMode }: AIA
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<string | undefined>();
+  const [internalAgent, setInternalAgent] = useState<string | undefined>();
+  const selectedAgent = controlledAgent !== undefined || onSelectedAgentChange ? controlledAgent : internalAgent;
+  const setSelectedAgent = useCallback(
+    (id: string | undefined) => {
+      if (onSelectedAgentChange) onSelectedAgentChange(id);
+      else setInternalAgent(id);
+    },
+    [onSelectedAgentChange]
+  );
   const [pendingConfirmations, setPendingConfirmations] = useState<PendingConfirmation[]>([]);
   const [fileDownloads, setFileDownloads] = useState<FileDownload[]>([]);
   const [toolStatus, setToolStatus] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+
+  // Publish tool status + pending approvals as window events so the
+  // fullscreen right rail (`<CopilotContextRail />`) can surface them
+  // without prop-drilling.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent('copilot:tool-status', { detail: { status: toolStatus } })
+    );
+  }, [toolStatus]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.dispatchEvent(
+      new CustomEvent('copilot:pending-confirmations', {
+        detail: {
+          items: pendingConfirmations.map(p => ({
+            description: p.payload.description,
+            status: p.status,
+          })),
+        },
+      })
+    );
+  }, [pendingConfirmations]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -152,10 +212,13 @@ export function AIAssistantChat({ sessionId, onSessionChange, onVoiceMode }: AIA
     fetch('/api/ai/chat')
       .then(res => res.json())
       .then(data => {
-        if (data.agents) setAgents(data.agents);
+        if (data.agents) {
+          setAgents(data.agents);
+          onAgentsLoaded?.(data.agents);
+        }
       })
       .catch(() => {});
-  }, []);
+  }, [onAgentsLoaded]);
 
   // Load session when sessionId changes
   useEffect(() => {
@@ -326,6 +389,24 @@ export function AIAssistantChat({ sessionId, onSessionChange, onVoiceMode }: AIA
                 const dl: FileDownload = JSON.parse(event.data);
                 setFileDownloads(prev => [...prev, dl]);
               } catch { /* skip */ }
+            } else if (event.type === 'form_fill') {
+              try {
+                const payload = JSON.parse(event.data);
+                window.dispatchEvent(new CustomEvent('copilot:open-form-fill', { detail: { payload } }));
+              } catch { /* skip */ }
+            } else if (event.type === 'table_update') {
+              try {
+                const payload = JSON.parse(event.data);
+                window.dispatchEvent(new CustomEvent('copilot:open-table-update', { detail: { payload } }));
+              } catch { /* skip */ }
+            } else if (event.type === 'template_fill') {
+              try {
+                const payload = JSON.parse(event.data);
+                window.dispatchEvent(new CustomEvent('copilot:open-template-fill', { detail: { payload } }));
+              } catch { /* skip */ }
+            } else if (event.type === 'field_suggest') {
+              // Inline suggestions are surfaced through `<InlineSuggestPopover />`
+              // that opens directly from the field — no chat-level UI needed.
             } else if (event.type === 'generated_questions') {
               try {
                 const parsed = JSON.parse(event.data);
@@ -441,9 +522,9 @@ export function AIAssistantChat({ sessionId, onSessionChange, onVoiceMode }: AIA
   const selectedAgentName = agents.find(a => a.id === selectedAgent)?.name;
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Agent Selector */}
-      {agents.length > 0 && (
+    <div className={cn('flex h-full flex-col', fullscreen && 'text-sm')}>
+      {/* Agent Selector — hidden in fullscreen (header owns it) */}
+      {agents.length > 0 && !fullscreen && (
         <div className="px-4 pt-3 pb-1">
           <DropdownMenu>
             <DropdownMenuTrigger className={buttonVariants({ variant: "outline", size: "sm", className: "w-full justify-between text-xs h-8" })}>
@@ -474,9 +555,9 @@ export function AIAssistantChat({ sessionId, onSessionChange, onVoiceMode }: AIA
         </div>
       )}
 
-      {messages.length === 0 ? (
+      {messages.length === 0 && !fullscreen ? (
         <>
-          {/* Welcome Header */}
+          {/* Welcome Header — narrow mode only */}
           <div className="py-8 px-6 text-center">
             <SoundWaveAnimation />
             <h2 className="text-xl font-semibold mt-4 mb-2">Hi,</h2>
@@ -492,7 +573,7 @@ export function AIAssistantChat({ sessionId, onSessionChange, onVoiceMode }: AIA
             </p>
           </div>
 
-          {/* Suggested Prompts */}
+          {/* Suggested Prompts — narrow mode (fullscreen renders them above composer) */}
           <div className="px-6 space-y-2">
             {prompts.map((prompt) => (
               <button
@@ -505,9 +586,19 @@ export function AIAssistantChat({ sessionId, onSessionChange, onVoiceMode }: AIA
             ))}
           </div>
         </>
+      ) : messages.length === 0 && fullscreen ? (
+        /* Fullscreen empty state — the persistent prompts above the composer
+           carry the empty state. We just leave a flexible spacer here so the
+           composer hugs the bottom. */
+        <div className="flex-1" />
       ) : (
         /* Messages Area */
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        <div
+          className={cn(
+            'flex-1 overflow-y-auto space-y-4',
+            fullscreen ? 'px-6 py-6' : 'px-4 py-4'
+          )}
+        >
           {messages.map((message, index) => (
             <div key={index} className="flex gap-2.5">
               <div className="flex-shrink-0 mt-0.5">
@@ -538,10 +629,15 @@ export function AIAssistantChat({ sessionId, onSessionChange, onVoiceMode }: AIA
                         ))}
                       </div>
                     )}
-                    <p className="text-sm">{message.content}</p>
+                    <p className={cn(fullscreen ? 'text-sm leading-relaxed' : 'text-sm')}>{message.content}</p>
                   </div>
                 ) : message.content ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none text-sm [&_table]:text-xs [&_pre]:text-xs [&_code]:text-xs">
+                  <div
+                    className={cn(
+                      'prose dark:prose-invert max-w-none [&_table]:text-xs [&_pre]:text-xs [&_code]:text-xs',
+                      fullscreen ? 'prose-sm text-sm' : 'prose-sm text-sm'
+                    )}
+                  >
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {message.content}
                     </ReactMarkdown>
@@ -549,7 +645,7 @@ export function AIAssistantChat({ sessionId, onSessionChange, onVoiceMode }: AIA
                 ) : isStreaming && index === messages.length - 1 ? (
                   <div className="flex items-center gap-1.5 text-muted-foreground">
                     <Loader2 className="h-3 w-3 animate-spin" />
-                    <span className="text-xs">Thinking...</span>
+                    <span className={cn(fullscreen ? 'text-sm' : 'text-xs')}>Thinking...</span>
                   </div>
                 ) : null}
               </div>
@@ -643,6 +739,25 @@ export function AIAssistantChat({ sessionId, onSessionChange, onVoiceMode }: AIA
         </div>
       )}
 
+      {/* Persistent suggested prompts (fullscreen) — sit directly above the
+          composer, contextual to the current module. ChatGPT-style. */}
+      {fullscreen && !isStreaming && (
+        <div className="mx-auto w-full max-w-[760px] px-4 pb-2 pt-1">
+          <div className="flex flex-wrap gap-1.5">
+            {prompts.slice(0, 4).map(prompt => (
+              <button
+                key={prompt}
+                type="button"
+                onClick={() => handlePromptClick(prompt)}
+                className="rounded-full border bg-background px-3 py-1 text-[12px] text-muted-foreground transition-colors hover:border-[var(--copilot-accent)] hover:text-foreground"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Input Area */}
       <AIAssistantInput
         value={inputValue}
@@ -654,6 +769,7 @@ export function AIAssistantChat({ sessionId, onSessionChange, onVoiceMode }: AIA
         onFilesAdd={handleFilesAdd}
         onFileRemove={handleFileRemove}
         onVoiceMode={onVoiceMode}
+        variant={variant}
       />
     </div>
   );

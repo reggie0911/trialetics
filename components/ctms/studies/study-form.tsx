@@ -32,11 +32,15 @@ import { createStudy, updateStudy, getCompanyName } from '@/lib/actions/studies'
 import { STUDY_PHASE_OPTIONS, STUDY_STATUS_OPTIONS } from '@/lib/types/ctms';
 import type { Study } from '@/lib/types/ctms';
 import type { StudyOverview } from '@/lib/validation/study-overview';
-import { parseStudyOverview, studyOverviewToDbValue } from '@/lib/validation/study-overview';
+import {
+  normalizeStudyRegionsInput,
+  parseStudyOverview,
+  studyOverviewToDbValue,
+} from '@/lib/validation/study-overview';
 import { TRIP_REPORT_DAYS_BASIS_LABELS } from '@/lib/types/visit-reports';
-
-/** Sentinel for optional directory / institution selects (Radix Select disallows empty string values). */
-const DIRECTORY_LINK_NONE = '__none__';
+import { StudyCountryMultiSelect } from '@/components/ctms/studies/study-country-multi-select';
+import { StudyIsoDateInput } from '@/components/ctms/studies/study-iso-date-input';
+import { CopilotFillTrigger } from '@/components/copilot/forms/copilot-fill-trigger';
 
 const overviewFormSchema = z.object({
   study_type: z.string().optional(),
@@ -46,12 +50,9 @@ const overviewFormSchema = z.object({
   population: z.string().optional(),
   primary_objective: z.string().optional(),
   secondary_objectives_text: z.string().optional(),
-  regions: z.string().optional(),
+  regions: z.array(z.string()),
   site_count_summary: z.string().optional(),
   site_types: z.string().optional(),
-  monitoring_type: z.string().optional(),
-  sdv: z.string().optional(),
-  monitoring_visit_types_text: z.string().optional(),
   trip_report_submission_days: z.string().optional(),
   trip_report_approval_days: z.string().optional(),
   trip_report_days_basis: z.enum(['calendar', 'business']),
@@ -59,6 +60,11 @@ const overviewFormSchema = z.object({
 
 const studyFormSchema = z.object({
   protocol_number: z.string().min(1, 'Protocol number is required'),
+  study_name: z
+    .string()
+    .trim()
+    .min(1, 'Study name is required')
+    .max(500, 'Study name must be at most 500 characters'),
   title: z.string().min(1, 'Study title is required'),
   phase: z.enum(['Phase I', 'Phase II', 'Phase III', 'Phase IV', 'Phase I/II', 'Phase II/III'], {
     required_error: 'Phase is required',
@@ -67,7 +73,6 @@ const studyFormSchema = z.object({
   indication: z.string().optional(),
   status: z.enum(['draft', 'active', 'completed', 'closed', 'on_hold']).optional(),
   sponsor: z.string().optional(),
-  sponsor_institution_id: z.string().optional(),
   start_date: z.string().optional(),
   end_date: z.string().optional(),
   description: z.string().optional(),
@@ -86,12 +91,9 @@ function defaultOverviewFromStudy(study?: Study): StudyFormValues['overview'] {
     population: o?.population ?? '',
     primary_objective: o?.primary_objective ?? '',
     secondary_objectives_text: o?.secondary_objectives?.join('\n') ?? '',
-    regions: o?.study_sites?.regions ?? '',
+    regions: normalizeStudyRegionsInput(o?.study_sites?.regions) ?? [],
     site_count_summary: o?.study_sites?.site_count_summary ?? '',
     site_types: o?.study_sites?.site_types ?? '',
-    monitoring_type: o?.monitoring?.monitoring_type ?? '',
-    sdv: o?.monitoring?.sdv ?? '',
-    monitoring_visit_types_text: o?.monitoring?.visit_types?.join('\n') ?? '',
     trip_report_submission_days:
       o?.trip_report_timing?.report_submission_days != null
         ? String(o.trip_report_timing.report_submission_days)
@@ -122,17 +124,10 @@ function buildStudyOverviewForSave(ov: StudyFormValues['overview']): StudyOvervi
       ?.split('\n')
       .map((l) => l.trim())
       .filter(Boolean) ?? [];
-  const visitTypes =
-    ov.monitoring_visit_types_text
-      ?.split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean) ?? [];
 
-  const hasSites = [ov.regions, ov.site_count_summary, ov.site_types].some((s) => s?.trim());
-  const hasMon =
-    Boolean(ov.monitoring_type?.trim()) ||
-    Boolean(ov.sdv?.trim()) ||
-    visitTypes.length > 0;
+  const hasRegions = ov.regions.length > 0;
+  const hasSites =
+    hasRegions || [ov.site_count_summary, ov.site_types].some((s) => s?.trim());
 
   const tripFieldText = Boolean(
     ov.trip_report_submission_days?.trim() || ov.trip_report_approval_days?.trim(),
@@ -154,16 +149,9 @@ function buildStudyOverviewForSave(ov: StudyFormValues['overview']): StudyOvervi
     secondary_objectives: secondary.length ? secondary : undefined,
     study_sites: hasSites
       ? {
-          regions: ov.regions?.trim() || undefined,
+          regions: hasRegions ? ov.regions : undefined,
           site_count_summary: ov.site_count_summary?.trim() || undefined,
           site_types: ov.site_types?.trim() || undefined,
-        }
-      : undefined,
-    monitoring: hasMon
-      ? {
-          monitoring_type: ov.monitoring_type?.trim() || undefined,
-          sdv: ov.sdv?.trim() || undefined,
-          visit_types: visitTypes.length ? visitTypes : undefined,
         }
       : undefined,
     trip_report_timing: includeTripTiming
@@ -184,14 +172,12 @@ interface StudyFormProps {
   study?: Study;
   mode: 'create' | 'edit';
   onSuccess?: () => void;
-  institutionOptions?: { id: string; name: string }[];
 }
 
 export function StudyForm({
   study,
   mode,
   onSuccess,
-  institutionOptions = [],
 }: StudyFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -200,16 +186,13 @@ export function StudyForm({
     resolver: zodResolver(studyFormSchema),
     defaultValues: {
       protocol_number: study?.protocol_number ?? '',
+      study_name: study?.study_name ?? '',
       title: study?.title ?? '',
       phase: study?.phase ?? undefined,
       therapeutic_area: study?.therapeutic_area ?? '',
       indication: study?.indication ?? '',
       status: study?.status ?? 'draft',
       sponsor: study?.sponsor ?? '',
-      sponsor_institution_id:
-        study?.sponsor_institution_id && study.sponsor_institution_id.length > 0
-          ? study.sponsor_institution_id
-          : DIRECTORY_LINK_NONE,
       start_date: study?.start_date ?? '',
       end_date: study?.end_date ?? '',
       description: study?.description ?? '',
@@ -229,18 +212,13 @@ export function StudyForm({
     setIsSubmitting(true);
 
     try {
-      const sponsorInstitutionId =
-        values.sponsor_institution_id === DIRECTORY_LINK_NONE
-          ? null
-          : values.sponsor_institution_id || null;
-
       const { overview: overviewForm, ...restValues } = values;
       const overview = buildStudyOverviewForSave(overviewForm);
 
       if (mode === 'create') {
         const { data, error } = await createStudy({
           ...restValues,
-          sponsor_institution_id: sponsorInstitutionId,
+          sponsor_institution_id: null,
           overview,
         });
         if (error) {
@@ -257,7 +235,6 @@ export function StudyForm({
         const { error } = await updateStudy({
           id: study!.id,
           ...restValues,
-          sponsor_institution_id: sponsorInstitutionId,
           overview,
         });
         if (error) {
@@ -272,22 +249,76 @@ export function StudyForm({
     }
   }
 
+  // Apply Copilot-proposed values into RHF. Only writes top-level study
+  // fields; the structured `overview` block has its own editor and isn't
+  // covered by the registered `ctms.study-overview` schema.
+  const handleCopilotApply = (values: Record<string, unknown>) => {
+    for (const [path, value] of Object.entries(values)) {
+      // Skip nested overview keys — current registered schema is flat.
+      if (path.includes('.')) continue;
+      form.setValue(path as keyof StudyFormValues, value as never, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    }
+  };
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
             <CardTitle>Study Information</CardTitle>
+            {mode === 'create' ? (
+              <CopilotFillTrigger
+                schemaId="ctms.study-overview"
+                schemaLabel="Study overview"
+                scope={{ kind: 'study' }}
+                currentValues={form.getValues() as Record<string, unknown>}
+                onApplied={handleCopilotApply}
+              />
+            ) : null}
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <FormField
               control={form.control}
-              name="protocol_number"
+              name="study_name"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Protocol Number</FormLabel>
+                <FormItem className="md:col-span-2">
+                                   <FormLabel>
+                    Study name
+                    <span className="text-destructive" aria-hidden="true">
+                      {' '}
+                      *
+                    </span>
+                  </FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., PROTO-2026-001" {...field} />
+                    <Input
+                      className="text-xs"
+                      placeholder="Short or display name"
+                      required
+                      aria-required
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem className="md:col-span-2">
+                  <FormLabel>Study title</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Enter full study title"
+                      rows={3}
+                      className="min-h-[4.5rem] resize-y"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -296,12 +327,12 @@ export function StudyForm({
 
             <FormField
               control={form.control}
-              name="title"
+              name="protocol_number"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Study Title</FormLabel>
+                  <FormLabel>Protocol Number</FormLabel>
                   <FormControl>
-                    <Input placeholder="Enter study title" {...field} />
+                    <Input placeholder="e.g., PROTO-2026-001" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -408,50 +439,20 @@ export function StudyForm({
 
             <FormField
               control={form.control}
-              name="sponsor_institution_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Sponsor organization (directory)</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value ?? DIRECTORY_LINK_NONE}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="text-xs">
-                        <SelectValue
-                          placeholder="Link to an organization"
-                          getDisplayLabel={(v) =>
-                            v === DIRECTORY_LINK_NONE
-                              ? 'Not linked'
-                              : institutionOptions.find((o) => o.id === v)?.name ?? v
-                          }
-                        />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={DIRECTORY_LINK_NONE} className="text-xs">
-                        Not linked
-                      </SelectItem>
-                      {institutionOptions.map((o) => (
-                        <SelectItem key={o.id} value={o.id} className="text-xs">
-                          {o.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
               name="start_date"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Start Date</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} />
+                    <StudyIsoDateInput
+                      value={field.value ?? ''}
+                      onChange={(iso) => {
+                        form.clearErrors('start_date');
+                        field.onChange(iso);
+                      }}
+                      onBlur={field.onBlur}
+                      disabled={isSubmitting}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -465,7 +466,15 @@ export function StudyForm({
                 <FormItem>
                   <FormLabel>End Date</FormLabel>
                   <FormControl>
-                    <Input type="date" {...field} />
+                    <StudyIsoDateInput
+                      value={field.value ?? ''}
+                      onChange={(iso) => {
+                        form.clearErrors('end_date');
+                        field.onChange(iso);
+                      }}
+                      onBlur={field.onBlur}
+                      disabled={isSubmitting}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -541,7 +550,12 @@ export function StudyForm({
                 <FormItem className="md:col-span-2">
                   <FormLabel>Population</FormLabel>
                   <FormControl>
-                    <Input className="text-xs" placeholder="Target population description" {...field} />
+                    <Textarea
+                      className="min-h-[80px] resize-y text-xs"
+                      placeholder="Target population description"
+                      rows={3}
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -582,9 +596,15 @@ export function StudyForm({
               name="overview.regions"
               render={({ field }) => (
                 <FormItem className="md:col-span-2">
-                  <FormLabel>Study sites — Regions</FormLabel>
+                  <FormLabel>Countries</FormLabel>
                   <FormControl>
-                    <Input className="text-xs" placeholder="e.g. United States, Europe, Asia-Pacific" {...field} />
+                    <StudyCountryMultiSelect
+                      id={field.name}
+                      value={field.value}
+                      onChange={field.onChange}
+                      disabled={isSubmitting}
+                      aria-invalid={Boolean(form.formState.errors.overview?.regions)}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -610,48 +630,10 @@ export function StudyForm({
                 <FormItem>
                   <FormLabel>Site type</FormLabel>
                   <FormControl>
-                    <Input className="text-xs" placeholder="e.g. Rheumatology centers" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="overview.monitoring_type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Monitoring type</FormLabel>
-                  <FormControl>
-                    <Input className="text-xs" placeholder="e.g. Risk-Based Monitoring (RBM)" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="overview.sdv"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>SDV</FormLabel>
-                  <FormControl>
-                    <Input className="text-xs" placeholder="e.g. Targeted SDV" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="overview.monitoring_visit_types_text"
-              render={({ field }) => (
-                <FormItem className="md:col-span-2">
-                  <FormLabel>Visit types</FormLabel>
-                  <FormControl>
                     <Textarea
-                      className="min-h-[80px] text-xs"
-                      placeholder="One visit type per line (e.g. Site Initiation Visit (SIV))"
+                      className="min-h-[4.5rem] resize-y text-xs"
+                      placeholder="e.g. Rheumatology centers"
+                      rows={2}
                       {...field}
                     />
                   </FormControl>

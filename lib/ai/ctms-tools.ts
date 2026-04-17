@@ -1,5 +1,6 @@
 import type { SiteStatus } from '@/lib/types/ctms';
 import type { ToolDefinition, UserContext } from './types';
+import { assertToolAllowedForRole } from './role-allowlist';
 
 function requireCompany(ctx: UserContext): string {
   if (!ctx.companyId) throw new Error('No company context available');
@@ -372,7 +373,8 @@ export const ctmsWriteTools: Record<string, ToolDefinition> = {
       required: ['kri_definition_id', 'study_id', 'period', 'value', 'status'],
     },
     requiresConfirmation: true,
-    handler: async (args) => {
+    handler: async (args, ctx) => {
+      assertToolAllowedForRole(ctx.userRole, 'recordKriValue');
       const { recordKriValue } = await import('@/lib/actions/reports');
       return recordKriValue({
         kri_definition_id: args.kri_definition_id as string,
@@ -402,7 +404,8 @@ export const ctmsWriteTools: Record<string, ToolDefinition> = {
       required: ['study_id', 'name', 'category'],
     },
     requiresConfirmation: true,
-    handler: async (args) => {
+    handler: async (args, ctx) => {
+      assertToolAllowedForRole(ctx.userRole, 'createMilestone');
       const { createMilestone } = await import('@/lib/actions/milestones');
       return createMilestone({
         study_id: args.study_id as string,
@@ -432,7 +435,8 @@ export const ctmsWriteTools: Record<string, ToolDefinition> = {
       required: ['study_id', 'title'],
     },
     requiresConfirmation: true,
-    handler: async (args) => {
+    handler: async (args, ctx) => {
+      assertToolAllowedForRole(ctx.userRole, 'createTask');
       const { createTask } = await import('@/lib/actions/tasks');
       return createTask({
         study_id: args.study_id as string,
@@ -460,7 +464,8 @@ export const ctmsWriteTools: Record<string, ToolDefinition> = {
       required: ['reportId'],
     },
     requiresConfirmation: true,
-    handler: async (args) => {
+    handler: async (args, ctx) => {
+      assertToolAllowedForRole(ctx.userRole, 'updateTripReportSummary');
       const { updateTripReport } = await import('@/lib/actions/visits');
       const updates: Record<string, string> = {};
       if (args.summary) updates.summary = args.summary as string;

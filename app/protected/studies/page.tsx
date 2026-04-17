@@ -42,9 +42,5 @@ export default async function StudiesPage({ searchParams }: StudiesPageProps) {
 
   const dashboardProps = await getCtmsDashboardProps(supabase, profile);
 
-  return (
-    <div data-onboarding="page-studies" className="contents">
-      <DashboardContent {...dashboardProps} studySelectionHint={studySelectionHint} />
-    </div>
-  );
+  return <DashboardContent {...dashboardProps} studySelectionHint={studySelectionHint} />;
 }

@@ -119,6 +119,13 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
+
+  /* Trialetics Copilot accent — cool teal, deliberately not consumer-AI purple.
+     Used for the Copilot button, context chip, NBA ribbon, AI-generated labels. */
+  --copilot-accent: oklch(0.66 0.115 195);
+  --copilot-accent-foreground: oklch(0.985 0 0);
+  --copilot-accent-soft: oklch(0.95 0.025 195);
+  --copilot-accent-border: oklch(0.78 0.07 195);
 }
 
 .dark {
@@ -153,6 +160,12 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+
+  /* Trialetics Copilot accent — slightly brighter teal for dark mode contrast. */
+  --copilot-accent: oklch(0.74 0.115 195);
+  --copilot-accent-foreground: oklch(0.18 0 0);
+  --copilot-accent-soft: oklch(0.32 0.05 195);
+  --copilot-accent-border: oklch(0.5 0.08 195);
 }
 
 @layer base {

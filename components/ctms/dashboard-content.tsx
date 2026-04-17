@@ -175,7 +175,7 @@ export function DashboardContent({
           </p>
         </div>
 
-        <Card className="rounded-lg bg-blue-500">
+        <Card className="rounded-lg bg-white dark:bg-card">
           <CardContent className="flex flex-wrap items-center gap-4 md:gap-6 py-4">
             {statCards.map((card) => (
               <Link

@@ -1,6 +1,7 @@
 import type { ToolDefinition, UserContext } from './types';
 import { writeToolDefinitions } from './write-tools';
 import { ctmsReadTools, ctmsWriteTools } from './ctms-tools';
+import { copilotMemoryToolDefinitions } from './copilot-memory-tools';
 
 function requireCompany(ctx: UserContext): string {
   if (!ctx.companyId) throw new Error('No company context available');
@@ -50,7 +51,13 @@ export const toolDefinitions: Record<string, ToolDefinition> = {
   },
 };
 
-const allTools = { ...toolDefinitions, ...writeToolDefinitions, ...ctmsReadTools, ...ctmsWriteTools };
+const allTools = {
+  ...toolDefinitions,
+  ...writeToolDefinitions,
+  ...ctmsReadTools,
+  ...ctmsWriteTools,
+  ...copilotMemoryToolDefinitions,
+};
 
 export function getToolDefinition(name: string): ToolDefinition | null {
   return allTools[name] ?? null;
