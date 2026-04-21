@@ -1,24 +1,20 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Pencil,
-  ArrowLeft,
   Globe,
   Building2,
   Users,
   UsersRound,
   ClipboardCheck,
+  ClipboardList,
+  CalendarClock,
   DollarSign,
 } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { Button } from '@/components/ui/button';
-import type { Study, StudyCountryWithSubmissions, StudySite, SubjectWithSite, EnrollmentFunnelData, TeamRole, TeamMemberWithStudies, MonitoringVisitWithRelations, StudyBudgetWithItems, SitePaymentWithSite, FinancialSummary, FinanceInvoiceWithRelations, KriValueWithDefinition, EnrollmentDataPoint, FinanceApprovalTemplateOption } from '@/lib/types/ctms';
+import type { Study, StudyCountryWithSubmissions, StudyEcrfRollupBundle, StudyVisitScheduleBundle, StudySite, SubjectWithSite, EnrollmentFunnelData, TeamRole, TeamMemberWithStudies, MonitoringVisitWithRelations, StudyBudgetWithItems, SitePaymentWithSite, FinancialSummary, FinanceInvoiceWithRelations, KriValueWithDefinition, EnrollmentDataPoint, FinanceApprovalTemplateOption, StudyVisitDefinition, StudyCrf } from '@/lib/types/ctms';
 import type { JoinLink, PendingInvitation } from '@/lib/actions/team';
 import { TRIP_REPORT_DAYS_BASIS_LABELS } from '@/lib/types/visit-reports';
 import {
@@ -30,6 +26,9 @@ import { SitesTab } from '@/components/ctms/sites/sites-tab';
 import { SubjectsTab } from '@/components/ctms/subjects/subjects-tab';
 import { TeamStudyPanel } from '@/components/ctms/team/team-study-panel';
 import { VisitsTab } from '@/components/ctms/visits/visits-tab';
+import { EcrfBuilderTab } from '@/components/ctms/study-forms/ecrf-builder-tab';
+import { StudyEcrfTrackingTab } from '@/components/ctms/ecrf-tracking/study-ecrf-tracking-tab';
+import { StudyVisitScheduleTab } from '@/components/ctms/visit-schedule/study-visit-schedule-tab';
 import { FinancialsTab } from '@/components/ctms/financials/financials-tab';
 import { KriGauge } from '@/components/ctms/reports/kri-gauge';
 import { EnrollmentChart } from '@/components/ctms/reports/enrollment-chart';
@@ -40,8 +39,11 @@ const STUDY_TAB_VALUES = [
   'countries',
   'sites',
   'subjects',
+  'ecrf-tracking',
+  'visit-schedule',
   'team',
   'visits',
+  'ecrf',
   'financials',
 ] as const;
 
@@ -52,8 +54,13 @@ const STUDY_TAB_TOOLTIPS: Record<StudyTabValue, string> = {
   countries: 'Country-level regulatory tracking and submissions for this study.',
   sites: 'Investigator sites, locations, and site-level actions.',
   subjects: 'Enrolled subjects, screening, and randomization.',
+  'ecrf-tracking':
+    'Read-only eCRF tracking rollups across sites, visits, and subjects. Drill into a subject to edit metrics.',
+  'visit-schedule':
+    'Read-only rollup of subject protocol visits across this study. Drill into a subject to edit anchors and dates.',
   team: 'Team members, roles, and site assignments for this study.',
-  visits: 'Monitoring visits: schedule visits, table and calendar views, and trip reports.',
+  visits: 'Site visits: schedule visits, table and calendar views, and trip reports.',
+  ecrf: 'eCRF Builder: define visits, assign CRFs to each visit, and author questions.',
   financials: 'Budgets, invoices, and payments for this study.',
 };
 
@@ -83,6 +90,10 @@ export interface StudyDetailTabsProps {
   enrollmentCurve: EnrollmentDataPoint[];
   isAdmin: boolean;
   financeApprovalTemplateOptions: FinanceApprovalTemplateOption[];
+  ecrfVisitDefinitions: StudyVisitDefinition[];
+  ecrfStudyCrfs: StudyCrf[];
+  ecrfRollup: StudyEcrfRollupBundle;
+  visitSchedule: StudyVisitScheduleBundle;
 }
 
 function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
@@ -117,19 +128,23 @@ export function StudyDetailTabs({
   enrollmentCurve,
   isAdmin,
   financeApprovalTemplateOptions,
+  ecrfVisitDefinitions,
+  ecrfStudyCrfs,
+  ecrfRollup,
+  visitSchedule,
 }: StudyDetailTabsProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const activeTab: StudyTabValue = isStudyTab(tabParam) ? tabParam : 'overview';
+  const requestedTab: StudyTabValue = isStudyTab(tabParam) ? tabParam : 'overview';
+  const activeTab: StudyTabValue =
+    requestedTab === 'ecrf' && !isAdmin ? 'overview' : requestedTab;
 
   /** Keeps address bar in sync without a new history entry per tab switch. */
   const handleStudyTabChange = (next: string) => {
     if (!isStudyTab(next)) return;
     router.replace(`/protected/studies/${study.id}?tab=${next}`, { scroll: false });
   };
-
-  const isStudyReadOnly = study.status === 'closed';
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return null;
@@ -140,53 +155,8 @@ export function StudyDetailTabs({
     });
   };
 
-  const headingName = study.study_name?.trim() || study.title;
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" render={<Link href="/protected/studies" />} nativeButton={false} className="-ml-2">
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              Studies
-            </Button>
-          </div>
-          <h1 className="text-2xl font-semibold tracking-tight">{headingName}</h1>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <span>{study.protocol_number}</span>
-            <span>&middot;</span>
-            <Badge variant="outline" className="text-xs">{study.phase}</Badge>
-            <StatusBadge status={study.status} className="text-xs" />
-          </div>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={isStudyReadOnly}
-                  render={
-                    isStudyReadOnly ? undefined : <Link href={`/protected/studies/${study.id}/edit`} />
-                  }
-                  nativeButton={isStudyReadOnly}
-                />
-              }
-            >
-              <Pencil className="mr-2 h-4 w-4" />
-              Edit
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs text-xs">
-              {isStudyReadOnly
-                ? 'Study is deactivated; editing is disabled until the study is reactivated.'
-                : 'Edit study metadata, overview fields, and configuration.'}
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-
+    <div className="space-y-4">
       <Tabs
         tabsId={`study-detail-${study.id}`}
         value={activeTab}
@@ -228,6 +198,24 @@ export function StudyDetailTabs({
             </TooltipContent>
           </Tooltip>
           <Tooltip>
+            <TooltipTrigger render={<TabsTrigger value="ecrf-tracking" />}>
+              <ClipboardList className="mr-1 h-3.5 w-3.5" />
+              eCRF Tracking
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              {STUDY_TAB_TOOLTIPS['ecrf-tracking']}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger render={<TabsTrigger value="visit-schedule" />}>
+              <CalendarClock className="mr-1 h-3.5 w-3.5" />
+              Visit Window Compliance
+            </TooltipTrigger>
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              {STUDY_TAB_TOOLTIPS['visit-schedule']}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
             <TooltipTrigger render={<TabsTrigger value="team" />}>
               <UsersRound className="mr-1 h-3.5 w-3.5" />
               Team ({teamTabCount})
@@ -239,12 +227,23 @@ export function StudyDetailTabs({
           <Tooltip>
             <TooltipTrigger render={<TabsTrigger value="visits" />}>
               <ClipboardCheck className="mr-1 h-3.5 w-3.5" />
-              Visits ({monitoringVisits.length})
+              Site Visits ({monitoringVisits.length})
             </TooltipTrigger>
             <TooltipContent side="bottom" className="max-w-xs text-xs">
               {STUDY_TAB_TOOLTIPS.visits}
             </TooltipContent>
           </Tooltip>
+          {isAdmin && (
+            <Tooltip>
+              <TooltipTrigger render={<TabsTrigger value="ecrf" />}>
+                <ClipboardList className="mr-1 h-3.5 w-3.5" />
+                eCRF Builder
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                {STUDY_TAB_TOOLTIPS.ecrf}
+              </TooltipContent>
+            </Tooltip>
+          )}
           <Tooltip>
             <TooltipTrigger render={<TabsTrigger value="financials" />}>
               <DollarSign className="mr-1 h-3.5 w-3.5" />
@@ -506,6 +505,22 @@ export function StudyDetailTabs({
           />
         </TabsContent>
 
+        <TabsContent value="ecrf-tracking">
+          <StudyEcrfTrackingTab
+            studyId={study.id}
+            scopeLabel={`Study ${study.protocol_number}`}
+            bundle={ecrfRollup}
+          />
+        </TabsContent>
+
+        <TabsContent value="visit-schedule">
+          <StudyVisitScheduleTab
+            studyId={study.id}
+            scopeLabel={`Study ${study.protocol_number}`}
+            bundle={visitSchedule}
+          />
+        </TabsContent>
+
         <TabsContent value="team" forceMount>
           <TeamStudyPanel
             studyId={study.id}
@@ -527,6 +542,16 @@ export function StudyDetailTabs({
             />
           </div>
         </TabsContent>
+
+        {isAdmin && (
+          <TabsContent value="ecrf">
+            <EcrfBuilderTab
+              studyId={study.id}
+              initialVisits={ecrfVisitDefinitions}
+              initialCrfs={ecrfStudyCrfs}
+            />
+          </TabsContent>
+        )}
 
         <TabsContent value="financials">
           <FinancialsTab

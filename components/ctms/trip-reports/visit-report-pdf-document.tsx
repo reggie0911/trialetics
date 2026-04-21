@@ -255,18 +255,41 @@ function PdfDigitalSignatureBlock({
   displayName,
   signatureData,
   signedAtColumn,
+  printedName,
+  attestationText,
+  signedAtDbColumn,
+  contentHash,
 }: {
   role: 'author' | 'approver';
+  /** Profile-derived display name; printed-name fallback for legacy reports. */
   displayName: string | null | undefined;
+  /** Legacy `*_signature_data` JSON blob (back-compat). */
   signatureData: string | null | undefined;
+  /** Legacy `*_signed_at` (client-supplied). */
   signedAtColumn: string | null | undefined;
+  /** New `*_printed_name` Part 11 column (preferred when set). */
+  printedName?: string | null | undefined;
+  /** New `*_attestation_text` Part 11 column (preferred when set). */
+  attestationText?: string | null | undefined;
+  /** New `*_signed_at_db` server-set timestamp (preferred when set). */
+  signedAtDbColumn?: string | null | undefined;
+  /** New `*_content_hash` SHA-256 (record-signature linking). */
+  contentHash?: string | null | undefined;
 }) {
   const parsed = parseTripReportSignaturePayload(signatureData ?? null);
   const whenIso =
-    (signedAtColumn && String(signedAtColumn).trim()) || parsed?.attestedAt || null;
-  const hasSig = !!(parsed?.isPasswordReverified || whenIso);
-  const attestation = tripReportSignatureAttestationLabel(parsed?.purpose ?? null, role);
-  const showName = (displayName && String(displayName).trim()) || null;
+    (signedAtDbColumn && String(signedAtDbColumn).trim()) ||
+    (signedAtColumn && String(signedAtColumn).trim()) ||
+    parsed?.attestedAt ||
+    null;
+  const trimmedPrintedName = (printedName && String(printedName).trim()) || null;
+  const hasSig = !!(parsed?.isPasswordReverified || whenIso || trimmedPrintedName);
+  const attestation =
+    (attestationText && String(attestationText).trim()) ||
+    tripReportSignatureAttestationLabel(parsed?.purpose ?? null, role);
+  const showName =
+    trimmedPrintedName || ((displayName && String(displayName).trim()) || null);
+  const trimmedHash = (contentHash && String(contentHash).trim()) || null;
 
   if (!hasSig) {
     return (
@@ -295,6 +318,11 @@ function PdfDigitalSignatureBlock({
       <Text style={styles.signatureAttestLine} wrap>
         {attestation}
       </Text>
+      {trimmedHash ? (
+        <Text style={[styles.signatureAttestLine, { fontFamily: 'Courier', fontSize: 7 }]} wrap>
+          Content hash (SHA-256): {trimmedHash}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -347,8 +375,16 @@ export interface VisitReportPdfData {
   approverName?: string | null;
   authorSubmissionSignatureData?: string | null;
   authorSubmissionSignedAt?: string | null;
+  authorSubmissionPrintedName?: string | null;
+  authorSubmissionAttestationText?: string | null;
+  authorSubmissionSignedAtDb?: string | null;
+  authorSubmissionContentHash?: string | null;
   approvalSignatureData?: string | null;
   approvalSignedAt?: string | null;
+  approvalPrintedName?: string | null;
+  approvalAttestationText?: string | null;
+  approvalSignedAtDb?: string | null;
+  approvalContentHash?: string | null;
   reviewer_comments_site_attendees?: string | null;
   reviewer_comments_sponsor_attendees?: string | null;
   reviewer_comments_monitored_crfs?: string | null;
@@ -729,6 +765,10 @@ export function VisitReportPdfDocument({
                   displayName={data.authorName}
                   signatureData={data.authorSubmissionSignatureData}
                   signedAtColumn={data.authorSubmissionSignedAt}
+                  printedName={data.authorSubmissionPrintedName}
+                  attestationText={data.authorSubmissionAttestationText}
+                  signedAtDbColumn={data.authorSubmissionSignedAtDb}
+                  contentHash={data.authorSubmissionContentHash}
                 />
               </View>
               <View style={styles.signatureDateLabelCell}>
@@ -737,7 +777,10 @@ export function VisitReportPdfDocument({
               <View style={styles.signatureDateValueCell}>
                 <Text style={styles.signatureDateValueText}>
                   {formatSignatureDisplayDateTime(
-                    data.authorSubmissionSignedAt ?? data.reportSubmittedDate ?? null
+                    data.authorSubmissionSignedAtDb ??
+                      data.authorSubmissionSignedAt ??
+                      data.reportSubmittedDate ??
+                      null
                   )}
                 </Text>
               </View>
@@ -752,6 +795,10 @@ export function VisitReportPdfDocument({
                   displayName={data.approverName}
                   signatureData={data.approvalSignatureData}
                   signedAtColumn={data.approvalSignedAt}
+                  printedName={data.approvalPrintedName}
+                  attestationText={data.approvalAttestationText}
+                  signedAtDbColumn={data.approvalSignedAtDb}
+                  contentHash={data.approvalContentHash}
                 />
               </View>
               <View style={styles.signatureDateLabelCell}>
@@ -760,7 +807,10 @@ export function VisitReportPdfDocument({
               <View style={styles.signatureDateValueCell}>
                 <Text style={styles.signatureDateValueText}>
                   {formatSignatureDisplayDateTime(
-                    data.approvalSignedAt ?? data.reportApprovedDate ?? null
+                    data.approvalSignedAtDb ??
+                      data.approvalSignedAt ??
+                      data.reportApprovedDate ??
+                      null
                   )}
                 </Text>
               </View>

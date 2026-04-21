@@ -35,6 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { VisitCalendar } from './visit-calendar';
 
 import type {
+  MonitoringVisitType,
   MonitoringVisitWithRelations,
   Study,
 } from '@/lib/types/ctms';
@@ -154,7 +155,7 @@ export function VisitList({ visits, studies, scopeStudyId }: VisitListProps) {
               placeholder="All Types"
               getDisplayLabel={(v) => {
                 if (v === 'all') return 'All Types';
-                return VISIT_TYPE_OPTIONS.find((o) => o.value === v)?.label ?? v;
+                return VISIT_TYPE_LABEL[v as MonitoringVisitType] ?? v;
               }}
             />
           </SelectTrigger>

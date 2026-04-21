@@ -64,6 +64,27 @@ export async function profileHasStudyRoles(
   return !!data;
 }
 
+/**
+ * Returns true when the profile has at least one active CPM study team
+ * membership. Used to gate UI like the Trip Report "Review queue" tab so users
+ * who are never reviewers do not see an empty/confusing queue.
+ */
+export async function getProfileIsCpmOnAnyStudy(
+  supabase: SupabaseClient,
+  profileId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('study_team_members')
+    .select('id')
+    .eq('profile_id', profileId)
+    .eq('is_active', true)
+    .eq('role', REPORT_REVIEWER_ROLE)
+    .limit(1)
+    .maybeSingle();
+  if (error) return false;
+  return !!data;
+}
+
 export async function getUserIsStudyCraAndCpm(
   supabase: SupabaseClient,
   profileId: string,

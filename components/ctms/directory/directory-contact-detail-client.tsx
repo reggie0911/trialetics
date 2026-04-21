@@ -713,7 +713,7 @@ function StudyLinkDialog({
             <select name="study_id" required className="flex h-9 w-full rounded-md border border-input px-2 text-xs">
               {studies.map((s) => (
                 <option key={s.id} value={s.id} disabled={existingStudyIds.has(s.id)}>
-                  {s.protocol_number} — {s.title}
+                  {s.study_name || s.protocol_number}
                 </option>
               ))}
             </select>

@@ -5,7 +5,6 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getSiteById } from '@/lib/actions/sites';
 import { getStudyCountries } from '@/lib/actions/countries';
-import { listDirectoryContacts } from '@/lib/actions/directory-contacts';
 import { SiteForm } from '@/components/ctms/sites/site-form';
 
 interface PageProps {
@@ -24,15 +23,6 @@ export default async function StudySiteEditPage({ params }: PageProps) {
     id: c.id,
     country_name: c.country_name,
     country_code: c.country_code,
-  }));
-
-  const { data: dirContacts } = await listDirectoryContacts({ limit: 100 });
-  const directoryContactOptions = (dirContacts ?? []).map((c) => ({
-    id: c.id,
-    label:
-      [c.first_name, c.last_name].filter(Boolean).join(' ').trim() ||
-      c.email ||
-      'Unnamed contact',
   }));
 
   return (
@@ -57,7 +47,6 @@ export default async function StudySiteEditPage({ params }: PageProps) {
         site={site}
         countries={countryOptions}
         mode="edit"
-        directoryContactOptions={directoryContactOptions}
         ctmsStudyRouteId={studyId}
       />
     </div>

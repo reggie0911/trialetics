@@ -176,18 +176,21 @@ export function SubjectFormDialog({
     <DialogTrigger
       render={
         isEdit ? (
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled={disabled} />
+          <Button variant="outline" size="sm" disabled={disabled} />
         ) : (
           <Button size="sm" disabled={disabled} />
         )
       }
     >
       {isEdit ? (
-        <Pencil className="h-3.5 w-3.5" />
+        <>
+          <Pencil className="mr-1 h-3.5 w-3.5" />
+          Edit Subject
+        </>
       ) : (
         <>
           <Plus className="mr-2 h-4 w-4" />
-          Enroll Subject
+          Add Subject
         </>
       )}
     </DialogTrigger>
@@ -203,11 +206,18 @@ export function SubjectFormDialog({
           </TooltipContent>
         </Tooltip>
       ) : (
-        trigger
+        <Tooltip>
+          <TooltipTrigger render={<span className="inline-flex" />}>{trigger}</TooltipTrigger>
+          <TooltipContent side="bottom" className="max-w-xs text-xs">
+            {isEdit
+              ? 'Edit this subject\u2019s number, site, status, and key dates (screening, randomization, completion, withdrawal).'
+              : 'Enroll a new subject in this study and assign them to a site.'}
+          </TooltipContent>
+        </Tooltip>
       )}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isEdit ? 'Edit Subject' : 'Enroll Subject'}</DialogTitle>
+          <DialogTitle>{isEdit ? 'Edit Subject' : 'Add Subject'}</DialogTitle>
           <DialogDescription>
             {isEdit
               ? 'Update subject details and status.'
@@ -368,7 +378,7 @@ export function SubjectFormDialog({
                 ? 'Saving...'
                 : isEdit
                   ? 'Save Changes'
-                  : 'Enroll Subject'}
+                  : 'Add Subject'}
             </Button>
           </DialogFooter>
         </form>

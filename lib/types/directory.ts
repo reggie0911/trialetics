@@ -56,6 +56,12 @@ export interface InstitutionRow {
   status: InstitutionStatus;
   notes: string | null;
   parent_institution_id: string | null;
+  nearest_airport_place_id: string | null;
+  nearest_airport_name: string | null;
+  nearest_airport_address: string | null;
+  nearest_hotel_place_id: string | null;
+  nearest_hotel_name: string | null;
+  nearest_hotel_address: string | null;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
@@ -200,6 +206,12 @@ export interface SaveInstitutionInput {
   status?: 'active' | 'inactive';
   notes?: string;
   parent_institution_id?: string | null;
+  nearest_airport_place_id?: string | null;
+  nearest_airport_name?: string | null;
+  nearest_airport_address?: string | null;
+  nearest_hotel_place_id?: string | null;
+  nearest_hotel_name?: string | null;
+  nearest_hotel_address?: string | null;
 }
 
 /** Payload for creating/updating a directory contact. */

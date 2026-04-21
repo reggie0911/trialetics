@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { updateSite } from '@/lib/actions/sites';
+import { updateInstitutionNearbyPlaces } from '@/lib/actions/directory-institutions';
+import { GOOGLE_MAPS_WRAPPER_OPTIONS } from '@/lib/maps/google-maps-script-options';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 
@@ -25,14 +27,17 @@ export interface DirectionsInfo {
   distance: string;
 }
 
+export type SiteMapPersistence =
+  | { kind: 'study_site'; siteId: string; studyId: string }
+  | { kind: 'institution'; institutionId: string };
+
 export interface SiteMapProps {
   siteName: string;
   address: string | null;
   city: string | null;
   state: string | null;
   postalCode: string | null;
-  siteId: string;
-  studyId: string;
+  persistence: SiteMapPersistence;
   savedAirport: { placeId: string | null; name: string | null; address: string | null } | null;
   savedHotel: { placeId: string | null; name: string | null; address: string | null } | null;
   onGeocode?: (lat: number, lng: number) => void;
@@ -218,8 +223,7 @@ export function SiteMap({
   city,
   state,
   postalCode,
-  siteId,
-  studyId,
+  persistence,
   savedAirport,
   savedHotel,
   onGeocode,
@@ -401,12 +405,17 @@ export function SiteMap({
                 nearest_hotel_address: place.address,
               };
 
-        await updateSite({ id: siteId, study_id: studyId, ...fields });
+        if (persistence.kind === 'study_site') {
+          await updateSite({ id: persistence.siteId, study_id: persistence.studyId, ...fields });
+        } else {
+          const { error } = await updateInstitutionNearbyPlaces(persistence.institutionId, fields);
+          if (error) toast.error(error);
+        }
         router.refresh();
         setSavingType(null);
       });
     },
-    [siteId, studyId, router]
+    [persistence, router]
   );
 
   if (!addressQuery) {
@@ -429,6 +438,7 @@ export function SiteMap({
     if (status === Status.FAILURE) return <MapErrorState />;
     return (
       <InnerMap
+        key={addressQuery}
         siteName={siteName}
         addressQuery={addressQuery}
         onGeocode={onGeocode}
@@ -451,8 +461,9 @@ export function SiteMap({
         <div className="flex flex-col lg:flex-row gap-3">
           {/* Map */}
           <div className="flex-1 min-w-0 overflow-hidden rounded-lg">
-            <Wrapper apiKey={apiKey} libraries={['geocoding', 'places']} render={render}>
+            <Wrapper apiKey={apiKey} {...GOOGLE_MAPS_WRAPPER_OPTIONS} render={render}>
               <InnerMap
+                key={addressQuery}
                 siteName={siteName}
                 addressQuery={addressQuery}
                 onGeocode={onGeocode}

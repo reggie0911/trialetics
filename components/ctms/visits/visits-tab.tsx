@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useTransition } from 'react';
+import { useState, useCallback, useMemo, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -85,6 +85,10 @@ import { useStudyHub } from '@/components/ctms/study-hub-context';
 import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
 import { CopilotImportTrigger } from '@/components/copilot/tables/copilot-import-trigger';
 import { CopilotFillTrigger } from '@/components/copilot/forms/copilot-fill-trigger';
+import { useClientPagination } from '@/lib/hooks/use-client-pagination';
+import { TablePaginationFooter } from '@/components/ui/table-pagination-footer';
+
+const VISITS_TABLE_COL_COUNT = 9;
 
 interface VisitsTabProps {
   studyId: string;
@@ -149,7 +153,7 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
       }
       const visitType = (typeof v.visit_type === 'string' && v.visit_type
         ? v.visit_type
-        : 'routine') as MonitoringVisitType;
+        : 'monitoring') as MonitoringVisitType;
       const status = (typeof v.status === 'string' && v.status
         ? v.status
         : 'planned') as MonitoringVisitStatus;
@@ -180,17 +184,25 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
     return [visit.profiles.first_name, visit.profiles.last_name].filter(Boolean).join(' ') || '—';
   };
 
-  const filteredVisits = visits.filter((v) => {
-    if (statusFilter !== 'all' && v.status !== statusFilter) return false;
-    if (typeFilter !== 'all' && v.visit_type !== typeFilter) return false;
-    if (search) {
-      const s = search.toLowerCase();
-      const siteName = (v.study_sites?.name ?? '').toLowerCase();
-      const studyTitle = (v.studies?.title ?? '').toLowerCase();
-      if (!siteName.includes(s) && !studyTitle.includes(s)) return false;
-    }
-    return true;
+  const filteredVisits = useMemo(() => {
+    return visits.filter((v) => {
+      if (statusFilter !== 'all' && v.status !== statusFilter) return false;
+      if (typeFilter !== 'all' && v.visit_type !== typeFilter) return false;
+      if (search) {
+        const s = search.toLowerCase();
+        const siteName = (v.study_sites?.name ?? '').toLowerCase();
+        const studyTitle = (v.studies?.title ?? '').toLowerCase();
+        if (!siteName.includes(s) && !studyTitle.includes(s)) return false;
+      }
+      return true;
+    });
+  }, [visits, statusFilter, typeFilter, search]);
+
+  const pagination = useClientPagination({
+    totalItems: filteredVisits.length,
+    resetKey: [search, statusFilter, typeFilter],
   });
+  const paginatedVisits = pagination.paginate(filteredVisits);
 
   const counts = {
     total: visits.length,
@@ -262,7 +274,7 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
                 placeholder="All Types"
                 getDisplayLabel={(v) => {
                   if (v === 'all') return 'All Types';
-                  return VISIT_TYPE_OPTIONS.find((o) => o.value === v)?.label ?? v;
+                  return VISIT_TYPE_LABEL[v as MonitoringVisitType] ?? v;
                 }}
               />
             </SelectTrigger>
@@ -321,16 +333,14 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="table">
-          {filteredVisits.length === 0 ? (
+        <TabsContent value="table" className="space-y-3">
+          {visits.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-16">
                 <ClipboardCheck className="h-10 w-10 text-muted-foreground mb-3" />
                 <p className="text-sm font-medium text-muted-foreground">No monitoring visits found</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {visits.length === 0
-                    ? 'Schedule monitoring visits to track site performance and compliance.'
-                    : 'Try adjusting your search or filters.'}
+                  Schedule monitoring visits to track site performance and compliance.
                 </p>
               </CardContent>
             </Card>
@@ -351,7 +361,17 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredVisits.map((visit) => {
+                  {filteredVisits.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={VISITS_TABLE_COL_COUNT}
+                        className="text-xs text-muted-foreground text-center py-6"
+                      >
+                        No monitoring visits match your filters.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedVisits.map((visit) => {
                     const hasReport = visit.trip_reports && visit.trip_reports.length > 0;
                     return (
                       <TableRow key={visit.id}>
@@ -447,10 +467,19 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
                         </TableCell>
                       </TableRow>
                     );
-                  })}
+                  })
+                  )}
                 </TableBody>
               </Table>
             </div>
+          )}
+
+          {visits.length > 0 && (
+            <TablePaginationFooter
+              pagination={pagination}
+              totalItems={filteredVisits.length}
+              itemNoun="visit"
+            />
           )}
         </TabsContent>
 
@@ -506,7 +535,7 @@ function VisitFormDialog({
         }
       : {
           site_id: '',
-          visit_type: 'routine',
+          visit_type: 'monitoring',
           planned_date: '',
           actual_date: '',
           status: 'planned',
@@ -655,7 +684,7 @@ function VisitFormDialog({
                 <SelectTrigger className="w-full">
                   <SelectValue
                   placeholder="Select Type"
-                    getDisplayLabel={(v) => VISIT_TYPE_OPTIONS.find((o) => o.value === v)?.label ?? v}
+                    getDisplayLabel={(v) => VISIT_TYPE_LABEL[v as MonitoringVisitType] ?? v}
                   />
                 </SelectTrigger>
                 <SelectContent>

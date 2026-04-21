@@ -35,7 +35,7 @@ import {
 const schema = z.object({
   name: z.string().min(1, 'Template name is required'),
   study_id: z.string().optional(),
-  visit_report_type: z.enum(['sqv', 'siv', 'monitoring', 'close_out']),
+  visit_report_type: z.enum(['sqv', 'siv', 'monitoring', 'close_out', 'training']),
   days_submission: z.coerce.number().int().min(1, 'Must be at least 1'),
   days_approval: z.coerce.number().int().min(1, 'Must be at least 1'),
   days_basis: z.enum(['calendar', 'business']),
@@ -116,9 +116,13 @@ export function AddEditTemplateModal({
           toast.error(error);
           return;
         }
-        toast.success('Template updated.');
         if (studySkipped) {
-          toast.info('Study association was not saved. Run the database migration to enable it.');
+          toast.warning(
+            'Template saved as company-wide. The selected study was not associated because the study scoping migration has not been applied yet. Run the latest Supabase migrations and try again to scope this template to a specific study.',
+            { duration: 10000 }
+          );
+        } else {
+          toast.success('Template updated.');
         }
       } else {
         const { data, error, studySkipped } = await createTemplate({
@@ -133,9 +137,13 @@ export function AddEditTemplateModal({
           toast.error(error);
           return;
         }
-        toast.success('Template created.');
         if (studySkipped) {
-          toast.info('Study association was not saved. Run the database migration to enable it.');
+          toast.warning(
+            'Template created as company-wide. The selected study was not associated because the study scoping migration has not been applied yet. Run the latest Supabase migrations and try again to scope this template to a specific study.',
+            { duration: 10000 }
+          );
+        } else {
+          toast.success('Template created.');
         }
       }
       reset();

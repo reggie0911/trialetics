@@ -1,6 +1,6 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
@@ -9,6 +9,10 @@ import { Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  PlacesAddressAutocomplete,
+  type ParsedPlace,
+} from '@/components/ui/places-address-autocomplete';
 import {
   Form,
   FormControl,
@@ -31,8 +35,7 @@ import { createSite, updateSite } from '@/lib/actions/sites';
 import { SITE_STATUS_OPTIONS } from '@/lib/types/ctms';
 import type { StudySite, StudyCountry } from '@/lib/types/ctms';
 import { CopilotFillTrigger } from '@/components/copilot/forms/copilot-fill-trigger';
-
-const DIRECTORY_LINK_NONE = '__none__';
+import { StudyIsoDateInput } from '@/components/ctms/studies/study-iso-date-input';
 
 const siteFormSchema = z.object({
   site_number: z.string().min(1, 'Site number is required'),
@@ -42,9 +45,6 @@ const siteFormSchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   postal_code: z.string().optional(),
-  pi_name: z.string().optional(),
-  pi_email: z.string().optional(),
-  pi_directory_contact_id: z.string().optional(),
   status: z.enum(['identified', 'selected', 'initiated', 'activated', 'enrolling', 'closed']).optional(),
   activation_date: z.string().optional(),
   target_enrollment: z.coerce.number().min(0).optional(),
@@ -58,7 +58,6 @@ interface SiteFormProps {
   countries: Pick<StudyCountry, 'id' | 'country_name' | 'country_code'>[];
   mode: 'create' | 'edit';
   onSuccess?: () => void;
-  directoryContactOptions?: { id: string; label: string }[];
   /** When set, navigates to study-scoped site URLs after save. */
   ctmsStudyRouteId?: string;
 }
@@ -69,7 +68,6 @@ export function SiteForm({
   countries,
   mode,
   onSuccess,
-  directoryContactOptions = [],
   ctmsStudyRouteId,
 }: SiteFormProps) {
   const router = useRouter();
@@ -90,31 +88,64 @@ export function SiteForm({
       city: site?.city ?? '',
       state: site?.state ?? '',
       postal_code: site?.postal_code ?? '',
-      pi_name: site?.pi_name ?? '',
-      pi_email: site?.pi_email ?? '',
-      pi_directory_contact_id:
-        site?.pi_directory_contact_id && site.pi_directory_contact_id.length > 0
-          ? site.pi_directory_contact_id
-          : DIRECTORY_LINK_NONE,
       status: site?.status ?? 'identified',
       activation_date: site?.activation_date ?? '',
       target_enrollment: site?.target_enrollment ?? 0,
     },
   });
 
+  const studyCountryIdWatched = useWatch({
+    control: form.control,
+    name: 'study_country_id',
+  });
+  const statusWatched = useWatch({ control: form.control, name: 'status' });
+  const countryBiasForPlaces =
+    countries.find((c) => c.id === studyCountryIdWatched)?.country_code ?? null;
+
+  const onAddressPlaceSelected = (parsed: ParsedPlace) => {
+    form.setValue('city', parsed.city ?? '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    form.setValue('state', parsed.state ?? '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    form.setValue('postal_code', parsed.postalCode ?? '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    if (!parsed.countryCode) return;
+    const match = countries.find((c) => c.country_code === parsed.countryCode);
+    if (!match) return;
+    const currentId = form.getValues('study_country_id');
+    const currentRow = countries.find((c) => c.id === currentId);
+    if (currentId && currentRow?.country_code !== parsed.countryCode) {
+      return;
+    }
+    form.setValue('study_country_id', match.id, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+  };
+
   async function onSubmit(values: SiteFormValues) {
     setIsSubmitting(true);
     try {
-      const piDirectoryContactId =
-        values.pi_directory_contact_id === DIRECTORY_LINK_NONE
-          ? null
-          : values.pi_directory_contact_id || null;
+      const activationDateForSave =
+        values.status === 'activated'
+          ? (values.activation_date?.trim() || undefined)
+          : undefined;
 
       if (mode === 'create') {
         const { data, error } = await createSite({
           study_id: studyId,
           ...values,
-          pi_directory_contact_id: piDirectoryContactId,
+          activation_date: activationDateForSave,
         });
         if (error) {
           toast.error(error);
@@ -127,7 +158,7 @@ export function SiteForm({
           id: site!.id,
           study_id: studyId,
           ...values,
-          pi_directory_contact_id: piDirectoryContactId,
+          activation_date: activationDateForSave,
         });
         if (error) {
           toast.error(error);
@@ -211,7 +242,7 @@ export function SiteForm({
                 name="study_country_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Country</FormLabel>
+                    <FormLabel>Associated Study Country</FormLabel>
                     <Select value={field.value ?? ''} onValueChange={field.onChange}>
                       <FormControl>
                         <SelectTrigger className="w-full">
@@ -248,7 +279,12 @@ export function SiteForm({
                   <FormLabel>Status</FormLabel>
                   <Select
                     value={field.value ?? 'identified'}
-                    onValueChange={field.onChange}
+                    onValueChange={(v) => {
+                      field.onChange(v);
+                      if (v !== 'activated') {
+                        form.setValue('activation_date', '');
+                      }
+                    }}
                   >
                     <FormControl>
                       <SelectTrigger className="w-full">
@@ -281,11 +317,18 @@ export function SiteForm({
             <FormField
               control={form.control}
               name="address"
-              render={({ field }) => (
+              render={({ field, fieldState }) => (
                 <FormItem className="md:col-span-2">
                   <FormLabel>Address</FormLabel>
                   <FormControl>
-                    <Input placeholder="Street address" {...field} />
+                    <PlacesAddressAutocomplete
+                      value={field.value ?? ''}
+                      onChange={field.onChange}
+                      onPlaceSelected={onAddressPlaceSelected}
+                      countryBias={countryBiasForPlaces}
+                      placeholder="Street address"
+                      aria-invalid={fieldState.invalid}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -338,84 +381,6 @@ export function SiteForm({
 
         <Card>
           <CardHeader>
-            <CardTitle>Principal Investigator</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            <FormField
-              control={form.control}
-              name="pi_name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>PI Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Dr. Jane Smith" className="text-xs" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="pi_email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>PI Email</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder="pi@hospital.org"
-                      className="text-xs"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="pi_directory_contact_id"
-              render={({ field }) => (
-                <FormItem className="md:col-span-2">
-                  <FormLabel>Principal investigator (directory)</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value ?? DIRECTORY_LINK_NONE}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="text-xs w-full">
-                        <SelectValue
-                          placeholder="Link to a directory contact"
-                          getDisplayLabel={(v) =>
-                            v === DIRECTORY_LINK_NONE
-                              ? 'Not linked'
-                              : directoryContactOptions.find((o) => o.id === v)?.label ?? v
-                          }
-                        />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value={DIRECTORY_LINK_NONE} className="text-xs">
-                        Not linked
-                      </SelectItem>
-                      {directoryContactOptions.map((o) => (
-                        <SelectItem key={o.id} value={o.id} className="text-xs">
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
             <CardTitle>Enrollment & Timeline</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
@@ -433,19 +398,27 @@ export function SiteForm({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="activation_date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Activation Date</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {statusWatched === 'activated' && (
+              <FormField
+                control={form.control}
+                name="activation_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Activation Date</FormLabel>
+                    <FormControl>
+                      <StudyIsoDateInput
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        id={field.name}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
           </CardContent>
         </Card>
 

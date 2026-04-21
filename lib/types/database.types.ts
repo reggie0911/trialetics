@@ -1497,6 +1497,54 @@ export type Database = {
           },
         ]
       }
+      directory_comments: {
+        Row: {
+          author_id: string
+          body: string
+          company_id: string
+          created_at: string
+          edited_at: string | null
+          entity_id: string
+          entity_type: string
+          id: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          company_id: string
+          created_at?: string
+          edited_at?: string | null
+          entity_id: string
+          entity_type: string
+          id?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          company_id?: string
+          created_at?: string
+          edited_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "directory_comments_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "directory_comments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       directory_contact_institution: {
         Row: {
           created_at: string
@@ -4097,6 +4145,12 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          nearest_airport_address: string | null
+          nearest_airport_name: string | null
+          nearest_airport_place_id: string | null
+          nearest_hotel_address: string | null
+          nearest_hotel_name: string | null
+          nearest_hotel_place_id: string | null
           notes: string | null
           organization_type: string
           parent_institution_id: string | null
@@ -4116,6 +4170,12 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          nearest_airport_address?: string | null
+          nearest_airport_name?: string | null
+          nearest_airport_place_id?: string | null
+          nearest_hotel_address?: string | null
+          nearest_hotel_name?: string | null
+          nearest_hotel_place_id?: string | null
           notes?: string | null
           organization_type: string
           parent_institution_id?: string | null
@@ -4135,6 +4195,12 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          nearest_airport_address?: string | null
+          nearest_airport_name?: string | null
+          nearest_airport_place_id?: string | null
+          nearest_hotel_address?: string | null
+          nearest_hotel_name?: string | null
+          nearest_hotel_place_id?: string | null
           notes?: string | null
           organization_type?: string
           parent_institution_id?: string | null
@@ -6753,6 +6819,95 @@ export type Database = {
             columns: ["study_id"]
             isOneToOne: false
             referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_crf_questions: {
+        Row: {
+          created_at: string
+          crf_id: string
+          help_text: string | null
+          id: string
+          label: string
+          options: Json | null
+          question_type: string
+          required: boolean
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          crf_id: string
+          help_text?: string | null
+          id?: string
+          label: string
+          options?: Json | null
+          question_type: string
+          required?: boolean
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          crf_id?: string
+          help_text?: string | null
+          id?: string
+          label?: string
+          options?: Json | null
+          question_type?: string
+          required?: boolean
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_crf_questions_crf_id_fkey"
+            columns: ["crf_id"]
+            isOneToOne: false
+            referencedRelation: "study_crfs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      study_crfs: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          sort_order: number
+          study_id: string
+          visit_definition_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          sort_order?: number
+          study_id: string
+          visit_definition_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          sort_order?: number
+          study_id?: string
+          visit_definition_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_crfs_study_id_fkey"
+            columns: ["study_id"]
+            isOneToOne: false
+            referencedRelation: "studies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_crfs_visit_definition_id_fkey"
+            columns: ["visit_definition_id"]
+            isOneToOne: false
+            referencedRelation: "study_visit_definitions"
             referencedColumns: ["id"]
           },
         ]

@@ -17,6 +17,8 @@ import {
   Loader2,
   ListTodo,
   DollarSign,
+  ClipboardList,
+  CalendarClock,
 } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -33,6 +35,8 @@ import type {
   InvoiceBudgetLineAllocationRef,
   SiteBudgetWithLineItems,
   PaymentScheduleWithSite,
+  SiteEcrfRollupBundle,
+  SiteVisitScheduleBundle,
   SubjectWithSite,
   EnrollmentFunnelData,
 } from '@/lib/types/ctms';
@@ -48,11 +52,21 @@ import { SiteTasksTable } from './site-tasks-table';
 import { SiteFinancialsPanel } from './site-financials-panel';
 import type { SiteBudgetStudyOption } from '@/components/ctms/financials/site-budget-from-study-dialog';
 import { SubjectsTab } from '@/components/ctms/subjects/subjects-tab';
+import { SiteEcrfTrackingTab } from '@/components/ctms/ecrf-tracking/site-ecrf-tracking-tab';
+import { SiteVisitScheduleTab } from '@/components/ctms/visit-schedule/site-visit-schedule-tab';
 import type { TaskWithRelations } from '@/lib/types/tasks';
 
 const noOpSubscribe = () => () => {};
 
-const SITE_MAIN_TABS = new Set(['overview', 'contacts', 'tasks', 'subjects', 'financials']);
+const SITE_MAIN_TABS = new Set([
+  'overview',
+  'contacts',
+  'tasks',
+  'subjects',
+  'ecrf-tracking',
+  'visit-schedule',
+  'financials',
+]);
 
 /** Radix Tabs uses @radix-ui/react-id, which can disagree with React 19 SSR useId(); mount tabs only on the client. */
 function useIsClient() {
@@ -153,7 +167,11 @@ interface SiteDetailTabsProps {
   siteTasks: TaskWithRelations[];
   directoryContactOptions?: { id: string; label: string }[];
   directoryCatalog: QuickContactCatalogCategory[];
+  /** Set when `getDirectoryRoleCatalog` failed (RLS, network, etc.). */
+  directoryCatalogError?: string | null;
   institutionsForQuickContact: InstitutionRow[];
+  /** Institution row id linked to this study site (parent organization for new site contacts). */
+  siteInstitutionId?: string | null;
   siteBudget: SiteBudgetWithLineItems | null;
   studyBudgetName?: string | null;
   budgetAllocations?: Record<string, number>;
@@ -162,6 +180,8 @@ interface SiteDetailTabsProps {
   sitePaymentSchedules: PaymentScheduleWithSite[];
   initialSiteSubjects: SubjectWithSite[];
   siteFunnel: EnrollmentFunnelData;
+  ecrfRollup: SiteEcrfRollupBundle;
+  visitSchedule: SiteVisitScheduleBundle;
   studySitesForSubjects: Pick<StudySite, 'id' | 'site_number' | 'name'>[];
   financeApprovalTemplateOptions: FinanceApprovalTemplateOption[];
   studyBudgetOptions?: SiteBudgetStudyOption[];
@@ -177,7 +197,9 @@ export function SiteDetailTabs({
   siteTasks,
   directoryContactOptions = [],
   directoryCatalog,
+  directoryCatalogError = null,
   institutionsForQuickContact,
+  siteInstitutionId = null,
   siteBudget,
   studyBudgetName,
   budgetAllocations = {},
@@ -186,6 +208,8 @@ export function SiteDetailTabs({
   sitePaymentSchedules,
   initialSiteSubjects,
   siteFunnel,
+  ecrfRollup,
+  visitSchedule,
   studySitesForSubjects,
   financeApprovalTemplateOptions,
   studyBudgetOptions = [],
@@ -194,6 +218,7 @@ export function SiteDetailTabs({
   const isClient = useIsClient();
   const searchParams = useSearchParams();
   const [mainTab, setMainTab] = useState('overview');
+  const [addContactIntent, setAddContactIntent] = useState<'pi' | null>(null);
   const [emailCopied, setEmailCopied] = useState(false);
   const [siteCoords, setSiteCoords] = useState<{ lat: number; lng: number } | null>(
     site.latitude != null && site.longitude != null
@@ -318,6 +343,14 @@ export function SiteDetailTabs({
             <Users className="mr-1 h-3.5 w-3.5" />
             Subjects ({initialSiteSubjects.length})
           </TabsTrigger>
+          <TabsTrigger value="ecrf-tracking">
+            <ClipboardList className="mr-1 h-3.5 w-3.5" />
+            eCRF Tracking
+          </TabsTrigger>
+          <TabsTrigger value="visit-schedule">
+            <CalendarClock className="mr-1 h-3.5 w-3.5" />
+            Visit Window Compliance
+          </TabsTrigger>
           <TabsTrigger value="financials">
             <DollarSign className="mr-1 h-3.5 w-3.5" />
             Financials
@@ -333,8 +366,7 @@ export function SiteDetailTabs({
               city={site.city}
               state={site.state}
               postalCode={site.postal_code}
-              siteId={site.id}
-              studyId={site.study_id}
+              persistence={{ kind: 'study_site', siteId: site.id, studyId: site.study_id }}
               savedAirport={{
                 placeId: site.nearest_airport_place_id,
                 name: site.nearest_airport_name,
@@ -426,7 +458,23 @@ export function SiteDetailTabs({
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground">No PI assigned</p>
+                    <div className="space-y-3">
+                      <p className="text-sm text-muted-foreground">No PI assigned</p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => {
+                          setMainTab('contacts');
+                          setAddContactIntent('pi');
+                        }}
+                      >
+                        Add Principal Investigator
+                      </Button>
+                      <p className="text-xs text-muted-foreground">
+                        Creates a directory contact and links them as Principal Investigator on this site.
+                      </p>
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -491,7 +539,11 @@ export function SiteDetailTabs({
             initialContacts={site.site_contacts ?? []}
             directoryContactOptions={directoryContactOptions}
             directoryCatalog={directoryCatalog}
+            directoryCatalogError={directoryCatalogError}
             institutions={institutionsForQuickContact}
+            siteInstitutionId={siteInstitutionId}
+            openAddContactIntent={addContactIntent}
+            onAddContactIntentConsumed={() => setAddContactIntent(null)}
           />
         </TabsContent>
 
@@ -506,6 +558,24 @@ export function SiteDetailTabs({
             initialFunnel={siteFunnel}
             sites={studySitesForSubjects}
             siteScopeId={site.id}
+          />
+        </TabsContent>
+
+        <TabsContent value="ecrf-tracking">
+          <SiteEcrfTrackingTab
+            studyId={site.study_id}
+            siteId={site.id}
+            scopeLabel={`Site ${site.site_number}${site.name ? ` — ${site.name}` : ''}`}
+            bundle={ecrfRollup}
+          />
+        </TabsContent>
+
+        <TabsContent value="visit-schedule">
+          <SiteVisitScheduleTab
+            studyId={site.study_id}
+            siteId={site.id}
+            scopeLabel={`Site ${site.site_number}${site.name ? ` — ${site.name}` : ''}`}
+            bundle={visitSchedule}
           />
         </TabsContent>
 

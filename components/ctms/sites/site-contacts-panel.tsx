@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useCallback, useTransition, useEffect, type FormEvent } from 'react';
+import { useState, useCallback, useMemo, useTransition, useEffect, useRef, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Pencil, Trash2, Star, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Star, ChevronRight, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -50,6 +51,7 @@ import {
 } from '@/components/ui/select';
 
 import type { SiteContact } from '@/lib/types/ctms';
+import { isPrincipalInvestigatorSiteRoleLabel } from '@/lib/types/ctms';
 import type { InstitutionRow } from '@/lib/types/directory';
 import { directoryContactFormSchema } from '@/lib/validation/directory';
 import { createDirectoryContact } from '@/lib/actions/directory-contacts';
@@ -62,9 +64,16 @@ import {
 import {
   QuickContactFormFields,
   siteRoleLabelFromQuickContact,
+  directoryCatalogHasRoles,
   type QuickContactCatalogCategory,
 } from '@/components/ctms/directory/quick-contact-form-fields';
+import { getCategoryIdForRoleId } from '@/components/ctms/directory/directory-primary-role-fields';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { formatPhoneNumber } from '@/lib/utils';
+import { useClientPagination } from '@/lib/hooks/use-client-pagination';
+import { TablePaginationFooter } from '@/components/ui/table-pagination-footer';
+
+const CONTACTS_TABLE_COL_COUNT = 6;
 
 const DIRECTORY_LINK_NONE = '__none__';
 
@@ -79,6 +88,17 @@ const contactSchema = z.object({
 
 type ContactFormValues = z.infer<typeof contactSchema>;
 
+/** Resolve directory role id for Principal Investigator site contact role label. */
+export function findPrincipalInvestigatorRoleId(
+  catalog: QuickContactCatalogCategory[]
+): string | null {
+  for (const cat of catalog) {
+    const r = cat.roles.find((x) => isPrincipalInvestigatorSiteRoleLabel(x.name));
+    if (r) return r.id;
+  }
+  return null;
+}
+
 interface SiteContactsPanelProps {
   companyId: string;
   siteId: string;
@@ -86,7 +106,14 @@ interface SiteContactsPanelProps {
   initialContacts: SiteContact[];
   directoryContactOptions?: { id: string; label: string }[];
   directoryCatalog: QuickContactCatalogCategory[];
+  /** Error message from `getDirectoryRoleCatalog` when the catalog could not be loaded. */
+  directoryCatalogError?: string | null;
   institutions: InstitutionRow[];
+  /** Institution row linked to this site; used to prefill `primary_institution_id` in new-contact dialog. */
+  siteInstitutionId?: string | null;
+  /** When set, opening the add-contact dialog should prefill PI directory role (overview CTA). */
+  openAddContactIntent?: 'pi' | null;
+  onAddContactIntentConsumed?: () => void;
 }
 
 export function SiteContactsPanel({
@@ -96,23 +123,56 @@ export function SiteContactsPanel({
   initialContacts,
   directoryContactOptions = [],
   directoryCatalog,
+  directoryCatalogError = null,
   institutions,
+  siteInstitutionId = null,
+  openAddContactIntent = null,
+  onAddContactIntentConsumed,
 }: SiteContactsPanelProps) {
+  const router = useRouter();
   const [contacts, setContacts] = useState(initialContacts);
   const [addOpen, setAddOpen] = useState(false);
+  const [localAddIntent, setLocalAddIntent] = useState<'pi' | null>(null);
   const [editingContact, setEditingContact] = useState<SiteContact | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [, startTransition] = useTransition();
+
+  const filteredContacts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return contacts;
+    return contacts.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.role?.toLowerCase().includes(q) ?? false) ||
+        (c.email?.toLowerCase().includes(q) ?? false) ||
+        (c.phone?.toLowerCase().includes(q) ?? false),
+    );
+  }, [contacts, searchQuery]);
+
+  const pagination = useClientPagination({
+    totalItems: filteredContacts.length,
+    resetKey: [searchQuery],
+  });
+  const paginatedContacts = pagination.paginate(filteredContacts);
 
   const refreshContacts = useCallback(() => {
     startTransition(async () => {
       try {
         const site = await getSiteById(siteId);
         if (site) setContacts(site.site_contacts);
+        router.refresh();
       } catch {
         toast.error('Failed to refresh contacts');
       }
     });
-  }, [siteId]);
+  }, [siteId, router]);
+
+  useEffect(() => {
+    if (openAddContactIntent !== 'pi') return;
+    setAddOpen(true);
+  }, [openAddContactIntent]);
+
+  const catalogRolesOk = directoryCatalogHasRoles(directoryCatalog);
 
   const handleDelete = async (id: string) => {
     const { error } = await deleteSiteContact(id, siteId);
@@ -126,18 +186,47 @@ export function SiteContactsPanel({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h3 className="text-lg font-medium">Contacts</h3>
-          <p className="text-sm text-muted-foreground">
-            Site team members and key contacts.
-          </p>
+      {directoryCatalogError && (
+        <Alert variant="destructive" className="text-sm">
+          <AlertTitle>Could not load directory role catalog</AlertTitle>
+          <AlertDescription className="text-xs">
+            {directoryCatalogError}. Check that you are signed in and migrations are applied. Try the{' '}
+            <Link href="/protected/directory" className="underline underline-offset-2 font-medium">
+              Directory
+            </Link>{' '}
+            page after refreshing.
+          </AlertDescription>
+        </Alert>
+      )}
+      {!directoryCatalogError && !catalogRolesOk && (
+        <Alert className="text-sm border-amber-500/40 bg-amber-500/5">
+          <AlertTitle>Directory role catalog is empty</AlertTitle>
+          <AlertDescription className="text-xs">
+            Role categories and titles are missing from the database. Apply CTMS directory migrations (including
+            seeds for <code className="text-[11px]">directory_role_categories</code> /{' '}
+            <code className="text-[11px]">directory_roles</code>) and the migration that grants authenticated users
+            read access to the global role catalog.
+          </AlertDescription>
+        </Alert>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search contacts..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
         </div>
         <Button
           type="button"
           size="sm"
-          className="text-xs h-9"
-          onClick={() => setAddOpen(true)}
+          className="ml-auto text-xs h-9"
+          onClick={() => {
+            setLocalAddIntent('pi');
+            setAddOpen(true);
+          }}
         >
           <Plus className="h-3.5 w-3.5 mr-1" />
           Add contact
@@ -147,13 +236,22 @@ export function SiteContactsPanel({
       <ContactFormDialog
         companyId={companyId}
         open={addOpen}
-        onOpenChange={setAddOpen}
+        onOpenChange={(next) => {
+          setAddOpen(next);
+          if (!next) setLocalAddIntent(null);
+        }}
         siteId={siteId}
         studyId={studyId}
         onSuccess={refreshContacts}
         directoryContactOptions={directoryContactOptions}
         directoryCatalog={directoryCatalog}
         institutions={institutions}
+        siteInstitutionId={siteInstitutionId}
+        openAddContactIntent={openAddContactIntent ?? localAddIntent}
+        onAddContactIntentConsumed={() => {
+          setLocalAddIntent(null);
+          onAddContactIntentConsumed?.();
+        }}
       />
       <ContactFormDialog
         companyId={companyId}
@@ -168,6 +266,7 @@ export function SiteContactsPanel({
         directoryContactOptions={directoryContactOptions}
         directoryCatalog={directoryCatalog}
         institutions={institutions}
+        siteInstitutionId={siteInstitutionId}
       />
 
       {contacts.length === 0 ? (
@@ -193,75 +292,94 @@ export function SiteContactsPanel({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {contacts.map((contact) => (
-                <TableRow key={contact.id}>
-                  <TableCell className="text-xs font-medium">{contact.name}</TableCell>
-                  <TableCell className="text-xs">{contact.role}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {contact.email || '—'}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {contact.phone || '—'}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {contact.is_primary && (
-                      <Badge variant="default" className="text-xs">
-                        <Star className="mr-1 h-3 w-3" />
-                        Primary
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    <div className="flex items-center gap-1">
-                      {contact.directory_contact_id ? (
-                        <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                          <Link href={`/protected/directory/contacts/${contact.directory_contact_id}`}>
-                            Open <ChevronRight className="h-3 w-3 ml-0.5" />
-                          </Link>
-                        </Button>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => setEditingContact(contact)}
-                          aria-label="Edit contact"
-                        >
-                          <Pencil className="h-3 w-3" />
-                        </Button>
-                      )}
-                      <AlertDialog>
-                        <AlertDialogTrigger
-                          render={
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" />
-                          }
-                        >
-                          <Trash2 className="h-3 w-3 text-destructive" />
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Contact</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will remove {contact.name} from this site&apos;s
-                              contact list.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(contact.id)}>
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
+              {filteredContacts.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={CONTACTS_TABLE_COL_COUNT}
+                    className="text-xs text-muted-foreground text-center py-6"
+                  >
+                    No contacts match your search.
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : (
+                paginatedContacts.map((contact) => (
+                  <TableRow key={contact.id}>
+                    <TableCell className="text-xs font-medium">{contact.name}</TableCell>
+                    <TableCell className="text-xs">{contact.role}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {contact.email || '—'}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {contact.phone || '—'}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {contact.is_primary && (
+                        <Badge variant="default" className="text-xs">
+                          <Star className="mr-1 h-3 w-3" />
+                          Primary
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <div className="flex items-center gap-1">
+                        {contact.directory_contact_id ? (
+                          <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                            <Link href={`/protected/directory/contacts/${contact.directory_contact_id}`}>
+                              Open <ChevronRight className="h-3 w-3 ml-0.5" />
+                            </Link>
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => setEditingContact(contact)}
+                            aria-label="Edit contact"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                        )}
+                        <AlertDialog>
+                          <AlertDialogTrigger
+                            render={
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" />
+                            }
+                          >
+                            <Trash2 className="h-3 w-3 text-destructive" />
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Contact</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will remove {contact.name} from this site&apos;s
+                                contact list.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(contact.id)}>
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
+      )}
+
+      {contacts.length > 0 && (
+        <TablePaginationFooter
+          pagination={pagination}
+          totalItems={filteredContacts.length}
+          itemNoun="contact"
+        />
       )}
     </div>
   );
@@ -302,6 +420,9 @@ function ContactFormDialog({
   directoryContactOptions,
   directoryCatalog,
   institutions,
+  siteInstitutionId = null,
+  openAddContactIntent = null,
+  onAddContactIntentConsumed,
 }: {
   companyId: string;
   open: boolean;
@@ -313,8 +434,12 @@ function ContactFormDialog({
   directoryContactOptions: { id: string; label: string }[];
   directoryCatalog: QuickContactCatalogCategory[];
   institutions: InstitutionRow[];
+  siteInstitutionId?: string | null;
+  openAddContactIntent?: 'pi' | null;
+  onAddContactIntentConsumed?: () => void;
 }) {
   const isEdit = !!contact;
+  const addOpenedWithPiIntentRef = useRef(false);
 
   const form = useForm<ContactFormValues>({
     resolver: zodResolver(contactSchema),
@@ -323,26 +448,63 @@ function ContactFormDialog({
 
   const [addRoleCategoryFilter, setAddRoleCategoryFilter] = useState('');
   const [addPrimaryRoleId, setAddPrimaryRoleId] = useState('');
+  const [addPrimaryInstitutionId, setAddPrimaryInstitutionId] = useState('');
   const [addContactCountryCode, setAddContactCountryCode] = useState('');
   const [addContactRegion, setAddContactRegion] = useState('');
   const [addPhone, setAddPhone] = useState('');
   const [addAvatarUrl, setAddAvatarUrl] = useState('');
   const [addIsPrimary, setAddIsPrimary] = useState(false);
+  const [addPrimaryFieldsLocked, setAddPrimaryFieldsLocked] = useState(false);
   const [addPending, setAddPending] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      addOpenedWithPiIntentRef.current = false;
+      return;
+    }
     if (isEdit) {
       form.reset(getDefaultValues(contact));
-    } else {
-      setAddRoleCategoryFilter('');
-      setAddPrimaryRoleId('');
+      return;
+    }
+
+    if (openAddContactIntent === 'pi' && !addOpenedWithPiIntentRef.current) {
+      const rid = findPrincipalInvestigatorRoleId(directoryCatalog);
       setAddContactCountryCode('');
       setAddContactRegion('');
       setAddPhone('');
-      setAddIsPrimary(false);
+      setAddAvatarUrl('');
+      setAddPrimaryInstitutionId(siteInstitutionId ?? '');
+      setAddPrimaryRoleId(rid ?? '');
+      setAddRoleCategoryFilter(rid ? getCategoryIdForRoleId(directoryCatalog, rid) : '');
+      setAddIsPrimary(true);
+      setAddPrimaryFieldsLocked(true);
+      addOpenedWithPiIntentRef.current = true;
+      onAddContactIntentConsumed?.();
+      return;
     }
-  }, [open, contact?.id, form, isEdit, contact]);
+
+    if (!addOpenedWithPiIntentRef.current) {
+      setAddRoleCategoryFilter('');
+      setAddContactCountryCode('');
+      setAddContactRegion('');
+      setAddPhone('');
+      setAddAvatarUrl('');
+      setAddPrimaryInstitutionId(siteInstitutionId ?? '');
+      setAddPrimaryRoleId('');
+      setAddIsPrimary(false);
+      setAddPrimaryFieldsLocked(false);
+    }
+  }, [
+    open,
+    contact?.id,
+    form,
+    isEdit,
+    contact,
+    openAddContactIntent,
+    directoryCatalog,
+    onAddContactIntentConsumed,
+    siteInstitutionId,
+  ]);
 
   const onSubmitEdit = async (values: ContactFormValues) => {
     if (!contact) return;
@@ -395,7 +557,11 @@ function ContactFormDialog({
       primary_institution_id: raw.primary_institution_id || null,
     });
     if (!parsed.success) {
-      toast.error(parsed.error.errors[0]?.message ?? 'Invalid form');
+      const err = parsed.error.errors[0];
+      const msg = err?.path?.length
+        ? `${err.path.join('.')}: ${err.message}`
+        : err?.message ?? 'Invalid form';
+      toast.error(msg);
       return;
     }
     setAddPending(true);
@@ -458,6 +624,9 @@ function ContactFormDialog({
               onContactRegionChange={setAddContactRegion}
               phone={addPhone}
               onPhoneChange={setAddPhone}
+              primaryInstitutionId={addPrimaryInstitutionId}
+              onPrimaryInstitutionChange={setAddPrimaryInstitutionId}
+              primaryFieldsLocked={addPrimaryFieldsLocked}
               companyId={companyId}
               avatarUrl={addAvatarUrl}
               onAvatarUrlChange={setAddAvatarUrl}

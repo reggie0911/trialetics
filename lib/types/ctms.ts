@@ -170,6 +170,13 @@ export const REGULATORY_STATUS_OPTIONS: { value: RegulatoryStatus; label: string
 /** Role string for the site contact row synced from study_sites PI fields — keep in sync with contacts UI. */
 export const SITE_CONTACT_ROLE_PRINCIPAL_INVESTIGATOR = 'Principal Investigator';
 
+/** Whether a site contact `role` string should be treated as Principal Investigator (directory catalog may use e.g. "Principal Investigator (PI)"). */
+export function isPrincipalInvestigatorSiteRoleLabel(role: string | null | undefined): boolean {
+  if (role == null || role === '') return false;
+  if (role === SITE_CONTACT_ROLE_PRINCIPAL_INVESTIGATOR) return true;
+  return role.toLowerCase().includes('principal investigator');
+}
+
 export interface SiteContact {
   id: string;
   site_id: string;
@@ -213,12 +220,19 @@ export interface Subject {
   completion_date: string | null;
   withdrawal_date: string | null;
   withdrawal_reason: string | null;
+  /** eCRF template version this subject is currently snapshotted from. */
+  template_version_id: string | null;
+  template_synced_at: string | null;
+  /** Which subject date the visit-schedule recompute uses as Day 0. */
+  visit_anchor_kind: VisitAnchorKind;
   created_at: string;
   updated_at: string;
 }
 
 export interface SubjectWithSite extends Subject {
   study_sites: Pick<StudySite, 'site_number' | 'name'>;
+  /** Optional pre-aggregated eCRF tracking summary; null when subject has no snapshot. */
+  tracking_summary?: SubjectTrackingSummary | null;
 }
 
 export interface SubjectVisit {
@@ -232,12 +246,435 @@ export interface SubjectVisit {
   window_start: string | null;
   window_end: string | null;
   notes: string | null;
+  /** eCRF template version this visit was snapshotted from (null for hand-added visits). */
+  template_version_id: string | null;
+  /** Source visit definition id from the eCRF template (null for hand-added visits). */
+  visit_definition_id: string | null;
+  sort_order: number;
+  /** Snapshot fingerprint copied from the template at insert time. */
+  timepoint_label: string | null;
+  /** Day offset relative to the subject anchor; null for hand-added visits. */
+  timepoint_days: number | null;
+  /** Days BEFORE planned_date the window opens. Defaults to 0. */
+  window_before_days: number;
+  /** Days AFTER planned_date the window closes. Defaults to 0. */
+  window_after_days: number;
   created_at: string;
+}
+
+// ─── Visit-schedule anchor + window metadata ──────────────────────────────────
+
+export type VisitAnchorKind = 'screening' | 'randomization';
+
+export const VISIT_ANCHOR_OPTIONS: { value: VisitAnchorKind; label: string }[] = [
+  { value: 'screening',     label: 'Screening Date' },
+  { value: 'randomization', label: 'Randomization Date' },
+];
+
+/** Derived (never persisted) bucket the Visits panel groups every row into. */
+export type WindowStatus =
+  | 'pending'        // No planned date / no anchor.
+  | 'upcoming'       // today < window_start, no actual.
+  | 'due_now'        // today in [window_start, window_end], no actual.
+  | 'overdue'        // today > window_end, no actual, status=scheduled.
+  | 'in_window'      // actual_date in [window_start, window_end].
+  | 'out_of_window'  // actual_date set but outside the window.
+  | 'done';          // Status is completed / missed / skipped (lifecycle takeover).
+
+export interface WindowStatusMeta {
+  kind: WindowStatus;
+  label: string;
+  /** Mapped onto Badge variants. */
+  variant: 'default' | 'secondary' | 'success' | 'warning' | 'destructive' | 'outline';
+}
+
+export const WINDOW_STATUS_FILTER_OPTIONS: { value: WindowStatus | 'all'; label: string }[] = [
+  { value: 'all',           label: 'All windows' },
+  { value: 'pending',       label: 'Pending' },
+  { value: 'upcoming',      label: 'Upcoming' },
+  { value: 'due_now',       label: 'Due now' },
+  { value: 'overdue',       label: 'Overdue' },
+  { value: 'in_window',     label: 'In window' },
+  { value: 'out_of_window', label: 'Out of window' },
+  { value: 'done',          label: 'Done' },
+];
+
+export const SUBJECT_VISIT_EVENT_FIELDS = [
+  'planned_date',
+  'actual_date',
+  'window_start',
+  'window_end',
+  'status',
+  'notes',
+  'visit_anchor_kind',
+  'anchor_date',
+  'recompute',
+] as const;
+export type SubjectVisitEventField = (typeof SUBJECT_VISIT_EVENT_FIELDS)[number];
+
+export const SUBJECT_VISIT_EVENT_FIELD_LABELS: Record<SubjectVisitEventField, string> = {
+  planned_date:     'Planned Date',
+  actual_date:      'Actual Date',
+  window_start:     'Window Start',
+  window_end:       'Window End',
+  status:           'Visit Status',
+  notes:            'Notes',
+  visit_anchor_kind:'Visit Anchor',
+  anchor_date:      'Anchor Date',
+  recompute:        'Schedule Recompute',
+};
+
+/** Append-only mirror of subject_crf_metric_events for visit timing changes. */
+export interface SubjectVisitEvent {
+  id: string;
+  subject_visit_id: string;
+  field: SubjectVisitEventField;
+  previous_value: string | null;
+  new_value: string | null;
+  actor_user_id: string | null;
+  created_at: string;
+  /** Joined display name of the actor (best-effort); null when unavailable. */
+  actor_name?: string | null;
+  /** Denormalized visit context for list rendering (when joined). */
+  visit_name?: string | null;
+}
+
+// ─── Subject eCRF Tracking ───────────────────────────────────────────────────
+
+/** Five user-toggled boolean completion metrics on every subject_crf row. */
+export const SUBJECT_CRF_METRICS = [
+  'data_entry',
+  'source_data_review',
+  'source_data_verified',
+  'pi_signed',
+  'data_management_lock',
+] as const;
+export type SubjectCrfMetricKey = (typeof SUBJECT_CRF_METRICS)[number];
+
+export const SUBJECT_CRF_METRIC_LABELS: Record<SubjectCrfMetricKey, string> = {
+  data_entry: 'Data Entry',
+  source_data_review: 'SDR',
+  source_data_verified: 'SDV',
+  pi_signed: 'PI Signed',
+  data_management_lock: 'DM Lock',
+};
+
+/** Compact column headers for the eCRF Tracking matrix. */
+export const SUBJECT_CRF_METRIC_SHORT_LABELS: Record<SubjectCrfMetricKey, string> = {
+  data_entry: 'DE',
+  source_data_review: 'SDR',
+  source_data_verified: 'SDV',
+  pi_signed: 'PI',
+  data_management_lock: 'LOCK',
+};
+
+export const SUBJECT_CRF_QUERY_STATUSES = ['none', 'open', 'answered'] as const;
+export type SubjectCrfQueryStatus = (typeof SUBJECT_CRF_QUERY_STATUSES)[number];
+
+export const SUBJECT_CRF_QUERY_STATUS_LABELS: Record<SubjectCrfQueryStatus, string> = {
+  none: 'No Query',
+  open: 'Open',
+  answered: 'Answered',
+};
+
+/** Mirrors a subject_crfs row. */
+export interface SubjectCrf {
+  id: string;
+  subject_id: string;
+  subject_visit_id: string;
+  /** Source CRF definition id from the eCRF template (null when template row was deleted). */
+  crf_definition_id: string | null;
+  template_version_id: string;
+  /** Denormalized snapshot of the CRF name (survives template deletions). */
+  crf_name: string;
+  sort_order: number;
+  /** Expected data units for this CRF (auto = 1 per CRF; reserved for future overrides). */
+  data_expected: number;
+  data_entry: boolean;
+  source_data_review: boolean;
+  source_data_verified: boolean;
+  pi_signed: boolean;
+  data_management_lock: boolean;
+  query_status: SubjectCrfQueryStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubjectVisitWithCrfs extends SubjectVisit {
+  crfs: SubjectCrf[];
+}
+
+/**
+ * Audit log row written by the apply_subject_crf_patch RPC every time a
+ * subject_crf metric or query_status value changes. Append-only; no UPDATE
+ * or DELETE paths exist (regulatory requirement).
+ */
+export const SUBJECT_CRF_METRIC_EVENT_FIELDS = [
+  'data_entry',
+  'source_data_review',
+  'source_data_verified',
+  'pi_signed',
+  'data_management_lock',
+  'query_status',
+] as const;
+export type SubjectCrfMetricEventField =
+  (typeof SUBJECT_CRF_METRIC_EVENT_FIELDS)[number];
+
+export const SUBJECT_CRF_METRIC_EVENT_FIELD_LABELS: Record<
+  SubjectCrfMetricEventField,
+  string
+> = {
+  data_entry: 'Data Entry',
+  source_data_review: 'Source Data Review',
+  source_data_verified: 'Source Data Verified',
+  pi_signed: 'Principal Investigator Signed',
+  data_management_lock: 'Data Management Lock',
+  query_status: 'Query Status',
+};
+
+export interface SubjectCrfMetricEvent {
+  id: string;
+  subject_crf_id: string;
+  field: SubjectCrfMetricEventField;
+  /** Stringified previous value: 'true' / 'false' for booleans, 'none' / 'open' / 'answered' for query_status. Null on first insert. */
+  previous_value: string | null;
+  new_value: string;
+  actor_user_id: string | null;
+  created_at: string;
+  /** Joined display name of the actor (best-effort); null when unavailable. */
+  actor_name?: string | null;
+  /** Denormalized CRF / visit context for list rendering (when joined). */
+  crf_name?: string | null;
+  visit_name?: string | null;
+}
+
+/**
+ * Discriminated union over the two audit-log streams (CRF metric changes and
+ * visit timing changes). Used by the unified Activity tab so a single table
+ * can render both.
+ */
+export type SubjectActivityEvent =
+  | ({ kind: 'crf' } & SubjectCrfMetricEvent)
+  | ({ kind: 'visit' } & SubjectVisitEvent);
+
+/** Top-level filter for the merged Activity feed. */
+export type SubjectActivityKind = 'all' | 'crf' | 'visit';
+
+export const SUBJECT_ACTIVITY_KIND_OPTIONS: ReadonlyArray<{
+  value: SubjectActivityKind;
+  label: string;
+}> = [
+  { value: 'all',   label: 'All activity' },
+  { value: 'crf',   label: 'CRF metrics' },
+  { value: 'visit', label: 'Visit timing' },
+];
+
+/**
+ * Aggregated DE / SDV / Lock totals + percentages for a CRF, visit, or subject.
+ * Computed by `lib/parsers/subject-ecrf-metrics.ts` — see that file for the
+ * exact rounding + query cap rules.
+ */
+export interface SubjectCrfPercentages {
+  dataExpectedTotal: number;
+  dataEntryTotal: number;
+  sdvTotal: number;
+  lockTotal: number;
+  /** Count of rows in the bucket with query_status = 'open'. */
+  openQueryCount: number;
+  /** Count of rows in the bucket with query_status = 'answered'. */
+  answeredQueryCount: number;
+  /** True iff at least one row in the bucket has query_status of 'open' or 'answered'. */
+  hasUnresolvedQuery: boolean;
+  /** sum(DE)   / sum(Expected) * 100 — null when Expected = 0. Not capped by queries. */
+  dataEntryPct: number | null;
+  /** sum(SDV)  / sum(DE) * 100 — null when DE = 0. Capped at 99 when hasUnresolvedQuery. */
+  sdvPct: number | null;
+  /** sum(Lock) / sum(DE) * 100 — null when DE = 0. Capped at 99 when hasUnresolvedQuery. */
+  lockPct: number | null;
+}
+
+/**
+ * Pre-aggregated tracking summary loaded with each subject in list / funnel
+ * contexts. Sourced from the `v_subject_ecrf_tracking_summary` SQL view so we
+ * avoid round-tripping every subject_crf row to the client. Percentages are
+ * still derived client-side via `computeSubjectCrfPercentages` so the cap rule
+ * stays centralised.
+ */
+export interface SubjectTrackingSummary {
+  dataExpectedTotal: number;
+  dataEntryTotal: number;
+  sdvTotal: number;
+  lockTotal: number;
+  openQueryCount: number;
+  answeredQueryCount: number;
+}
+
+/**
+ * Per-visit eCRF rollup row (study or site scope). Sourced from
+ * `v_visit_ecrf_tracking_summary` (filtered by site_id at site scope, summed
+ * across site_id at study scope). Counters only — percentages are computed
+ * client-side via `computeSubjectCrfPercentages` so the open-query cap rule
+ * stays single-sourced.
+ */
+export interface VisitEcrfRollup {
+  visit_name: string;
+  subjectCount: number;
+  dataExpectedTotal: number;
+  dataEntryTotal: number;
+  sdvTotal: number;
+  lockTotal: number;
+  openQueryCount: number;
+  answeredQueryCount: number;
+}
+
+/**
+ * Per-site eCRF rollup row (study scope only). Sourced from
+ * `v_site_ecrf_tracking_summary` joined to `study_sites` for the human-readable
+ * site_number / name / country columns rendered by the "By Site" table.
+ */
+export interface SiteEcrfRollup {
+  site_id: string;
+  site_number: string;
+  site_name: string;
+  country?: string | null;
+  subjectCount: number;
+  dataExpectedTotal: number;
+  dataEntryTotal: number;
+  sdvTotal: number;
+  lockTotal: number;
+  openQueryCount: number;
+  answeredQueryCount: number;
+}
+
+/**
+ * Per-subject eCRF rollup row (site or study scope). Each row links back to
+ * its subject detail page so reviewers can drill from the rollup into the
+ * editable matrix in `SubjectEcrfTrackingPanel`.
+ */
+export interface SubjectEcrfRollupRow {
+  subject_id: string;
+  subject_number: string;
+  status: SubjectStatus;
+  site_id: string | null;
+  site_number: string | null;
+  dataExpectedTotal: number;
+  dataEntryTotal: number;
+  sdvTotal: number;
+  lockTotal: number;
+  openQueryCount: number;
+  answeredQueryCount: number;
+}
+
+/**
+ * Site-scoped eCRF rollup bundle loaded server-side and passed to
+ * `SiteEcrfTrackingTab`. `totals` is the same `SubjectTrackingSummary` shape
+ * already used elsewhere so percentage rendering stays consistent.
+ */
+export interface SiteEcrfRollupBundle {
+  totals: SubjectTrackingSummary;
+  bySubject: SubjectEcrfRollupRow[];
+  byVisit: VisitEcrfRollup[];
+  /** Most recent template_synced_at across the subjects in scope (display-only). */
+  lastTemplateSyncedAt: string | null;
+}
+
+/**
+ * Study-scoped eCRF rollup bundle. Extends the site-scoped shape with an
+ * additional per-site rollup section.
+ */
+export interface StudyEcrfRollupBundle extends SiteEcrfRollupBundle {
+  bySite: SiteEcrfRollup[];
+}
+
+// ─── Visit Schedule rollup (read-only site / study aggregations) ─────────────
+
+/**
+ * Counts per window bucket (`computeVisitWindowStatus` kinds) plus a `total`.
+ * The shared shape used for overall / by-site / by-visit / by-subject rows in
+ * the read-only Visit Schedule rollup tabs.
+ */
+export interface VisitScheduleBucketCounts {
+  total: number;
+  done: number;
+  in_window: number;
+  out_of_window: number;
+  overdue: number;
+  due_now: number;
+  upcoming: number;
+  pending: number;
+}
+
+/**
+ * Per-subject Visit Schedule rollup row (site or study scope). Sourced from
+ * `v_subject_visit_schedule_summary`. The "Open" button on this row drills
+ * into the editable Visits panel on the subject detail page.
+ */
+export interface VisitScheduleSubjectRow extends VisitScheduleBucketCounts {
+  subject_id: string;
+  subject_number: string;
+  status: SubjectStatus;
+  site_id: string | null;
+  site_number: string | null;
+  visit_anchor_kind: VisitAnchorKind;
+  anchor_date: string | null;
+  last_actual_date: string | null;
+}
+
+/**
+ * Per-visit Visit Schedule rollup row. Sourced from `v_visit_schedule_summary`
+ * (filtered by site_id at site scope, summed across site_id at study scope).
+ * `subjectCount` is preserved so the UI can show "# subjects with this visit".
+ */
+export interface VisitScheduleVisitRow extends VisitScheduleBucketCounts {
+  visit_name: string;
+  visit_number: number | null;
+  sort_order: number | null;
+  timepoint_label: string | null;
+  timepoint_days: number | null;
+  subjectCount: number;
+}
+
+/**
+ * Per-site Visit Schedule rollup row (study scope only). Sourced from
+ * `v_site_visit_schedule_summary` joined to `study_sites` for the
+ * human-readable site_number / name / country columns.
+ */
+export interface VisitScheduleSiteRow extends VisitScheduleBucketCounts {
+  site_id: string;
+  site_number: string;
+  site_name: string;
+  country?: string | null;
+  subjectCount: number;
+  last_actual_date: string | null;
+}
+
+/**
+ * Site-scoped Visit Schedule rollup bundle loaded server-side and passed to
+ * `SiteVisitScheduleTab`. `overall` is the same `VisitScheduleBucketCounts`
+ * shape so headers and tables share rendering.
+ */
+export interface SiteVisitScheduleBundle {
+  overall: VisitScheduleBucketCounts;
+  subjectCount: number;
+  byVisit: VisitScheduleVisitRow[];
+  bySubject: VisitScheduleSubjectRow[];
+  /** Most recent actual_date across the subjects in scope (display-only). */
+  lastActualDate: string | null;
+}
+
+/**
+ * Study-scoped Visit Schedule rollup bundle. Adds a `bySite` section to the
+ * site-scoped shape.
+ */
+export interface StudyVisitScheduleBundle extends SiteVisitScheduleBundle {
+  bySite: VisitScheduleSiteRow[];
 }
 
 export interface SubjectWithDetails extends Subject {
   study_sites: Pick<StudySite, 'site_number' | 'name'>;
   subject_visits: SubjectVisit[];
+  /** Optional eager-loaded eCRF Tracking tree (visits with their subject_crfs). */
+  subject_visits_tracking?: SubjectVisitWithCrfs[];
 }
 
 export const SUBJECT_STATUS_OPTIONS: { value: SubjectStatus; label: string }[] = [
@@ -268,6 +705,10 @@ export interface EnrollmentFunnelData {
   withdrawn: number;
   discontinued: number;
   total: number;
+  /** Total open queries across every subject_crf in scope (study or site). */
+  openQueryCount: number;
+  /** Total answered queries across every subject_crf in scope (study or site). */
+  answeredQueryCount: number;
 }
 
 export type TeamMemberRole =
@@ -394,7 +835,16 @@ export const TEAM_ROLE_LABEL: Record<TeamMemberRole, string> = {
   custom: 'Custom',
 };
 
-export type MonitoringVisitType = 'routine' | 'for_cause' | 'close_out' | 'pre_study' | 'interim' | 'sqv' | 'siv' | 'monitoring';
+export type MonitoringVisitType =
+  | 'routine'
+  | 'for_cause'
+  | 'close_out'
+  | 'pre_study'
+  | 'interim'
+  | 'sqv'
+  | 'siv'
+  | 'monitoring'
+  | 'training';
 
 export type MonitoringVisitStatus = 'planned' | 'confirmed' | 'completed' | 'cancelled';
 
@@ -486,15 +936,21 @@ export interface FollowUpItem {
   profiles: { first_name: string | null; last_name: string | null } | null;
 }
 
+/**
+ * Active monitoring-visit types offered when creating or editing a visit. The
+ * legacy values (`routine`, `for_cause`, `pre_study`, `interim`, and the bare
+ * `Close-Out` label) are intentionally excluded here but remain in
+ * `VISIT_TYPE_LABEL` / `MonitoringVisitType` so existing rows still render
+ * with their old labels. Each option's label combines the long name with the
+ * short abbreviation (also exposed via `VISIT_TYPE_ABBREV`) so users learn
+ * the codes used elsewhere in the UI (calendar chips, exports, etc.).
+ */
 export const VISIT_TYPE_OPTIONS: { value: MonitoringVisitType; label: string }[] = [
-  { value: 'routine', label: 'Routine' },
-  { value: 'for_cause', label: 'For Cause' },
-  { value: 'close_out', label: 'Close-Out' },
-  { value: 'pre_study', label: 'Pre-Study' },
-  { value: 'interim', label: 'Interim' },
-  { value: 'sqv', label: 'Site Qualification Visit' },
-  { value: 'siv', label: 'Site Initiation Visit' },
-  { value: 'monitoring', label: 'Interim Monitoring Visit' },
+  { value: 'sqv',        label: 'Site Qualification Visit (SQV)' },
+  { value: 'siv',        label: 'Site Initiation Visit (SIV)' },
+  { value: 'monitoring', label: 'Interim Monitoring Visit (IMV)' },
+  { value: 'close_out',  label: 'Close-Out Visit (COV)' },
+  { value: 'training',   label: 'Training Visit (TV)' },
 ];
 
 export const MONITORING_VISIT_STATUS_OPTIONS: { value: MonitoringVisitStatus; label: string }[] = [
@@ -522,15 +978,35 @@ export const RESOLUTION_STATUS_OPTIONS: { value: ResolutionStatus; label: string
   { value: 'resolved', label: 'Resolved' },
 ];
 
+/**
+ * Long-form label for every visit type, including legacy values that are no
+ * longer offered in `VISIT_TYPE_OPTIONS`. Use this in detail screens and
+ * tooltips where the full name reads better than an abbreviation.
+ */
 export const VISIT_TYPE_LABEL: Record<MonitoringVisitType, string> = {
   routine: 'Routine',
   for_cause: 'For Cause',
-  close_out: 'Close-Out',
+  close_out: 'Close-Out Visit',
   pre_study: 'Pre-Study',
   interim: 'Interim',
   sqv: 'Site Qualification Visit',
   siv: 'Site Initiation Visit',
   monitoring: 'Interim Monitoring Visit',
+  training: 'Training Visit',
+};
+
+/**
+ * Short codes for the five active visit types, used in compact UI surfaces
+ * (e.g. the calendar chip in `visit-calendar.tsx`). Legacy values are absent
+ * on purpose so callers can detect them via `??` and fall back to
+ * `VISIT_TYPE_LABEL`.
+ */
+export const VISIT_TYPE_ABBREV: Partial<Record<MonitoringVisitType, string>> = {
+  sqv: 'SQV',
+  siv: 'SIV',
+  monitoring: 'IMV',
+  close_out: 'COV',
+  training: 'TV',
 };
 
 export const MONITORING_VISIT_STATUS_LABEL: Record<MonitoringVisitStatus, string> = {
@@ -588,6 +1064,7 @@ export const BUDGET_SECTION_TYPE_OPTIONS: { value: BudgetSectionType; label: str
 export interface StudyVisitDefinition {
   id: string;
   study_id: string;
+  template_version_id: string;
   visit_name: string;
   timepoint_label: string | null;
   timepoint_days: number | null;
@@ -618,6 +1095,73 @@ export interface ProcedureGrid {
 export interface StudyEnrollmentActuals {
   total: number;
   bySite: Array<{ site_id: string; site_name: string; count: number }>;
+}
+
+// ─── eCRF Builder: CRFs, Questions ───────────────────────────────────────────
+
+export type QuestionType =
+  | 'text'
+  | 'textarea'
+  | 'number'
+  | 'date'
+  | 'single_select'
+  | 'multi_select'
+  | 'yes_no';
+
+export const QUESTION_TYPE_OPTIONS: { value: QuestionType; label: string }[] = [
+  { value: 'text', label: 'Short Text' },
+  { value: 'textarea', label: 'Long Text' },
+  { value: 'number', label: 'Number' },
+  { value: 'date', label: 'Date' },
+  { value: 'single_select', label: 'Single Select' },
+  { value: 'multi_select', label: 'Multi Select' },
+  { value: 'yes_no', label: 'Yes / No' },
+];
+
+export interface StudyCrf {
+  id: string;
+  study_id: string;
+  template_version_id: string;
+  visit_definition_id: string;
+  name: string;
+  description: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface StudyCrfQuestion {
+  id: string;
+  crf_id: string;
+  template_version_id: string;
+  label: string;
+  help_text: string | null;
+  question_type: QuestionType;
+  options: string[] | null;
+  required: boolean;
+  sort_order: number;
+  created_at: string;
+}
+
+// ─── eCRF Template Versions ──────────────────────────────────────────────────
+
+export type EcrfTemplateVersionStatus = 'draft' | 'live' | 'archived';
+
+export interface EcrfTemplateVersion {
+  id: string;
+  study_id: string;
+  version_number: number;
+  name: string | null;
+  status: EcrfTemplateVersionStatus;
+  created_by: string | null;
+  created_at: string;
+  published_at: string | null;
+  archived_at: string | null;
+}
+
+export interface EcrfTemplateVersionWithCounts extends EcrfTemplateVersion {
+  visit_count: number;
+  crf_count: number;
+  question_count: number;
 }
 
 export type PaymentType = 'startup' | 'milestone' | 'per_subject' | 'pass_through';

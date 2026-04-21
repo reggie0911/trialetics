@@ -1,7 +1,14 @@
 /**
- * Curated first-level subdivisions for common clinical-trial geographies.
- * Values are human-readable names stored in `region` text columns (no migration).
+ * First-level subdivisions for every supported clinical-trial geography.
+ *
+ * Curated lists below are the canonical names persisted in our `region` text columns.
+ * For any country not curated here we fall back to the comprehensive ISO 3166-2 dataset
+ * via the `iso-3166-2` package (states/provinces only — no city data).
  */
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const iso3166 = require('iso-3166-2') as {
+  country(code: string): { sub?: Record<string, { name: string }> } | null;
+};
 
 const US: string[] = [
   'Alabama',
@@ -179,7 +186,15 @@ const REGIONS_BY_COUNTRY: Record<string, string[]> = {
 
 export function regionsForCountry(countryCode: string): { name: string }[] {
   const code = countryCode.trim().toUpperCase();
-  const list = REGIONS_BY_COUNTRY[code];
-  if (!list?.length) return [];
-  return list.map((name) => ({ name }));
+  if (!code) return [];
+
+  const curated = REGIONS_BY_COUNTRY[code];
+  if (curated?.length) return curated.map((name) => ({ name }));
+
+  const country = iso3166.country(code);
+  const subs = country?.sub ? Object.values(country.sub) : [];
+  if (!subs.length) return [];
+  return subs
+    .map((s) => ({ name: s.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 }

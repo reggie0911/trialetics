@@ -186,6 +186,8 @@ DELETE FROM public.study_procedure_visit_costs;
 DELETE FROM public.budget_line_items;
 DELETE FROM public.study_budget_sections;
 DELETE FROM public.study_budgets;
+DELETE FROM public.study_crf_questions;
+DELETE FROM public.study_crfs;
 DELETE FROM public.study_visit_definitions;
 DELETE FROM public.study_budget_templates;
 DELETE FROM public.payment_schedules;
@@ -196,6 +198,7 @@ DELETE FROM public.site_payments;
 -- =============================================================================
 DELETE FROM public.directory_assignment_history;
 DELETE FROM public.directory_audit_log;
+DELETE FROM public.directory_comments;
 DELETE FROM public.committee_members;
 DELETE FROM public.committees;
 DELETE FROM public.institution_study_site;

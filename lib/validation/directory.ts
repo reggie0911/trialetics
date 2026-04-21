@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 const optionalUuid = z
-  .union([z.string().uuid(), z.literal('')])
+  .union([z.string().uuid(), z.literal(''), z.null()])
   .optional()
-  .transform((v) => (v === '' || v === undefined ? null : v));
+  .transform((v) => (v === '' || v === undefined || v === null ? null : v));
 
 const optionalAvatarUrl = z
   .string()

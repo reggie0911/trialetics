@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Plus, LayoutGrid, List } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,13 @@ import { UpdateAssigneeTaskModal } from './update-assignee-task-modal';
 import type { StudyMilestoneWithProgress } from '@/lib/types/tasks';
 import type { TaskWithRelations } from '@/lib/types/tasks';
 import type { TaskDashboardCounts } from '@/lib/actions/tasks';
+import { useClientPagination } from '@/lib/hooks/use-client-pagination';
+import { TablePaginationFooter } from '@/components/ui/table-pagination-footer';
+import { studySelectLabel } from '@/lib/ctms/study-display';
+import type { Study } from '@/lib/types/ctms';
+
+type BoardGroupBy = 'status' | 'priority' | 'assignee';
+const BOARD_GROUPS: BoardGroupBy[] = ['status', 'priority', 'assignee'];
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All' },
@@ -31,7 +38,7 @@ const STATUS_OPTIONS = [
 interface TasksClientProps {
   initialMilestones: StudyMilestoneWithProgress[];
   initialTasks: TaskWithRelations[];
-  studies: { id: string; title: string }[];
+  studies: Pick<Study, 'id' | 'title' | 'study_name' | 'protocol_number'>[];
   initialCounts: TaskDashboardCounts;
   isAdmin?: boolean;
   /** When set, tasks and milestones are scoped to this study (study filter hidden). */
@@ -47,21 +54,82 @@ export function TasksClient({
   lockedStudyId,
 }: TasksClientProps) {
   const router = useRouter();
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [studyFilter, setStudyFilter] = useState<string>(() => lockedStudyId ?? 'all');
-  const [viewMode, setViewMode] = useState<'table' | 'board'>('table');
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // Seed filters and view from URL on mount; thereafter URL is kept in sync
+  // via the effect below. `lockedStudyId` always wins for the study filter.
+  const [statusFilter, setStatusFilter] = useState<string>(
+    () => searchParams.get('status') ?? 'all',
+  );
+  const [studyFilter, setStudyFilter] = useState<string>(
+    () => lockedStudyId ?? searchParams.get('study') ?? 'all',
+  );
+  const [viewMode, setViewMode] = useState<'table' | 'board'>(() => {
+    const v = searchParams.get('view');
+    return v === 'board' || v === 'table' ? v : 'table';
+  });
+  const [boardGroupBy, setBoardGroupBy] = useState<BoardGroupBy>(() => {
+    const g = searchParams.get('group');
+    return BOARD_GROUPS.includes(g as BoardGroupBy) ? (g as BoardGroupBy) : 'status';
+  });
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
 
-  const filteredMilestones = studyFilter === 'all'
-    ? initialMilestones
-    : initialMilestones.filter((m) => m.study_id === studyFilter);
+  // Mirror the four URL-persisted bits of state back into the URL whenever
+  // they change. We strip default values so the link stays clean and shareable.
+  useEffect(() => {
+    if (!pathname) return;
+    const params = new URLSearchParams(searchParams.toString());
+    const setOrDelete = (key: string, value: string, defaultValue: string) => {
+      if (value && value !== defaultValue) params.set(key, value);
+      else params.delete(key);
+    };
+    setOrDelete('status', statusFilter, 'all');
+    if (!lockedStudyId) setOrDelete('study', studyFilter, 'all');
+    else params.delete('study');
+    setOrDelete('view', viewMode, 'table');
+    setOrDelete('group', boardGroupBy, 'status');
+    const next = params.toString();
+    const current = searchParams.toString();
+    if (next === current) return;
+    router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+  }, [
+    pathname,
+    router,
+    searchParams,
+    statusFilter,
+    studyFilter,
+    viewMode,
+    boardGroupBy,
+    lockedStudyId,
+  ]);
 
-  const filteredTasks = initialTasks.filter((t) => {
-    if (studyFilter !== 'all' && t.study_id !== studyFilter) return false;
-    if (statusFilter !== 'all' && t.status !== statusFilter) return false;
-    return true;
+  const filteredMilestones = useMemo(
+    () =>
+      studyFilter === 'all'
+        ? initialMilestones
+        : initialMilestones.filter((m) => m.study_id === studyFilter),
+    [initialMilestones, studyFilter],
+  );
+
+  const filteredTasks = useMemo(
+    () =>
+      initialTasks.filter((t) => {
+        if (studyFilter !== 'all' && t.study_id !== studyFilter) return false;
+        if (statusFilter !== 'all' && t.status !== statusFilter) return false;
+        return true;
+      }),
+    [initialTasks, studyFilter, statusFilter],
+  );
+
+  const milestonePagination = useClientPagination({
+    totalItems: filteredMilestones.length,
+    initialPageSize: 5,
+    pageSizeOptions: [5, 10, 25, 50],
+    resetKey: [statusFilter, studyFilter],
   });
+  const pageMilestones = milestonePagination.paginate(filteredMilestones);
 
   const counts = {
     total: filteredTasks.length,
@@ -138,13 +206,19 @@ export function TasksClient({
               <SelectTrigger className="w-[200px]">
                 <SelectValue
                   placeholder="All Studies"
-                  getDisplayLabel={(v) => (v === 'all' ? 'All Studies' : studies.find((s) => s.id === v)?.title ?? v)}
+                  getDisplayLabel={(v) => {
+                    if (v === 'all') return 'All Studies';
+                    const study = studies.find((s) => s.id === v);
+                    return study ? studySelectLabel(study) : v;
+                  }}
                 />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Studies</SelectItem>
                 {studies.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
+                  <SelectItem key={s.id} value={s.id}>
+                    {studySelectLabel(s)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -177,17 +251,29 @@ export function TasksClient({
       </div>
 
       {viewMode === 'table' ? (
-        <TaskTableView
-          milestones={filteredMilestones}
-          tasks={filteredTasks}
-          onEditTask={setEditTaskId}
-          onRefresh={refresh}
-        />
+        <>
+          <TaskTableView
+            milestones={pageMilestones}
+            tasks={filteredTasks}
+            indexOffset={milestonePagination.startIndex}
+            onEditTask={setEditTaskId}
+            onRefresh={refresh}
+          />
+          <TablePaginationFooter
+            pagination={milestonePagination}
+            totalItems={filteredMilestones.length}
+            itemNoun="milestone"
+          />
+        </>
       ) : (
         <TaskBoardView
           tasks={filteredTasks}
+          milestones={filteredMilestones}
           onEditTask={setEditTaskId}
           onRefresh={refresh}
+          onCreateTask={() => setCreateModalOpen(true)}
+          groupBy={boardGroupBy}
+          onGroupByChange={setBoardGroupBy}
         />
       )}
 

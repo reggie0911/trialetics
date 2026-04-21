@@ -48,6 +48,10 @@ import {
 } from '@/components/ctms/directory/quick-contact-form-fields';
 import { DirectoryCountryRegionFields } from '@/components/ctms/directory/directory-country-region-fields';
 import {
+  PlacesAddressAutocomplete,
+  type ParsedPlace,
+} from '@/components/ui/places-address-autocomplete';
+import {
   DIRECTORY_CONTACTS_TEMPLATE_FILENAME,
   DIRECTORY_ORGANIZATIONS_TEMPLATE_FILENAME,
   getDirectoryContactsCsvTemplate,
@@ -807,22 +811,45 @@ function QuickInstitutionDialog({
   onCreated: (id: string) => void;
 }) {
   const [pending, setPending] = useState(false);
+  const [instAddressLine1, setInstAddressLine1] = useState('');
+  const [instCity, setInstCity] = useState('');
+  const [instPostalCode, setInstPostalCode] = useState('');
+  const [instStateRegion, setInstStateRegion] = useState('');
   const [instCountryCode, setInstCountryCode] = useState('');
   const [instRegion, setInstRegion] = useState('');
 
   useEffect(() => {
     if (open) {
+      setInstAddressLine1('');
+      setInstCity('');
+      setInstPostalCode('');
+      setInstStateRegion('');
       setInstCountryCode('');
       setInstRegion('');
     }
   }, [open]);
 
+  const onNewInstitutionAddressPlaceSelected = (parsed: ParsedPlace) => {
+    setInstCity(parsed.city ?? '');
+    setInstPostalCode(parsed.postalCode ?? '');
+    const regionLabel = parsed.stateLong ?? parsed.state ?? '';
+    setInstStateRegion(regionLabel);
+    setInstRegion(regionLabel);
+    setInstCountryCode((prev) => {
+      if (!parsed.countryCode) return prev;
+      if (!prev || prev === parsed.countryCode) return parsed.countryCode;
+      return prev;
+    });
+  };
+
   const submit = async (form: FormData) => {
     const raw = {
       name: String(form.get('name') ?? ''),
       organization_type: String(form.get('organization_type') ?? 'other'),
-      address_line1: String(form.get('address_line1') ?? '') || undefined,
-      city: String(form.get('city') ?? '') || undefined,
+      address_line1: instAddressLine1 || undefined,
+      city: instCity || undefined,
+      state_region: instStateRegion || undefined,
+      postal_code: instPostalCode || undefined,
       country_code: instCountryCode || undefined,
       region: instRegion || undefined,
       status: (form.get('status') as string) === 'inactive' ? 'inactive' : 'active',
@@ -895,7 +922,13 @@ function QuickInstitutionDialog({
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Address line 1</Label>
-            <Input name="address_line1" className="text-xs h-9" />
+            <PlacesAddressAutocomplete
+              value={instAddressLine1}
+              onChange={setInstAddressLine1}
+              onPlaceSelected={onNewInstitutionAddressPlaceSelected}
+              countryBias={instCountryCode || null}
+              className="text-xs h-9"
+            />
           </div>
           <DirectoryCountryRegionFields
             variant="institutionAddress"
@@ -906,7 +939,11 @@ function QuickInstitutionDialog({
             citySlot={
               <div className="space-y-1">
                 <Label className="text-xs">City</Label>
-                <Input name="city" className="text-xs h-9" />
+                <Input
+                  className="text-xs h-9"
+                  value={instCity}
+                  onChange={(e) => setInstCity(e.target.value)}
+                />
               </div>
             }
           />

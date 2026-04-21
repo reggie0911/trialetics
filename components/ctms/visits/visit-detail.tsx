@@ -10,15 +10,13 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Send,
-  CheckCircle2,
   FileText,
+  ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -74,8 +72,6 @@ import {
 } from '@/lib/types/ctms';
 import {
   getTripReport,
-  createTripReport,
-  updateTripReport,
   getReportFindings,
   createFinding,
   updateFinding,
@@ -135,32 +131,14 @@ export function VisitDetail({
     ? [visit.profiles.first_name, visit.profiles.last_name].filter(Boolean).join(' ') || '—'
     : '—';
 
-  const handleCreateReport = async () => {
-    const { error } = await createTripReport(visit.id);
-    if (error) { toast.error(error); return; }
-    toast.success('Trip report created');
-    refreshReport();
-  };
-
-  const handleSubmitReport = async () => {
-    if (!report) return;
-    const { error } = await updateTripReport(report.id, { status: 'submitted' });
-    if (error) { toast.error(error); return; }
-    toast.success('Report submitted');
-    refreshReport();
-  };
-
-  const handleApproveReport = async () => {
-    if (!report) return;
-    const { error } = await updateTripReport(report.id, { status: 'approved' });
-    if (error) { toast.error(error); return; }
-    toast.success('Report approved');
-    refreshReport();
-  };
-
   const studyBackHref = scopeStudyId
     ? `/protected/studies/${scopeStudyId}/visits`
     : `/protected/studies/${visit.study_id}`;
+
+  const tripReportsBaseHref = `/protected/studies/${visit.study_id}/trip-reports`;
+  const tripReportHref = report
+    ? `${tripReportsBaseHref}/${visit.id}/author`
+    : `${tripReportsBaseHref}?createVisit=1`;
 
   return (
     <div className="space-y-6">
@@ -220,26 +198,14 @@ export function VisitDetail({
         {/* Trip Report */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle>Trip Report</CardTitle>
-              {report && report.status === 'draft' && (
-                <Button size="sm" variant="outline" onClick={handleSubmitReport}>
-                  <Send className="mr-2 h-3 w-3" />Submit
-                </Button>
-              )}
-              {report && report.status === 'submitted' && (
-                <Button size="sm" onClick={handleApproveReport}>
-                  <CheckCircle2 className="mr-2 h-3 w-3" />Approve
-                </Button>
-              )}
-            </div>
+            <CardTitle>Trip Report</CardTitle>
           </CardHeader>
           <CardContent>
             {!report ? (
               <div className="flex flex-col items-center justify-center py-8">
                 <FileText className="h-8 w-8 text-muted-foreground mb-3" />
                 <p className="text-sm text-muted-foreground mb-3">No trip report yet.</p>
-                <Button size="sm" onClick={handleCreateReport}>
+                <Button size="sm" render={<Link href={tripReportHref} />} nativeButton={false}>
                   <Plus className="mr-2 h-4 w-4" />Create Trip Report
                 </Button>
               </div>
@@ -253,7 +219,15 @@ export function VisitDetail({
                     </span>
                   )}
                 </div>
-                <TripReportEditor report={report} onSuccess={refreshReport} />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  render={<Link href={tripReportHref} />}
+                  nativeButton={false}
+                >
+                  <ExternalLink className="mr-2 h-3 w-3" />
+                  Open Trip Report
+                </Button>
               </div>
             )}
           </CardContent>
@@ -423,63 +397,6 @@ export function VisitDetail({
             )}
           </CardContent>
         </Card>
-      )}
-    </div>
-  );
-}
-
-// Trip Report Editor (inline summary/findings editing)
-
-function TripReportEditor({ report, onSuccess }: { report: TripReportWithAuthor; onSuccess: () => void }) {
-  const [editing, setEditing] = useState(false);
-  const [summary, setSummary] = useState(report.summary ?? '');
-  const [reportFindings, setReportFindings] = useState(report.findings ?? '');
-
-  const handleSave = async () => {
-    const { error } = await updateTripReport(report.id, { summary, findings: reportFindings });
-    if (error) { toast.error(error); return; }
-    toast.success('Report updated');
-    setEditing(false);
-    onSuccess();
-  };
-
-  if (editing) {
-    return (
-      <div className="space-y-3">
-        <div className="space-y-2">
-          <Label>Summary</Label>
-          <Textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={3} placeholder="Visit summary..." />
-        </div>
-        <div className="space-y-2">
-          <Label>General Findings</Label>
-          <Textarea value={reportFindings} onChange={(e) => setReportFindings(e.target.value)} rows={3} placeholder="General findings..." />
-        </div>
-        <div className="flex gap-2">
-          <Button size="sm" onClick={handleSave}>Save</Button>
-          <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2">
-      <div>
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-muted-foreground">Summary</p>
-          {report.status === 'draft' && (
-            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setEditing(true)}>
-              <Pencil className="mr-1 h-3 w-3" />Edit
-            </Button>
-          )}
-        </div>
-        <p className="text-sm whitespace-pre-wrap">{report.summary || 'No summary yet.'}</p>
-      </div>
-      {report.findings && (
-        <div>
-          <p className="text-xs font-medium text-muted-foreground">General Findings</p>
-          <p className="text-sm whitespace-pre-wrap">{report.findings}</p>
-        </div>
       )}
     </div>
   );

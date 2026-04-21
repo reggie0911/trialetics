@@ -1,24 +1,49 @@
 import { z } from 'zod';
+import countries, { getAlpha2Code, getName, getNames } from 'i18n-iso-countries';
+import en from 'i18n-iso-countries/langs/en.json';
+
+countries.registerLocale(en);
+
+/** Map a single token (alpha-2 code or English country name) to ISO alpha-2. */
+function coerceRegionTokenToAlpha2(token: string): string | undefined {
+  const t = token.trim();
+  if (!t) return undefined;
+  if (/^[a-zA-Z]{2}$/.test(t)) {
+    const code = t.toUpperCase();
+    return getName(code, 'en') ? code : undefined;
+  }
+  const fromAlpha2 = getAlpha2Code(t, 'en');
+  if (fromAlpha2) return fromAlpha2;
+  const lower = t.toLowerCase();
+  const catalog = getNames('en') as Record<string, string>;
+  for (const [code, name] of Object.entries(catalog)) {
+    if (name.toLowerCase() === lower) return code;
+  }
+  return undefined;
+}
+
+/** Normalize legacy string or array to alpha-2 codes for `study_sites.regions`. */
+export function normalizeStudyRegionsInput(val: unknown): string[] | undefined {
+  let tokens: string[] = [];
+  if (val == null || val === '') return undefined;
+  if (Array.isArray(val)) {
+    tokens = val.map((x) => (x == null ? '' : String(x).trim())).filter(Boolean);
+  } else if (typeof val === 'string') {
+    tokens = val.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
+  } else {
+    return undefined;
+  }
+  if (!tokens.length) return undefined;
+  const codes = tokens.map(coerceRegionTokenToAlpha2).filter((c): c is string => Boolean(c));
+  const deduped = [...new Set(codes)];
+  return deduped.length ? deduped : undefined;
+}
 
 const tripReportTimingSchema = z.object({
   report_submission_days: z.number().int().positive().optional(),
   report_approval_days: z.number().int().positive().optional(),
   days_basis: z.enum(['calendar', 'business']).optional(),
 });
-
-/** Normalize legacy string or array to a string array for `study_sites.regions`. */
-export function normalizeStudyRegionsInput(val: unknown): string[] | undefined {
-  if (val == null || val === '') return undefined;
-  if (Array.isArray(val)) {
-    const a = val.map((x) => (x == null ? '' : String(x).trim())).filter(Boolean);
-    return a.length ? a : undefined;
-  }
-  if (typeof val === 'string') {
-    const parts = val.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
-    return parts.length ? parts : undefined;
-  }
-  return undefined;
-}
 
 export const studyOverviewSchema = z.object({
   study_type: z.string().optional(),
@@ -137,16 +162,25 @@ function overviewHasContent(o: StudyOverview): boolean {
   return false;
 }
 
-/** Format `study_sites.regions` for read-only display (string or string[] from older rows). */
+/** Format `study_sites.regions` for read-only display (alpha-2 codes or legacy names). */
 export function formatStudyOverviewRegionsForDisplay(
   regions: string | string[] | undefined | null,
 ): string | null {
   if (regions == null) return null;
+  const toLabel = (raw: string): string => {
+    const t = raw.trim();
+    if (!t) return '';
+    if (/^[a-zA-Z]{2}$/.test(t)) {
+      const code = t.toUpperCase();
+      return getName(code, 'en') ?? code;
+    }
+    return t;
+  };
   if (Array.isArray(regions)) {
-    const s = regions.map((x) => String(x).trim()).filter(Boolean);
+    const s = regions.map((x) => toLabel(String(x))).filter(Boolean);
     return s.length ? s.join(', ') : null;
   }
-  const t = String(regions).trim();
+  const t = toLabel(String(regions));
   return t || null;
 }
 

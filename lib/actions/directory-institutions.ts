@@ -97,7 +97,7 @@ export async function getInstitutionById(id: string): Promise<{
     .from('institution_study')
     .select(
       `id, institution_id, study_id, relationship_type, start_date, end_date, notes,
-       studies(id,title,protocol_number)`
+       studies(id,title,protocol_number,study_name)`
     )
     .eq('institution_id', id);
 
@@ -113,7 +113,7 @@ export async function getInstitutionById(id: string): Promise<{
     .from('directory_contact_institution')
     .select(
       `id, directory_contact_id, is_primary,
-       directory_contacts(id,first_name,last_name,email,title)`
+       directory_contacts(id,first_name,last_name,email,title,primary_directory_role_id,directory_roles(id,name))`
     )
     .eq('institution_id', id);
 
@@ -182,6 +182,35 @@ export async function updateInstitution(
   });
   revalidatePath('/protected/directory');
   revalidatePath(`/protected/directory/institutions/${id}`);
+  return { error: null };
+}
+
+export type InstitutionNearbyPlacesUpdate =
+  | {
+      nearest_airport_place_id: string;
+      nearest_airport_name: string;
+      nearest_airport_address: string;
+    }
+  | {
+      nearest_hotel_place_id: string;
+      nearest_hotel_name: string;
+      nearest_hotel_address: string;
+    };
+
+/** Persists nearest airport or hotel selection from SiteMap (directory institution mode). */
+export async function updateInstitutionNearbyPlaces(
+  institutionId: string,
+  fields: InstitutionNearbyPlacesUpdate
+): Promise<{ error: string | null }> {
+  const { supabase, companyId } = await requireEditor();
+  const { error } = await supabase
+    .from('institutions')
+    .update(fields)
+    .eq('id', institutionId)
+    .eq('company_id', companyId);
+  if (error) return { error: error.message };
+  revalidatePath('/protected/directory');
+  revalidatePath(`/protected/directory/institutions/${institutionId}`);
   return { error: null };
 }
 

@@ -10,6 +10,7 @@ import type {
   VisitReportTemplateQuestion,
   VisitReportType,
 } from '@/lib/types/visit-reports';
+import { VISIT_TYPE_LABEL, type MonitoringVisitType } from '@/lib/types/ctms';
 import {
   assertReportAuthorPermission,
   assertReportCpmPermission,
@@ -23,7 +24,19 @@ import {
   profileHasStudyRoles,
   REPORT_REVIEWER_ROLE,
 } from '@/lib/visit-report-permissions';
-import { logTripReportStatusEvent } from '@/lib/trip-report-audit';
+import {
+  logTripReportSignatureAudit,
+  logTripReportStatusEvent,
+} from '@/lib/trip-report-audit';
+import {
+  TRIP_REPORT_APPROVER_ATTESTATION,
+  TRIP_REPORT_AUTHOR_ATTESTATION,
+  TRIP_REPORT_VOID_ATTESTATION,
+  assertPasswordReverified,
+  computeReportContentHash,
+  namesMatch,
+} from '@/lib/visit-report-signature';
+import { headers } from 'next/headers';
 import {
   notifyReportApproved,
   notifyReportReturnedToAuthor,
@@ -32,7 +45,29 @@ import {
 } from '@/lib/trip-report-notifications';
 import { getCompanyLogoUrl } from '@/lib/actions/company';
 import { buildVisitReportPdfData } from '@/lib/utils/build-visit-report-pdf-data';
+import {
+  MAX_ATTACHMENTS_PER_REPORT,
+  validateAttachmentCandidate,
+} from '@/lib/visit-report-attachments-policy';
 import type { VisitReportPdfData } from '@/components/ctms/trip-reports/visit-report-pdf-document';
+import {
+  TRIP_REPORT_DEFAULT_PAGE_SIZE as TRIP_REPORT_DEFAULT_PAGE_SIZE_PURE,
+  TRIP_REPORT_MAX_PAGE_SIZE as TRIP_REPORT_MAX_PAGE_SIZE_PURE,
+  bucketizeOverdueDays,
+  compareForSort as compareForSortPure,
+  emptyAgingBuckets,
+  normalizeTripReportPagination as normalizeTripReportPaginationPure,
+  type TrackerAgingBuckets as TrackerAgingBucketsPure,
+  type TripReportPaginationOptions as TripReportPaginationOptionsPure,
+  type TripReportSortDirection as TripReportSortDirectionPure,
+  type TripReportSortOption as TripReportSortOptionPure,
+} from '@/lib/trip-report-compliance';
+import {
+  loadTemplateForReport,
+  maybeRefreshSnapshotForReport,
+  resolveTemplateQuestionVersionId,
+  snapshotTemplateForReport,
+} from '@/lib/actions/visit-report-template-versions';
 
 async function getProfileId(): Promise<string> {
   const supabase = await createClient();
@@ -60,11 +95,93 @@ async function getCompanyId(): Promise<string> {
   return profile.company_id;
 }
 
-/** Legacy `/protected/trip-reports` plus study-scoped routes under `/protected/studies/[id]/…`. */
-function revalidateTripReportRelatedUi() {
+/**
+ * Load the signer's identity for a Part 11 signature: profile id +
+ * first/last name (for `namesMatch`) + auth email (for the password
+ * reverification round-trip). Returns a typed error string on failure
+ * so callers can surface it as a 400/401-style result.
+ */
+async function loadSignerIdentity(
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<{
+  profileId: string | null;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  error: string | null;
+}> {
+  const { data: { user }, error: userErr } = await supabase.auth.getUser();
+  if (userErr || !user) {
+    return { profileId: null, email: null, firstName: null, lastName: null, error: 'Not authenticated.' };
+  }
+  const { data: profile, error: profileErr } = await supabase
+    .from('profiles')
+    .select('id, first_name, last_name')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  if (profileErr || !profile) {
+    return { profileId: null, email: user.email ?? null, firstName: null, lastName: null, error: 'No profile found.' };
+  }
+  const p = profile as { id: string; first_name: string | null; last_name: string | null };
+  return {
+    profileId: p.id,
+    email: user.email ?? null,
+    firstName: p.first_name,
+    lastName: p.last_name,
+    error: null,
+  };
+}
+
+/**
+ * Best-effort capture of the request IP and User-Agent for signature
+ * audit rows. Falls back to nulls if `headers()` is not available
+ * (e.g. test environments) so we never block a legitimate signature on
+ * audit-metadata collection.
+ */
+async function captureSignatureRequestMetadata(): Promise<{
+  ipAddress: string | null;
+  userAgent: string | null;
+}> {
+  try {
+    const h = await headers();
+    const fwd = h.get('x-forwarded-for');
+    const ip = (fwd?.split(',')[0]?.trim() || h.get('x-real-ip') || null) ?? null;
+    const ua = h.get('user-agent') ?? null;
+    return { ipAddress: ip, userAgent: ua };
+  } catch {
+    return { ipAddress: null, userAgent: null };
+  }
+}
+
+/**
+ * Revalidate the trip-report related UI surfaces.
+ *
+ * Pass `studyId` whenever it is known so the per-study trip-reports route is
+ * invalidated specifically. We intentionally avoid invalidating the entire
+ * `/protected/studies` layout - that wipes every study tab in the cache and
+ * creates noticeable navigation latency for users in unrelated studies.
+ */
+function revalidateTripReportRelatedUi(studyId?: string | null) {
   revalidatePath('/protected/trip-reports');
   revalidatePath('/protected/visits');
-  revalidatePath('/protected/studies', 'layout');
+  if (studyId) {
+    revalidatePath(`/protected/studies/${studyId}/trip-reports`);
+    revalidatePath(`/protected/studies/${studyId}/trip-reports`, 'layout');
+  }
+}
+
+/**
+ * Look up the studyId from a reportId and call `revalidateTripReportRelatedUi`.
+ * Use this in mutation actions that only have the reportId in scope so we still
+ * invalidate the per-study trip-reports route without falling back to a layout-wide
+ * revalidation.
+ */
+async function revalidateAfterReportMutation(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  reportId: string
+): Promise<void> {
+  const { studyId } = await getStudyIdForReport(supabase, reportId);
+  revalidateTripReportRelatedUi(studyId);
 }
 
 export interface TripReportSummaryRow {
@@ -91,6 +208,8 @@ export interface TripReportTrackerRow {
   study_name: string;
   site_name: string;
   visit_type: string;
+  /** Persisted monitoring_visits.visit_name; auto-derived for legacy null rows. */
+  visit_name: string;
   visit_id_display: string;
   visit_end_date: string | null;
   report_status: string;
@@ -107,6 +226,9 @@ export interface TripReportTrackerRow {
   can_edit_report: boolean;
   can_review_report: boolean;
   can_view_report: boolean;
+  is_report_author: boolean;
+  can_send_to_review: boolean;
+  can_recall_report: boolean;
   submission_overdue: boolean;
   approval_overdue: boolean;
   /** From template offsets + visit anchor; else stored submission_due_date when no template */
@@ -140,15 +262,65 @@ export interface TripReportReviewQueueRow {
 type VisitRow = {
   id: string;
   study_id: string;
+  site_id?: string | null;
   visit_type: string;
   planned_date?: string | null;
   actual_date?: string | null;
   start_date?: string | null;
   end_date?: string | null;
   visit_name?: string | null;
+  created_at?: string | null;
   study_sites?: { name: string; study_countries?: { country_name: string } | null } | null;
   studies?: { title: string; protocol_number?: string | null } | null;
 };
+
+/**
+ * Build a `visitId -> visit_name` map that mirrors the SQL backfill rule:
+ * for any row whose persisted `visit_name` is null, derive
+ * `${VISIT_TYPE_LABEL[visit_type]} -${rank}` where rank is the row's
+ * 1-based position within (study_id, site_id, visit_type) ordered by
+ * (created_at, id). Persisted names are returned as-is.
+ *
+ * The on-the-fly derivation is purely a defensive read-side fallback - the
+ * canonical write path is `createSiteVisitWithReport` and the
+ * 20260528000000 backfill migration; once both are in place, there should
+ * be no null `visit_name` rows in practice.
+ */
+function buildVisitNameMap(
+  visits: { id: string; study_id?: string | null; site_id?: string | null; visit_type?: string | null; visit_name?: string | null; created_at?: string | null }[]
+): Map<string, string> {
+  const groups = new Map<string, { id: string; created_at: string }[]>();
+  for (const v of visits) {
+    if (v.visit_name) continue;
+    const key = `${v.study_id ?? ''}::${v.site_id ?? ''}::${v.visit_type ?? ''}`;
+    const list = groups.get(key) ?? [];
+    list.push({ id: v.id, created_at: v.created_at ?? '' });
+    groups.set(key, list);
+  }
+  const derived = new Map<string, string>();
+  for (const [key, list] of groups) {
+    list.sort((a, b) => {
+      if (a.created_at && b.created_at && a.created_at !== b.created_at) {
+        return a.created_at < b.created_at ? -1 : 1;
+      }
+      return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    });
+    const visitType = key.split('::')[2] ?? '';
+    const label = (VISIT_TYPE_LABEL as Record<string, string | undefined>)[visitType] ?? visitType;
+    list.forEach((row, idx) => {
+      derived.set(row.id, `${label} -${idx + 1}`);
+    });
+  }
+  const out = new Map<string, string>();
+  for (const v of visits) {
+    if (v.visit_name) {
+      out.set(v.id, v.visit_name);
+    } else {
+      out.set(v.id, derived.get(v.id) ?? '—');
+    }
+  }
+  return out;
+}
 
 type ReportRow = {
   id: string;
@@ -157,6 +329,23 @@ type ReportRow = {
   created_by?: string | null;
   reviewer_id?: string | null;
 };
+
+export type TrackerAgingBuckets = TrackerAgingBucketsPure;
+
+export interface TrackerBreakdownEntry {
+  /** Display label (author name, site name, etc.). */
+  label: string;
+  /** Total tracker rows in this bucket. */
+  total: number;
+  /** Overdue submissions count. */
+  submissionOverdue: number;
+  /** Overdue approvals count. */
+  approvalOverdue: number;
+  /** Compliant submissions count. */
+  submissionCompleted: number;
+  /** Compliant approvals count. */
+  approvalCompleted: number;
+}
 
 export interface TrackerComplianceMetrics {
   submissionCompleted: number;
@@ -167,6 +356,14 @@ export interface TrackerComplianceMetrics {
   approvalOverdue: number;
   approvalTotal: number;
   approvalPercent: number;
+  /** Aging buckets for *currently* overdue submissions (not yet submitted). */
+  submissionAging: TrackerAgingBuckets;
+  /** Aging buckets for *currently* overdue approvals (not yet approved). */
+  approvalAging: TrackerAgingBuckets;
+  /** Per-author breakdown, sorted by total descending then label. */
+  byAuthor: TrackerBreakdownEntry[];
+  /** Per-site breakdown, sorted by total descending then label. */
+  bySite: TrackerBreakdownEntry[];
 }
 
 function latestTripReportByVisitId(
@@ -310,7 +507,62 @@ export async function getStudyCpmsForReviewerAssignment(
   return rows.sort((a, b) => a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }));
 }
 
-export async function getTripReportSummaryList(studyId?: string | null): Promise<TripReportSummaryRow[]> {
+/** Server-side pagination defaults for trip report tables. */
+export type TripReportSortDirection = TripReportSortDirectionPure;
+export type TripReportSortOption = TripReportSortOptionPure;
+export type TripReportPaginationOptions = TripReportPaginationOptionsPure;
+
+const SUMMARY_SORTABLE_COLUMNS = new Set<string>([
+  'site_name',
+  'visit_name',
+  'visit_type',
+  'country_name',
+  'visit_start_date',
+  'report_status',
+  'report_author',
+]);
+
+const TRACKER_SORTABLE_COLUMNS = new Set<string>([
+  'study_name',
+  'site_name',
+  'visit_name',
+  'visit_type',
+  'visit_end_date',
+  'report_status',
+  'report_author',
+  'days_until_submission_due',
+  'days_until_approval_due',
+  'submission_date',
+  'approved_date',
+  'submission_compliance',
+  'approval_compliance',
+  'compliance_status',
+]);
+
+const compareForSort = compareForSortPure;
+
+export interface TripReportSummaryListResult {
+  rows: TripReportSummaryRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface TripReportTrackerListResult {
+  rows: TripReportTrackerRow[];
+  metrics: TrackerComplianceMetrics;
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+const normalizeTripReportPagination = normalizeTripReportPaginationPure;
+
+export async function getTripReportSummaryList(
+  studyId?: string | null,
+  options?: TripReportPaginationOptions
+): Promise<TripReportSummaryListResult> {
+  const { page, pageSize } = normalizeTripReportPagination(options);
   const supabase = await createClient();
   let currentProfileId: string | null = null;
   try {
@@ -324,8 +576,12 @@ export async function getTripReportSummaryList(studyId?: string | null): Promise
     .select(`
       id,
       study_id,
+      site_id,
       visit_type,
       planned_date,
+      start_date,
+      visit_name,
+      created_at,
       study_sites (
         name,
         study_countries ( country_name )
@@ -339,6 +595,16 @@ export async function getTripReportSummaryList(studyId?: string | null): Promise
   if (error) throw new Error(error.message);
 
   const visitIds = (visits ?? []).map((v: { id: string }) => v.id);
+  const visitNameById = buildVisitNameMap(
+    (visits ?? []) as unknown as {
+      id: string;
+      study_id?: string | null;
+      site_id?: string | null;
+      visit_type?: string | null;
+      visit_name?: string | null;
+      created_at?: string | null;
+    }[]
+  );
   const admin = createAdminClient();
   let reportByVisit = new Map<string, Record<string, unknown>>();
   if (visitIds.length > 0) {
@@ -368,6 +634,39 @@ export async function getTripReportSummaryList(studyId?: string | null): Promise
     });
   }
 
+  // Batch CRA/CPM membership lookup once per (study_id, profile) instead of
+  // running study_team_members queries per visit row.
+  const summaryStudyIds = [
+    ...new Set(
+      (visits ?? [])
+        .map((v) => (v as unknown as VisitRow).study_id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    ),
+  ];
+  type SummaryStudyRoles = { isCra: boolean; isCpm: boolean };
+  const summaryRolesByStudy = new Map<string, SummaryStudyRoles>();
+  let summaryAppRoleIsAdmin = false;
+  if (currentProfileId) {
+    if (summaryStudyIds.length > 0) {
+      const { data: memberRows } = await admin
+        .from('study_team_members')
+        .select('study_id, role')
+        .eq('profile_id', currentProfileId)
+        .eq('is_active', true)
+        .in('role', ['clinical_research_associate', 'clinical_project_manager'])
+        .in('study_id', summaryStudyIds);
+      for (const m of memberRows ?? []) {
+        const row = m as { study_id: string; role: string };
+        const flags = summaryRolesByStudy.get(row.study_id) ?? { isCra: false, isCpm: false };
+        if (row.role === 'clinical_research_associate') flags.isCra = true;
+        if (row.role === 'clinical_project_manager') flags.isCpm = true;
+        summaryRolesByStudy.set(row.study_id, flags);
+      }
+    }
+    const role = await getProfileRole(supabase, currentProfileId);
+    summaryAppRoleIsAdmin = role === 'admin';
+  }
+
   const today = new Date().toISOString().split('T')[0];
   const rows: TripReportSummaryRow[] = [];
 
@@ -385,27 +684,28 @@ export async function getTripReportSummaryList(studyId?: string | null): Promise
     const submitted = status !== 'report_pending' && status !== 'authoring';
     const submission_overdue = !!(subDue && !submitted && daysSub !== null && daysSub < 0);
 
-    let isCra = false;
-    let isCpm = false;
-    if (currentProfileId && studyId) {
-      const flags = await getUserIsStudyCraAndCpm(supabase, currentProfileId, studyId);
-      isCra = flags.isCra;
-      isCpm = flags.isCpm;
-    }
+    const summaryFlags: SummaryStudyRoles = (currentProfileId && studyId && summaryRolesByStudy.get(studyId)) || { isCra: false, isCpm: false };
+    const isCra = summaryFlags.isCra;
+    const isCpm = summaryFlags.isCpm;
 
     const can_edit_report =
       isCra && !!report && ['report_pending', 'authoring', 'returned'].includes(status);
     const can_review_report = isCpm && !!report && ['submitted', 'under_review'].includes(status);
-    const can_view_report =
-      !!report &&
-      (await canViewTripReportContent(supabase, currentProfileId, status, studyId));
+    let can_view_report = false;
+    if (report) {
+      if (status === 'approved_and_signed') {
+        can_view_report = true;
+      } else if (currentProfileId) {
+        can_view_report = isCra || isCpm || summaryAppRoleIsAdmin;
+      }
+    }
 
     rows.push({
       id: v.id,
       visit_id: v.id,
       study_id: studyId ?? '',
       site_name: site?.name ?? '—',
-      visit_name: vr.visit_name ?? `${vr.studies?.title ?? 'Visit'} – ${v.id.slice(0, 8)}`,
+      visit_name: visitNameById.get(v.id) ?? '—',
       visit_type: v.visit_type ?? '—',
       country_name: countryName,
       visit_start_date: vr.start_date ?? v.planned_date ?? null,
@@ -419,13 +719,26 @@ export async function getTripReportSummaryList(studyId?: string | null): Promise
     });
   }
 
-  return rows;
+  if (options?.sort && SUMMARY_SORTABLE_COLUMNS.has(options.sort.column)) {
+    const { column, direction } = options.sort;
+    rows.sort((a, b) => compareForSort(
+      (a as unknown as Record<string, unknown>)[column],
+      (b as unknown as Record<string, unknown>)[column],
+      direction
+    ));
+  }
+
+  const total = rows.length;
+  const start = (page - 1) * pageSize;
+  const pagedRows = rows.slice(start, start + pageSize);
+  return { rows: pagedRows, total, page, pageSize };
 }
 
-export async function getTripReportTrackerList(studyId?: string | null): Promise<{
-  rows: TripReportTrackerRow[];
-  metrics: TrackerComplianceMetrics;
-}> {
+export async function getTripReportTrackerList(
+  studyId?: string | null,
+  options?: TripReportPaginationOptions
+): Promise<TripReportTrackerListResult> {
+  const { page, pageSize } = normalizeTripReportPagination(options);
   const supabase = await createClient();
   const admin = createAdminClient();
   const today = new Date().toISOString().split('T')[0];
@@ -442,11 +755,14 @@ export async function getTripReportTrackerList(studyId?: string | null): Promise
     .select(`
       id,
       study_id,
+      site_id,
       visit_type,
       planned_date,
       actual_date,
       start_date,
       end_date,
+      visit_name,
+      created_at,
       study_sites ( name ),
       studies ( title )
     `)
@@ -454,15 +770,41 @@ export async function getTripReportTrackerList(studyId?: string | null): Promise
   if (studyId) trackerVisitQuery = trackerVisitQuery.eq('study_id', studyId);
   const { data: visits, error } = await trackerVisitQuery;
 
-  if (error) return { rows: [], metrics: { submissionCompleted: 0, submissionOverdue: 0, submissionTotal: 0, submissionPercent: 0, approvalCompleted: 0, approvalOverdue: 0, approvalTotal: 0, approvalPercent: 0 } };
+  if (error) {
+    const emptyMetrics: TrackerComplianceMetrics = {
+      submissionCompleted: 0,
+      submissionOverdue: 0,
+      submissionTotal: 0,
+      submissionPercent: 0,
+      approvalCompleted: 0,
+      approvalOverdue: 0,
+      approvalTotal: 0,
+      approvalPercent: 0,
+      submissionAging: emptyAgingBuckets(),
+      approvalAging: emptyAgingBuckets(),
+      byAuthor: [],
+      bySite: [],
+    };
+    return { rows: [], metrics: emptyMetrics, total: 0, page, pageSize };
+  }
 
   const visitIds = (visits ?? []).map((v: { id: string }) => v.id);
+  const visitNameById = buildVisitNameMap(
+    (visits ?? []) as unknown as {
+      id: string;
+      study_id?: string | null;
+      site_id?: string | null;
+      visit_type?: string | null;
+      visit_name?: string | null;
+      created_at?: string | null;
+    }[]
+  );
   let reportByVisit = new Map<string, Record<string, unknown>>();
   if (visitIds.length > 0) {
     const { data: reportRows } = await admin
       .from('trip_reports')
       .select(
-        'id, visit_id, status, report_status, template_id, submitted_date, approved_date, reviewed_at, created_by, approved_by, reviewer_id, submission_due_date, approval_due_date, created_at'
+        'id, visit_id, status, report_status, template_id, submitted_date, approved_date, reviewed_at, created_by, approved_by, reviewer_id, submission_due_date, approval_due_date, created_at, expected_send_date_confirmation_letter, expected_send_date_followup_letter, date_followup_letter_uploaded, date_mvl_log_uploaded'
       )
       .in('visit_id', visitIds);
     reportByVisit = latestTripReportByVisitId(
@@ -520,6 +862,40 @@ export async function getTripReportTrackerList(studyId?: string | null): Promise
     (profiles ?? []).forEach((p: { id: string; first_name: string | null; last_name: string | null }) => {
       profileNames[p.id] = [p.first_name, p.last_name].filter(Boolean).join(' ') || '—';
     });
+  }
+
+  // Batch CRA/CPM membership lookup once per (study_id, profile) instead of
+  // hitting study_team_members per visit row inside the loop below. Also
+  // resolve the global app role once for `canViewTripReportContent` fallbacks.
+  const studyIdsForPerm = [
+    ...new Set(
+      (visits ?? [])
+        .map((v) => (v as unknown as VisitRow).study_id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    ),
+  ];
+  type StudyRoles = { isCra: boolean; isCpm: boolean };
+  const rolesByStudy = new Map<string, StudyRoles>();
+  let appRoleIsAdmin = false;
+  if (currentProfileId) {
+    if (studyIdsForPerm.length > 0) {
+      const { data: memberRows } = await admin
+        .from('study_team_members')
+        .select('study_id, role')
+        .eq('profile_id', currentProfileId)
+        .eq('is_active', true)
+        .in('role', ['clinical_research_associate', 'clinical_project_manager'])
+        .in('study_id', studyIdsForPerm);
+      for (const m of memberRows ?? []) {
+        const row = m as { study_id: string; role: string };
+        const flags = rolesByStudy.get(row.study_id) ?? { isCra: false, isCpm: false };
+        if (row.role === 'clinical_research_associate') flags.isCra = true;
+        if (row.role === 'clinical_project_manager') flags.isCpm = true;
+        rolesByStudy.set(row.study_id, flags);
+      }
+    }
+    const role = await getProfileRole(supabase, currentProfileId);
+    appRoleIsAdmin = role === 'admin';
   }
 
   let submissionCompleted = 0;
@@ -604,19 +980,28 @@ export async function getTripReportTrackerList(studyId?: string | null): Promise
     else if (submittedDate && approvedDate) approvalDays = calendarDaysBetweenIso(submittedDate, approvedDate);
 
     const studyId = vr.study_id;
-    let isCra = false;
-    let isCpm = false;
-    if (currentProfileId && studyId) {
-      const flags = await getUserIsStudyCraAndCpm(supabase, currentProfileId, studyId);
-      isCra = flags.isCra;
-      isCpm = flags.isCpm;
-    }
+    const studyFlags: StudyRoles = (currentProfileId && studyId && rolesByStudy.get(studyId)) || { isCra: false, isCpm: false };
+    const isCra = studyFlags.isCra;
+    const isCpm = studyFlags.isCpm;
     const can_edit_report =
       isCra && !!report && ['report_pending', 'authoring', 'returned'].includes(status);
     const can_review_report = isCpm && !!report && ['submitted', 'under_review'].includes(status);
-    const can_view_report =
-      !!report &&
-      (await canViewTripReportContent(supabase, currentProfileId, status, studyId));
+    let can_view_report = false;
+    if (report) {
+      if (status === 'approved_and_signed') {
+        can_view_report = true;
+      } else if (currentProfileId) {
+        can_view_report = isCra || isCpm || appRoleIsAdmin;
+      }
+    }
+    const is_report_author = !!(
+      report &&
+      currentProfileId &&
+      (report.created_by as string | null | undefined) === currentProfileId
+    );
+    const can_send_to_review =
+      is_report_author && isCra && (status === 'authoring' || status === 'returned');
+    const can_recall_report = is_report_author && isCra && status === 'submitted';
     const submission_overdue = !!(expectedSub && !submitted && daysSub !== null && daysSub < 0);
     const approval_overdue = !!(expectedApp && !approved && daysApp !== null && daysApp < 0);
 
@@ -626,6 +1011,7 @@ export async function getTripReportTrackerList(studyId?: string | null): Promise
       study_name: vr.studies?.title ?? '—',
       site_name: vr.study_sites?.name ?? '—',
       visit_type: v.visit_type,
+      visit_name: visitNameById.get(v.id) ?? '—',
       visit_id_display: `V-${v.id.slice(0, 12).toUpperCase()}`,
       visit_end_date: endDate,
       report_status: status,
@@ -641,6 +1027,9 @@ export async function getTripReportTrackerList(studyId?: string | null): Promise
       can_edit_report,
       can_review_report,
       can_view_report,
+      is_report_author,
+      can_send_to_review,
+      can_recall_report,
       submission_overdue,
       approval_overdue,
       expected_vr_submission_date: expectedSub,
@@ -651,15 +1040,55 @@ export async function getTripReportTrackerList(studyId?: string | null): Promise
       review_days: reviewDays,
       approval_compliance: approvalCompliance,
       approval_days: approvalDays,
-      expected_send_date_confirmation_letter: null,
-      expected_send_date_followup_letter: null,
-      date_followup_letter_uploaded: null,
-      date_mvl_log_uploaded: null,
+      expected_send_date_confirmation_letter:
+        (report?.expected_send_date_confirmation_letter as string | null | undefined) ?? null,
+      expected_send_date_followup_letter:
+        (report?.expected_send_date_followup_letter as string | null | undefined) ?? null,
+      date_followup_letter_uploaded:
+        (report?.date_followup_letter_uploaded as string | null | undefined) ?? null,
+      date_mvl_log_uploaded:
+        (report?.date_mvl_log_uploaded as string | null | undefined) ?? null,
     });
   }
 
   const submissionTotal = rows.filter((r) => r.days_until_submission_due !== null).length || 1;
   const approvalTotal = rows.filter((r) => r.days_until_approval_due !== null).length || 1;
+
+  const submissionAging = emptyAgingBuckets();
+  const approvalAging = emptyAgingBuckets();
+  for (const r of rows) {
+    if (r.submission_overdue && typeof r.days_until_submission_due === 'number') {
+      const overdueDays = Math.abs(r.days_until_submission_due);
+      submissionAging[bucketizeOverdueDays(overdueDays)] += 1;
+    }
+    if (r.approval_overdue && typeof r.days_until_approval_due === 'number') {
+      const overdueDays = Math.abs(r.days_until_approval_due);
+      approvalAging[bucketizeOverdueDays(overdueDays)] += 1;
+    }
+  }
+
+  type Acc = { total: number; submissionOverdue: number; approvalOverdue: number; submissionCompleted: number; approvalCompleted: number };
+  const newAcc = (): Acc => ({ total: 0, submissionOverdue: 0, approvalOverdue: 0, submissionCompleted: 0, approvalCompleted: 0 });
+  const byAuthorMap = new Map<string, Acc>();
+  const bySiteMap = new Map<string, Acc>();
+  for (const r of rows) {
+    const authorKey = r.report_author?.trim() || 'Unassigned';
+    const siteKey = r.site_name?.trim() || '—';
+    const a = byAuthorMap.get(authorKey) ?? newAcc();
+    const s = bySiteMap.get(siteKey) ?? newAcc();
+    a.total += 1;
+    s.total += 1;
+    if (r.submission_overdue) { a.submissionOverdue += 1; s.submissionOverdue += 1; }
+    if (r.approval_overdue) { a.approvalOverdue += 1; s.approvalOverdue += 1; }
+    if (r.submission_compliance === 'compliant') { a.submissionCompleted += 1; s.submissionCompleted += 1; }
+    if (r.approval_compliance === 'compliant') { a.approvalCompleted += 1; s.approvalCompleted += 1; }
+    byAuthorMap.set(authorKey, a);
+    bySiteMap.set(siteKey, s);
+  }
+  const sortBreakdown = (m: Map<string, Acc>): TrackerBreakdownEntry[] =>
+    [...m.entries()]
+      .map(([label, v]) => ({ label, ...v }))
+      .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
 
   const metrics: TrackerComplianceMetrics = {
     submissionCompleted,
@@ -670,9 +1099,27 @@ export async function getTripReportTrackerList(studyId?: string | null): Promise
     approvalOverdue,
     approvalTotal,
     approvalPercent: approvalTotal ? Math.round((approvalCompleted / approvalTotal) * 100) : 100,
+    submissionAging,
+    approvalAging,
+    byAuthor: sortBreakdown(byAuthorMap),
+    bySite: sortBreakdown(bySiteMap),
   };
 
-  return { rows, metrics };
+  if (options?.sort && TRACKER_SORTABLE_COLUMNS.has(options.sort.column)) {
+    const { column, direction } = options.sort;
+    rows.sort((a, b) => compareForSort(
+      (a as unknown as Record<string, unknown>)[column],
+      (b as unknown as Record<string, unknown>)[column],
+      direction
+    ));
+  }
+
+  // Compute metrics over the full result so the dashboard cards stay accurate
+  // regardless of the page being viewed; only slice the rows array for display.
+  const total = rows.length;
+  const start = (page - 1) * pageSize;
+  const pagedRows = rows.slice(start, start + pageSize);
+  return { rows: pagedRows, metrics, total, page, pageSize };
 }
 
 export async function getTripReportReviewQueue(studyId?: string | null): Promise<TripReportReviewQueueRow[]> {
@@ -771,7 +1218,17 @@ export async function getVisitReportTemplates(): Promise<VisitReportTemplate[]> 
 export interface TemplateWithQuestionCount extends VisitReportTemplate {
   question_count: number;
   report_count: number;
+  /**
+   * Distinct trip reports that have snapshotted this template via the
+   * versioning system (any version_number). Drives the "edits won't
+   * affect N historical reports" reassurance badge on the Templates
+   * Admin tab. Independent of `report_count` so legacy reports still
+   * pointing at the live `template_id` aren't double-counted.
+   */
+  snapshotted_report_count: number;
   study_name?: string | null;
+  /** Display name of the profile that created the template (or null when unknown). */
+  created_by_name?: string | null;
 }
 
 const TEMPLATE_SELECT_COLS =
@@ -816,6 +1273,39 @@ export async function getTemplatesWithQuestionCount(): Promise<TemplateWithQuest
     }
   });
 
+  // Snapshotted report counts: distinct reports per live template_id,
+  // joined through visit_report_template_versions.template_id. Wrapped
+  // in a try/swallow so the Admin tab still renders on environments
+  // without the versioning migration applied yet.
+  const snapshotCountByTemplate: Record<string, number> = {};
+  try {
+    const { data: versionRows } = await supabase
+      .from('visit_report_template_versions')
+      .select('id, template_id');
+    const templateIdByVersionId: Record<string, string> = {};
+    (versionRows ?? []).forEach((v: { id: string; template_id: string }) => {
+      templateIdByVersionId[v.id] = v.template_id;
+    });
+    if (Object.keys(templateIdByVersionId).length > 0) {
+      const { data: snapshotReports } = await supabase
+        .from('trip_reports')
+        .select('id, template_version_id')
+        .not('template_version_id', 'is', null);
+      const seenByTemplate: Record<string, Set<string>> = {};
+      (snapshotReports ?? []).forEach((r: { id: string; template_version_id: string | null }) => {
+        const tplId = r.template_version_id ? templateIdByVersionId[r.template_version_id] : null;
+        if (!tplId) return;
+        if (!seenByTemplate[tplId]) seenByTemplate[tplId] = new Set();
+        seenByTemplate[tplId].add(r.id);
+      });
+      for (const [tplId, ids] of Object.entries(seenByTemplate)) {
+        snapshotCountByTemplate[tplId] = ids.size;
+      }
+    }
+  } catch {
+    // versioning tables not yet migrated: leave snapshot counts at 0.
+  }
+
   const studyIds = [...new Set((templates as Record<string, unknown>[]).map((t) => t.study_id).filter(Boolean) as string[])];
   const studyNameById: Record<string, string> = {};
   if (studyIds.length > 0) {
@@ -828,14 +1318,36 @@ export async function getTemplatesWithQuestionCount(): Promise<TemplateWithQuest
     });
   }
 
+  const creatorIds = [
+    ...new Set(
+      (templates as Record<string, unknown>[])
+        .map((t) => t.created_by)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    ),
+  ];
+  const creatorNameById: Record<string, string> = {};
+  if (creatorIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name')
+      .in('id', creatorIds);
+    (profiles ?? []).forEach((p: { id: string; first_name: string | null; last_name: string | null }) => {
+      const name = [p.first_name, p.last_name].filter(Boolean).join(' ').trim();
+      if (name) creatorNameById[p.id] = name;
+    });
+  }
+
   return (templates as unknown as VisitReportTemplate[]).map((t) => {
     const raw = t as unknown as Record<string, unknown>;
     const studyId = (raw.study_id as string | null | undefined) ?? null;
+    const createdBy = (raw.created_by as string | null | undefined) ?? null;
     return {
       ...t,
       question_count: countByTemplate[t.id] ?? 0,
       report_count: reportCountByTemplate[t.id] ?? 0,
+      snapshotted_report_count: snapshotCountByTemplate[t.id] ?? 0,
       study_name: studyId ? (studyNameById[studyId] ?? null) : null,
+      created_by_name: createdBy ? (creatorNameById[createdBy] ?? null) : null,
     };
   });
 }
@@ -848,13 +1360,35 @@ export interface CreateSiteVisitWithReportInput {
   study_id: string;
   site_id: string;
   site_number?: string;
-  visit_type: 'sqv' | 'siv' | 'monitoring' | 'close_out';
+  visit_type: 'sqv' | 'siv' | 'monitoring' | 'close_out' | 'training';
   visit_location: 'onsite' | 'remote';
-  visit_name?: string;
   description?: string;
   start_date: string;
   end_date: string;
   template_id?: string | null;
+}
+
+/**
+ * Compute the next auto-numbered visit_name for a (study, site, visit_type)
+ * triple. The number is the count of existing rows + 1, regardless of status,
+ * so cancelled visits permanently retain their slot. Once written, the
+ * `visit_name` is treated as an immutable label by downstream readers.
+ */
+async function nextAutoVisitName(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  studyId: string,
+  siteId: string,
+  visitType: MonitoringVisitType
+): Promise<string> {
+  const { count } = await supabase
+    .from('monitoring_visits')
+    .select('id', { count: 'exact', head: true })
+    .eq('study_id', studyId)
+    .eq('site_id', siteId)
+    .eq('visit_type', visitType);
+  const n = (count ?? 0) + 1;
+  const label = VISIT_TYPE_LABEL[visitType] ?? visitType;
+  return `${label} -${n}`;
 }
 
 export async function createSiteVisitWithReport(
@@ -894,37 +1428,75 @@ export async function createSiteVisitWithReport(
       }
     }
 
-    const { data: visit, error: visitError } = await supabase
-      .from('monitoring_visits')
+    const visitType = input.visit_type as MonitoringVisitType;
+
+    const insertVisit = async (visitName: string) =>
+      supabase
+        .from('monitoring_visits')
+        .insert({
+          study_id: input.study_id,
+          site_id: input.site_id,
+          visit_type: input.visit_type,
+          visit_name: visitName,
+          visit_location: input.visit_location,
+          start_date: input.start_date,
+          end_date: input.end_date,
+          description: input.description ?? null,
+          planned_date: input.start_date,
+          status: 'planned',
+        })
+        .select('id')
+        .single();
+
+    let visitName = await nextAutoVisitName(supabase, input.study_id, input.site_id, visitType);
+    let { data: visit, error: visitError } = await insertVisit(visitName);
+
+    // Retry once on Postgres unique-violation in case a concurrent insert
+    // claimed the same slot between count() and insert().
+    if (visitError && (visitError as { code?: string }).code === '23505') {
+      visitName = await nextAutoVisitName(supabase, input.study_id, input.site_id, visitType);
+      ({ data: visit, error: visitError } = await insertVisit(visitName));
+    }
+
+    if (visitError || !visit) return { visitId: null, error: visitError?.message ?? 'Failed to create visit' };
+
+    const { data: insertedReport, error: reportError } = await supabase
+      .from('trip_reports')
       .insert({
-        study_id: input.study_id,
-        site_id: input.site_id,
-        visit_type: input.visit_type,
-        visit_name: input.visit_name ?? null,
-        visit_location: input.visit_location,
-        start_date: input.start_date,
-        end_date: input.end_date,
-        description: input.description ?? null,
-        planned_date: input.start_date,
-        status: 'planned',
+        visit_id: visit.id,
+        created_by: profileId,
+        report_status: 'report_pending',
+        template_id: input.template_id ?? null,
+        submission_due_date: submissionDue,
+        approval_due_date: approvalDue,
       })
       .select('id')
       .single();
 
-    if (visitError || !visit) return { visitId: null, error: visitError?.message ?? 'Failed to create visit' };
+    if (reportError || !insertedReport) {
+      return { visitId: null, error: reportError?.message ?? 'Failed to create report.' };
+    }
 
-    const { error: reportError } = await supabase.from('trip_reports').insert({
-      visit_id: visit.id,
-      created_by: profileId,
-      report_status: 'report_pending',
-      template_id: input.template_id ?? null,
-      submission_due_date: submissionDue,
-      approval_due_date: approvalDue,
-    });
+    // Snapshot the template + questions onto the report immediately so
+    // later edits to the live template never silently mutate this
+    // historical report. No-op for reports without a chosen template.
+    if (input.template_id) {
+      const reportId = (insertedReport as { id: string }).id;
+      const snap = await snapshotTemplateForReport(reportId, supabase, {
+        reason: 'on_create',
+        profileId,
+      });
+      if (snap.error) {
+        // Roll back the report row so the visit doesn't end up with an
+        // unsnapshotted report. The visit row itself is intentionally
+        // left in place to mirror the existing failure behavior in this
+        // function (a stranded visit can be re-attempted by the user).
+        await supabase.from('trip_reports').delete().eq('id', reportId);
+        return { visitId: null, error: snap.error };
+      }
+    }
 
-    if (reportError) return { visitId: null, error: reportError.message };
-
-    revalidateTripReportRelatedUi();
+    revalidateTripReportRelatedUi(input.study_id);
     return { visitId: visit.id, error: null };
   } catch (err) {
     return { visitId: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -976,7 +1548,7 @@ export async function createTemplate(input: {
         .single());
     }
     if (error) return { data: null, error: error.message };
-    revalidateTripReportRelatedUi();
+    revalidateTripReportRelatedUi(input.study_id ?? null);
     return { data: data as VisitReportTemplate, error: null, ...(studySkipped && { studySkipped: true }) };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1005,7 +1577,7 @@ export async function updateTemplate(
       result = await supabase.from('visit_report_templates').update(inputWithoutStudyId).eq('id', id);
     }
     if (result.error) return { error: result.error.message };
-    revalidateTripReportRelatedUi();
+    revalidateTripReportRelatedUi(input.study_id ?? null);
     return { error: null, ...(studySkipped && { studySkipped: true }) };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1188,6 +1760,13 @@ export interface TripReportActionItem {
   created_at: string;
 }
 
+export type TripReportAttachmentScanStatus =
+  | 'pending'
+  | 'clean'
+  | 'infected'
+  | 'error'
+  | 'skipped';
+
 export interface TripReportAttachment {
   id: string;
   trip_report_id: string;
@@ -1198,6 +1777,11 @@ export interface TripReportAttachment {
   category: string | null;
   uploaded_by: string | null;
   created_at: string;
+  scan_status: TripReportAttachmentScanStatus;
+  scan_status_at: string | null;
+  scan_engine: string | null;
+  scan_signature: string | null;
+  scan_error: string | null;
 }
 
 export interface TripReportStatusEventRow {
@@ -1209,6 +1793,32 @@ export interface TripReportStatusEventRow {
   metadata: Record<string, unknown> | null;
   actor_display_name?: string | null;
 }
+
+export interface TripReportSignatureAuditRow {
+  id: string;
+  trip_report_id: string;
+  kind: 'author_submit' | 'approver_approve' | 'void_approval';
+  actor_profile_id: string;
+  printed_name: string;
+  attestation_text: string;
+  content_hash: string | null;
+  password_verified: boolean;
+  reason: string | null;
+  signed_at_db: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  actor_display_name?: string | null;
+}
+
+/**
+ * Discriminated entry in the merged audit timeline. The dialog renders
+ * `status` and `signature` rows differently (the status row keeps the
+ * existing from→to badge UX; the signature row shows the printed name,
+ * full attestation, and content hash).
+ */
+export type TripReportAuditTimelineEntry =
+  | { kind: 'status'; at: string; event: TripReportStatusEventRow }
+  | { kind: 'signature'; at: string; event: TripReportSignatureAuditRow };
 
 /**
  * Returns the date of the most recent approved visit for the same study+site,
@@ -1376,58 +1986,38 @@ export async function getTripReportWithDetails(visitId: string): Promise<TripRep
     };
   }
 
-  let template: VisitReportTemplate | null = null;
-  let questions: VisitReportTemplateQuestion[] = [];
-  if (report.template_id) {
-    const { data: t, error: te } = await supabase.from('visit_report_templates').select('*').eq('id', report.template_id).single();
-    template = t as VisitReportTemplate | null;
-    if (template) {
-      const { data: q, error: qe } = await supabase
-        .from('visit_report_template_questions')
-        .select('*')
-        .eq('template_id', template.id)
-        .order('sort_order', { ascending: true });
-      questions = (q as VisitReportTemplateQuestion[]) ?? [];
-      // TODO: Remove after investigation - temporary diagnostic logging for missing questions
-      if (process.env.NODE_ENV === 'development') {
-        console.info('[TripReportDebug] getTripReportWithDetails', {
-          visitId,
-          reportId: report.id,
-          templateId: report.template_id,
-          templateFound: !!template,
-          templateFetchError: te?.message ?? null,
-          questionsCount: questions.length,
-          questionsFetchError: qe?.message ?? null,
-        });
-      }
-    } else if (process.env.NODE_ENV === 'development') {
-      console.info('[TripReportDebug] getTripReportWithDetails - template not found', {
-        visitId,
-        reportId: report.id,
-        templateId: report.template_id,
-        templateFetchError: te?.message ?? null,
-      });
-    }
-  } else if (process.env.NODE_ENV === 'development') {
-    console.info('[TripReportDebug] getTripReportWithDetails - no template_id on report', {
+  // Read through the snapshot-aware loader so this returns the locked-in
+  // template + questions for snapshot reports, and falls back to the
+  // live template for legacy reports that pre-date versioning.
+  const loaded = await loadTemplateForReport(report.id, supabase);
+  const template: VisitReportTemplate | null = loaded.template;
+  const questions: VisitReportTemplateQuestion[] = loaded.questions;
+  if (process.env.NODE_ENV === 'development' && loaded.error) {
+    console.info('[TripReportDebug] loadTemplateForReport error', {
       visitId,
       reportId: report.id,
-      templateId: report.template_id,
+      error: loaded.error,
     });
   }
 
   const { data: resRows } = await supabase
     .from('trip_report_question_responses')
-    .select('template_question_id, response, comments, reviewer_comments')
+    .select('template_question_id, template_question_version_id, response, comments, reviewer_comments')
     .eq('trip_report_id', report.id);
   const responses: Record<string, { response: string | null; comments: string | null; reviewer_comments: string | null }> = {};
   (resRows ?? []).forEach((r: {
-    template_question_id: string;
+    template_question_id: string | null;
+    template_question_version_id: string | null;
     response: string | null;
     comments: string | null;
     reviewer_comments: string | null;
   }) => {
-    responses[r.template_question_id] = {
+    // Snapshot reports key responses by version question id (which
+    // loadTemplateForReport surfaces as VisitReportTemplateQuestion.id);
+    // legacy reports key by the live template_question_id.
+    const key = r.template_question_version_id ?? r.template_question_id;
+    if (!key) return;
+    responses[key] = {
       response: r.response ?? null,
       comments: r.comments ?? null,
       reviewer_comments: r.reviewer_comments ?? null,
@@ -1563,6 +2153,172 @@ export async function getApprovedTripReportPdfData(
   return { data };
 }
 
+/**
+ * Returns the trip_report_status_events for a single trip report, with actor
+ * display names resolved. Drives the row-level status timeline drawer on the
+ * Summary and Tracker tabs. Permissions follow `canViewTripReportContent`.
+ */
+export async function getTripReportStatusEvents(
+  tripReportId: string
+): Promise<{ events: TripReportStatusEventRow[]; error: string | null }> {
+  if (!tripReportId) return { events: [], error: 'Missing trip report id.' };
+  const supabase = await createClient();
+  const admin = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { events: [], error: 'Not authenticated.' };
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  const profileId = (profile as { id?: string } | null)?.id ?? null;
+  if (!profileId) return { events: [], error: 'No profile.' };
+
+  const { data: report } = await admin
+    .from('trip_reports')
+    .select('id, visit_id, report_status')
+    .eq('id', tripReportId)
+    .maybeSingle();
+  const r = report as { id: string; visit_id: string; report_status: string } | null;
+  if (!r) return { events: [], error: 'Report not found.' };
+
+  const { data: visit } = await admin
+    .from('monitoring_visits')
+    .select('study_id')
+    .eq('id', r.visit_id)
+    .maybeSingle();
+  const studyId = (visit as { study_id?: string } | null)?.study_id ?? null;
+  if (studyId) {
+    const allowed = await canViewTripReportContent(supabase, profileId, r.report_status, studyId);
+    if (!allowed) return { events: [], error: 'You do not have permission to view this timeline.' };
+  }
+
+  const { data: evRows, error } = await admin
+    .from('trip_report_status_events')
+    .select('id, from_status, to_status, created_at, actor_profile_id, metadata')
+    .eq('trip_report_id', tripReportId)
+    .order('created_at', { ascending: true });
+  if (error) return { events: [], error: error.message };
+  const base = (evRows ?? []) as TripReportStatusEventRow[];
+  const actorIds = [
+    ...new Set(base.map((e) => e.actor_profile_id).filter((v): v is string => !!v)),
+  ];
+  const nameById: Record<string, string> = {};
+  if (actorIds.length > 0) {
+    const { data: profs } = await admin
+      .from('profiles')
+      .select('id, first_name, last_name')
+      .in('id', actorIds);
+    (profs ?? []).forEach((p: { id: string; first_name: string | null; last_name: string | null }) => {
+      const name = [p.first_name, p.last_name].filter(Boolean).join(' ').trim();
+      nameById[p.id] = name || '—';
+    });
+  }
+  const events = base.map((e) => ({
+    ...e,
+    actor_display_name: e.actor_profile_id ? nameById[e.actor_profile_id] ?? null : null,
+  }));
+  return { events, error: null };
+}
+
+/**
+ * Returns the merged audit timeline for a trip report combining
+ * `trip_report_status_events` (workflow transitions) and
+ * `trip_report_signature_audit` (Part 11 signing events) sorted by time.
+ * Honors the same view-permission gate used by getTripReportStatusEvents.
+ */
+export async function getTripReportAuditTimeline(
+  tripReportId: string
+): Promise<{ entries: TripReportAuditTimelineEntry[]; error: string | null }> {
+  if (!tripReportId) return { entries: [], error: 'Missing trip report id.' };
+  const supabase = await createClient();
+  const admin = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { entries: [], error: 'Not authenticated.' };
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  const profileId = (profile as { id?: string } | null)?.id ?? null;
+  if (!profileId) return { entries: [], error: 'No profile.' };
+
+  const { data: report } = await admin
+    .from('trip_reports')
+    .select('id, visit_id, report_status')
+    .eq('id', tripReportId)
+    .maybeSingle();
+  const r = report as { id: string; visit_id: string; report_status: string } | null;
+  if (!r) return { entries: [], error: 'Report not found.' };
+
+  const { data: visit } = await admin
+    .from('monitoring_visits')
+    .select('study_id')
+    .eq('id', r.visit_id)
+    .maybeSingle();
+  const studyId = (visit as { study_id?: string } | null)?.study_id ?? null;
+  if (studyId) {
+    const allowed = await canViewTripReportContent(supabase, profileId, r.report_status, studyId);
+    if (!allowed) return { entries: [], error: 'You do not have permission to view this timeline.' };
+  }
+
+  const [{ data: statusRows, error: statusErr }, { data: sigRows, error: sigErr }] =
+    await Promise.all([
+      admin
+        .from('trip_report_status_events')
+        .select('id, from_status, to_status, created_at, actor_profile_id, metadata')
+        .eq('trip_report_id', tripReportId),
+      admin
+        .from('trip_report_signature_audit')
+        .select(
+          'id, trip_report_id, kind, actor_profile_id, printed_name, attestation_text, content_hash, password_verified, reason, signed_at_db, ip_address, user_agent'
+        )
+        .eq('trip_report_id', tripReportId),
+    ]);
+  if (statusErr) return { entries: [], error: statusErr.message };
+  if (sigErr) return { entries: [], error: sigErr.message };
+
+  const status = (statusRows ?? []) as TripReportStatusEventRow[];
+  const sigs = (sigRows ?? []) as TripReportSignatureAuditRow[];
+  const actorIds = [
+    ...new Set([
+      ...status.map((e) => e.actor_profile_id),
+      ...sigs.map((e) => e.actor_profile_id),
+    ].filter((v): v is string => !!v)),
+  ];
+  const nameById: Record<string, string> = {};
+  if (actorIds.length > 0) {
+    const { data: profs } = await admin
+      .from('profiles')
+      .select('id, first_name, last_name')
+      .in('id', actorIds);
+    (profs ?? []).forEach((p: { id: string; first_name: string | null; last_name: string | null }) => {
+      const name = [p.first_name, p.last_name].filter(Boolean).join(' ').trim();
+      nameById[p.id] = name || '—';
+    });
+  }
+  const statusEntries: TripReportAuditTimelineEntry[] = status.map((e) => ({
+    kind: 'status',
+    at: e.created_at,
+    event: {
+      ...e,
+      actor_display_name: e.actor_profile_id ? nameById[e.actor_profile_id] ?? null : null,
+    },
+  }));
+  const sigEntries: TripReportAuditTimelineEntry[] = sigs.map((e) => ({
+    kind: 'signature',
+    at: e.signed_at_db,
+    event: {
+      ...e,
+      actor_display_name: e.actor_profile_id ? nameById[e.actor_profile_id] ?? null : null,
+    },
+  }));
+  const merged = [...statusEntries, ...sigEntries].sort((a, b) => a.at.localeCompare(b.at));
+  return { entries: merged, error: null };
+}
+
 export async function saveReportDraft(
   reportId: string,
   responses: { template_question_id: string; response: string | null; comments: string | null; reviewer_comments: string | null }[],
@@ -1573,6 +2329,12 @@ export async function saveReportDraft(
     const profileId = await getProfileId();
     const permErr = await assertAuthorCanEditReport(supabase, profileId, reportId);
     if (permErr) return { error: permErr };
+
+    // First-edit lock-in: re-snapshot the live template if it changed
+    // since the create-snapshot, while the report is still report_pending.
+    // No-op once the report transitions out of report_pending below.
+    const refresh = await maybeRefreshSnapshotForReport(reportId, supabase, profileId);
+    if (refresh.error) return { error: refresh.error };
 
     const { data: existing } = await supabase
       .from('trip_reports')
@@ -1590,41 +2352,126 @@ export async function saveReportDraft(
     }
 
     for (const r of responses) {
-      const { error: upsertErr } = await supabase.from('trip_report_question_responses').upsert(
-        {
-          trip_report_id: reportId,
-          template_question_id: r.template_question_id,
-          response: r.response,
-          comments: r.comments,
-          reviewer_comments: r.reviewer_comments,
-          sort_order: 0,
-        },
-        { onConflict: 'trip_report_id,template_question_id' }
-      );
-      if (upsertErr) return { error: upsertErr.message };
+      const upsertErr = await upsertResponseRow(supabase, reportId, {
+        template_question_id: r.template_question_id,
+        response: r.response,
+        comments: r.comments,
+        reviewer_comments: r.reviewer_comments,
+      });
+      if (upsertErr) return { error: upsertErr };
     }
-    revalidateTripReportRelatedUi();
+    await revalidateAfterReportMutation(supabase, reportId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }
 }
 
+/**
+ * Internal helper: upsert a question response, choosing whether to write
+ * `template_question_version_id` (snapshot reports) or
+ * `template_question_id` (legacy reports) based on whether the report
+ * has a template_version_id and whether the inbound id resolves to a
+ * version row. Honors the partial unique indexes added by the
+ * 20260601 migration.
+ */
+async function upsertResponseRow(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  reportId: string,
+  row: {
+    template_question_id: string;
+    response: string | null;
+    comments: string | null;
+    reviewer_comments: string | null;
+  }
+): Promise<string | null> {
+  const versionQuestionId = await resolveTemplateQuestionVersionId(
+    supabase,
+    reportId,
+    row.template_question_id
+  );
+  if (versionQuestionId) {
+    const { error } = await supabase
+      .from('trip_report_question_responses')
+      .upsert(
+        {
+          trip_report_id: reportId,
+          template_question_version_id: versionQuestionId,
+          template_question_id: null,
+          response: row.response,
+          comments: row.comments,
+          reviewer_comments: row.reviewer_comments,
+          sort_order: 0,
+        },
+        { onConflict: 'trip_report_id,template_question_version_id' }
+      );
+    return error?.message ?? null;
+  }
+  const { error } = await supabase
+    .from('trip_report_question_responses')
+    .upsert(
+      {
+        trip_report_id: reportId,
+        template_question_id: row.template_question_id,
+        response: row.response,
+        comments: row.comments,
+        reviewer_comments: row.reviewer_comments,
+        sort_order: 0,
+      },
+      { onConflict: 'trip_report_id,template_question_id' }
+    );
+  return error?.message ?? null;
+}
+
 export async function submitReport(
   reportId: string,
-  options: { signatureData: string; signedAt: string }
+  options: {
+    signatureData: string;
+    signedAt?: string;
+    printedName: string;
+    attestationText: string;
+    password: string;
+  }
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
     const sig = options?.signatureData?.trim() ?? '';
-    const signedAt = options?.signedAt?.trim() ?? '';
-    if (!sig || !signedAt) {
+    const printedName = (options?.printedName ?? '').trim();
+    const attestationText = options?.attestationText ?? '';
+    const password = options?.password ?? '';
+    if (!sig) {
       return { error: 'Electronic signature is required to submit the report.' };
     }
+    if (!printedName) {
+      return { error: 'Please type your full legal name to sign.' };
+    }
+    if (attestationText !== TRIP_REPORT_AUTHOR_ATTESTATION) {
+      return { error: 'Attestation text does not match the required statement; reload the page and try again.' };
+    }
 
-    const profileId = await getProfileId();
+    const identity = await loadSignerIdentity(supabase);
+    if (identity.error || !identity.profileId) {
+      return { error: identity.error ?? 'No profile found.' };
+    }
+    const profileId = identity.profileId;
+
     const roleErr = await assertReportAuthorPermission(supabase, profileId, reportId);
     if (roleErr) return { error: roleErr };
+
+    // 11.300: server-side password reverification (the modal verifies as
+    // a UX nicety; this is the source of truth).
+    const pwErr = await assertPasswordReverified(supabase, identity.email, password);
+    if (pwErr) return { error: pwErr };
+
+    // 11.50: validate the typed printed name against the profile name.
+    if (!namesMatch(printedName, { first_name: identity.firstName, last_name: identity.lastName })) {
+      return { error: 'The name you typed does not match the name on your account.' };
+    }
+
+    // First-edit lock-in: re-snapshot the live template if it changed
+    // since the create-snapshot, while the report is still report_pending.
+    const refresh = await maybeRefreshSnapshotForReport(reportId, supabase, profileId);
+    if (refresh.error) return { error: refresh.error };
 
     const { data: report } = await supabase
       .from('trip_reports')
@@ -1636,16 +2483,52 @@ export async function submitReport(
       return { error: 'Report can only be submitted from report pending, authoring, or returned status' };
     }
     const fromStatus = status ?? 'report_pending';
+
+    // 11.70: bind the signature to the record content via a SHA-256
+    // over the canonical signed payload.
+    const { hash: contentHash, error: hashErr } = await computeReportContentHash(supabase, reportId);
+    if (hashErr) return { error: hashErr };
+
+    const signedAtDb = new Date().toISOString();
+    const clientSignedAt = (options.signedAt ?? '').trim();
+
     const { error } = await supabase
       .from('trip_reports')
       .update({
         report_status: 'submitted',
-        submitted_date: new Date().toISOString().split('T')[0],
+        submitted_date: signedAtDb.split('T')[0],
+        // Legacy columns kept populated for back-compat through one release.
         author_submission_signature_data: sig,
-        author_submission_signed_at: signedAt,
+        author_submission_signed_at: clientSignedAt || signedAtDb,
+        // New first-class signature manifestation columns.
+        author_submission_printed_name: printedName,
+        author_submission_attestation_text: attestationText,
+        author_submission_signed_at_db: signedAtDb,
+        author_submission_content_hash: contentHash,
       })
       .eq('id', reportId);
     if (error) return { error: error.message };
+
+    const meta = await captureSignatureRequestMetadata();
+    const audit = await logTripReportSignatureAudit({
+      tripReportId: reportId,
+      kind: 'author_submit',
+      actorProfileId: profileId,
+      printedName,
+      attestationText,
+      contentHash,
+      passwordVerified: true,
+      signedAtDb,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    });
+    if (audit.error) {
+      // Treat audit failure as a hard fail so we never leave a signed
+      // record without its corresponding audit row. The status event is
+      // not yet inserted, so the report stays in its prior status.
+      return { error: `Failed to record signature audit: ${audit.error}` };
+    }
+
     const visitId = (report as { visit_id?: string })?.visit_id;
     const { studyId } = visitId ? await getStudyIdForVisit(supabase, visitId) : { studyId: null as string | null };
     await logTripReportStatusEvent({
@@ -1661,7 +2544,7 @@ export async function submitReport(
         reviewerId: (report as { reviewer_id?: string | null })?.reviewer_id ?? null,
       });
     }
-    revalidateTripReportRelatedUi();
+    revalidateTripReportRelatedUi(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1699,7 +2582,7 @@ export async function startReview(reportId: string): Promise<{ error: string | n
       toStatus: 'under_review',
       actorProfileId: profileId,
     });
-    revalidateTripReportRelatedUi();
+    await revalidateAfterReportMutation(supabase, reportId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1778,22 +2661,17 @@ export async function saveReviewerComments(
     const revErr = await assertReportReviewerPermission(supabase, profileId, reportId, r.reviewer_id);
     if (revErr) return { error: revErr };
     for (const row of responses) {
-      const { error: upsertErr } = await supabase.from('trip_report_question_responses').upsert(
-        {
-          trip_report_id: reportId,
-          template_question_id: row.template_question_id,
-          response: row.response,
-          comments: row.comments,
-          reviewer_comments: row.reviewer_comments,
-          sort_order: 0,
-        },
-        { onConflict: 'trip_report_id,template_question_id' }
-      );
-      if (upsertErr) return { error: upsertErr.message };
+      const upsertErr = await upsertResponseRow(supabase, reportId, {
+        template_question_id: row.template_question_id,
+        response: row.response,
+        comments: row.comments,
+        reviewer_comments: row.reviewer_comments,
+      });
+      if (upsertErr) return { error: upsertErr };
     }
     const { error: reportUpErr } = await supabase.from('trip_reports').update(sectionComments).eq('id', reportId);
     if (reportUpErr) return { error: reportUpErr.message };
-    revalidateTripReportRelatedUi();
+    await revalidateAfterReportMutation(supabase, reportId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1825,9 +2703,27 @@ export async function returnReport(
     if (revErr) return { error: revErr };
     if (responses && responses.length > 0) {
       for (const res of responses) {
-        await supabase
-          .from('trip_report_question_responses')
-          .upsert(
+        // Branches on whether the report has a snapshot. Reviewer-only
+        // partial upsert: do NOT include response / comments so existing
+        // values aren't overwritten to null on conflict.
+        const versionQuestionId = await resolveTemplateQuestionVersionId(
+          supabase,
+          reportId,
+          res.template_question_id
+        );
+        if (versionQuestionId) {
+          await supabase.from('trip_report_question_responses').upsert(
+            {
+              trip_report_id: reportId,
+              template_question_version_id: versionQuestionId,
+              template_question_id: null,
+              reviewer_comments: res.reviewer_comments,
+              sort_order: 0,
+            },
+            { onConflict: 'trip_report_id,template_question_version_id' }
+          );
+        } else {
+          await supabase.from('trip_report_question_responses').upsert(
             {
               trip_report_id: reportId,
               template_question_id: res.template_question_id,
@@ -1836,6 +2732,7 @@ export async function returnReport(
             },
             { onConflict: 'trip_report_id,template_question_id' }
           );
+        }
       }
     }
     const { error } = await supabase
@@ -1853,8 +2750,10 @@ export async function returnReport(
       toStatus: 'returned',
       actorProfileId: profileId,
     });
+    let returnStudyId: string | null = null;
     if (r.created_by && r.visit_id) {
       const { studyId } = await getStudyIdForVisit(supabase, r.visit_id);
+      returnStudyId = studyId;
       if (studyId) {
         await notifyReportReturnedToAuthor({
           authorProfileId: r.created_by,
@@ -1863,7 +2762,11 @@ export async function returnReport(
         });
       }
     }
-    revalidateTripReportRelatedUi();
+    if (returnStudyId) {
+      revalidateTripReportRelatedUi(returnStudyId);
+    } else {
+      await revalidateAfterReportMutation(supabase, reportId);
+    }
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1889,6 +2792,12 @@ export async function recallReport(reportId: string): Promise<{ error: string | 
     }
     const craErr = await assertReportAuthorPermission(supabase, profileId, reportId);
     if (craErr) return { error: craErr };
+
+    // No-op when the report is not in report_pending, but we keep the
+    // call here for symmetry with the rest of the author-write entry
+    // points so the gate is consistent.
+    const refresh = await maybeRefreshSnapshotForReport(reportId, supabase, profileId);
+    if (refresh.error) return { error: refresh.error };
     const { error } = await supabase
       .from('trip_reports')
       .update({
@@ -1905,7 +2814,7 @@ export async function recallReport(reportId: string): Promise<{ error: string | 
       toStatus: 'authoring',
       actorProfileId: profileId,
     });
-    revalidateTripReportRelatedUi();
+    await revalidateAfterReportMutation(supabase, reportId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1971,6 +2880,17 @@ export async function voidApproval(
       return { error: 'Only an approved report can be voided' };
     }
 
+    // Resolve printed name from the signer's profile (no typed-name UI
+    // for voids today; the admin's stored profile name is the canonical
+    // printed-name source for the audit row).
+    const { data: signerProfile } = await supabase
+      .from('profiles')
+      .select('first_name, last_name')
+      .eq('id', profileId)
+      .maybeSingle();
+    const sp = signerProfile as { first_name: string | null; last_name: string | null } | null;
+    const voidPrintedName = [sp?.first_name, sp?.last_name].filter(Boolean).join(' ').trim() || 'Unknown signer';
+
     const { error } = await supabase
       .from('trip_reports')
       .update({
@@ -1979,9 +2899,31 @@ export async function voidApproval(
         approved_date: null,
         approval_signature_data: null,
         approval_signed_at: null,
+        approval_printed_name: null,
+        approval_attestation_text: null,
+        approval_signed_at_db: null,
+        approval_content_hash: null,
       })
       .eq('id', reportId);
     if (error) return { error: error.message };
+
+    const meta = await captureSignatureRequestMetadata();
+    const audit = await logTripReportSignatureAudit({
+      tripReportId: reportId,
+      kind: 'void_approval',
+      actorProfileId: profileId,
+      printedName: voidPrintedName,
+      attestationText: TRIP_REPORT_VOID_ATTESTATION,
+      contentHash: null,
+      passwordVerified: true,
+      reason: trimmedReason,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    });
+    if (audit.error) {
+      return { error: `Failed to record signature audit: ${audit.error}` };
+    }
+
     await logTripReportStatusEvent({
       tripReportId: reportId,
       fromStatus: 'approved_and_signed',
@@ -1989,7 +2931,7 @@ export async function voidApproval(
       actorProfileId: profileId,
       metadata: { void_approval: true, reason: trimmedReason },
     });
-    revalidateTripReportRelatedUi();
+    await revalidateAfterReportMutation(supabase, reportId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -1998,10 +2940,30 @@ export async function voidApproval(
 
 export async function approveReport(
   reportId: string,
-  options?: { signatureData?: string; signedAt?: string }
+  options: {
+    signatureData: string;
+    signedAt?: string;
+    printedName: string;
+    attestationText: string;
+    password: string;
+  }
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const sig = options?.signatureData?.trim() ?? '';
+    const printedName = (options?.printedName ?? '').trim();
+    const attestationText = options?.attestationText ?? '';
+    const password = options?.password ?? '';
+    if (!sig) {
+      return { error: 'Electronic signature is required to approve the report.' };
+    }
+    if (!printedName) {
+      return { error: 'Please type your full legal name to sign.' };
+    }
+    if (attestationText !== TRIP_REPORT_APPROVER_ATTESTATION) {
+      return { error: 'Attestation text does not match the required statement; reload the page and try again.' };
+    }
+
     const { data: report } = await supabase
       .from('trip_reports')
       .select('report_status, reviewer_id, created_by, visit_id')
@@ -2016,27 +2978,67 @@ export async function approveReport(
     if (!r || r.report_status !== 'under_review') {
       return { error: 'Report must be under review to approve' };
     }
-    const profileId = await getProfileId();
+
+    const identity = await loadSignerIdentity(supabase);
+    if (identity.error || !identity.profileId) {
+      return { error: identity.error ?? 'No profile found.' };
+    }
+    const profileId = identity.profileId;
+
     const revErr = await assertReportReviewerPermission(supabase, profileId, reportId, r.reviewer_id);
     if (revErr) return { error: revErr };
+
+    const pwErr = await assertPasswordReverified(supabase, identity.email, password);
+    if (pwErr) return { error: pwErr };
+
+    if (!namesMatch(printedName, { first_name: identity.firstName, last_name: identity.lastName })) {
+      return { error: 'The name you typed does not match the name on your account.' };
+    }
+
+    const { hash: contentHash, error: hashErr } = await computeReportContentHash(supabase, reportId);
+    if (hashErr) return { error: hashErr };
+
+    const signedAtDb = new Date().toISOString();
+    const clientSignedAt = (options.signedAt ?? '').trim();
+
     const payload: Record<string, unknown> = {
       report_status: 'approved_and_signed',
       approved_by: profileId,
-      approved_date: new Date().toISOString().split('T')[0],
+      approved_date: signedAtDb.split('T')[0],
+      approval_signature_data: sig,
+      approval_signed_at: clientSignedAt || signedAtDb,
+      approval_printed_name: printedName,
+      approval_attestation_text: attestationText,
+      approval_signed_at_db: signedAtDb,
+      approval_content_hash: contentHash,
     };
     if (r.reviewer_id == null) {
       payload.reviewer_id = profileId;
-      payload.reviewed_at = new Date().toISOString();
-    }
-    if (options?.signatureData != null) {
-      payload.approval_signature_data = options.signatureData;
-      payload.approval_signed_at = options.signedAt ?? new Date().toISOString();
+      payload.reviewed_at = signedAtDb;
     }
     const { error } = await supabase
       .from('trip_reports')
       .update(payload)
       .eq('id', reportId);
     if (error) return { error: error.message };
+
+    const meta = await captureSignatureRequestMetadata();
+    const audit = await logTripReportSignatureAudit({
+      tripReportId: reportId,
+      kind: 'approver_approve',
+      actorProfileId: profileId,
+      printedName,
+      attestationText,
+      contentHash,
+      passwordVerified: true,
+      signedAtDb,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+    });
+    if (audit.error) {
+      return { error: `Failed to record signature audit: ${audit.error}` };
+    }
+
     await logTripReportStatusEvent({
       tripReportId: reportId,
       fromStatus: 'under_review',
@@ -2051,10 +3053,271 @@ export async function approveReport(
         visitId: r.visit_id,
       });
     }
-    revalidateTripReportRelatedUi();
+    revalidateTripReportRelatedUi(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+// =====================================================================
+// Bulk approve (continuous-session signing — 21 CFR 11.200(a)(1)(ii))
+// =====================================================================
+
+export interface BulkApproveResult {
+  reportId: string;
+  ok: boolean;
+  error: string | null;
+}
+
+export interface BulkApproveResponse {
+  results: BulkApproveResult[];
+  summary: { total: number; succeeded: number; failed: number };
+  /**
+   * Populated only when the entire batch is rejected before any audit
+   * row is written (bad password, name mismatch, attestation mismatch,
+   * basic input validation). Per-report failures are surfaced in
+   * `results`, not here.
+   */
+  error: string | null;
+}
+
+/** Hard cap on the number of reports a CPM can approve in a single request. */
+const APPROVE_REPORTS_BULK_MAX = 50;
+
+/**
+ * Approve N trip reports in a single continuous controlled session.
+ *
+ * Authentication / manifestation challenges happen ONCE per call:
+ *   - `signInWithPassword` reverification (server-side; client check is UX-only)
+ *   - printed-name validation against the signer's profile
+ *   - canonical attestation text byte-equality
+ *
+ * After the challenges pass, every report is processed atomically per
+ * report (status check, study CPM permission, content hash, single
+ * `trip_reports` UPDATE, signature audit row, status event,
+ * notification). Failures on individual reports do NOT abort the
+ * batch; they are surfaced as `{ ok: false, error }` rows in `results`
+ * so the CPM can retry just those.
+ *
+ * Every successful audit row is stamped with the same generated
+ * `signing_session_id` so a regulator can re-tie the per-record
+ * manifestations back to the single session that authorized them.
+ */
+export async function approveReportsBulk(
+  reportIds: string[],
+  options: {
+    signatureData: string;
+    signedAt?: string;
+    printedName: string;
+    attestationText: string;
+    password: string;
+  }
+): Promise<BulkApproveResponse> {
+  const empty: BulkApproveResponse = {
+    results: [],
+    summary: { total: 0, succeeded: 0, failed: 0 },
+    error: null,
+  };
+  const ids = Array.from(new Set((reportIds ?? []).filter((s) => typeof s === 'string' && s.trim() !== '')));
+  if (ids.length === 0) {
+    return { ...empty, error: 'No reports selected.' };
+  }
+  if (ids.length > APPROVE_REPORTS_BULK_MAX) {
+    return {
+      ...empty,
+      error: `Cannot approve more than ${APPROVE_REPORTS_BULK_MAX} reports in a single batch.`,
+    };
+  }
+
+  const sig = options?.signatureData?.trim() ?? '';
+  const printedName = (options?.printedName ?? '').trim();
+  const attestationText = options?.attestationText ?? '';
+  const password = options?.password ?? '';
+  if (!sig) return { ...empty, error: 'Electronic signature is required to approve the reports.' };
+  if (!printedName) return { ...empty, error: 'Please type your full legal name to sign.' };
+  if (attestationText !== TRIP_REPORT_APPROVER_ATTESTATION) {
+    return {
+      ...empty,
+      error: 'Attestation text does not match the required statement; reload the page and try again.',
+    };
+  }
+
+  const supabase = await createClient();
+  try {
+    const identity = await loadSignerIdentity(supabase);
+    if (identity.error || !identity.profileId) {
+      return { ...empty, error: identity.error ?? 'No profile found.' };
+    }
+    const profileId = identity.profileId;
+
+    // 11.200: ONE server-side reverification per session.
+    const pwErr = await assertPasswordReverified(supabase, identity.email, password);
+    if (pwErr) return { ...empty, error: pwErr };
+
+    // 11.50: ONE printed-name match per session.
+    if (!namesMatch(printedName, { first_name: identity.firstName, last_name: identity.lastName })) {
+      return { ...empty, error: 'The name you typed does not match the name on your account.' };
+    }
+
+    // The shared session id every successful audit row in this batch
+    // will carry. NULL on the existing per-report flows so we don't
+    // disturb single-report audit semantics.
+    const signingSessionId = crypto.randomUUID();
+    const meta = await captureSignatureRequestMetadata();
+
+    const results: BulkApproveResult[] = [];
+    for (const reportId of ids) {
+      const reportRes = await processOneApprovalForBulk(supabase, {
+        reportId,
+        profileId,
+        sig,
+        printedName,
+        attestationText,
+        clientSignedAt: (options.signedAt ?? '').trim(),
+        signingSessionId,
+        meta,
+      });
+      results.push(reportRes);
+    }
+
+    const succeeded = results.filter((r) => r.ok).length;
+    const failed = results.length - succeeded;
+    revalidateTripReportRelatedUi(null);
+    return {
+      results,
+      summary: { total: results.length, succeeded, failed },
+      error: null,
+    };
+  } catch (err) {
+    return {
+      ...empty,
+      error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+    };
+  }
+}
+
+/**
+ * Approve a single report inside a `approveReportsBulk` loop. All the
+ * cross-batch validation (password, printed name, attestation) is
+ * already done by the caller; this just runs the per-report part of
+ * the per-report `approveReport` flow with the shared
+ * `signingSessionId` threaded through to the audit row.
+ *
+ * Returns `{ ok, error }` per report — never throws into the batch
+ * loop so one bad report cannot abort the rest.
+ */
+async function processOneApprovalForBulk(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  input: {
+    reportId: string;
+    profileId: string;
+    sig: string;
+    printedName: string;
+    attestationText: string;
+    clientSignedAt: string;
+    signingSessionId: string;
+    meta: { ipAddress: string | null; userAgent: string | null };
+  }
+): Promise<BulkApproveResult> {
+  const { reportId, profileId, sig, printedName, attestationText, clientSignedAt, signingSessionId, meta } =
+    input;
+  try {
+    const { data: report } = await supabase
+      .from('trip_reports')
+      .select('report_status, reviewer_id, created_by, visit_id')
+      .eq('id', reportId)
+      .single();
+    const r = report as {
+      report_status?: string;
+      reviewer_id?: string | null;
+      created_by?: string;
+      visit_id?: string;
+    } | null;
+    if (!r) return { reportId, ok: false, error: 'Report not found.' };
+    if (r.report_status !== 'under_review') {
+      return { reportId, ok: false, error: 'Report is no longer under review.' };
+    }
+
+    const revErr = await assertReportReviewerPermission(supabase, profileId, reportId, r.reviewer_id);
+    if (revErr) return { reportId, ok: false, error: revErr };
+
+    const { hash: contentHash, error: hashErr } = await computeReportContentHash(supabase, reportId);
+    if (hashErr) return { reportId, ok: false, error: hashErr };
+
+    const signedAtDb = new Date().toISOString();
+    const payload: Record<string, unknown> = {
+      report_status: 'approved_and_signed',
+      approved_by: profileId,
+      approved_date: signedAtDb.split('T')[0],
+      approval_signature_data: sig,
+      approval_signed_at: clientSignedAt || signedAtDb,
+      approval_printed_name: printedName,
+      approval_attestation_text: attestationText,
+      approval_signed_at_db: signedAtDb,
+      approval_content_hash: contentHash,
+    };
+    if (r.reviewer_id == null) {
+      payload.reviewer_id = profileId;
+      payload.reviewed_at = signedAtDb;
+    }
+    const { error: updErr } = await supabase
+      .from('trip_reports')
+      .update(payload)
+      .eq('id', reportId);
+    if (updErr) return { reportId, ok: false, error: updErr.message };
+
+    const audit = await logTripReportSignatureAudit({
+      tripReportId: reportId,
+      kind: 'approver_approve',
+      actorProfileId: profileId,
+      printedName,
+      attestationText,
+      contentHash,
+      passwordVerified: true,
+      signedAtDb,
+      ipAddress: meta.ipAddress,
+      userAgent: meta.userAgent,
+      signingSessionId,
+    });
+    if (audit.error) {
+      return {
+        reportId,
+        ok: false,
+        error: `Failed to record signature audit: ${audit.error}`,
+      };
+    }
+
+    await logTripReportStatusEvent({
+      tripReportId: reportId,
+      fromStatus: 'under_review',
+      toStatus: 'approved_and_signed',
+      actorProfileId: profileId,
+    });
+
+    if (r.visit_id) {
+      const { studyId } = await getStudyIdForVisit(supabase, r.visit_id);
+      if (studyId && r.created_by) {
+        try {
+          await notifyReportApproved({
+            studyId,
+            authorProfileId: r.created_by,
+            visitId: r.visit_id,
+          });
+        } catch (notifyErr) {
+          // Notifications are best-effort; never fail an already-signed report.
+          console.error('notifyReportApproved (bulk) failed:', notifyErr);
+        }
+      }
+    }
+
+    return { reportId, ok: true, error: null };
+  } catch (err) {
+    return {
+      reportId,
+      ok: false,
+      error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+    };
   }
 }
 
@@ -2112,7 +3375,7 @@ export async function assignReportReviewer(
     if (reviewerProfileId && reviewerProfileId !== prev) {
       await notifyReviewerAssigned({ reviewerProfileId, visitId, studyId });
     }
-    revalidateTripReportRelatedUi();
+    revalidateTripReportRelatedUi(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2187,7 +3450,7 @@ export async function transitionReportStatusForTest(
       .update(payload)
       .eq('id', reportId);
     if (error) return { error: error.message };
-    revalidateTripReportRelatedUi();
+    await revalidateAfterReportMutation(supabase, reportId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2203,10 +3466,146 @@ export async function saveReportNarrative(reportId: string, narrative: string | 
     const payload: Record<string, unknown> = { narrative: narrative ?? null };
     const { error } = await supabase.from('trip_reports').update(payload).eq('id', reportId);
     if (error) return { error: error.message };
-    revalidateTripReportRelatedUi();
+    await revalidateAfterReportMutation(supabase, reportId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+// =====================================================
+// Trip Report - Post-visit dates
+// =====================================================
+//
+// Four optional milestone dates that compliance reviewers track *without*
+// requiring a document upload. Editable by anyone with CRA *or* CPM
+// membership on the parent study, in any report status (including
+// `approved_and_signed`). Every changed field produces one
+// `trip_report_status_events` row with `metadata.event === 'post_visit_date_changed'`
+// for the audit trail.
+
+export type TripReportPostVisitDateField =
+  | 'expected_send_date_confirmation_letter'
+  | 'expected_send_date_followup_letter'
+  | 'date_followup_letter_uploaded'
+  | 'date_mvl_log_uploaded';
+
+export interface TripReportPostVisitDates {
+  expected_send_date_confirmation_letter: string | null;
+  expected_send_date_followup_letter: string | null;
+  date_followup_letter_uploaded: string | null;
+  date_mvl_log_uploaded: string | null;
+}
+
+const POST_VISIT_DATE_FIELDS: TripReportPostVisitDateField[] = [
+  'expected_send_date_confirmation_letter',
+  'expected_send_date_followup_letter',
+  'date_followup_letter_uploaded',
+  'date_mvl_log_uploaded',
+];
+
+/** Normalize a user-supplied YYYY-MM-DD date or null. Empty strings collapse to null. */
+function normalizePostVisitDate(value: string | null | undefined): string | null {
+  if (value == null) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  // Accept either pure YYYY-MM-DD or any ISO-ish string; coerce to date-only.
+  const datePart = trimmed.split('T')[0];
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return null;
+  return datePart;
+}
+
+export async function updateTripReportPostVisitDates(
+  reportId: string,
+  input: Partial<TripReportPostVisitDates>
+): Promise<{ error: string | null; changedFields: TripReportPostVisitDateField[] }> {
+  const supabase = await createClient();
+  try {
+    const profileId = await getProfileId();
+    const { studyId, error: studyErr } = await getStudyIdForReport(supabase, reportId);
+    if (studyErr || !studyId) {
+      return { error: studyErr ?? 'Study not found for this report.', changedFields: [] };
+    }
+
+    const { isCra, isCpm } = await getUserIsStudyCraAndCpm(supabase, profileId, studyId);
+    if (!isCra && !isCpm) {
+      return {
+        error: 'Only CRAs or CPMs on this study can edit post-visit dates.',
+        changedFields: [],
+      };
+    }
+
+    // Post-visit date edits are allowed in any status, so the refresh
+    // is only meaningful while the report is still report_pending. The
+    // helper itself enforces that gate.
+    const refresh = await maybeRefreshSnapshotForReport(reportId, supabase, profileId);
+    if (refresh.error) return { error: refresh.error, changedFields: [] };
+
+    const { data: current, error: fetchErr } = await supabase
+      .from('trip_reports')
+      .select(
+        'report_status, expected_send_date_confirmation_letter, expected_send_date_followup_letter, date_followup_letter_uploaded, date_mvl_log_uploaded'
+      )
+      .eq('id', reportId)
+      .single();
+    if (fetchErr || !current) {
+      return { error: fetchErr?.message ?? 'Report not found.', changedFields: [] };
+    }
+
+    const currentRow = current as Record<string, unknown>;
+    const currentStatus = (currentRow.report_status as string | null) ?? null;
+
+    const update: Record<string, string | null> = {};
+    const changes: Array<{
+      field: TripReportPostVisitDateField;
+      from: string | null;
+      to: string | null;
+    }> = [];
+
+    for (const field of POST_VISIT_DATE_FIELDS) {
+      if (!(field in input)) continue;
+      const next = normalizePostVisitDate(input[field] ?? null);
+      const prevRaw = currentRow[field];
+      const prev = prevRaw == null ? null : String(prevRaw).split('T')[0];
+      if (prev === next) continue;
+      update[field] = next;
+      changes.push({ field, from: prev, to: next });
+    }
+
+    if (changes.length === 0) {
+      return { error: null, changedFields: [] };
+    }
+
+    const { error: updateErr } = await supabase
+      .from('trip_reports')
+      .update(update)
+      .eq('id', reportId);
+    if (updateErr) return { error: updateErr.message, changedFields: [] };
+
+    // One audit event per changed field so the timeline reads as a sequence
+    // of single-field updates rather than a single opaque batch.
+    for (const change of changes) {
+      await logTripReportStatusEvent({
+        tripReportId: reportId,
+        fromStatus: currentStatus,
+        toStatus: currentStatus ?? 'unknown',
+        actorProfileId: profileId,
+        metadata: {
+          event: 'post_visit_date_changed',
+          field: change.field,
+          from: change.from,
+          to: change.to,
+        },
+      });
+    }
+
+    revalidateTripReportRelatedUi(studyId);
+    return { error: null, changedFields: changes.map((c) => c.field) };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+      changedFields: [],
+    };
   }
 }
 
@@ -2255,12 +3654,22 @@ export async function linkReportToTemplate(
       .from('trip_reports')
       .update({
         template_id: templateId,
+        // Clear any previous snapshot so snapshotTemplateForReport
+        // captures the freshly-linked template instead of skipping
+        // because of a stale template_version_id pointing at the prior
+        // template's snapshot.
+        template_version_id: null,
         submission_due_date: submissionDue,
         approval_due_date: approvalDue,
       })
       .eq('id', reportId);
     if (error) return { error: error.message };
-    revalidateTripReportRelatedUi();
+    const snap = await snapshotTemplateForReport(reportId, supabase, {
+      reason: 'on_create',
+      profileId,
+    });
+    if (snap.error) return { error: snap.error };
+    await revalidateAfterReportMutation(supabase, reportId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2297,7 +3706,7 @@ export async function addAttendee(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidateTripReportRelatedUi();
+    await revalidateAfterReportMutation(supabase, reportId);
     return { data: data as TripReportAttendee, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2320,7 +3729,7 @@ export async function removeAttendee(attendeeId: string): Promise<{ error: strin
     if (permErr) return { error: permErr };
     const { error } = await supabase.from('trip_report_attendees').delete().eq('id', attendeeId);
     if (error) return { error: error.message };
-    revalidateTripReportRelatedUi();
+    await revalidateAfterReportMutation(supabase, rid);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2356,7 +3765,7 @@ export async function addCrfEntry(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidateTripReportRelatedUi();
+    await revalidateAfterReportMutation(supabase, reportId);
     return { data: data as TripReportCrfEntry, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2379,7 +3788,7 @@ export async function removeCrfEntry(entryId: string): Promise<{ error: string |
     if (permErr) return { error: permErr };
     const { error } = await supabase.from('trip_report_crf_entries').delete().eq('id', entryId);
     if (error) return { error: error.message };
-    revalidateTripReportRelatedUi();
+    await revalidateAfterReportMutation(supabase, rid);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2416,7 +3825,7 @@ export async function addActionItem(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidateTripReportRelatedUi();
+    await revalidateAfterReportMutation(supabase, reportId);
     return { data: data as TripReportActionItem, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2446,7 +3855,7 @@ export async function updateActionItem(
     if (Object.keys(payload).length === 0) return { error: null };
     const { error } = await supabase.from('trip_report_action_items').update(payload).eq('id', itemId);
     if (error) return { error: error.message };
-    revalidateTripReportRelatedUi();
+    await revalidateAfterReportMutation(supabase, rid);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -2477,6 +3886,27 @@ export async function uploadVisitReportAttachment(
       .single();
     if (!report) return { data: null, error: 'Report not found' };
 
+    // Per-report file count cap.
+    const { count: existingCount, error: countErr } = await supabase
+      .from('visit_report_attachments')
+      .select('id', { count: 'exact', head: true })
+      .eq('trip_report_id', reportId);
+    if (countErr) return { data: null, error: countErr.message };
+
+    // Server-side size + magic-byte revalidation. We slice rather than load
+    // the whole file just to read the first 16 bytes for the sniff.
+    const headerBytes = new Uint8Array(
+      await file.slice(0, 16).arrayBuffer(),
+    );
+    const validation = validateAttachmentCandidate({
+      size: file.size,
+      declaredMime: file.type || null,
+      fileName: file.name,
+      headerBytes,
+      existingCount: existingCount ?? 0,
+    });
+    if (!validation.ok) return { data: null, error: validation.error };
+
     const storagePath = `${reportId}/${crypto.randomUUID()}-${encodeURIComponent(file.name)}`;
 
     const { error: uploadError } = await supabase.storage
@@ -2496,12 +3926,26 @@ export async function uploadVisitReportAttachment(
         mime_type: file.type || null,
         category: allowedCategory,
         uploaded_by: profileId,
+        scan_status: 'pending',
       })
       .select()
       .single();
 
     if (insertErr) return { data: null, error: insertErr.message };
-    revalidateTripReportRelatedUi();
+
+    // Fire-and-forget the AV scan. If invoke fails (e.g. function not
+    // deployed in the local dev container) we still return success and rely
+    // on `retryPendingAttachmentScans` to re-drive the row.
+    void supabase.functions
+      .invoke('scan-visit-report-attachment', {
+        body: { attachmentId: (row as { id: string }).id },
+      })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.warn('[uploadVisitReportAttachment] scan invoke failed', err);
+      });
+
+    await revalidateAfterReportMutation(supabase, reportId);
     return { data: row as TripReportAttachment, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'Upload failed' };
@@ -2524,7 +3968,7 @@ export async function deleteVisitReportAttachment(attachmentId: string): Promise
     await supabase.storage.from('visit-report-attachments').remove([(att as { storage_path: string }).storage_path]);
     const { error: delErr } = await supabase.from('visit_report_attachments').delete().eq('id', attachmentId);
     if (delErr) return { error: delErr.message };
-    revalidateTripReportRelatedUi();
+    await revalidateAfterReportMutation(supabase, (att as { trip_report_id: string }).trip_report_id);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Delete failed' };
@@ -2544,10 +3988,21 @@ export async function getAttachmentDownloadUrl(attachmentId: string): Promise<{ 
 
     const { data: att, error: fetchErr } = await admin
       .from('visit_report_attachments')
-      .select('id, storage_path, trip_report_id')
+      .select('id, storage_path, trip_report_id, scan_status')
       .eq('id', attachmentId)
       .maybeSingle();
     if (fetchErr || !att) return { url: null, error: fetchErr?.message ?? 'Attachment not found' };
+
+    const scanStatus = (att as { scan_status?: string | null }).scan_status ?? 'pending';
+    if (scanStatus === 'pending') {
+      return { url: null, error: 'Attachment is still being scanned. Please try again in a moment.' };
+    }
+    if (scanStatus === 'infected') {
+      return { url: null, error: 'This attachment was quarantined and removed. Contact your administrator.' };
+    }
+    if (scanStatus === 'error') {
+      return { url: null, error: 'Attachment scan failed. Contact your administrator.' };
+    }
 
     const { data: rep } = await admin
       .from('trip_reports')
@@ -2587,6 +4042,49 @@ export async function getAttachmentDownloadUrl(attachmentId: string): Promise<{ 
     return { url: signed?.signedUrl ?? null, error: null };
   } catch (err) {
     return { url: null, error: err instanceof Error ? err.message : 'Failed to get download URL' };
+  }
+}
+
+/**
+ * Re-drive the AV scan for any visit_report_attachments rows that have been
+ * stuck in `scan_status='pending'` for more than `staleMinutes` minutes.
+ *
+ * Intended to be called from a daily cron (Supabase scheduled function /
+ * external scheduler) and from an on-demand admin button. Uses the admin
+ * client because the operation must run cross-company.
+ */
+export async function retryPendingAttachmentScans(
+  staleMinutes = 5,
+  maxBatch = 100,
+): Promise<{ enqueued: number; error: string | null }> {
+  const admin = createAdminClient();
+  const supabase = await createClient();
+  try {
+    const cutoffIso = new Date(Date.now() - staleMinutes * 60 * 1000).toISOString();
+    const { data, error } = await admin
+      .from('visit_report_attachments')
+      .select('id')
+      .eq('scan_status', 'pending')
+      .lt('created_at', cutoffIso)
+      .order('created_at', { ascending: true })
+      .limit(maxBatch);
+    if (error) return { enqueued: 0, error: error.message };
+    const rows = (data ?? []) as Array<{ id: string }>;
+    let enqueued = 0;
+    for (const row of rows) {
+      try {
+        await supabase.functions.invoke('scan-visit-report-attachment', {
+          body: { attachmentId: row.id },
+        });
+        enqueued += 1;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[retryPendingAttachmentScans] invoke failed', row.id, err);
+      }
+    }
+    return { enqueued, error: null };
+  } catch (err) {
+    return { enqueued: 0, error: err instanceof Error ? err.message : 'Retry failed' };
   }
 }
 

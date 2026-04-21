@@ -70,6 +70,8 @@ import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useStudyHub } from '@/components/ctms/study-hub-context';
 import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
+import { useClientPagination } from '@/lib/hooks/use-client-pagination';
+import { TablePaginationFooter } from '@/components/ui/table-pagination-footer';
 
 import type {
   TeamMemberWithStudies,
@@ -98,23 +100,21 @@ import {
 } from '@/lib/actions/team';
 import { scopeTeamMembersToStudy } from '@/lib/team/scope-team-members';
 
-/** Readable title for study selects (title case per word). */
-function formatStudyTitleLabel(title: string): string {
-  return title
-    .trim()
-    .split(/\s+/)
-    .map((word) => {
-      if (!word) return word;
-      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-    })
-    .join(' ');
+/**
+ * Compact identifier for a study used in select triggers and option rows.
+ * Falls back from `study_name` (e.g. "Aurora IV") to the always-present
+ * `protocol_number` (e.g. "TRI-DEMO-204") so the trigger never has to render
+ * the full multi-line `title`.
+ */
+function studyShortLabel(s: Pick<Study, 'study_name' | 'protocol_number'>): string {
+  return s.study_name?.trim() || s.protocol_number;
 }
 
 function studySelectDisplayLabel(studies: Study[], studyId: string | null | undefined, placeholder: string): string {
   if (!studyId?.trim()) return placeholder;
-  const t = studies.find((s) => s.id === studyId)?.title?.trim();
-  if (!t) return placeholder;
-  return formatStudyTitleLabel(t);
+  const s = studies.find((s) => s.id === studyId);
+  if (!s) return placeholder;
+  return studyShortLabel(s);
 }
 
 interface TeamDirectoryProps {
@@ -220,6 +220,43 @@ export function TeamDirectory({
       return true;
     });
   }, [members, search, roleFilter, statusFilter, appRoleFilter]);
+
+  const membersFiltersActive =
+    Boolean(search.trim()) ||
+    roleFilter !== 'all' ||
+    statusFilter !== 'all' ||
+    appRoleFilter !== 'all';
+
+  const membersPagination = useClientPagination({
+    totalItems: filteredMembers.length,
+    initialPageSize: 10,
+    resetKey: [search, roleFilter, statusFilter, appRoleFilter],
+  });
+  const paginatedMembers = membersPagination.paginate(filteredMembers);
+
+  const [pendingSearch, setPendingSearch] = useState('');
+
+  const filteredInvitations = useMemo(() => {
+    const q = pendingSearch.trim().toLowerCase();
+    if (!q) return pendingInvitations;
+    return pendingInvitations.filter((inv) => {
+      const haystack = [
+        inv.email,
+        [inv.first_name, inv.last_name].filter(Boolean).join(' '),
+        inv.invited_by_name ?? '',
+      ]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [pendingInvitations, pendingSearch]);
+
+  const invitationsPagination = useClientPagination({
+    totalItems: filteredInvitations.length,
+    initialPageSize: 10,
+    resetKey: [pendingSearch],
+  });
+  const paginatedInvitations = invitationsPagination.paginate(filteredInvitations);
 
   const toggleExpanded = (id: string) => {
     setExpandedIds((prev) => {
@@ -438,58 +475,67 @@ export function TeamDirectory({
           </div>
 
           {/* Team Members Table */}
-          {filteredMembers.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16">
-                <UserCircle className="h-10 w-10 text-muted-foreground mb-3" />
-                <p className="text-sm font-medium text-muted-foreground">No team members found</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Adjust filters or invite team members to your company.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs w-[30px]" />
-                <TableHead className="text-xs">Name</TableHead>
-                <TableHead className="text-xs">Email</TableHead>
-                <TableHead className="text-xs">App Role</TableHead>
-                <TableHead className="text-xs">Assignments</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs w-[80px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredMembers.map((member) => {
-                const name = [member.first_name, member.last_name].filter(Boolean).join(' ') || 'Unknown';
-                const initials = ((member.first_name?.[0] ?? '') + (member.last_name?.[0] ?? '')).toUpperCase() || '?';
-                const isExpanded = expandedIds.has(member.profile_id);
-                const activeCount = member.assignments.filter((a) => a.is_active).length;
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs w-[30px]" />
+                  <TableHead className="text-xs">Name</TableHead>
+                  <TableHead className="text-xs">Email</TableHead>
+                  <TableHead className="text-xs">App Role</TableHead>
+                  <TableHead className="text-xs">Assignments</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="text-xs w-[80px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedMembers.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={7}
+                      className="text-muted-foreground py-10 text-center text-xs"
+                    >
+                      <UserCircle className="mx-auto mb-2 h-8 w-8 opacity-60" />
+                      {membersFiltersActive
+                        ? 'No members match your filters.'
+                        : 'No team members found. Adjust filters or invite team members to your company.'}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  paginatedMembers.map((member) => {
+                    const name = [member.first_name, member.last_name].filter(Boolean).join(' ') || 'Unknown';
+                    const initials = ((member.first_name?.[0] ?? '') + (member.last_name?.[0] ?? '')).toUpperCase() || '?';
+                    const isExpanded = expandedIds.has(member.profile_id);
+                    const activeCount = member.assignments.filter((a) => a.is_active).length;
 
-                return (
-                  <MemberRows
-                    key={member.profile_id}
-                    member={member}
-                    name={name}
-                    initials={initials}
-                    isExpanded={isExpanded}
-                    activeCount={activeCount}
-                    readOnly={readOnly}
-                    onToggleExpand={() => toggleExpanded(member.profile_id)}
-                    onEditMember={() => setEditingMember(member)}
-                    onEditAssignment={(assignment) => setEditingAssignment({ member, assignment })}
-                    onAddAssignment={() => setAddingAssignmentFor(member)}
-                    onDeleteAssignment={handleDeleteAssignment}
-                  />
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+                    return (
+                      <MemberRows
+                        key={member.profile_id}
+                        member={member}
+                        name={name}
+                        initials={initials}
+                        isExpanded={isExpanded}
+                        activeCount={activeCount}
+                        readOnly={readOnly}
+                        onToggleExpand={() => toggleExpanded(member.profile_id)}
+                        onEditMember={() => setEditingMember(member)}
+                        onEditAssignment={(assignment) => setEditingAssignment({ member, assignment })}
+                        onAddAssignment={() => setAddingAssignmentFor(member)}
+                        onDeleteAssignment={handleDeleteAssignment}
+                      />
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+            <div className="border-t px-3 py-2">
+              <TablePaginationFooter
+                pagination={membersPagination}
+                totalItems={filteredMembers.length}
+                itemNoun="member"
+              />
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="pending" className="mt-4">
@@ -506,9 +552,21 @@ export function TeamDirectory({
           ) : (
             <Card className="rounded-lg border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20">
               <CardContent className="py-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground mb-3">
-                  <Mail className="h-4 w-4 text-amber-600 dark:text-amber-500" />
-                  <span>Pending Invitations</span>
+                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                    <Mail className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+                    <span>Pending Invitations</span>
+                  </div>
+                  <div className="relative w-full sm:max-w-xs">
+                    <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2" />
+                    <Input
+                      value={pendingSearch}
+                      onChange={(event) => setPendingSearch(event.target.value)}
+                      placeholder="Search invitations..."
+                      aria-label="Search pending invitations"
+                      className="h-8 pl-7 text-xs"
+                    />
+                  </div>
                 </div>
                 <div className="rounded-md border bg-background">
                   <Table>
@@ -525,7 +583,17 @@ export function TeamDirectory({
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pendingInvitations.map((inv) => {
+                      {paginatedInvitations.length === 0 ? (
+                        <TableRow>
+                          <TableCell
+                            colSpan={isAdmin ? 6 : 5}
+                            className="text-muted-foreground py-8 text-center text-xs"
+                          >
+                            No invitations match your search.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                      paginatedInvitations.map((inv) => {
                         const name = [inv.first_name, inv.last_name].filter(Boolean).join(' ') || '—';
                         const invitedDate = new Date(inv.invited_at).toLocaleDateString(undefined, {
                           month: 'short',
@@ -631,9 +699,17 @@ export function TeamDirectory({
                             )}
                           </TableRow>
                         );
-                      })}
+                      })
+                      )}
                     </TableBody>
                   </Table>
+                  <div className="border-t px-3 py-2">
+                    <TablePaginationFooter
+                      pagination={invitationsPagination}
+                      totalItems={filteredInvitations.length}
+                      itemNoun="invitation"
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1234,7 +1310,14 @@ function AddAssignmentDialog({
               <SelectContent>
                 {studies.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
-                    {formatStudyTitleLabel(s.title)}
+                    <span className="flex items-center gap-2">
+                      <span className="truncate">{studyShortLabel(s)}</span>
+                      {s.study_name?.trim() && (
+                        <span className="text-muted-foreground text-xs">
+                          {s.protocol_number}
+                        </span>
+                      )}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1427,7 +1510,14 @@ function InviteUserDialog({
               <SelectContent>
                 {studies.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
-                    {formatStudyTitleLabel(s.title)}
+                    <span className="flex items-center gap-2">
+                      <span className="truncate">{studyShortLabel(s)}</span>
+                      {s.study_name?.trim() && (
+                        <span className="text-muted-foreground text-xs">
+                          {s.protocol_number}
+                        </span>
+                      )}
+                    </span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1670,7 +1760,14 @@ function JoinLinkManagerDialog({
                     <SelectItem value="__none__">No study assignment</SelectItem>
                     {studies.map((s) => (
                       <SelectItem key={s.id} value={s.id}>
-                        {formatStudyTitleLabel(s.title)}
+                        <span className="flex items-center gap-2">
+                          <span className="truncate">{studyShortLabel(s)}</span>
+                          {s.study_name?.trim() && (
+                            <span className="text-muted-foreground text-xs">
+                              {s.protocol_number}
+                            </span>
+                          )}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>

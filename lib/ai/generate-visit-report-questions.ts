@@ -72,6 +72,14 @@ const VISIT_TYPE_GUIDANCE: Record<string, string> = {
 - Post-study treatment and follow-up arrangements
 - Equipment return or decommissioning
 - Acknowledgment of site obligations after study closure`,
+
+  training: `Training Visit (TV) focus areas:
+- Protocol training delivery and attendance verification
+- Role-specific training (PI, sub-investigator, coordinator, pharmacist)
+- Documentation of training completion in delegation log
+- GCP / regulatory refresher coverage
+- System / device / EDC training where applicable
+- Open questions and follow-up training needs`,
 };
 
 export async function generateVisitReportQuestions(

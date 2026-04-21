@@ -13,9 +13,20 @@ const dancingScript = Dancing_Script({ subsets: ['latin'], weight: ['400', '700'
 
 export type DigitalSignatureBlockProps = {
   role: 'author' | 'approver';
+  /** Profile-derived display name; used as a printed-name fallback for legacy reports. */
   displayName: string | null;
+  /** Legacy `*_signature_data` JSON blob (back-compat). */
   signatureData: string | null | undefined;
+  /** Legacy `*_signed_at` (client-supplied). */
   signedAtColumn: string | null | undefined;
+  /** New `*_printed_name` Part 11 column (preferred when set). */
+  printedName?: string | null | undefined;
+  /** New `*_attestation_text` Part 11 column (preferred when set). */
+  attestationText?: string | null | undefined;
+  /** New `*_signed_at_db` server-set timestamp (preferred when set). */
+  signedAtDbColumn?: string | null | undefined;
+  /** New `*_content_hash` Part 11 column for record-signature linking. */
+  contentHash?: string | null | undefined;
 };
 
 export function DigitalSignatureBlock({
@@ -23,12 +34,29 @@ export function DigitalSignatureBlock({
   displayName,
   signatureData,
   signedAtColumn,
+  printedName,
+  attestationText,
+  signedAtDbColumn,
+  contentHash,
 }: DigitalSignatureBlockProps) {
   const parsed = parseTripReportSignaturePayload(signatureData ?? null);
-  const whenIso = signedAtColumn?.trim() || parsed?.attestedAt || null;
-  const hasSig = !!(parsed?.isPasswordReverified || whenIso);
-  const attestation = tripReportSignatureAttestationLabel(parsed?.purpose ?? null, role);
-  const showName = displayName?.trim() || null;
+  // Prefer the server-set timestamp; fall back to the client-supplied one
+  // and finally to whatever the legacy JSON payload reported.
+  const whenIso =
+    (signedAtDbColumn?.trim() || null) ||
+    (signedAtColumn?.trim() || null) ||
+    parsed?.attestedAt ||
+    null;
+  const hasSig = !!(parsed?.isPasswordReverified || whenIso || (printedName && printedName.trim()));
+  // New attestation column wins over the short legacy label.
+  const attestation =
+    (attestationText && attestationText.trim()) ||
+    tripReportSignatureAttestationLabel(parsed?.purpose ?? null, role);
+  // New printed-name column wins; fall back to the profile-derived display name.
+  const showName =
+    (printedName && printedName.trim()) ||
+    (displayName?.trim() || null);
+  const trimmedHash = contentHash?.trim() || null;
 
   if (!hasSig) {
     return (
@@ -58,6 +86,14 @@ export function DigitalSignatureBlock({
         <span className="font-medium text-foreground">Signing date:</span> {formatSignatureDisplayDateTime(whenIso)}
       </p>
       <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{attestation}</p>
+      {trimmedHash ? (
+        <p
+          className="mt-1 break-all font-mono text-[10px] leading-snug text-muted-foreground/80"
+          title="SHA-256 of the canonical signed payload (21 CFR 11.70 record-signature linking)"
+        >
+          <span className="font-sans font-medium text-foreground">Content hash:</span> {trimmedHash}
+        </p>
+      ) : null}
     </div>
   );
 }
