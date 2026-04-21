@@ -206,7 +206,7 @@ export async function getSiteEcrfRollup(
   const subjects = (subjectMetaData as unknown as SubjectMetaRow[] | null) ?? [];
 
   const subjectIds = subjects.map((s) => s.id);
-  let summaryById = new Map<string, SubjectSummaryRow>();
+  const summaryById = new Map<string, SubjectSummaryRow>();
   if (subjectIds.length > 0) {
     const { data: summaries } = await supabase
       .from('v_subject_ecrf_tracking_summary')
@@ -258,7 +258,7 @@ export async function getStudyEcrfRollup(
   const subjects = (subjectMetaData as unknown as SubjectMetaRow[] | null) ?? [];
 
   const subjectIds = subjects.map((s) => s.id);
-  let summaryById = new Map<string, SubjectSummaryRow>();
+  const summaryById = new Map<string, SubjectSummaryRow>();
   if (subjectIds.length > 0) {
     const { data: summaries } = await supabase
       .from('v_subject_ecrf_tracking_summary')
