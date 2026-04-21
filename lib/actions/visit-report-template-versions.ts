@@ -222,7 +222,7 @@ export async function maybeRefreshSnapshotForReport(
   if (!liveTpl) return { refreshed: false, error: 'Live template no longer exists.' };
 
   let existingVersionCreatedAt: string | null = null;
-  let existingVersionId: string | null = row.template_version_id;
+  const existingVersionId: string | null = row.template_version_id;
   if (existingVersionId) {
     const { data: existingVersion, error: vErr } = await supabase
       .from('visit_report_template_versions')
