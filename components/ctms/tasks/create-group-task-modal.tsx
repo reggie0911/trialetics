@@ -23,6 +23,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { createGroupTask } from '@/lib/actions/tasks';
+import { studySelectLabel } from '@/lib/ctms/study-display';
+import type { Study } from '@/lib/types/ctms';
 
 const DEPARTMENTS = [
   'Biostatistics',
@@ -58,7 +60,7 @@ type FormValues = z.infer<typeof schema>;
 interface CreateGroupTaskModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  studies: { id: string; title: string }[];
+  studies: Pick<Study, 'id' | 'title' | 'study_name' | 'protocol_number'>[];
   onSuccess: () => void;
 }
 
@@ -215,13 +217,15 @@ export function CreateGroupTaskModal({
                   getDisplayLabel={(v) => {
                     if (!v) return null;
                     const study = studies.find((s) => s.id === v);
-                    return study?.title ?? 'Select Study...';
+                    return study ? studySelectLabel(study) : 'Select Study...';
                   }}
                 />
               </SelectTrigger>
               <SelectContent>
                 {studies.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
+                  <SelectItem key={s.id} value={s.id}>
+                    {studySelectLabel(s)}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

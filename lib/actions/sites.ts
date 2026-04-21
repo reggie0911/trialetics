@@ -15,6 +15,11 @@ import {
   type StudySiteWithDetails,
 } from '@/lib/types/ctms';
 
+/** PostgREST `or` filter: canonical PI label or directory-style names (e.g. "Principal Investigator (PI)"). */
+function siteContactPrincipalInvestigatorRoleOrFilter(): string {
+  return `role.eq."${SITE_CONTACT_ROLE_PRINCIPAL_INVESTIGATOR}",role.ilike.%Principal Investigator%`;
+}
+
 // --------------- helpers ---------------
 
 async function getCompanyId(): Promise<string> {
@@ -28,6 +33,61 @@ async function getCompanyId(): Promise<string> {
     .single();
   if (!profile?.company_id) throw new Error('No company found');
   return profile.company_id;
+}
+
+/**
+ * Sets `study_sites.pi_*` from the site's Principal Investigator `site_contacts` row
+ * (prefer `is_primary`, else first by id). Clears `pi_*` when no PI contact exists.
+ */
+async function syncPiFieldsFromSiteContacts(siteId: string, studyId: string): Promise<void> {
+  const supabase = await createClient();
+  const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+  if (writeGuard) return;
+
+  const { data: piRows, error: qErr } = await supabase
+    .from('site_contacts')
+    .select('id, name, email, directory_contact_id, is_primary')
+    .eq('site_id', siteId)
+    .or(siteContactPrincipalInvestigatorRoleOrFilter())
+    .order('is_primary', { ascending: false })
+    .order('id', { ascending: true });
+
+  if (qErr) {
+    console.error('[syncPiFieldsFromSiteContacts]', qErr.message);
+    return;
+  }
+
+  const list = piRows ?? [];
+  if (list.length === 0) {
+    const { error } = await supabase
+      .from('study_sites')
+      .update({
+        pi_name: null,
+        pi_email: null,
+        pi_directory_contact_id: null,
+      })
+      .eq('id', siteId);
+    if (error) console.error('[syncPiFieldsFromSiteContacts] clear', error.message);
+    return;
+  }
+
+  const pick = list.find((r) => r.is_primary) ?? list[0];
+  const { error } = await supabase
+    .from('study_sites')
+    .update({
+      pi_name: pick.name?.trim() || null,
+      pi_email: pick.email?.trim() || null,
+      pi_directory_contact_id: pick.directory_contact_id ?? null,
+    })
+    .eq('id', siteId);
+  if (error) console.error('[syncPiFieldsFromSiteContacts] set', error.message);
+}
+
+function revalidateAfterSiteContactsChange(siteId: string, studyId: string): void {
+  revalidatePath(`/protected/sites/${siteId}`);
+  revalidatePath('/protected');
+  revalidatePath('/protected/sites');
+  revalidateStudyCtmsLayout(studyId);
 }
 
 async function updateSiteGeocoding(params: {
@@ -85,17 +145,20 @@ async function syncPrincipalInvestigatorContact(params: {
   if (!name) return;
 
   const supabase = await createClient();
-  const { data: existing, error: findError } = await supabase
+  const { data: existingRows, error: findError } = await supabase
     .from('site_contacts')
     .select('id')
     .eq('site_id', params.siteId)
-    .eq('role', SITE_CONTACT_ROLE_PRINCIPAL_INVESTIGATOR)
-    .maybeSingle();
+    .or(siteContactPrincipalInvestigatorRoleOrFilter())
+    .order('id', { ascending: true })
+    .limit(1);
 
   if (findError) {
     console.error('syncPrincipalInvestigatorContact lookup', findError.message);
     return;
   }
+
+  const existing = existingRows?.[0];
 
   const email = params.pi_email?.trim() || null;
   const directoryId = params.pi_directory_contact_id || null;
@@ -433,8 +496,9 @@ export async function addSiteContact(
 
     const row = data as unknown as SiteContact;
     await syncSiteContactToDirectory(supabase, companyId, row, studyId);
+    await syncPiFieldsFromSiteContacts(input.site_id, studyId);
+    revalidateAfterSiteContactsChange(input.site_id, studyId);
 
-    revalidatePath(`/protected/sites/${input.site_id}`);
     return { data: row, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -479,9 +543,12 @@ export async function updateSiteContact(
       if (row) {
         await syncSiteContactToDirectory(supabase, companyId, row as unknown as SiteContact, resolvedStudyId);
       }
+      await syncPiFieldsFromSiteContacts(siteId, resolvedStudyId);
+      revalidateAfterSiteContactsChange(siteId, resolvedStudyId);
+    } else {
+      revalidatePath(`/protected/sites/${siteId}`);
     }
 
-    revalidatePath(`/protected/sites/${siteId}`);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -507,7 +574,12 @@ export async function deleteSiteContact(
 
     if (error) return { error: error.message };
 
-    revalidatePath(`/protected/sites/${siteId}`);
+    const studyId = ss?.study_id;
+    if (studyId) {
+      await syncPiFieldsFromSiteContacts(siteId, studyId);
+      revalidateAfterSiteContactsChange(siteId, studyId);
+    }
+
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };

@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 
-import { StudySubNav } from '@/components/ctms/study-sub-nav';
+import { StudyCompactHeader } from '@/components/ctms/studies/study-compact-header';
 import { StudyHubShell } from '@/components/ctms/study-hub-shell';
 import { StudyContextBridge } from '@/components/copilot/study-context-bridge';
 import { getStudyByIdCached } from '@/lib/actions/studies';
@@ -27,7 +27,8 @@ export default async function StudyScopedLayout({
     isAdmin = profile?.role === 'admin';
   }
 
-  const heading = [study.protocol_number, study.study_name ?? study.title].filter(Boolean).join(' · ');
+  const headingName = study.study_name?.trim() || study.title;
+  const isStudyReadOnly = study.status === 'closed';
 
   return (
     <div className="flex min-h-0 flex-col">
@@ -35,9 +36,16 @@ export default async function StudyScopedLayout({
         studyId={id}
         studyTitle={study.study_name ?? study.title ?? study.protocol_number ?? null}
         studyStatus={study.status}
-        isStudyReadOnly={study.status === 'closed'}
+        isStudyReadOnly={isStudyReadOnly}
       />
-      <StudySubNav studyId={id} heading={heading} />
+      <StudyCompactHeader
+        studyId={id}
+        headingName={headingName}
+        protocolNumber={study.protocol_number}
+        phase={study.phase}
+        status={study.status}
+        isStudyReadOnly={isStudyReadOnly}
+      />
       <StudyHubShell studyId={id} studyStatus={study.status} isAdmin={isAdmin}>
         {children}
       </StudyHubShell>

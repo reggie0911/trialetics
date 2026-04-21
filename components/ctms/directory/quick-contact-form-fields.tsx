@@ -4,15 +4,25 @@ import type { ReactNode } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import Link from 'next/link';
 import type { DirectoryRole, DirectoryRoleCategory, InstitutionRow } from '@/lib/types/directory';
 import { DirectoryPrimaryRoleFields } from '@/components/ctms/directory/directory-primary-role-fields';
 import { DirectoryCountryRegionFields } from '@/components/ctms/directory/directory-country-region-fields';
 import { DirectoryContactPhotoField } from '@/components/ctms/directory/directory-contact-photo-field';
 import { formatPhoneNumber } from '@/lib/utils';
+import {
+  SITE_CONTACT_ROLE_PRINCIPAL_INVESTIGATOR,
+  isPrincipalInvestigatorSiteRoleLabel,
+} from '@/lib/types/ctms';
 
 export type QuickContactCatalogCategory = DirectoryRoleCategory & {
   roles: DirectoryRole[];
 };
+
+export function directoryCatalogHasRoles(catalog: QuickContactCatalogCategory[]): boolean {
+  return catalog.some((c) => (c.roles?.length ?? 0) > 0);
+}
 
 interface QuickContactFormFieldsProps {
   catalog: QuickContactCatalogCategory[];
@@ -31,6 +41,11 @@ interface QuickContactFormFieldsProps {
   companyId: string;
   avatarUrl: string;
   onAvatarUrlChange: (url: string) => void;
+  /** Controlled `primary_institution_id` value (also submitted via the underlying select). */
+  primaryInstitutionId?: string;
+  onPrimaryInstitutionChange?: (id: string) => void;
+  /** When true, lock Role category, Primary role, and Primary organization fields (e.g. PI add intent). */
+  primaryFieldsLocked?: boolean;
   /** Rendered inside the form after Notes, before DialogFooter (e.g. site primary checkbox) */
   children?: ReactNode;
 }
@@ -51,8 +66,14 @@ export function QuickContactFormFields({
   companyId,
   avatarUrl,
   onAvatarUrlChange,
+  primaryInstitutionId,
+  onPrimaryInstitutionChange,
+  primaryFieldsLocked = false,
   children,
 }: QuickContactFormFieldsProps) {
+  const roleLibraryReady = directoryCatalogHasRoles(catalog);
+  const primaryInstitutionControlled = primaryInstitutionId !== undefined;
+
   return (
     <>
       <DirectoryContactPhotoField
@@ -97,6 +118,21 @@ export function QuickContactFormFields({
       </div>
       <div className="space-y-1">
         <p className="text-xs text-muted-foreground mb-1">Primary role (from library)</p>
+        {!roleLibraryReady && (
+          <Alert className="py-2 text-xs border-amber-500/40 bg-amber-500/5 [&_svg]:text-amber-600 dark:[&_svg]:text-amber-500">
+            <AlertTitle className="text-xs">Directory role library unavailable</AlertTitle>
+            <AlertDescription className="text-xs">
+              Role categories and titles are not loaded. Ensure you are signed in, directory migrations are applied
+              (including seeds for <code className="text-[11px]">directory_role_*</code>), and refresh the page. Open
+              the{' '}
+              <Link href="/protected/directory" className="underline underline-offset-2 font-medium">
+                Directory
+              </Link>{' '}
+              to confirm; if it stays empty, check Supabase RLS on those tables (authenticated users should be able to
+              read the global catalog).
+            </AlertDescription>
+          </Alert>
+        )}
         <DirectoryPrimaryRoleFields
           catalog={catalog}
           categoryFilter={roleCategoryFilter}
@@ -104,14 +140,21 @@ export function QuickContactFormFields({
           roleId={primaryRoleId}
           onRoleChange={onPrimaryRoleChange}
           emptyRoleLabel="Optional"
+          disabled={!roleLibraryReady || primaryFieldsLocked}
         />
       </div>
       <div className="space-y-1">
         <Label className="text-xs">Primary organization</Label>
         <select
           name="primary_institution_id"
-          className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs"
-          defaultValue=""
+          className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs disabled:opacity-50"
+          disabled={primaryFieldsLocked}
+          {...(primaryInstitutionControlled
+            ? {
+                value: primaryInstitutionId ?? '',
+                onChange: (e) => onPrimaryInstitutionChange?.(e.target.value),
+              }
+            : { defaultValue: '' })}
         >
           <option value="">Optional — main affiliation</option>
           {institutions.map((i) => (
@@ -166,7 +209,11 @@ export function siteRoleLabelFromQuickContact(
   if (primaryRoleId) {
     for (const c of catalog) {
       const r = c.roles.find((x) => x.id === primaryRoleId);
-      if (r) return r.name;
+      if (r) {
+        return isPrincipalInvestigatorSiteRoleLabel(r.name)
+          ? SITE_CONTACT_ROLE_PRINCIPAL_INVESTIGATOR
+          : r.name;
+      }
     }
   }
   const t = title.trim();

@@ -16,9 +16,6 @@ export const siteActivationFormSchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   postal_code: z.string().optional(),
-  pi_name: z.string().optional(),
-  pi_email: z.string().optional(),
-  pi_directory_contact_id: z.string().optional(),
   status: z
     .enum(['identified', 'selected', 'initiated', 'activated', 'enrolling', 'closed'])
     .optional(),
@@ -42,8 +39,6 @@ registerCopilotForm({
     { path: 'city', label: 'City' },
     { path: 'state', label: 'State', synonyms: ['Province', 'Region'] },
     { path: 'postal_code', label: 'Postal code', synonyms: ['Zip', 'Zip Code', 'Postcode'] },
-    { path: 'pi_name', label: 'PI name', synonyms: ['Principal Investigator', 'PI', 'Lead Investigator'] },
-    { path: 'pi_email', label: 'PI email', synonyms: ['PI Email', 'Investigator Email'] },
     { path: 'status', label: 'Status', synonyms: ['Site Status', 'Activation Status'] },
     { path: 'activation_date', label: 'Activation date', synonyms: ['SIV Date', 'Activated On'] },
     { path: 'target_enrollment', label: 'Target enrollment', synonyms: ['Target', 'Enrollment Goal'] },

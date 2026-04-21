@@ -3,7 +3,9 @@ import { notFound } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 import { getInstitutionById } from '@/lib/actions/directory-institutions';
 import { getDirectoryAccess } from '@/lib/actions/directory-context';
+import { listDirectoryComments } from '@/lib/actions/directory-comments';
 import { getStudies } from '@/lib/actions/studies';
+import { createClient } from '@/lib/server';
 import { Button } from '@/components/ui/button';
 import { DirectoryInstitutionDetailClient } from '@/components/ctms/directory/directory-institution-detail-client';
 import type { InstitutionRow } from '@/lib/types/directory';
@@ -38,7 +40,17 @@ export default async function DirectoryInstitutionPage({ params }: PageProps) {
   const access = await getDirectoryAccess();
   if (!access.ok) notFound();
 
-  const [inst, studies] = await Promise.all([getInstitutionById(id), getStudies()]);
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) notFound();
+
+  const [inst, studies, commentsRes] = await Promise.all([
+    getInstitutionById(id),
+    getStudies(),
+    listDirectoryComments('institution', id),
+  ]);
 
   if (!inst.data) notFound();
 
@@ -54,6 +66,8 @@ export default async function DirectoryInstitutionPage({ params }: PageProps) {
         institution={inst.data as InstitutionDetailProps}
         canEdit={access.canEdit}
         studies={studies}
+        currentUserId={user.id}
+        initialComments={commentsRes.data}
       />
     </div>
   );

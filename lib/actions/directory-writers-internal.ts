@@ -29,6 +29,12 @@ export async function insertInstitutionRecord(
       status: input.status ?? 'active',
       notes: input.notes?.trim() || null,
       parent_institution_id: input.parent_institution_id ?? null,
+      nearest_airport_place_id: input.nearest_airport_place_id?.trim() || null,
+      nearest_airport_name: input.nearest_airport_name?.trim() || null,
+      nearest_airport_address: input.nearest_airport_address?.trim() || null,
+      nearest_hotel_place_id: input.nearest_hotel_place_id?.trim() || null,
+      nearest_hotel_name: input.nearest_hotel_name?.trim() || null,
+      nearest_hotel_address: input.nearest_hotel_address?.trim() || null,
     })
     .select('id')
     .single();
@@ -43,24 +49,40 @@ export async function updateInstitutionRecord(
   institutionId: string,
   input: SaveInstitutionInput
 ): Promise<{ error: string | null }> {
-  const { error } = await supabase
-    .from('institutions')
-    .update({
-      name: input.name.trim(),
-      organization_type: input.organization_type,
-      address_line1: input.address_line1?.trim() || null,
-      address_line2: input.address_line2?.trim() || null,
-      city: input.city?.trim() || null,
-      state_region: input.state_region?.trim() || null,
-      postal_code: input.postal_code?.trim() || null,
-      country_code: input.country_code?.trim() || null,
-      region: input.region?.trim() || null,
-      status: input.status ?? 'active',
-      notes: input.notes?.trim() || null,
-      parent_institution_id: input.parent_institution_id ?? null,
-    })
-    .eq('id', institutionId)
-    .eq('company_id', companyId);
+  const updates: Record<string, unknown> = {
+    name: input.name.trim(),
+    organization_type: input.organization_type,
+    address_line1: input.address_line1?.trim() || null,
+    address_line2: input.address_line2?.trim() || null,
+    city: input.city?.trim() || null,
+    state_region: input.state_region?.trim() || null,
+    postal_code: input.postal_code?.trim() || null,
+    country_code: input.country_code?.trim() || null,
+    region: input.region?.trim() || null,
+    status: input.status ?? 'active',
+    notes: input.notes?.trim() || null,
+    parent_institution_id: input.parent_institution_id ?? null,
+  };
+  if (input.nearest_airport_place_id !== undefined) {
+    updates.nearest_airport_place_id = input.nearest_airport_place_id?.trim() || null;
+  }
+  if (input.nearest_airport_name !== undefined) {
+    updates.nearest_airport_name = input.nearest_airport_name?.trim() || null;
+  }
+  if (input.nearest_airport_address !== undefined) {
+    updates.nearest_airport_address = input.nearest_airport_address?.trim() || null;
+  }
+  if (input.nearest_hotel_place_id !== undefined) {
+    updates.nearest_hotel_place_id = input.nearest_hotel_place_id?.trim() || null;
+  }
+  if (input.nearest_hotel_name !== undefined) {
+    updates.nearest_hotel_name = input.nearest_hotel_name?.trim() || null;
+  }
+  if (input.nearest_hotel_address !== undefined) {
+    updates.nearest_hotel_address = input.nearest_hotel_address?.trim() || null;
+  }
+
+  const { error } = await supabase.from('institutions').update(updates).eq('id', institutionId).eq('company_id', companyId);
 
   return { error: error?.message ?? null };
 }

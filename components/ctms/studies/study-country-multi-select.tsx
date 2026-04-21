@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
+/** `value` / `onChange` use ISO 3166-1 alpha-2 codes (e.g. `US`, `GB`). */
 export type StudyCountryMultiSelectProps = {
   id?: string;
   value: string[];
@@ -32,6 +33,12 @@ export function StudyCountryMultiSelect({
 
   const options = useMemo(() => allIsoCountriesForSelectList(), []);
 
+  const codeToName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const o of options) m.set(o.code, o.name);
+    return m;
+  }, [options]);
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return options;
@@ -40,34 +47,37 @@ export function StudyCountryMultiSelect({
 
   const selectedSet = useMemo(() => new Set(value), [value]);
 
-  const toggleName = (name: string) => {
+  const toggleCode = (code: string) => {
     const next = new Set(value);
-    if (next.has(name)) next.delete(name);
-    else next.add(name);
+    if (next.has(code)) next.delete(code);
+    else next.add(code);
     onChange([...next]);
   };
 
-  const removeName = (name: string) => {
-    onChange(value.filter((v) => v !== name));
+  const removeCode = (code: string) => {
+    onChange(value.filter((v) => v !== code));
   };
 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-1.5 min-h-[1.75rem]">
-        {value.map((name) => (
-          <Badge key={name} variant="secondary" className="text-xs font-normal gap-1 pr-1">
-            {name}
-            <button
-              type="button"
-              className="rounded-sm hover:bg-muted p-0.5 disabled:opacity-50"
-              onClick={() => removeName(name)}
-              disabled={disabled}
-              aria-label={`Remove ${name}`}
-            >
-              <X className="size-3" />
-            </button>
-          </Badge>
-        ))}
+        {value.map((code) => {
+          const label = codeToName.get(code) ?? code;
+          return (
+            <Badge key={code} variant="secondary" className="text-xs font-normal gap-1 pr-1">
+              {label}
+              <button
+                type="button"
+                className="rounded-sm hover:bg-muted p-0.5 disabled:opacity-50"
+                onClick={() => removeCode(code)}
+                disabled={disabled}
+                aria-label={`Remove ${label}`}
+              >
+                <X className="size-3" />
+              </button>
+            </Badge>
+          );
+        })}
       </div>
 
       <Popover open={open} onOpenChange={setOpen}>
@@ -112,8 +122,8 @@ export function StudyCountryMultiSelect({
                     )}
                   >
                     <Checkbox
-                      checked={selectedSet.has(name)}
-                      onCheckedChange={() => toggleName(name)}
+                      checked={selectedSet.has(code)}
+                      onCheckedChange={() => toggleCode(code)}
                       disabled={disabled}
                     />
                     <span className="truncate">{name}</span>

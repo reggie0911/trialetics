@@ -199,35 +199,20 @@ export async function getTripReport(visitId: string): Promise<TripReportWithAuth
   return data as unknown as TripReportWithAuthor | null;
 }
 
+/**
+ * @deprecated Trip reports must be created through the templated flow.
+ * Use `createSiteVisitWithReport` from `@/lib/actions/visit-reports` instead,
+ * which provisions both the monitoring visit and the linked trip report
+ * (with template, due dates, and proper status).
+ */
 export async function createTripReport(
-  visitId: string,
-  summary?: string,
-  findings?: string
+  _visitId: string,
+  _summary?: string,
+  _findings?: string
 ): Promise<{ data: TripReport | null; error: string | null }> {
-  const supabase = await createClient();
-  try {
-    const studyId = await getStudyIdForVisit(supabase, visitId);
-    if (studyId) {
-      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
-      if (writeGuard) return { data: null, error: writeGuard };
-    }
-
-    const profileId = await getProfileId();
-    const { data, error } = await supabase
-      .from('trip_reports')
-      .insert({
-        visit_id: visitId,
-        summary: summary || null,
-        findings: findings || null,
-        created_by: profileId,
-      })
-      .select()
-      .single();
-    if (error) return { data: null, error: error.message };
-    return { data: data as unknown as TripReport, error: null };
-  } catch (err) {
-    return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
-  }
+  throw new Error(
+    'createTripReport is deprecated. Use createSiteVisitWithReport from @/lib/actions/visit-reports.'
+  );
 }
 
 export async function updateTripReport(

@@ -70,8 +70,8 @@ export function listRepoManualTemplates(): RepoManualTemplateOption[] {
 export function readAllowlistedRepoManualRaw(filePath: string): string | null {
   const n = normalizeRepoManualRelativePath(filePath);
   if (!n || !REPO_MANUAL_ALLOWLIST.has(n)) return null;
-  const full = path.resolve(process.cwd(), n);
-  const root = path.resolve(process.cwd());
+  const full = path.resolve(/*turbopackIgnore: true*/ process.cwd(), n);
+  const root = path.resolve(/*turbopackIgnore: true*/ process.cwd());
   if (!full.startsWith(root + path.sep) && full !== root) return null;
   if (!fs.existsSync(full)) return null;
   return fs.readFileSync(full, 'utf-8');

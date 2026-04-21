@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   CalendarDays,
+  ClipboardCheck,
+  History,
   User,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -14,6 +16,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { getSubjectById } from '@/lib/actions/subjects';
 import type { SubjectWithDetails } from '@/lib/types/ctms';
 import type { Study } from '@/lib/types/ctms';
@@ -21,7 +28,9 @@ import type { Study } from '@/lib/types/ctms';
 import { useStudyHub } from '@/components/ctms/study-hub-context';
 import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
 
+import { SubjectActivityPanel } from './subject-activity-panel';
 import { SubjectFormDialog } from './subject-form-dialog';
+import { SubjectEcrfTrackingPanel } from './subject-ecrf-tracking-panel';
 import { VisitsPanel } from './visits-panel';
 
 function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
@@ -121,14 +130,62 @@ export function SubjectDetailTabs({
 
       <Tabs tabsId="subject-detail" defaultValue="overview" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="overview">
-            <User className="mr-1 h-3.5 w-3.5" />
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="visits">
-            <CalendarDays className="mr-1 h-3.5 w-3.5" />
-            Visits ({subject.subject_visits?.length ?? 0})
-          </TabsTrigger>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <TabsTrigger value="overview">
+                  <User className="mr-1 h-3.5 w-3.5" />
+                  Overview
+                </TabsTrigger>
+              }
+            />
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              Subject demographics, key dates, and enrollment status.
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <TabsTrigger value="visits">
+                  <CalendarDays className="mr-1 h-3.5 w-3.5" />
+                  Visits ({subject.subject_visits?.length ?? 0})
+                </TabsTrigger>
+              }
+            />
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              Visit schedule snapshotted from the live eCRF template.
+              Edit planned/actual dates, status, and notes; recompute scheduled
+              dates from the subject anchor.
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <TabsTrigger value="ecrf-tracking">
+                  <ClipboardCheck className="mr-1 h-3.5 w-3.5" />
+                  eCRF Tracking
+                </TabsTrigger>
+              }
+            />
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              Per-CRF data entry, source data review, SDV, PI sign, lock, and
+              query status with derived DE / SDV / Lock percentages.
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <TabsTrigger value="activity">
+                  <History className="mr-1 h-3.5 w-3.5" />
+                  Activity
+                </TabsTrigger>
+              }
+            />
+            <TooltipContent side="bottom" className="max-w-xs text-xs">
+              Audit trail of every CRF metric, query-status, and visit-timing
+              change for this subject (Part 11 compliant).
+            </TooltipContent>
+          </Tooltip>
         </TabsList>
 
         <TabsContent value="overview">
@@ -185,7 +242,31 @@ export function SubjectDetailTabs({
         <TabsContent value="visits">
           <VisitsPanel
             subjectId={subject.id}
+            studyId={subject.study_id}
             initialVisits={subject.subject_visits ?? []}
+            anchorKind={subject.visit_anchor_kind}
+            screeningDate={subject.screening_date}
+            randomizationDate={subject.randomization_date}
+          />
+        </TabsContent>
+
+        <TabsContent value="ecrf-tracking">
+          <SubjectEcrfTrackingPanel
+            studyId={subject.study_id}
+            subjectId={subject.id}
+            templateVersionId={subject.template_version_id}
+            templateSyncedAt={subject.template_synced_at}
+            initialVisits={subject.subject_visits_tracking ?? []}
+            disabled={readOnly}
+            disabledTooltip={disabledTooltip}
+            onMutated={refreshSubject}
+          />
+        </TabsContent>
+
+        <TabsContent value="activity">
+          <SubjectActivityPanel
+            subjectId={subject.id}
+            studyId={subject.study_id}
           />
         </TabsContent>
       </Tabs>

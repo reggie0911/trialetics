@@ -2,6 +2,8 @@
 
 import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
+import { assertEcrfAdminForStudy } from '@/lib/server/require-ecrf-admin';
+import { assertDraftVersion } from '@/lib/server/require-draft-ecrf-version';
 import { assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import type {
   StudyVisitDefinition,
@@ -12,15 +14,57 @@ import type {
 
 // ─── Visit Definitions ────────────────────────────────────────────────────────
 
-export async function listStudyVisitDefinitions(studyId: string): Promise<StudyVisitDefinition[]> {
+/**
+ * List visit definitions for a study, optionally filtered to a specific
+ * eCRF template version. When `versionId` is omitted, returns rows across
+ * all versions (used by callers that don't yet know about versions, e.g. the
+ * procedure grid; safe because the procedure grid keys off visit ids directly).
+ */
+export async function listStudyVisitDefinitions(
+  studyId: string,
+  versionId?: string
+): Promise<StudyVisitDefinition[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from('study_visit_definitions')
     .select('*')
     .eq('study_id', studyId)
     .order('sort_order', { ascending: true });
+  if (versionId) query = query.eq('template_version_id', versionId);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data as unknown as StudyVisitDefinition[]) ?? [];
+}
+
+/**
+ * Resolves the active eCRF template version for a study, lazily creating
+ * a v1 draft if the study has none yet. Used as a fallback for callers
+ * that don't yet know about versions (e.g. the Procedure Cost Grid).
+ */
+async function resolveActiveVersionId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  studyId: string
+): Promise<{ versionId: string | null; error: string | null }> {
+  const { data: rows, error } = await supabase
+    .from('study_ecrf_template_versions')
+    .select('id, status, version_number')
+    .eq('study_id', studyId)
+    .order('status', { ascending: true })
+    .order('version_number', { ascending: false });
+  if (error) return { versionId: null, error: error.message };
+
+  const live = rows?.find((r) => r.status === 'live');
+  const draft = rows?.find((r) => r.status === 'draft');
+  if (live) return { versionId: live.id, error: null };
+  if (draft) return { versionId: draft.id, error: null };
+
+  const { data: created, error: insertError } = await supabase
+    .from('study_ecrf_template_versions')
+    .insert({ study_id: studyId, version_number: 1, name: 'Version 1', status: 'draft' })
+    .select('id')
+    .single();
+  if (insertError) return { versionId: null, error: insertError.message };
+  return { versionId: created.id as string, error: null };
 }
 
 export async function createStudyVisitDefinition(
@@ -30,17 +74,36 @@ export async function createStudyVisitDefinition(
     timepoint_label?: string | null;
     timepoint_days?: number | null;
     sort_order?: number;
+    version_id?: string;
   }
 ): Promise<{ data: StudyVisitDefinition | null; error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: adminError } = await assertEcrfAdminForStudy(supabase, studyId);
+    if (adminError) return { data: null, error: adminError };
     const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
     if (writeGuard) return { data: null, error: writeGuard };
+
+    let versionId = input.version_id ?? null;
+    if (!versionId) {
+      const { versionId: resolved, error: resolveError } = await resolveActiveVersionId(
+        supabase,
+        studyId
+      );
+      if (resolveError || !resolved) {
+        return { data: null, error: resolveError ?? 'No template version available.' };
+      }
+      versionId = resolved;
+    }
+
+    const { error: draftError } = await assertDraftVersion(supabase, studyId, versionId);
+    if (draftError) return { data: null, error: draftError };
 
     const { data, error } = await supabase
       .from('study_visit_definitions')
       .insert({
         study_id: studyId,
+        template_version_id: versionId,
         visit_name: input.visit_name,
         timepoint_label: input.timepoint_label ?? null,
         timepoint_days: input.timepoint_days ?? null,
@@ -56,6 +119,18 @@ export async function createStudyVisitDefinition(
   }
 }
 
+async function loadVersionIdForVisit(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  visitId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('study_visit_definitions')
+    .select('template_version_id')
+    .eq('id', visitId)
+    .maybeSingle();
+  return (data?.template_version_id as string | undefined) ?? null;
+}
+
 export async function updateStudyVisitDefinition(
   id: string,
   studyId: string,
@@ -68,8 +143,15 @@ export async function updateStudyVisitDefinition(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: adminError } = await assertEcrfAdminForStudy(supabase, studyId);
+    if (adminError) return { error: adminError };
     const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
     if (writeGuard) return { error: writeGuard };
+
+    const versionId = await loadVersionIdForVisit(supabase, id);
+    if (!versionId) return { error: 'Visit not found.' };
+    const { error: draftError } = await assertDraftVersion(supabase, studyId, versionId);
+    if (draftError) return { error: draftError };
 
     const { error } = await supabase
       .from('study_visit_definitions')
@@ -90,8 +172,15 @@ export async function deleteStudyVisitDefinition(
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: adminError } = await assertEcrfAdminForStudy(supabase, studyId);
+    if (adminError) return { error: adminError };
     const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
     if (writeGuard) return { error: writeGuard };
+
+    const versionId = await loadVersionIdForVisit(supabase, id);
+    if (!versionId) return { error: 'Visit not found.' };
+    const { error: draftError } = await assertDraftVersion(supabase, studyId, versionId);
+    if (draftError) return { error: draftError };
 
     const { error } = await supabase
       .from('study_visit_definitions')
@@ -108,20 +197,30 @@ export async function deleteStudyVisitDefinition(
 
 export async function reorderStudyVisitDefinitions(
   studyId: string,
-  orderedIds: string[]
+  orderedIds: string[],
+  versionId?: string
 ): Promise<{ error: string | null }> {
   const supabase = await createClient();
   try {
+    const { error: adminError } = await assertEcrfAdminForStudy(supabase, studyId);
+    if (adminError) return { error: adminError };
     const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
     if (writeGuard) return { error: writeGuard };
 
-    const updates = orderedIds.map((id, idx) =>
-      supabase
+    if (versionId) {
+      const { error: draftError } = await assertDraftVersion(supabase, studyId, versionId);
+      if (draftError) return { error: draftError };
+    }
+
+    const updates = orderedIds.map((id, idx) => {
+      let q = supabase
         .from('study_visit_definitions')
         .update({ sort_order: idx })
         .eq('id', id)
-        .eq('study_id', studyId)
-    );
+        .eq('study_id', studyId);
+      if (versionId) q = q.eq('template_version_id', versionId);
+      return q;
+    });
     await Promise.all(updates);
     revalidateStudyCtmsLayout(studyId);
     return { error: null };

@@ -3,7 +3,7 @@
 import { useTransition } from 'react';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { Trash2, Plus } from 'lucide-react';
@@ -12,7 +12,6 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -37,9 +36,16 @@ import {
 } from '@/lib/actions/directory-institutions';
 import { institutionFormSchema } from '@/lib/validation/directory';
 import type { InstitutionRow } from '@/lib/types/directory';
+import { DirectoryComments } from '@/components/ctms/directory/directory-comments-card';
+import type { DirectoryCommentRow } from '@/lib/actions/directory-comments';
 import type { Study } from '@/lib/types/ctms';
 import { INSTITUTION_STUDY_RELATIONSHIP_OPTIONS, INSTITUTION_TYPE_OPTIONS } from '@/lib/types/directory';
 import { DirectoryCountryRegionFields } from '@/components/ctms/directory/directory-country-region-fields';
+import {
+  PlacesAddressAutocomplete,
+  type ParsedPlace,
+} from '@/components/ui/places-address-autocomplete';
+import { SiteMap } from '@/components/ctms/sites/site-map';
 
 type InstitutionDetail = InstitutionRow & {
   institution_study: {
@@ -66,12 +72,16 @@ interface Props {
   institution: InstitutionDetail;
   canEdit: boolean;
   studies: Study[];
+  currentUserId: string;
+  initialComments: DirectoryCommentRow[];
 }
 
 export function DirectoryInstitutionDetailClient({
   institution: initial,
   canEdit,
   studies,
+  currentUserId,
+  initialComments,
 }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -100,9 +110,53 @@ export function DirectoryInstitutionDetailClient({
     },
   });
 
-  const normStudy = (s: unknown) => (Array.isArray(s) ? s[0] : s) as { title?: string; protocol_number?: string } | null;
+  const watchedCountryCode = useWatch({ control: form.control, name: 'country_code' });
+  const mapAddressLine1 = useWatch({ control: form.control, name: 'address_line1' });
+  const mapCity = useWatch({ control: form.control, name: 'city' });
+  const mapStateRegion = useWatch({ control: form.control, name: 'state_region' });
+  const mapPostal = useWatch({ control: form.control, name: 'postal_code' });
+  const mapLocationKey = [mapAddressLine1, mapCity, mapStateRegion, mapPostal].join('|');
+
+  const onInstitutionAddressPlaceSelected = (parsed: ParsedPlace) => {
+    form.setValue('city', parsed.city ?? '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    const regionLabel = parsed.stateLong ?? parsed.state ?? '';
+    form.setValue('state_region', regionLabel, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    form.setValue('region', regionLabel, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    form.setValue('postal_code', parsed.postalCode ?? '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    const cc = form.getValues('country_code');
+    if (parsed.countryCode && (!cc || cc === parsed.countryCode)) {
+      form.setValue('country_code', parsed.countryCode, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    }
+  };
+
+  const normStudy = (s: unknown) => (Array.isArray(s) ? s[0] : s) as { title?: string; protocol_number?: string; study_name?: string | null } | null;
   const normContact = (c: unknown) =>
-    (Array.isArray(c) ? c[0] : c) as { first_name?: string; last_name?: string; email?: string } | null;
+    (Array.isArray(c) ? c[0] : c) as {
+      first_name?: string;
+      last_name?: string;
+      email?: string;
+      directory_roles?: { id?: string; name?: string } | null;
+    } | null;
 
   const onSave = form.handleSubmit(async (values) => {
     startTransition(async () => {
@@ -179,10 +233,24 @@ export function DirectoryInstitutionDetailClient({
                 ))}
               </select>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Address line 1</Label>
-              <Input className="text-xs h-9" {...form.register('address_line1')} disabled={!canEdit} />
-            </div>
+            <Controller
+              name="address_line1"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <div className="space-y-1">
+                  <Label className="text-xs">Address line 1</Label>
+                  <PlacesAddressAutocomplete
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    onPlaceSelected={onInstitutionAddressPlaceSelected}
+                    countryBias={watchedCountryCode || null}
+                    disabled={!canEdit}
+                    aria-invalid={fieldState.invalid}
+                    className="text-xs h-9"
+                  />
+                </div>
+              )}
+            />
             <DirectoryCountryRegionFields
               variant="institutionAddress"
               countryCode={form.watch('country_code') ?? ''}
@@ -210,10 +278,6 @@ export function DirectoryInstitutionDetailClient({
                 <option value="inactive">Inactive</option>
               </select>
             </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Notes</Label>
-              <Textarea className="text-xs min-h-[72px]" {...form.register('notes')} disabled={!canEdit} />
-            </div>
             {canEdit && (
               <Button type="submit" size="sm" className="text-xs" disabled={form.formState.isSubmitting}>
                 Save
@@ -222,6 +286,26 @@ export function DirectoryInstitutionDetailClient({
           </form>
         </CardContent>
       </Card>
+
+      <SiteMap
+        key={mapLocationKey}
+        siteName={initial.name}
+        address={mapAddressLine1 || null}
+        city={mapCity || null}
+        state={mapStateRegion || null}
+        postalCode={mapPostal || null}
+        persistence={{ kind: 'institution', institutionId: initial.id }}
+        savedAirport={{
+          placeId: initial.nearest_airport_place_id ?? null,
+          name: initial.nearest_airport_name ?? null,
+          address: initial.nearest_airport_address ?? null,
+        }}
+        savedHotel={{
+          placeId: initial.nearest_hotel_place_id ?? null,
+          name: initial.nearest_hotel_name ?? null,
+          address: initial.nearest_hotel_address ?? null,
+        }}
+      />
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3">
@@ -255,7 +339,7 @@ export function DirectoryInstitutionDetailClient({
                   return (
                     <TableRow key={row.id}>
                       <TableCell className="text-xs">
-                        {st ? `${st.protocol_number} — ${st.title}` : '—'}
+                        {st ? (st.study_name || st.protocol_number) : '—'}
                       </TableCell>
                       <TableCell className="text-xs capitalize">{row.relationship_type.replace(/_/g, ' ')}</TableCell>
                       <TableCell className="text-xs">
@@ -296,25 +380,28 @@ export function DirectoryInstitutionDetailClient({
               <TableRow>
                 <TableHead className="text-xs">Contact</TableHead>
                 <TableHead className="text-xs">Email</TableHead>
+                <TableHead className="text-xs">Role</TableHead>
                 <TableHead className="text-xs">Primary</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {initial.directory_contact_institution.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-xs text-muted-foreground">
+                  <TableCell colSpan={4} className="text-xs text-muted-foreground">
                     No linked contacts — link from each contact profile.
                   </TableCell>
                 </TableRow>
               ) : (
                 initial.directory_contact_institution.map((row) => {
                   const dc = normContact(row.directory_contacts);
+                  const role = dc?.directory_roles;
                   return (
                     <TableRow key={row.id}>
                       <TableCell className="text-xs">
                         {dc ? `${dc.first_name} ${dc.last_name}` : '—'}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{dc?.email ?? '—'}</TableCell>
+                      <TableCell className="text-xs">{role?.name ?? '—'}</TableCell>
                       <TableCell className="text-xs">{row.is_primary ? 'Yes' : 'No'}</TableCell>
                     </TableRow>
                   );
@@ -324,6 +411,14 @@ export function DirectoryInstitutionDetailClient({
           </Table>
         </CardContent>
       </Card>
+
+      <DirectoryComments
+        entityType="institution"
+        entityId={initial.id}
+        canEdit={canEdit}
+        currentUserId={currentUserId}
+        initialComments={initialComments}
+      />
 
       <InstStudyDialog
         open={studyOpen}
@@ -391,7 +486,7 @@ function InstStudyDialog({
             <select name="study_id" required className="flex h-9 w-full rounded-md border border-input px-2 text-xs">
               {studies.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.protocol_number} — {s.title}
+                  {s.study_name || s.protocol_number}
                 </option>
               ))}
             </select>

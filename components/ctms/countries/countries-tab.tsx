@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useCallback, useTransition } from 'react';
+import { useState, useMemo, useCallback, useTransition } from 'react';
 import {
+  Search,
   Trash2,
   ChevronDown,
   ChevronRight,
@@ -10,8 +11,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/ui/status-badge';
 import {
   Table,
@@ -47,6 +49,8 @@ import {
 import { useStudyHub } from '@/components/ctms/study-hub-context';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
+import { useClientPagination } from '@/lib/hooks/use-client-pagination';
+import { TablePaginationFooter } from '@/components/ui/table-pagination-footer';
 
 import { CountryFormDialog } from './country-form-dialog';
 import { SubmissionFormDialog } from './submission-form-dialog';
@@ -57,6 +61,8 @@ const submissionTypeLabel: Record<string, string> = {
   import_license: 'Import License',
   regulatory_approval: 'Regulatory Approval',
 };
+
+const COUNTRY_TABLE_COL_COUNT = 6;
 
 interface CountriesTabProps {
   studyId: string;
@@ -70,6 +76,7 @@ export function CountriesTab({ studyId, initialCountries }: CountriesTabProps) {
 
   const [countries, setCountries] = useState(initialCountries);
   const [expandedCountries, setExpandedCountries] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
   const [, startTransition] = useTransition();
 
   const refreshCountries = useCallback(() => {
@@ -82,6 +89,22 @@ export function CountriesTab({ studyId, initialCountries }: CountriesTabProps) {
       }
     });
   }, [studyId]);
+
+  const filteredCountries = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return countries;
+    return countries.filter(
+      (c) =>
+        c.country_name.toLowerCase().includes(q) ||
+        c.country_code.toLowerCase().includes(q),
+    );
+  }, [countries, searchQuery]);
+
+  const pagination = useClientPagination({
+    totalItems: filteredCountries.length,
+    resetKey: [searchQuery],
+  });
+  const paginatedCountries = pagination.paginate(filteredCountries);
 
   const toggleExpand = (countryId: string) => {
     setExpandedCountries((prev) => {
@@ -127,21 +150,26 @@ export function CountriesTab({ studyId, initialCountries }: CountriesTabProps) {
   const existingCodes = countries.map((c) => c.country_code);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-medium">Countries</h3>
-          <p className="text-sm text-muted-foreground">
-            Manage country participation and regulatory submissions for this study.
-          </p>
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search countries..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
         </div>
-        <CountryFormDialog
-          studyId={studyId}
-          existingCodes={existingCodes}
-          onSuccess={refreshCountries}
-          disabled={readOnly}
-          disabledTooltip={disabledTooltip}
-        />
+        <div className="ml-auto">
+          <CountryFormDialog
+            studyId={studyId}
+            existingCodes={existingCodes}
+            onSuccess={refreshCountries}
+            disabled={readOnly}
+            disabledTooltip={disabledTooltip}
+          />
+        </div>
       </div>
 
       {countries.length === 0 ? (
@@ -155,187 +183,263 @@ export function CountriesTab({ studyId, initialCountries }: CountriesTabProps) {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {countries.map((country) => {
-            const isExpanded = expandedCountries.has(country.id);
-            const submissions = country.regulatory_submissions ?? [];
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[40px]" />
+                <TableHead className="text-xs">Country</TableHead>
+                <TableHead className="text-xs">Participation</TableHead>
+                <TableHead className="text-xs">Regulatory</TableHead>
+                <TableHead className="text-xs w-[110px]">Submissions</TableHead>
+                <TableHead className="text-xs w-[110px]">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredCountries.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={COUNTRY_TABLE_COL_COUNT}
+                    className="text-xs text-muted-foreground text-center py-6"
+                  >
+                    No countries match your search.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                paginatedCountries.map((country) => {
+                  const isExpanded = expandedCountries.has(country.id);
+                  const submissions = country.regulatory_submissions ?? [];
 
-            return (
-              <Card key={country.id}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => toggleExpand(country.id)}
-                      >
-                        {isExpanded ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <div>
-                        <CardTitle className="text-sm font-medium">
-                          {country.country_name}{' '}
-                          <span className="text-muted-foreground font-normal">
-                            ({country.country_code})
-                          </span>
-                        </CardTitle>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                          <span className="flex items-center gap-1.5">
-                            <span className="shrink-0 text-muted-foreground">Participation:</span>
-                            <StatusBadge
-                              status={country.status}
-                              className="text-xs"
-                              label={
-                                COUNTRY_STATUS_OPTIONS.find((o) => o.value === country.status)?.label ??
-                                country.status
-                              }
-                            />
-                          </span>
-                          <span className="flex items-center gap-1.5">
-                            <span className="shrink-0 text-muted-foreground">Regulatory:</span>
-                            <StatusBadge
-                              status={country.regulatory_status}
-                              className="text-xs"
-                              label={
-                                REGULATORY_STATUS_OPTIONS.find((o) => o.value === country.regulatory_status)
-                                  ?.label ?? country.regulatory_status
-                              }
-                            />
-                          </span>
-                          {submissions.length > 0 && (
-                            <span className="text-xs text-muted-foreground">
-                              {submissions.length} submission{submissions.length !== 1 ? 's' : ''}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <CountryFormDialog
-                        studyId={studyId}
-                        existingCodes={existingCodes}
-                        country={country}
-                        onSuccess={refreshCountries}
-                        disabled={readOnly}
-                        disabledTooltip={disabledTooltip}
-                      />
-                      {readOnly ? (
-                        <Tooltip>
-                          <TooltipTrigger render={<span className="inline-flex" />}>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0"
-                              disabled
-                              aria-label="Remove country"
-                            >
-                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" className="max-w-xs text-xs">
-                            {STUDY_DEACTIVATED_TOOLTIP}
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <AlertDialog>
-                          <AlertDialogTrigger
-                            render={
-                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0" />
-                            }
-                          >
-                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Remove Country</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                This will remove {country.country_name} and all associated
-                                regulatory submissions from this study. This action cannot be
-                                undone.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleRemoveCountry(country.id)}
-                              >
-                                Remove
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-
-                {isExpanded && (
-                  <CardContent className="pt-0">
-                    <div className="border-t pt-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                          <h4 className="text-sm font-medium">Regulatory Submissions</h4>
-                        </div>
-                        <SubmissionFormDialog
-                          studyId={studyId}
-                          studyCountryId={country.id}
-                          onSuccess={refreshCountries}
-                          disabled={readOnly}
-                          disabledTooltip={disabledTooltip}
-                        />
-                      </div>
-
-                      {submissions.length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-6">
-                          No regulatory submissions recorded for this country.
-                        </p>
-                      ) : (
-                        <div className="rounded-md border">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead className="text-xs">Type</TableHead>
-                                <TableHead className="text-xs">Status</TableHead>
-                                <TableHead className="text-xs">Submission Date</TableHead>
-                                <TableHead className="text-xs">Approval Date</TableHead>
-                                <TableHead className="text-xs">Expiry Date</TableHead>
-                                <TableHead className="text-xs">Reference</TableHead>
-                                <TableHead className="text-xs w-[80px]">Actions</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {submissions.map((sub) => (
-                                <SubmissionRow
-                                  key={sub.id}
-                                  submission={sub}
-                                  studyId={studyId}
-                                  studyCountryId={country.id}
-                                  formatDate={formatDate}
-                                  onDelete={handleDeleteSubmission}
-                                  onSuccess={refreshCountries}
-                                  readOnly={readOnly}
-                                />
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                )}
-              </Card>
-            );
-          })}
+                  return (
+                    <CountryRows
+                      key={country.id}
+                      country={country}
+                      submissions={submissions}
+                      isExpanded={isExpanded}
+                      onToggle={() => toggleExpand(country.id)}
+                      studyId={studyId}
+                      existingCodes={existingCodes}
+                      readOnly={readOnly}
+                      disabledTooltip={disabledTooltip}
+                      formatDate={formatDate}
+                      onRemoveCountry={handleRemoveCountry}
+                      onDeleteSubmission={handleDeleteSubmission}
+                      onRefresh={refreshCountries}
+                    />
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
         </div>
       )}
+
+      {countries.length > 0 && (
+        <TablePaginationFooter
+          pagination={pagination}
+          totalItems={filteredCountries.length}
+          itemNoun="country"
+          itemNounPlural="countries"
+        />
+      )}
     </div>
+  );
+}
+
+function CountryRows({
+  country,
+  submissions,
+  isExpanded,
+  onToggle,
+  studyId,
+  existingCodes,
+  readOnly,
+  disabledTooltip,
+  formatDate,
+  onRemoveCountry,
+  onDeleteSubmission,
+  onRefresh,
+}: {
+  country: StudyCountryWithSubmissions;
+  submissions: RegulatorySubmission[];
+  isExpanded: boolean;
+  onToggle: () => void;
+  studyId: string;
+  existingCodes: string[];
+  readOnly: boolean;
+  disabledTooltip: string | undefined;
+  formatDate: (d: string | null) => string;
+  onRemoveCountry: (id: string) => void;
+  onDeleteSubmission: (id: string) => void;
+  onRefresh: () => void;
+}) {
+  const participationLabel =
+    COUNTRY_STATUS_OPTIONS.find((o) => o.value === country.status)?.label ?? country.status;
+  const regulatoryLabel =
+    REGULATORY_STATUS_OPTIONS.find((o) => o.value === country.regulatory_status)?.label ??
+    country.regulatory_status;
+
+  return (
+    <>
+      <TableRow>
+        <TableCell className="py-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0"
+            onClick={onToggle}
+            aria-label={isExpanded ? 'Collapse country' : 'Expand country'}
+            aria-expanded={isExpanded}
+          >
+            {isExpanded ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronRight className="h-4 w-4" />
+            )}
+          </Button>
+        </TableCell>
+        <TableCell className="text-xs font-medium">
+          {country.country_name}
+          <span className="text-muted-foreground font-normal">
+            {' '}
+            ({country.country_code})
+          </span>
+        </TableCell>
+        <TableCell>
+          <StatusBadge
+            status={country.status}
+            className="text-xs"
+            label={participationLabel}
+          />
+        </TableCell>
+        <TableCell>
+          <StatusBadge
+            status={country.regulatory_status}
+            className="text-xs"
+            label={regulatoryLabel}
+          />
+        </TableCell>
+        <TableCell className="text-xs">
+          {submissions.length === 0 ? (
+            <span className="text-muted-foreground">0</span>
+          ) : (
+            submissions.length
+          )}
+        </TableCell>
+        <TableCell>
+          <div className="flex items-center gap-1">
+            <CountryFormDialog
+              studyId={studyId}
+              existingCodes={existingCodes}
+              country={country}
+              onSuccess={onRefresh}
+              disabled={readOnly}
+              disabledTooltip={disabledTooltip}
+            />
+            {readOnly ? (
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0"
+                    disabled
+                    aria-label="Remove country"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  {STUDY_DEACTIVATED_TOOLTIP}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <AlertDialog>
+                <AlertDialogTrigger
+                  render={<Button variant="ghost" size="sm" className="h-8 w-8 p-0" />}
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Remove Country</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will remove {country.country_name} and all associated regulatory
+                      submissions from this study. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => onRemoveCountry(country.id)}>
+                      Remove
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        </TableCell>
+      </TableRow>
+
+      {isExpanded && (
+        <TableRow className="bg-muted/30 hover:bg-muted/30">
+          <TableCell colSpan={COUNTRY_TABLE_COL_COUNT} className="py-3">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                  <h4 className="text-sm font-medium">Regulatory submissions</h4>
+                </div>
+                <SubmissionFormDialog
+                  studyId={studyId}
+                  studyCountryId={country.id}
+                  onSuccess={onRefresh}
+                  disabled={readOnly}
+                  disabledTooltip={disabledTooltip}
+                />
+              </div>
+
+              {submissions.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-6">
+                  No regulatory submissions recorded for this country.
+                </p>
+              ) : (
+                <div className="rounded-md border bg-background">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Type</TableHead>
+                        <TableHead className="text-xs">Status</TableHead>
+                        <TableHead className="text-xs">Submission Date</TableHead>
+                        <TableHead className="text-xs">Approval Date</TableHead>
+                        <TableHead className="text-xs">Expiry Date</TableHead>
+                        <TableHead className="text-xs">Reference</TableHead>
+                        <TableHead className="text-xs w-[80px]">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {submissions.map((sub) => (
+                        <SubmissionRow
+                          key={sub.id}
+                          submission={sub}
+                          studyId={studyId}
+                          studyCountryId={country.id}
+                          formatDate={formatDate}
+                          onDelete={onDeleteSubmission}
+                          onSuccess={onRefresh}
+                          readOnly={readOnly}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
+    </>
   );
 }
 

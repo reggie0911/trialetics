@@ -8,13 +8,38 @@ import type {
   Subject,
   Study,
   StudySite,
+  SubjectCrf,
   SubjectStatus,
+  SubjectTrackingSummary,
   SubjectWithSite,
   SubjectWithDetails,
   SubjectVisit,
+  SubjectVisitWithCrfs,
+  VisitAnchorKind,
   VisitStatus,
   EnrollmentFunnelData,
 } from '@/lib/types/ctms';
+
+interface TrackingSummaryRow {
+  subject_id: string;
+  data_expected_total: number | null;
+  data_entry_total: number | null;
+  sdv_total: number | null;
+  lock_total: number | null;
+  open_query_count: number | null;
+  answered_query_count: number | null;
+}
+
+function summaryRowToType(row: TrackingSummaryRow): SubjectTrackingSummary {
+  return {
+    dataExpectedTotal: Number(row.data_expected_total ?? 0),
+    dataEntryTotal: Number(row.data_entry_total ?? 0),
+    sdvTotal: Number(row.sdv_total ?? 0),
+    lockTotal: Number(row.lock_total ?? 0),
+    openQueryCount: Number(row.open_query_count ?? 0),
+    answeredQueryCount: Number(row.answered_query_count ?? 0),
+  };
+}
 
 async function getStudyIdForSubject(supabase: Awaited<ReturnType<typeof createClient>>, subjectId: string) {
   const { data: row } = await supabase.from('subjects').select('study_id').eq('id', subjectId).maybeSingle();
@@ -92,7 +117,26 @@ export async function getStudySubjects(
 
   const { data, error } = await query;
   if (error) throw new Error(error.message);
-  return (data as unknown as SubjectWithSite[]) ?? [];
+  const subjects = (data as unknown as SubjectWithSite[]) ?? [];
+
+  if (subjects.length === 0) return subjects;
+
+  // Hydrate tracking_summary for each subject in a single round trip.
+  const ids = subjects.map((s) => s.id);
+  const { data: summaries } = await supabase
+    .from('v_subject_ecrf_tracking_summary')
+    .select('*')
+    .in('subject_id', ids);
+
+  const summaryById = new Map<string, SubjectTrackingSummary>();
+  for (const row of (summaries ?? []) as TrackingSummaryRow[]) {
+    summaryById.set(row.subject_id, summaryRowToType(row));
+  }
+
+  return subjects.map((s) => ({
+    ...s,
+    tracking_summary: summaryById.get(s.id) ?? null,
+  }));
 }
 
 export async function getSubjectById(id: string): Promise<SubjectWithDetails | null> {
@@ -106,10 +150,50 @@ export async function getSubjectById(id: string): Promise<SubjectWithDetails | n
     .single();
 
   if (error) return null;
-  return data as unknown as SubjectWithDetails;
+  const subject = data as unknown as SubjectWithDetails;
+
+  // Eager-load the eCRF Tracking tree (subject_visits with their subject_crfs).
+  // Single batched query to avoid N+1; visits with no snapshotted CRFs simply
+  // get an empty `crfs` array so the UI can render them as empty groups.
+  const visitIds = (subject.subject_visits ?? []).map((v) => v.id);
+  if (visitIds.length > 0) {
+    const { data: crfs } = await supabase
+      .from('subject_crfs')
+      .select('*')
+      .in('subject_visit_id', visitIds)
+      .order('sort_order', { ascending: true });
+
+    const crfsByVisit = new Map<string, SubjectCrf[]>();
+    for (const crf of (crfs ?? []) as SubjectCrf[]) {
+      const list = crfsByVisit.get(crf.subject_visit_id) ?? [];
+      list.push(crf);
+      crfsByVisit.set(crf.subject_visit_id, list);
+    }
+
+    const tracking: SubjectVisitWithCrfs[] = (subject.subject_visits ?? [])
+      .slice()
+      .sort((a, b) => {
+        const so = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+        if (so !== 0) return so;
+        return (a.visit_number ?? 0) - (b.visit_number ?? 0);
+      })
+      .map((v) => ({ ...v, crfs: crfsByVisit.get(v.id) ?? [] }));
+
+    subject.subject_visits_tracking = tracking;
+  } else {
+    subject.subject_visits_tracking = [];
+  }
+
+  return subject;
 }
 
-function funnelFromStatusRows(rows: { status: string }[] | null | undefined): EnrollmentFunnelData {
+function funnelFromStatusRows(
+  rows: { status: string }[] | null | undefined,
+  queryTotals: { openQueryCount: number; answeredQueryCount: number } = {
+    openQueryCount: 0,
+    answeredQueryCount: 0,
+  },
+): EnrollmentFunnelData {
   const counts: EnrollmentFunnelData = {
     preScreening: 0,
     screening: 0,
@@ -120,6 +204,8 @@ function funnelFromStatusRows(rows: { status: string }[] | null | undefined): En
     withdrawn: 0,
     discontinued: 0,
     total: rows?.length ?? 0,
+    openQueryCount: queryTotals.openQueryCount,
+    answeredQueryCount: queryTotals.answeredQueryCount,
   };
 
   for (const row of rows ?? []) {
@@ -138,16 +224,40 @@ function funnelFromStatusRows(rows: { status: string }[] | null | undefined): En
   return counts;
 }
 
+async function aggregateQueryCountsForSubjectIds(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  subjectIds: string[],
+): Promise<{ openQueryCount: number; answeredQueryCount: number }> {
+  if (subjectIds.length === 0) return { openQueryCount: 0, answeredQueryCount: 0 };
+  const { data } = await supabase
+    .from('v_subject_ecrf_tracking_summary')
+    .select('open_query_count, answered_query_count')
+    .in('subject_id', subjectIds);
+
+  let openQueryCount = 0;
+  let answeredQueryCount = 0;
+  for (const row of (data ?? []) as TrackingSummaryRow[]) {
+    openQueryCount += Number(row.open_query_count ?? 0);
+    answeredQueryCount += Number(row.answered_query_count ?? 0);
+  }
+  return { openQueryCount, answeredQueryCount };
+}
+
 export async function getEnrollmentFunnel(studyId: string): Promise<EnrollmentFunnelData> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from('subjects')
-    .select('status')
+    .select('id, status')
     .eq('study_id', studyId);
 
   if (error) throw new Error(error.message);
-  return funnelFromStatusRows(data ?? []);
+  const rows = (data ?? []) as { id: string; status: string }[];
+  const totals = await aggregateQueryCountsForSubjectIds(
+    supabase,
+    rows.map((r) => r.id),
+  );
+  return funnelFromStatusRows(rows, totals);
 }
 
 export async function getEnrollmentFunnelForSite(siteId: string): Promise<EnrollmentFunnelData> {
@@ -155,11 +265,16 @@ export async function getEnrollmentFunnelForSite(siteId: string): Promise<Enroll
 
   const { data, error } = await supabase
     .from('subjects')
-    .select('status')
+    .select('id, status')
     .eq('site_id', siteId);
 
   if (error) throw new Error(error.message);
-  return funnelFromStatusRows(data ?? []);
+  const rows = (data ?? []) as { id: string; status: string }[];
+  const totals = await aggregateQueryCountsForSubjectIds(
+    supabase,
+    rows.map((r) => r.id),
+  );
+  return funnelFromStatusRows(rows, totals);
 }
 
 export interface CreateSubjectInput {
@@ -204,10 +319,25 @@ export async function createSubject(
       return { data: null, error: error.message };
     }
 
+    const subject = data as unknown as Subject;
+
+    // Snapshot the live eCRF template into this subject. Best-effort: if the
+    // study has no live template yet, the RPC returns gracefully and the
+    // subject is still created. Any unexpected error is logged but does not
+    // block the creation flow.
+    try {
+      await supabase.rpc('snapshot_ecrf_to_subject', { p_subject_id: subject.id });
+    } catch (snapshotErr) {
+      console.warn(
+        `[createSubject] snapshot_ecrf_to_subject failed for subject ${subject.id}:`,
+        snapshotErr,
+      );
+    }
+
     revalidatePath('/protected');
     revalidateStudyCtmsLayout(input.study_id);
     revalidatePath(`/protected/sites/${input.site_id}`);
-    return { data: data as unknown as Subject, error: null };
+    return { data: subject, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
   }
@@ -411,6 +541,172 @@ export async function deleteSubjectVisit(
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+// --------------- Visit timing (anchor-driven schedule) ---------------
+
+/**
+ * Allowlisted timing fields editable via the Visits panel. Visit identity
+ * (visit_name, visit_number, visit_definition_id, sort_order) is owned by
+ * the eCRF template snapshot and is NOT writable from this surface.
+ */
+export interface SubjectVisitTimingPatch {
+  planned_date?: string | null;
+  actual_date?: string | null;
+  window_start?: string | null;
+  window_end?: string | null;
+  status?: VisitStatus;
+  notes?: string | null;
+}
+
+const ALLOWED_TIMING_FIELDS: Array<keyof SubjectVisitTimingPatch> = [
+  'planned_date',
+  'actual_date',
+  'window_start',
+  'window_end',
+  'status',
+  'notes',
+];
+
+/**
+ * Update one or more timing fields on a subject_visits row. Routes through the
+ * apply_subject_visit_patch RPC so every changed field gets one audit row in
+ * subject_visit_events. Returns the count of audit events written so the UI
+ * can surface "no change" cases without an error toast.
+ */
+export async function updateSubjectVisitTiming(
+  visitId: string,
+  subjectId: string,
+  patch: SubjectVisitTimingPatch,
+): Promise<{ error: string | null; eventsWritten: number }> {
+  const supabase = await createClient();
+
+  try {
+    const studyId = await getStudyIdForSubject(supabase, subjectId);
+    if (studyId) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+      if (writeGuard) return { error: writeGuard, eventsWritten: 0 };
+    }
+
+    const cleanPatch: Record<string, unknown> = {};
+    for (const key of ALLOWED_TIMING_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(patch, key)) {
+        const value = patch[key];
+        cleanPatch[key] = value === '' ? null : value;
+      }
+    }
+
+    if (Object.keys(cleanPatch).length === 0) {
+      return { error: null, eventsWritten: 0 };
+    }
+
+    const { data, error } = await supabase.rpc('apply_subject_visit_patch', {
+      p_visit_id: visitId,
+      p_patch: cleanPatch,
+    });
+    if (error) return { error: error.message, eventsWritten: 0 };
+
+    await revalidateSubjectCachesForStudySubject(subjectId);
+    return {
+      error: null,
+      eventsWritten: typeof data === 'number' ? data : Number(data ?? 0),
+    };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+      eventsWritten: 0,
+    };
+  }
+}
+
+/**
+ * Update the per-subject schedule anchor (kind + date) and optionally trigger
+ * a recompute. The matching anchor date column on `subjects` (`screening_date`
+ * or `randomization_date`) is updated alongside `visit_anchor_kind` so the
+ * recompute RPC reads consistent state.
+ */
+export async function setSubjectVisitAnchor(
+  subjectId: string,
+  kind: VisitAnchorKind,
+  anchorDate: string | null,
+  recompute: boolean,
+): Promise<{ error: string | null; updated: number }> {
+  const supabase = await createClient();
+
+  try {
+    const studyId = await getStudyIdForSubject(supabase, subjectId);
+    if (studyId) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+      if (writeGuard) return { error: writeGuard, updated: 0 };
+    }
+
+    const dateColumn = kind === 'screening' ? 'screening_date' : 'randomization_date';
+    const cleanDate = anchorDate && anchorDate.trim().length > 0 ? anchorDate : null;
+
+    const { error: updateError } = await supabase
+      .from('subjects')
+      .update({ visit_anchor_kind: kind, [dateColumn]: cleanDate })
+      .eq('id', subjectId);
+
+    if (updateError) return { error: updateError.message, updated: 0 };
+
+    let updated = 0;
+    if (recompute) {
+      const { data, error: rpcError } = await supabase.rpc('recompute_subject_visit_dates', {
+        p_subject_id: subjectId,
+      });
+      if (rpcError) return { error: rpcError.message, updated: 0 };
+      updated = Number((data as { updated?: number } | null)?.updated ?? 0);
+    }
+
+    await revalidateSubjectCachesForStudySubject(subjectId);
+    return { error: null, updated };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+      updated: 0,
+    };
+  }
+}
+
+/**
+ * Recompute planned_date / window_start / window_end for every SCHEDULED
+ * subject_visits row using the subject's current anchor. Completed / missed /
+ * skipped rows are never touched. Hand-edited rows that are still scheduled
+ * are overwritten (by design) so a single button reliably re-syncs the
+ * schedule after a date slip.
+ */
+export async function recomputeSubjectVisitDates(
+  subjectId: string,
+): Promise<{ error: string | null; updated: number; anchorDate: string | null }> {
+  const supabase = await createClient();
+
+  try {
+    const studyId = await getStudyIdForSubject(supabase, subjectId);
+    if (studyId) {
+      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+      if (writeGuard) return { error: writeGuard, updated: 0, anchorDate: null };
+    }
+
+    const { data, error } = await supabase.rpc('recompute_subject_visit_dates', {
+      p_subject_id: subjectId,
+    });
+    if (error) return { error: error.message, updated: 0, anchorDate: null };
+
+    const result = (data ?? {}) as { updated?: number; anchor_date?: string | null };
+    await revalidateSubjectCachesForStudySubject(subjectId);
+    return {
+      error: null,
+      updated: Number(result.updated ?? 0),
+      anchorDate: result.anchor_date ?? null,
+    };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+      updated: 0,
+      anchorDate: null,
+    };
   }
 }
 

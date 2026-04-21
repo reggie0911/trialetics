@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -10,6 +10,7 @@ import {
   getPaginationRowModel,
   flexRender,
   type ColumnDef,
+  type PaginationState,
   type SortingState,
 } from '@tanstack/react-table';
 import { ArrowUpDown, Archive, ExternalLink, Pencil, Plus, RotateCcw, Search, X } from 'lucide-react';
@@ -33,6 +34,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 import type { Study } from '@/lib/types/ctms';
@@ -61,6 +71,10 @@ export function StudyList({
 }: StudyListProps) {
   const router = useRouter();
   const [sorting, setSorting] = useState<SortingState>([]);
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 25,
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [phaseFilter, setPhaseFilter] = useState<string>('all');
@@ -89,6 +103,10 @@ export function StudyList({
 
     return result;
   }, [studies, searchQuery, statusFilter, phaseFilter]);
+
+  useEffect(() => {
+    setPagination((p) => ({ ...p, pageIndex: 0 }));
+  }, [searchQuery, statusFilter, phaseFilter]);
 
   const columns: ColumnDef<Study>[] = useMemo(
     () => [
@@ -268,9 +286,32 @@ export function StudyList({
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
-    state: { sorting },
-    initialState: { pagination: { pageSize: 20 } },
+    onPaginationChange: setPagination,
+    state: { sorting, pagination },
   });
+
+  const totalPages = Math.max(1, table.getPageCount());
+  const currentPage = pagination.pageIndex + 1;
+
+  useEffect(() => {
+    if (pagination.pageIndex > totalPages - 1) {
+      setPagination((p) => ({ ...p, pageIndex: Math.max(0, totalPages - 1) }));
+    }
+  }, [pagination.pageIndex, totalPages]);
+
+  const pageWindow = useMemo<(number | 'ellipsis')[]>(() => {
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1);
+    }
+    const items: (number | 'ellipsis')[] = [1];
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+    if (start > 2) items.push('ellipsis');
+    for (let p = start; p <= end; p++) items.push(p);
+    if (end < totalPages - 1) items.push('ellipsis');
+    items.push(totalPages);
+    return items;
+  }, [totalPages, currentPage]);
 
   const hasActiveFilters = searchQuery || statusFilter !== 'all' || phaseFilter !== 'all';
 
@@ -401,35 +442,92 @@ export function StudyList({
         </Table>
       </div>
 
-      {table.getPageCount() > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Showing {table.getState().pagination.pageIndex * table.getState().pagination.pageSize + 1}
-            {' '}-{' '}
-            {Math.min(
-              (table.getState().pagination.pageIndex + 1) * table.getState().pagination.pageSize,
-              filteredData.length
-            )}
-            {' '}of {filteredData.length} studies
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              Next
-            </Button>
+      {filteredData.length > 0 && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <span>
+              Showing{' '}
+              <span className="font-medium text-foreground">
+                {pagination.pageIndex * pagination.pageSize + 1}
+              </span>
+              {'–'}
+              <span className="font-medium text-foreground">
+                {Math.min((pagination.pageIndex + 1) * pagination.pageSize, filteredData.length)}
+              </span>{' '}
+              of{' '}
+              <span className="font-medium text-foreground">{filteredData.length}</span>
+            </span>
+            <div className="flex items-center gap-2">
+              <span>Rows per page</span>
+              <Select
+                value={String(pagination.pageSize)}
+                onValueChange={(v) => {
+                  const next = Number(v);
+                  setPagination({ pageIndex: 0, pageSize: next });
+                }}
+              >
+                <SelectTrigger className="h-8 w-[72px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 25, 50, 100].map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
+          {totalPages > 1 && (
+            <Pagination className="mx-0 w-auto justify-end">
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      table.previousPage();
+                    }}
+                    className={!table.getCanPreviousPage() ? 'pointer-events-none opacity-50' : ''}
+                  />
+                </PaginationItem>
+
+                {pageWindow.map((entry, idx) =>
+                  entry === 'ellipsis' ? (
+                    <PaginationItem key={`ellipsis-${idx}`}>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  ) : (
+                    <PaginationItem key={entry}>
+                      <PaginationLink
+                        href="#"
+                        isActive={currentPage === entry}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          table.setPageIndex(entry - 1);
+                        }}
+                      >
+                        {entry}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ),
+                )}
+
+                <PaginationItem>
+                  <PaginationNext
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      table.nextPage();
+                    }}
+                    className={!table.getCanNextPage() ? 'pointer-events-none opacity-50' : ''}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          )}
         </div>
       )}
       </div>

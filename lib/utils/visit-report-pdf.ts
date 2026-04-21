@@ -2,7 +2,7 @@ import { pdf } from '@react-pdf/renderer';
 import React from 'react';
 import { VisitReportPdfDocument, type VisitReportPdfData } from '@/components/ctms/trip-reports/visit-report-pdf-document';
 
-function saveBlobAsFile(blob: Blob, filename: string) {
+export function saveBlobAsFile(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

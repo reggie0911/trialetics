@@ -41,7 +41,14 @@ export default async function StudyTasksPage({ params }: PageProps) {
       <TasksClient
         initialMilestones={milestones}
         initialTasks={tasks}
-        studies={[{ id: study.id, title: study.title }]}
+        studies={[
+          {
+            id: study.id,
+            title: study.title,
+            study_name: study.study_name,
+            protocol_number: study.protocol_number,
+          },
+        ]}
         initialCounts={counts}
         isAdmin={profile?.role === 'admin'}
         lockedStudyId={studyId}

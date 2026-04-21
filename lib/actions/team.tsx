@@ -5,7 +5,8 @@ import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
 import { assertStudyWritable, assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import { createAdminClient } from '@/lib/server-admin';
-import { resend, getInviteEmailHtml } from '@/lib/email';
+import { sendEmail } from '@/lib/email';
+import { InviteUser } from '@/emails/invite-user';
 import type {
   TeamRole,
   StudyTeamMember,
@@ -13,6 +14,7 @@ import type {
   TeamMemberRole,
   TeamMemberWithStudies,
 } from '@/lib/types/ctms';
+import { TEAM_ROLE_LABEL } from '@/lib/types/ctms';
 import {
   JOIN_STUDY_ID_META_KEY,
   JOIN_STUDY_ROLE_META_KEY,
@@ -459,7 +461,7 @@ export async function inviteUser(
     const supabaseCheck = await createClient();
     const { data: study } = await supabaseCheck
       .from('studies')
-      .select('id')
+      .select('id, study_name, protocol_number')
       .eq('id', study_id)
       .eq('company_id', profile.company_id)
       .single();
@@ -471,13 +473,12 @@ export async function inviteUser(
     if (writeGuard) return { data: null, error: writeGuard };
 
     const resendApiKey = process.env.RESEND_API_KEY;
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Trialetics <noreply@trialetics.io>';
     if (!resendApiKey) {
       return { data: null, error: 'Email invite is not configured. Contact support.' };
     }
 
     const supabase = await createClient();
-    const { error: inviteErr } = await supabase
+    const { data: invitationRow, error: inviteErr } = await supabase
       .from('invitations')
       .upsert(
         {
@@ -493,11 +494,16 @@ export async function inviteUser(
           study_role,
         },
         { onConflict: 'company_id,email' }
-      );
+      )
+      .select('id, invited_at')
+      .single();
 
-    if (inviteErr) {
+    if (inviteErr || !invitationRow) {
       console.error('Invitation record upsert error:', inviteErr);
-      return { data: null, error: `Could not save invitation: ${inviteErr.message}` };
+      return {
+        data: null,
+        error: `Could not save invitation: ${inviteErr?.message ?? 'unknown error'}`,
+      };
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
@@ -530,15 +536,32 @@ export async function inviteUser(
 
     const inviteLink = `${siteUrl}/auth/confirm?token_hash=${tokenHash}&type=invite`;
 
-    const { error: emailError } = await resend!.emails.send({
-      from: fromEmail,
-      to: [emailTrimmed],
-      subject: "You're invited to join Trialetics",
-      html: getInviteEmailHtml(first_name?.trim() || '', last_name?.trim() || '', inviteLink),
+    const inviterContext = await loadInviterContext(profile.id, profile.company_id);
+    const studyLabel =
+      (study.study_name as string | null)?.trim() ||
+      (study.protocol_number as string | null)?.trim() ||
+      null;
+    const roleLabel = TEAM_ROLE_LABEL[study_role] ?? null;
+
+    const sendResult = await sendEmail({
+      to: emailTrimmed,
+      replyTo: inviterContext.email ?? undefined,
+      subject: `${inviterContext.name} invited you to Trialetics`,
+      category: 'invite',
+      idempotencyKey: `${invitationRow.id as string}:invite`,
+      template: (
+        <InviteUser
+          inviteeFirstName={first_name?.trim() ?? ''}
+          inviterName={inviterContext.name}
+          companyName={inviterContext.companyName}
+          studyLabel={studyLabel}
+          roleLabel={roleLabel}
+          acceptUrl={inviteLink}
+        />
+      ),
     });
 
-    if (emailError) {
-      console.error('Resend invite API error:', emailError);
+    if (sendResult.error) {
       return { data: null, error: 'Failed to send invite email. Please try again.' };
     }
 
@@ -551,6 +574,38 @@ export async function inviteUser(
       error: err instanceof Error ? err.message : 'An unexpected error occurred.',
     };
   }
+}
+
+interface InviterContext {
+  name: string;
+  email: string | null;
+  companyName: string;
+}
+
+async function loadInviterContext(
+  profileId: string,
+  companyId: string,
+): Promise<InviterContext> {
+  const admin = createAdminClient();
+  const [{ data: inviter }, { data: company }] = await Promise.all([
+    admin
+      .from('profiles')
+      .select('first_name, last_name, email')
+      .eq('id', profileId)
+      .maybeSingle(),
+    admin.from('companies').select('name').eq('id', companyId).maybeSingle(),
+  ]);
+  const first = (inviter as { first_name?: string | null } | null)?.first_name?.trim() ?? '';
+  const last = (inviter as { last_name?: string | null } | null)?.last_name?.trim() ?? '';
+  const fullName = [first, last].filter(Boolean).join(' ');
+  const email = (inviter as { email?: string | null } | null)?.email?.trim() ?? null;
+  return {
+    name: fullName || email || 'A Trialetics teammate',
+    email,
+    companyName:
+      (company as { name?: string | null } | null)?.name?.trim() ||
+      'this organization',
+  };
 }
 
 // =====================================================
@@ -567,7 +622,7 @@ export async function resendInvite(invitationId: string): Promise<{ error: strin
     const supabase = await createClient();
     const { data: inv, error: fetchErr } = await supabase
       .from('invitations')
-      .select('id, email, first_name, last_name, role, company_id')
+      .select('id, email, first_name, last_name, role, company_id, study_id, study_role')
       .eq('id', invitationId)
       .eq('company_id', profile.company_id)
       .eq('status', 'pending')
@@ -579,7 +634,6 @@ export async function resendInvite(invitationId: string): Promise<{ error: strin
 
     const emailTrimmed = (inv.email as string).trim().toLowerCase();
     const resendApiKey = process.env.RESEND_API_KEY;
-    const fromEmail = process.env.RESEND_FROM_EMAIL || 'Trialetics <noreply@trialetics.io>';
     if (!resendApiKey) {
       return { error: 'Email invite is not configured. Contact support.' };
     }
@@ -614,25 +668,51 @@ export async function resendInvite(invitationId: string): Promise<{ error: strin
 
     const inviteLink = `${siteUrl}/auth/confirm?token_hash=${tokenHash}&type=invite`;
 
-    const { error: emailError } = await resend!.emails.send({
-      from: fromEmail,
-      to: [emailTrimmed],
-      subject: "You're invited to join Trialetics",
-      html: getInviteEmailHtml(
-        (inv.first_name as string)?.trim() || '',
-        (inv.last_name as string)?.trim() || '',
-        inviteLink
+    const inviterContext = await loadInviterContext(profile.id, profile.company_id);
+
+    let studyLabel: string | null = null;
+    if (inv.study_id) {
+      const { data: studyRow } = await admin
+        .from('studies')
+        .select('study_name, protocol_number')
+        .eq('id', inv.study_id as string)
+        .maybeSingle();
+      const sName = (studyRow as { study_name?: string | null } | null)?.study_name?.trim() ?? '';
+      const sProto =
+        (studyRow as { protocol_number?: string | null } | null)?.protocol_number?.trim() ?? '';
+      studyLabel = sName || sProto || null;
+    }
+    const roleLabel = inv.study_role
+      ? (TEAM_ROLE_LABEL[inv.study_role as TeamMemberRole] ?? null)
+      : null;
+
+    const resentAt = new Date().toISOString();
+
+    const sendResult = await sendEmail({
+      to: emailTrimmed,
+      replyTo: inviterContext.email ?? undefined,
+      subject: `${inviterContext.name} invited you to Trialetics`,
+      category: 'invite-resend',
+      idempotencyKey: `${invitationId}:invite-resend:${resentAt}`,
+      template: (
+        <InviteUser
+          inviteeFirstName={(inv.first_name as string)?.trim() ?? ''}
+          inviterName={inviterContext.name}
+          companyName={inviterContext.companyName}
+          studyLabel={studyLabel}
+          roleLabel={roleLabel}
+          acceptUrl={inviteLink}
+        />
       ),
     });
 
-    if (emailError) {
-      console.error('Resend invite API error:', emailError);
+    if (sendResult.error) {
       return { error: 'Failed to send invite email. Please try again.' };
     }
 
     await supabase
       .from('invitations')
-      .update({ invited_at: new Date().toISOString() })
+      .update({ invited_at: resentAt })
       .eq('id', invitationId)
       .eq('company_id', profile.company_id);
 

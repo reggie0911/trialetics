@@ -26,21 +26,15 @@ import {
 import type { StudyMilestoneWithProgress } from '@/lib/types/tasks';
 import type { TaskWithRelations } from '@/lib/types/tasks';
 import { TASK_PRIORITY_OPTIONS } from '@/lib/types/tasks';
+import { formatPlanDate } from '@/lib/utils/visit-window';
 
 interface TaskTableViewProps {
   milestones: StudyMilestoneWithProgress[];
   tasks: TaskWithRelations[];
+  /** Absolute row index offset so milestone numbering stays consistent across pages. */
+  indexOffset?: number;
   onEditTask: (taskId: string) => void;
   onRefresh: () => void;
-}
-
-function formatDate(dateStr: string | null) {
-  if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: '2-digit',
-  });
 }
 
 function assigneeDisplay(task: TaskWithRelations): string {
@@ -56,6 +50,7 @@ function siteDisplay(task: TaskWithRelations): string {
 export function TaskTableView({
   milestones,
   tasks,
+  indexOffset = 0,
   onEditTask,
   onRefresh,
 }: TaskTableViewProps) {
@@ -73,7 +68,7 @@ export function TaskTableView({
   return (
     <div className="rounded-md border">
       <Table>
-        <TableHeader>
+        <TableHeader className="sticky top-0 z-10 bg-background">
           <TableRow>
             <TableHead className="w-10 text-xs">#</TableHead>
             <TableHead className="text-xs">Task Name</TableHead>
@@ -81,8 +76,8 @@ export function TaskTableView({
             <TableHead className="text-xs">Assigned to</TableHead>
             <TableHead className="text-xs">Due Date</TableHead>
             <TableHead className="text-xs">Status</TableHead>
-            <TableHead className="text-xs">Priority</TableHead>
-            <TableHead className="text-xs">Task Completed</TableHead>
+            <TableHead className="text-xs text-right">Priority</TableHead>
+            <TableHead className="text-xs text-right">Task Completed</TableHead>
             <TableHead className="w-10" />
           </TableRow>
         </TableHeader>
@@ -92,15 +87,17 @@ export function TaskTableView({
             const isExpanded = expanded.has(milestone.id);
             const assigneeCount = childTasks.filter((t) => t.assigned_to).length;
             const dueDate = milestone.planned_due_date;
-            const isOverdue = dueDate && new Date(dueDate) < new Date();
+            const isOverdue = !!dueDate && new Date(dueDate) < new Date();
 
             return (
               <Fragment key={milestone.id}>
                 <TableRow
                   key={milestone.id}
-                  className="bg-muted/40 hover:bg-muted/60"
+                  className="group bg-muted/40 hover:bg-muted/60"
                 >
-                  <TableCell className="font-medium">{idx + 1}</TableCell>
+                  <TableCell className="font-medium">
+                    {indexOffset + idx + 1}
+                  </TableCell>
                   <TableCell className="font-medium">{milestone.name}</TableCell>
                   <TableCell>—</TableCell>
                   <TableCell>
@@ -121,7 +118,7 @@ export function TaskTableView({
                   </TableCell>
                   <TableCell>
                     <span className={isOverdue ? 'text-destructive' : ''}>
-                      {formatDate(dueDate)}
+                      {formatPlanDate(dueDate)}
                       {isOverdue && ' Overdue'}
                     </span>
                   </TableCell>
@@ -142,13 +139,13 @@ export function TaskTableView({
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell>—</TableCell>
-                  <TableCell className="text-xs">
+                  <TableCell className="text-right">—</TableCell>
+                  <TableCell className="text-right text-xs tabular-nums">
                     {milestone.completed_count}/{milestone.total_count}
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
-                      <DropdownMenuTrigger className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground">
+                      <DropdownMenuTrigger className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-accent-foreground focus-visible:opacity-100 group-hover:opacity-100">
                         <MoreHorizontal className="h-4 w-4" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
@@ -159,69 +156,77 @@ export function TaskTableView({
                   </TableCell>
                 </TableRow>
                 {isExpanded &&
-                  childTasks.map((task, childIdx) => (
-                    <TableRow key={task.id} className="bg-background">
-                      <TableCell className="pl-10 text-muted-foreground">
-                        {childIdx + 1}
-                      </TableCell>
-                      <TableCell>{task.title}</TableCell>
-                      <TableCell>
-                        {task.site_id ? (
-                          siteDisplay(task)
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => onEditTask(task.id)}
-                            className="text-destructive hover:underline text-left"
-                          >
-                            Missing Site Name
-                          </button>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {task.assigned_to ? (
-                          assigneeDisplay(task)
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => onEditTask(task.id)}
-                            className="text-destructive hover:underline text-left"
-                          >
-                            Missing Name
-                          </button>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {formatDate(task.due_date)}
-                        {task.due_date &&
-                          new Date(task.due_date) < new Date() && (
+                  childTasks.map((task, childIdx) => {
+                    const taskOverdue =
+                      !!task.due_date && new Date(task.due_date) < new Date();
+                    return (
+                      <TableRow
+                        key={task.id}
+                        className="group bg-background even:bg-muted/30"
+                      >
+                        <TableCell className="pl-10 text-muted-foreground">
+                          {childIdx + 1}
+                        </TableCell>
+                        <TableCell>{task.title}</TableCell>
+                        <TableCell>
+                          {task.site_id ? (
+                            siteDisplay(task)
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => onEditTask(task.id)}
+                              className="text-destructive hover:underline text-left"
+                            >
+                              Missing Site Name
+                            </button>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {task.assigned_to ? (
+                            assigneeDisplay(task)
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => onEditTask(task.id)}
+                              className="text-destructive hover:underline text-left"
+                            >
+                              Missing Name
+                            </button>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <span className={taskOverdue ? 'text-destructive' : ''}>
+                            {formatPlanDate(task.due_date)}
+                          </span>
+                          {taskOverdue && (
                             <span className="text-destructive ml-1">Overdue</span>
                           )}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={task.status} />
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {TASK_PRIORITY_OPTIONS.find((o) => o.value === task.priority)?.label ?? task.priority}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>—</TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => onEditTask(task.id)}>
-                              <Pencil className="mr-2 h-4 w-4" />
-                              Edit Task
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={task.status} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant="secondary">
+                            {TASK_PRIORITY_OPTIONS.find((o) => o.value === task.priority)?.label ?? task.priority}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">—</TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-accent-foreground focus-visible:opacity-100 group-hover:opacity-100">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => onEditTask(task.id)}>
+                                <Pencil className="mr-2 h-4 w-4" />
+                                Edit Task
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
               </Fragment>
             );
           })}

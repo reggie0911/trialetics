@@ -10,6 +10,27 @@ const eslintConfig = defineConfig([
     rules: { "react/no-unescaped-entities": "off" },
   },
   {
+    // Centralize all transactional email sending in lib/email/. Any other
+    // file that imports `resend` directly bypasses templating, idempotency,
+    // and the 21 CFR Part 11 email_log audit trail.
+    files: ["**/*.{ts,tsx}"],
+    ignores: ["lib/email/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "resend",
+              message:
+                "Import sendEmail from '@/lib/email' instead of using the Resend SDK directly.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // The React Compiler ESLint plugin ships with Next.js 15 but this project
     // does not enable the React Compiler (no reactCompiler flag in next.config).
     // Downgrade compiler-only rules from error to warn to avoid blocking CI on

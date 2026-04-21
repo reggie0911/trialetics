@@ -60,7 +60,7 @@ export function parseMarkdownDocument(raw: string): ParsedDoc {
 }
 
 export function loadDoc(filePath: string): ParsedDoc | null {
-  const fullPath = path.join(process.cwd(), filePath);
+  const fullPath = path.join(/*turbopackIgnore: true*/ process.cwd(), filePath);
   if (!fs.existsSync(fullPath)) return null;
 
   const raw = fs.readFileSync(fullPath, 'utf-8');
@@ -68,7 +68,7 @@ export function loadDoc(filePath: string): ParsedDoc | null {
 }
 
 export function loadDocContent(filePath: string): string | null {
-  const fullPath = path.join(process.cwd(), filePath);
+  const fullPath = path.join(/*turbopackIgnore: true*/ process.cwd(), filePath);
   if (!fs.existsSync(fullPath)) return null;
   const raw = fs.readFileSync(fullPath, 'utf-8');
   const { content } = parseFrontmatter(raw);

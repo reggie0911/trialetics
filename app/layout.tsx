@@ -32,6 +32,7 @@ export const metadata: Metadata = {
     template: "%s | Trialetics Technologies",
   },
   description: "Premier custom software agency dedicated to advancing clinical trial management through technological innovation. Tailored solutions, Excel to SaaS conversion, and rapid 8-week implementation for clinical operations excellence.",
+  manifest: "/favicon/site.webmanifest",
   icons: {
     icon: [
       { url: "/favicon/favicon.ico", sizes: "48x48" },

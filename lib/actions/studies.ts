@@ -1,8 +1,10 @@
 'use server';
 
 import { cache } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
+import { allIsoCountriesForSelectList } from '@/lib/data/iso-countries-select';
 import { createClient } from '@/lib/server';
 import { assertStudyWritable } from '@/lib/server/study-write-guard';
 import {
@@ -50,6 +52,60 @@ export interface StudyFilters {
   search?: string;
   status?: StudyStatus;
   phase?: StudyPhase;
+}
+
+/**
+ * Keep `study_countries` rows aligned with `studies.overview.study_sites.regions` (alpha-2 codes).
+ * Inserts before deletes. Errors are logged only — study save remains authoritative; re-save converges.
+ */
+async function syncStudyCountriesFromOverview(
+  supabase: SupabaseClient,
+  studyId: string,
+  regions: string[],
+): Promise<void> {
+  try {
+    const targetCodes = new Set(regions.filter(Boolean));
+    const { data: existing, error: fetchError } = await supabase
+      .from('study_countries')
+      .select('id, country_code')
+      .eq('study_id', studyId);
+
+    if (fetchError) {
+      console.error('[syncStudyCountriesFromOverview] fetch', fetchError.message);
+      return;
+    }
+
+    const existingCodes = new Set((existing ?? []).map((r) => r.country_code));
+    const toInsert = [...targetCodes].filter((c) => !existingCodes.has(c));
+    const toDelete = (existing ?? []).filter((r) => !targetCodes.has(r.country_code));
+
+    if (toInsert.length) {
+      const list = allIsoCountriesForSelectList();
+      const nameByCode = new Map(list.map((o) => [o.code, o.name] as const));
+      const rows = toInsert.map((code) => ({
+        study_id: studyId,
+        country_code: code,
+        country_name: nameByCode.get(code) ?? code,
+        status: 'planned' as const,
+        regulatory_status: 'not_started' as const,
+      }));
+      const { error: insertError } = await supabase.from('study_countries').insert(rows);
+      if (insertError) {
+        console.error('[syncStudyCountriesFromOverview] insert', insertError.message);
+        return;
+      }
+    }
+
+    if (toDelete.length) {
+      const ids = toDelete.map((r) => r.id);
+      const { error: delError } = await supabase.from('study_countries').delete().in('id', ids);
+      if (delError) {
+        console.error('[syncStudyCountriesFromOverview] delete', delError.message);
+      }
+    }
+  } catch (e) {
+    console.error('[syncStudyCountriesFromOverview]', e);
+  }
 }
 
 async function getCompanyId(): Promise<string> {
@@ -211,8 +267,13 @@ export async function createStudy(input: CreateStudyInput): Promise<{ data: Stud
       return { data: null, error: error.message };
     }
 
+    const studyId = data.id as string;
+    const regionCodes = input.overview?.study_sites?.regions ?? [];
+    await syncStudyCountriesFromOverview(supabase, studyId, regionCodes);
+
     revalidatePath('/protected');
     revalidatePath('/protected/studies');
+    revalidateStudyCtmsLayout(studyId);
     return { data: mapStudyRow(data), error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -292,6 +353,7 @@ export async function updateStudy(input: UpdateStudyInput): Promise<{ data: Stud
       return { data: null, error: 'Profile not found.' };
     }
 
+    const overviewProvided = 'overview' in input;
     const { id, ...updates } = input;
     const { error: writeGuard } = await assertStudyWritable(supabase, id, profile.company_id);
     if (writeGuard) {
@@ -335,6 +397,12 @@ export async function updateStudy(input: UpdateStudyInput): Promise<{ data: Stud
         return { data: null, error: 'A study with this protocol number already exists.' };
       }
       return { data: null, error: error.message };
+    }
+
+    if (overviewProvided) {
+      const regionCodes =
+        input.overview === null ? [] : (input.overview?.study_sites?.regions ?? []);
+      await syncStudyCountriesFromOverview(supabase, id, regionCodes);
     }
 
     revalidatePath('/protected');

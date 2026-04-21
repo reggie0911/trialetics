@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { createTask } from '@/lib/actions/tasks';
+import { studySelectLabel } from '@/lib/ctms/study-display';
 
 const schema = z.object({
   study_id: z.string().min(1, 'Study is required'),
@@ -39,7 +40,7 @@ interface CreateTaskModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
-  studies: { id: string; title: string }[];
+  studies: { id: string; title: string; study_name: string | null; protocol_number: string }[];
   profileId: string;
 }
 
@@ -114,16 +115,17 @@ export function CreateTaskModal({
                   getDisplayLabel={(v) => {
                     if (!v) return null;
                     const study = studies.find((s) => s.id === v);
-                    const label = study?.title ?? null;
+                    if (!study) return 'Select Study...';
+                    const label = studySelectLabel(study);
                     if (!label || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(label))
                       return 'Select Study...';
-                    return label.replace(/\b\w/g, (c) => c.toUpperCase());
+                    return label;
                   }}
                 />
               </SelectTrigger>
               <SelectContent>
                 {studies.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>
+                  <SelectItem key={s.id} value={s.id}>{studySelectLabel(s)}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

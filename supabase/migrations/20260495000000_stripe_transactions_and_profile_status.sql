@@ -34,6 +34,7 @@ CREATE INDEX IF NOT EXISTS idx_transactions_stripe_event ON public.transactions(
 
 ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "transactions_select" ON public.transactions;
 CREATE POLICY "transactions_select" ON public.transactions
   FOR SELECT USING (
     company_id = (SELECT company_id FROM public.profiles WHERE user_id = auth.uid())

@@ -3,11 +3,18 @@
 import { useState, useTransition, useMemo, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Save, Send, Download, MessageSquareOff, Plus, Trash2, CheckCircle2, Circle, AlertTriangle, Loader2, Upload, ChevronDown, Undo2, XCircle } from 'lucide-react';
+import { ArrowLeft, Save, Send, Download, MessageSquareOff, Plus, Trash2, CheckCircle2, Circle, AlertTriangle, Loader2, Upload, ChevronDown, Undo2, XCircle, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import {
+  ATTACHMENT_LIMITS_HELPER_TEXT,
+  MAX_ATTACHMENT_BYTES,
+  MAX_ATTACHMENTS_PER_REPORT,
+  isDeclaredTypeAllowed,
+} from '@/lib/visit-report-attachments-policy';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -40,6 +47,7 @@ import {
   uploadVisitReportAttachment,
   deleteVisitReportAttachment,
   getAttachmentDownloadUrl,
+  updateTripReportPostVisitDates,
 } from '@/lib/actions/visit-reports';
 import type {
   TripReportAttendee,
@@ -95,9 +103,17 @@ type VisitReportAuthoringReport = {
   template_id?: string | null;
   author_submission_signature_data?: string | null;
   author_submission_signed_at?: string | null;
+  author_submission_printed_name?: string | null;
+  author_submission_attestation_text?: string | null;
+  author_submission_signed_at_db?: string | null;
+  author_submission_content_hash?: string | null;
   submitted_date?: string | null;
   approval_signature_data?: string | null;
   approval_signed_at?: string | null;
+  approval_printed_name?: string | null;
+  approval_attestation_text?: string | null;
+  approval_signed_at_db?: string | null;
+  approval_content_hash?: string | null;
   approved_date?: string | null;
   reviewer_comments_site_attendees?: string | null;
   reviewer_comments_sponsor_attendees?: string | null;
@@ -105,7 +121,33 @@ type VisitReportAuthoringReport = {
   reviewer_comments_narrative?: string | null;
   reviewer_comments_open_actions?: string | null;
   reviewer_comments_attachments?: string | null;
+  expected_send_date_confirmation_letter?: string | null;
+  expected_send_date_followup_letter?: string | null;
+  date_followup_letter_uploaded?: string | null;
+  date_mvl_log_uploaded?: string | null;
 };
+
+const POST_VISIT_DATE_KEYS = [
+  'expected_send_date_confirmation_letter',
+  'expected_send_date_followup_letter',
+  'date_followup_letter_uploaded',
+  'date_mvl_log_uploaded',
+] as const;
+type PostVisitDateKey = (typeof POST_VISIT_DATE_KEYS)[number];
+
+const POST_VISIT_DATE_LABELS: Record<PostVisitDateKey, string> = {
+  expected_send_date_confirmation_letter: 'Expected Send Date: Confirmation Letter',
+  expected_send_date_followup_letter: 'Expected Send Date: Follow-up Letter',
+  date_followup_letter_uploaded: 'Date Follow-up Letter Uploaded',
+  date_mvl_log_uploaded: 'Date Monitoring Visit Log (MVL) Uploaded',
+};
+
+/** Render a YYYY-MM-DD date for `<Input type="date">`; everything else collapses to ''. */
+function postVisitDateInputValue(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const part = String(raw).split('T')[0];
+  return /^\d{4}-\d{2}-\d{2}$/.test(part) ? part : '';
+}
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -292,6 +334,12 @@ export function VisitReportAuthoring({
   const [linkTemplateId, setLinkTemplateId] = useState('');
   const [isPdfGenerating, setIsPdfGenerating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [postVisitDates, setPostVisitDates] = useState<Record<PostVisitDateKey, string>>(() => ({
+    expected_send_date_confirmation_letter: postVisitDateInputValue(report?.expected_send_date_confirmation_letter),
+    expected_send_date_followup_letter: postVisitDateInputValue(report?.expected_send_date_followup_letter),
+    date_followup_letter_uploaded: postVisitDateInputValue(report?.date_followup_letter_uploaded),
+    date_mvl_log_uploaded: postVisitDateInputValue(report?.date_mvl_log_uploaded),
+  }));
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [submitSignatureModalOpen, setSubmitSignatureModalOpen] = useState(false);
   const [voidApprovalDialogOpen, setVoidApprovalDialogOpen] = useState(false);
@@ -326,6 +374,10 @@ export function VisitReportAuthoring({
   const canRecallSubmitted =
     userIsStudyCra && reportStatus === 'submitted' && !!currentUserProfileId && !!isAuthor;
   const canVoidApproval = reportStatus === 'approved_and_signed' && userIsAppAdmin;
+  // Post-visit dates are editable by any CRA or CPM on the study, regardless
+  // of report status (including approved_and_signed). Each save logs an
+  // audit event per changed field.
+  const canEditPostVisitDates = userIsStudyCra || userIsStudyCpm;
   const siteId = visit?.site_id ?? null;
 
   const siteAttendees = attendees.filter((a) => a.attendee_type === 'site');
@@ -363,6 +415,20 @@ export function VisitReportAuthoring({
   }, [report?.narrative]);
 
   useEffect(() => {
+    setPostVisitDates({
+      expected_send_date_confirmation_letter: postVisitDateInputValue(report?.expected_send_date_confirmation_letter),
+      expected_send_date_followup_letter: postVisitDateInputValue(report?.expected_send_date_followup_letter),
+      date_followup_letter_uploaded: postVisitDateInputValue(report?.date_followup_letter_uploaded),
+      date_mvl_log_uploaded: postVisitDateInputValue(report?.date_mvl_log_uploaded),
+    });
+  }, [
+    report?.expected_send_date_confirmation_letter,
+    report?.expected_send_date_followup_letter,
+    report?.date_followup_letter_uploaded,
+    report?.date_mvl_log_uploaded,
+  ]);
+
+  useEffect(() => {
     setSectionReviewerComments(sectionReviewerStateFromReport(report));
   }, [
     report?.id,
@@ -381,6 +447,18 @@ export function VisitReportAuthoring({
     }
   }, [voidApprovalDialogOpen]);
 
+  // Refresh while any attachment is still being scanned so the per-row badge
+  // resolves without a manual reload. Gated on `pending` count > 0 to avoid
+  // background traffic on idle pages.
+  useEffect(() => {
+    const hasPending = attachments.some((a) => a.scan_status === 'pending');
+    if (!hasPending) return;
+    const id = window.setInterval(() => {
+      router.refresh();
+    }, 10_000);
+    return () => window.clearInterval(id);
+  }, [attachments, router]);
+
   const handleSaveDraft = () => {
     if (!report?.id) return;
     startTransition(async () => {
@@ -394,12 +472,42 @@ export function VisitReportAuthoring({
     });
   };
 
+  const handleSavePostVisitDates = () => {
+    if (!report?.id) return;
+    startTransition(async () => {
+      const payload: Partial<Record<PostVisitDateKey, string | null>> = {};
+      for (const key of POST_VISIT_DATE_KEYS) {
+        const trimmed = postVisitDates[key].trim();
+        payload[key] = trimmed === '' ? null : trimmed;
+      }
+      const { error, changedFields } = await updateTripReportPostVisitDates(report.id, payload);
+      if (error) {
+        toast.error(error);
+        return;
+      }
+      if (changedFields.length === 0) {
+        toast.info('No changes to save.');
+        return;
+      }
+      toast.success(
+        changedFields.length === 1 ? 'Date saved.' : `${changedFields.length} dates saved.`
+      );
+      router.refresh();
+    });
+  };
+
   const openSubmitSignatureModal = () => {
     if (!report?.id) return;
     setSubmitSignatureModalOpen(true);
   };
 
-  const handleSubmitSignatureConfirm = (signatureData: string, signedAt: string) => {
+  const handleSubmitSignatureConfirm = (payload: {
+    signatureData: string;
+    signedAt: string;
+    printedName: string;
+    attestationText: string;
+    password: string;
+  }) => {
     if (!report?.id) return;
     startTransition(async () => {
       const { error: draftError } = await saveReportDraft(report.id, buildDraftPayload(), narrative);
@@ -407,7 +515,7 @@ export function VisitReportAuthoring({
         toast.error(draftError);
         return;
       }
-      const { error } = await submitReport(report.id, { signatureData, signedAt });
+      const { error } = await submitReport(report.id, payload);
       if (error) {
         toast.error(error);
         return;
@@ -523,10 +631,16 @@ export function VisitReportAuthoring({
     setSignatureModalOpen(true);
   };
 
-  const handleSignatureConfirm = (signatureData: string, signedAt: string) => {
+  const handleSignatureConfirm = (payload: {
+    signatureData: string;
+    signedAt: string;
+    printedName: string;
+    attestationText: string;
+    password: string;
+  }) => {
     if (!report?.id) return;
     startTransition(async () => {
-      const { error } = await approveReport(report.id, { signatureData, signedAt });
+      const { error } = await approveReport(report.id, payload);
       if (error) {
         toast.error(error);
         return;
@@ -772,6 +886,25 @@ export function VisitReportAuthoring({
   const handleUploadAttachment = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!report?.id || !e.target.files?.[0]) return;
     const file = e.target.files[0];
+
+    // Pre-flight client checks. Server re-validates these with a magic-byte
+    // sniff; this just gives the user immediate feedback for obvious cases.
+    if (attachments.length >= MAX_ATTACHMENTS_PER_REPORT) {
+      toast.error(`Maximum ${MAX_ATTACHMENTS_PER_REPORT} attachments per report.`);
+      e.target.value = '';
+      return;
+    }
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      toast.error('File is too large. Max 10 MB.');
+      e.target.value = '';
+      return;
+    }
+    if (!isDeclaredTypeAllowed(file.type, file.name)) {
+      toast.error('This file type is not allowed.');
+      e.target.value = '';
+      return;
+    }
+
     setIsUploading(true);
     const formData = new FormData();
     formData.append('file', file);
@@ -779,7 +912,7 @@ export function VisitReportAuthoring({
       const { data, error } = await uploadVisitReportAttachment(report.id, formData);
       if (error) toast.error(error);
       else {
-        toast.success('File uploaded.');
+        toast.success('File uploaded. Scanning for viruses…');
         router.refresh();
       }
     } finally {
@@ -804,6 +937,26 @@ export function VisitReportAuthoring({
     if (error) toast.error(error);
     else if (url) window.open(url, '_blank');
   };
+
+  // Quick-action deep link: when the Tracker dropdown navigates here with
+  // `#submit`, auto-open the submit signature modal once the report is fully
+  // answered and the user is allowed to submit. Only fires once per mount and
+  // clears the hash so a back-nav or refresh does not re-trigger it. Hooks
+  // must run before the early `!report` return below.
+  const submitHashHandledRef = useRef(false);
+  const submitHashPercent =
+    questions.length > 0
+      ? Math.round((questions.filter((q) => responses[q.id]?.response != null).length / questions.length) * 100)
+      : 0;
+  useEffect(() => {
+    if (submitHashHandledRef.current) return;
+    if (typeof window === 'undefined') return;
+    if (window.location.hash !== '#submit') return;
+    if (!template || questions.length === 0 || !canSubmit || submitHashPercent !== 100) return;
+    submitHashHandledRef.current = true;
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    setSubmitSignatureModalOpen(true);
+  }, [template, questions.length, canSubmit, submitHashPercent]);
 
   if (!report) {
     return (
@@ -1283,6 +1436,7 @@ export function VisitReportAuthoring({
               <TabsTrigger value="open-actions">Open Action Items ({openActionItems.length})</TabsTrigger>
               <TabsTrigger value="closed-actions">Closed Action Items ({closedActionItems.length})</TabsTrigger>
               <TabsTrigger value="attachments">Attachments ({attachments.length})</TabsTrigger>
+              <TabsTrigger value="post-visit-dates">Post-visit Dates</TabsTrigger>
               <TabsTrigger value="audit">Approval Audit</TabsTrigger>
             </TabsList>
 
@@ -1733,29 +1887,67 @@ export function VisitReportAuthoring({
         </CardHeader>
         <CardContent className="py-2 space-y-2">
           {attachments.length === 0 && <p className="text-sm text-muted-foreground">No attachments.</p>}
-          {attachments.map((a) => (
-            <div key={a.id} className="flex items-center justify-between gap-2 rounded border p-2 text-sm">
-              <div className="min-w-0 flex-1">
-                <p className="truncate">{a.file_name}</p>
-                <p className="text-muted-foreground text-xs">
-                  {a.file_size != null ? `${(a.file_size / 1024).toFixed(1)} KB` : ''} · {formatDate(a.created_at)}
-                  {a.category ? ` · ${a.category}` : ''}
-                </p>
+          {attachments.map((a) => {
+            const scanStatus = a.scan_status ?? 'pending';
+            const isInfected = scanStatus === 'infected';
+            const isPending = scanStatus === 'pending';
+            const isErrored = scanStatus === 'error';
+            return (
+              <div key={a.id} className="flex items-center justify-between gap-2 rounded border p-2 text-sm">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate">{a.file_name}</p>
+                    {isPending && (
+                      <Badge variant="secondary" className="gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Scanning…
+                      </Badge>
+                    )}
+                    {isInfected && (
+                      <Badge variant="destructive" className="gap-1">
+                        <ShieldAlert className="h-3 w-3" />
+                        Quarantined
+                      </Badge>
+                    )}
+                    {isErrored && (
+                      <Badge
+                        variant="warning"
+                        className="gap-1"
+                        title="Virus scan failed. Contact your administrator."
+                      >
+                        <AlertTriangle className="h-3 w-3" />
+                        Scan error
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-muted-foreground text-xs">
+                    {a.file_size != null ? `${(a.file_size / 1024).toFixed(1)} KB` : ''} · {formatDate(a.created_at)}
+                    {a.category ? ` · ${a.category}` : ''}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {!isInfected && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDownloadAttachment(a.id)}
+                      disabled={isPending}
+                    >
+                      Download
+                    </Button>
+                  )}
+                  {canEdit && (
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteAttachment(a.id)} aria-label="Remove attachment">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Button variant="ghost" size="sm" onClick={() => handleDownloadAttachment(a.id)}>
-                  Download
-                </Button>
-                {canEdit && (
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleDeleteAttachment(a.id)} aria-label="Remove attachment">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
           {canEdit && (
-            <div className="pt-2">
+            <div className="pt-2 space-y-1.5">
+              <p className="text-xs text-muted-foreground">{ATTACHMENT_LIMITS_HELPER_TEXT}</p>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1781,6 +1973,69 @@ export function VisitReportAuthoring({
           {renderSectionReviewerNotes('reviewer_comments_attachments', 'attachments')}
         </CardContent>
       </Card>
+      </TabsContent>
+
+      <TabsContent value="post-visit-dates" className="mt-4">
+      {/* Post-visit dates: editable by CRA + CPM in any status (incl. approved). */}
+      <Collapsible defaultOpen>
+        <Card className="py-2">
+          <CollapsibleTrigger className="w-full block text-left border-0 bg-transparent p-0 m-0 min-h-0 font-inherit focus:outline-none focus:ring-0">
+            <CardHeader className={cn(sectionStyle, 'border-b border-border/60 flex flex-row items-center justify-between cursor-pointer hover:bg-muted/30')}>
+              <h2 className="text-sm font-semibold text-foreground dark:text-white">Post-visit Dates</h2>
+              <ChevronDown className="h-4 w-4" />
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="py-3 space-y-3">
+              <p className="text-xs text-muted-foreground">
+                These compliance milestones do not require a document upload. Editable by CRAs and CPMs at any time, including after the report is approved. Each change is recorded in the Approval Audit.
+              </p>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {POST_VISIT_DATE_KEYS.map((key) => (
+                  <div key={key} className="flex flex-col gap-1">
+                    <Label htmlFor={`post-visit-${key}`} className="text-xs font-normal text-muted-foreground">
+                      {POST_VISIT_DATE_LABELS[key]}
+                    </Label>
+                    <Input
+                      id={`post-visit-${key}`}
+                      type="date"
+                      className="text-[12px] h-9"
+                      value={postVisitDates[key]}
+                      onChange={(e) =>
+                        setPostVisitDates((prev) => ({ ...prev, [key]: e.target.value }))
+                      }
+                      readOnly={!canEditPostVisitDates}
+                      disabled={!canEditPostVisitDates}
+                    />
+                  </div>
+                ))}
+              </div>
+              {canEditPostVisitDates && (
+                <div className="flex justify-end pt-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSavePostVisitDates}
+                    disabled={isPending || !report?.id}
+                  >
+                    {isPending ? (
+                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-1.5" />
+                    )}
+                    Save dates
+                  </Button>
+                </div>
+              )}
+              {!canEditPostVisitDates && (
+                <p className="text-xs text-muted-foreground italic">
+                  Read-only. Only CRAs and CPMs on this study can edit these dates.
+                </p>
+              )}
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
       </TabsContent>
 
       <TabsContent value="audit" className="mt-4">
@@ -1813,6 +2068,10 @@ export function VisitReportAuthoring({
                     displayName={reportSignerNames.author}
                     signatureData={report?.author_submission_signature_data}
                     signedAtColumn={report?.author_submission_signed_at}
+                    printedName={report?.author_submission_printed_name}
+                    attestationText={report?.author_submission_attestation_text}
+                    signedAtDbColumn={report?.author_submission_signed_at_db}
+                    contentHash={report?.author_submission_content_hash}
                   />
                 </div>
                 <div className="flex items-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground md:col-span-2 md:border-r md:border-border/60 md:px-3 md:py-3">
@@ -1820,7 +2079,9 @@ export function VisitReportAuthoring({
                 </div>
                 <div className="flex min-w-0 items-center font-medium text-foreground md:col-span-3 md:px-3 md:py-3">
                   {formatSignatureDisplayDateTime(
-                    report?.author_submission_signed_at ?? report?.submitted_date
+                    report?.author_submission_signed_at_db ??
+                      report?.author_submission_signed_at ??
+                      report?.submitted_date
                   )}
                 </div>
               </div>
@@ -1834,13 +2095,19 @@ export function VisitReportAuthoring({
                     displayName={reportSignerNames.approver}
                     signatureData={report?.approval_signature_data}
                     signedAtColumn={report?.approval_signed_at}
+                    printedName={report?.approval_printed_name}
+                    attestationText={report?.approval_attestation_text}
+                    signedAtDbColumn={report?.approval_signed_at_db}
+                    contentHash={report?.approval_content_hash}
                   />
                 </div>
                 <div className="flex items-center text-[10px] font-semibold uppercase tracking-wide text-muted-foreground md:col-span-2 md:border-r md:border-border/60 md:px-3 md:py-3">
                   Approved date
                 </div>
                 <div className="flex min-w-0 items-center font-medium text-foreground md:col-span-3 md:px-3 md:py-3">
-                  {formatSignatureDisplayDateTime(report?.approval_signed_at ?? report?.approved_date)}
+                  {formatSignatureDisplayDateTime(
+                    report?.approval_signed_at_db ?? report?.approval_signed_at ?? report?.approved_date
+                  )}
                 </div>
               </div>
             </div>

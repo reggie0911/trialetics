@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, X, Users, Trash2 } from 'lucide-react';
+import { Search, X, Users, Trash2, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -42,7 +42,6 @@ import type {
   StudySite,
   SubjectStatus,
 } from '@/lib/types/ctms';
-import { SUBJECT_STATUS_OPTIONS } from '@/lib/types/ctms';
 import {
   getStudySubjects,
   getEnrollmentFunnel,
@@ -54,9 +53,15 @@ import { useStudyHub } from '@/components/ctms/study-hub-context';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
 import { CopilotImportTrigger } from '@/components/copilot/tables/copilot-import-trigger';
+import { useClientPagination } from '@/lib/hooks/use-client-pagination';
+import { TablePaginationFooter } from '@/components/ui/table-pagination-footer';
 
 import { EnrollmentFunnel } from './enrollment-funnel';
 import { SubjectFormDialog } from './subject-form-dialog';
+import {
+  SubjectTrackingPctSubCell,
+  SubjectTrackingQuerySubCell,
+} from './subject-tracking-summary-cell';
 
 interface SubjectsTabProps {
   studyId: string;
@@ -129,6 +134,12 @@ export function SubjectsTab({
     return result;
   }, [subjects, searchQuery, statusFilter, siteFilter, siteScopeId]);
 
+  const pagination = useClientPagination({
+    totalItems: filteredSubjects.length,
+    resetKey: [searchQuery, statusFilter, siteFilter, siteScopeId],
+  });
+  const paginatedSubjects = pagination.paginate(filteredSubjects);
+
   // Bulk-create subjects from accepted Copilot proposals. We resolve site
   // references against the available sites first (Copilot may return a
   // site_number, name, or label instead of the canonical UUID), then call
@@ -198,11 +209,15 @@ export function SubjectsTab({
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '—';
-    return new Date(dateStr).toLocaleDateString('en-US', {
+    const parts = new Intl.DateTimeFormat('en-GB', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric',
-    });
+      day: '2-digit',
+    }).formatToParts(new Date(dateStr));
+    const day = parts.find((p) => p.type === 'day')?.value ?? '';
+    const month = parts.find((p) => p.type === 'month')?.value ?? '';
+    const year = parts.find((p) => p.type === 'year')?.value ?? '';
+    return `${day}-${month}-${year}`;
   };
 
   const hasActiveFilters =
@@ -211,58 +226,14 @@ export function SubjectsTab({
     (!siteScopeId && siteFilter !== 'all');
 
   return (
-    <div className="space-y-4">
-      <EnrollmentFunnel data={funnel} />
+    <div className="space-y-3">
+      <EnrollmentFunnel
+        data={funnel}
+        value={statusFilter as SubjectStatus | 'all'}
+        onValueChange={(next) => setStatusFilter(next)}
+      />
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-medium">Subjects</h3>
-          <p className="text-sm text-muted-foreground">
-            {subjects.length} subject{subjects.length !== 1 ? 's' : ''}{' '}
-            {siteScopeId ? 'at this site.' : 'enrolled in this study.'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {!readOnly ? (
-            <CopilotImportTrigger
-              tableId="ctms.subject"
-              tableLabel="Subjects"
-              studyId={studyId}
-              scope={{ kind: 'study', id: studyId }}
-              duplicateKey="subject_number"
-              existingRows={subjects.map(s => ({
-                id: s.id,
-                values: {
-                  subject_number: s.subject_number,
-                  screening_number: s.screening_number,
-                  randomization_number: s.randomization_number,
-                },
-              }))}
-              targetFields={[
-                { path: 'subject_number', label: 'Subject number' },
-                { path: 'site_id', label: 'Site' },
-                { path: 'screening_number', label: 'Screening number' },
-                { path: 'randomization_number', label: 'Randomization number' },
-                { path: 'status', label: 'Status' },
-                { path: 'screening_date', label: 'Screening date' },
-                { path: 'randomization_date', label: 'Randomization date' },
-              ]}
-              onApplied={handleCopilotImport}
-            />
-          ) : null}
-          <SubjectFormDialog
-            studyId={studyId}
-            sites={sites}
-            onSuccess={refreshData}
-            defaultSiteIdWhenCreate={siteScopeId}
-            lockSiteSelection={Boolean(siteScopeId)}
-            disabled={readOnly}
-            disabledTooltip={disabledTooltip}
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-1 items-center gap-2 flex-wrap">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-full sm:w-64">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -272,23 +243,6 @@ export function SubjectsTab({
             className="pl-9"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue
-              placeholder="Status"
-              getDisplayLabel={(v) => {
-                if (v === 'all') return 'All Statuses';
-                return SUBJECT_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? v;
-              }}
-            />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            {SUBJECT_STATUS_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         {!siteScopeId && sites.length > 0 && (
           <Select value={siteFilter} onValueChange={setSiteFilter}>
             <SelectTrigger className="w-[150px]">
@@ -322,6 +276,44 @@ export function SubjectsTab({
             Clear
           </Button>
         )}
+        <div className="ml-auto flex items-center gap-2">
+          {!readOnly ? (
+            <CopilotImportTrigger
+              tableId="ctms.subject"
+              tableLabel="Subjects"
+              studyId={studyId}
+              scope={{ kind: 'study', id: studyId }}
+              duplicateKey="subject_number"
+              existingRows={subjects.map((s) => ({
+                id: s.id,
+                values: {
+                  subject_number: s.subject_number,
+                  screening_number: s.screening_number,
+                  randomization_number: s.randomization_number,
+                },
+              }))}
+              targetFields={[
+                { path: 'subject_number', label: 'Subject number' },
+                { path: 'site_id', label: 'Site' },
+                { path: 'screening_number', label: 'Screening number' },
+                { path: 'randomization_number', label: 'Randomization number' },
+                { path: 'status', label: 'Status' },
+                { path: 'screening_date', label: 'Screening date' },
+                { path: 'randomization_date', label: 'Randomization date' },
+              ]}
+              onApplied={handleCopilotImport}
+            />
+          ) : null}
+          <SubjectFormDialog
+            studyId={studyId}
+            sites={sites}
+            onSuccess={refreshData}
+            defaultSiteIdWhenCreate={siteScopeId}
+            lockSiteSelection={Boolean(siteScopeId)}
+            disabled={readOnly}
+            disabledTooltip={disabledTooltip}
+          />
+        </div>
       </div>
 
       {filteredSubjects.length === 0 ? (
@@ -350,11 +342,41 @@ export function SubjectsTab({
                 <TableHead className="text-xs">Status</TableHead>
                 <TableHead className="text-xs">Screening Date</TableHead>
                 <TableHead className="text-xs">Randomization Date</TableHead>
-                <TableHead className="text-xs w-[60px]">Actions</TableHead>
+                <TableHead className="text-xs w-[60px] text-center">
+                  <Tooltip>
+                    <TooltipTrigger render={<span className="cursor-help" />}>DE</TooltipTrigger>
+                    <TooltipContent>Data Entry %</TooltipContent>
+                  </Tooltip>
+                </TableHead>
+                <TableHead className="text-xs w-[60px] text-center">
+                  <Tooltip>
+                    <TooltipTrigger render={<span className="cursor-help" />}>SDV</TooltipTrigger>
+                    <TooltipContent>Source Data Verified %</TooltipContent>
+                  </Tooltip>
+                </TableHead>
+                <TableHead className="text-xs w-[60px] text-center">
+                  <Tooltip>
+                    <TooltipTrigger render={<span className="cursor-help" />}>Lock</TooltipTrigger>
+                    <TooltipContent>Data Management Lock %</TooltipContent>
+                  </Tooltip>
+                </TableHead>
+                <TableHead className="text-xs w-[50px] text-center">
+                  <Tooltip>
+                    <TooltipTrigger render={<span className="cursor-help" />}>OQ</TooltipTrigger>
+                    <TooltipContent>Open queries</TooltipContent>
+                  </Tooltip>
+                </TableHead>
+                <TableHead className="text-xs w-[50px] text-center">
+                  <Tooltip>
+                    <TooltipTrigger render={<span className="cursor-help" />}>AQ</TooltipTrigger>
+                    <TooltipContent>Answered queries</TooltipContent>
+                  </Tooltip>
+                </TableHead>
+                <TableHead className="text-xs w-[120px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredSubjects.map((subject) => (
+              {paginatedSubjects.map((subject) => (
                 <TableRow
                   key={subject.id}
                   className="cursor-pointer"
@@ -383,7 +405,53 @@ export function SubjectsTab({
                   <TableCell className="text-xs text-muted-foreground">
                     {formatDate(subject.randomization_date)}
                   </TableCell>
+                  <TableCell className="text-xs text-center">
+                    <SubjectTrackingPctSubCell
+                      summary={subject.tracking_summary}
+                      metric="dataEntryPct"
+                    />
+                  </TableCell>
+                  <TableCell className="text-xs text-center">
+                    <SubjectTrackingPctSubCell
+                      summary={subject.tracking_summary}
+                      metric="sdvPct"
+                    />
+                  </TableCell>
+                  <TableCell className="text-xs text-center">
+                    <SubjectTrackingPctSubCell
+                      summary={subject.tracking_summary}
+                      metric="lockPct"
+                    />
+                  </TableCell>
+                  <TableCell className="text-xs text-center">
+                    <SubjectTrackingQuerySubCell
+                      count={subject.tracking_summary?.openQueryCount ?? 0}
+                      variant="open"
+                    />
+                  </TableCell>
+                  <TableCell className="text-xs text-center">
+                    <SubjectTrackingQuerySubCell
+                      count={subject.tracking_summary?.answeredQueryCount ?? 0}
+                      variant="answered"
+                    />
+                  </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() =>
+                          router.push(
+                            `/protected/studies/${studyId}/subjects/${subject.id}`,
+                          )
+                        }
+                        aria-label={`Open subject ${subject.subject_number}`}
+                      >
+                        <ExternalLink className="h-3 w-3 mr-1" />
+                        Open
+                      </Button>
                     {readOnly ? (
                       <Tooltip>
                         <TooltipTrigger render={<span className="inline-flex" />}>
@@ -430,6 +498,7 @@ export function SubjectsTab({
                         </AlertDialogContent>
                       </AlertDialog>
                     )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -437,6 +506,12 @@ export function SubjectsTab({
           </Table>
         </div>
       )}
+
+      <TablePaginationFooter
+        pagination={pagination}
+        totalItems={filteredSubjects.length}
+        itemNoun="subject"
+      />
     </div>
   );
 }

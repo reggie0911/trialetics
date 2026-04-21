@@ -9,6 +9,8 @@ import {
   getEnrollmentFunnelForSite,
 } from '@/lib/actions/subjects';
 import { getTasksBySite } from '@/lib/actions/tasks';
+import { getSiteEcrfRollup } from '@/lib/actions/ecrf-rollup';
+import { getSiteVisitScheduleRollup } from '@/lib/actions/visit-schedule-rollup';
 import { listDirectoryContacts } from '@/lib/actions/directory-contacts';
 import { getDirectoryRoleCatalog } from '@/lib/actions/directory-catalog';
 import { listInstitutions } from '@/lib/actions/directory-institutions';
@@ -59,6 +61,8 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
     institutionsRes,
     financeApprovalTemplateOptions,
     studyBudgetOptions,
+    ecrfRollup,
+    visitSchedule,
   ] = await Promise.all([
     getStudyById(studyId),
     getSubjectCountBySite(siteId),
@@ -74,6 +78,8 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
     listInstitutions({ limit: 300, offset: 0 }),
     listFinanceApprovalTemplateOptions().catch(() => []),
     listStudyBudgetOptions(site.study_id).catch(() => []),
+    getSiteEcrfRollup(site.id),
+    getSiteVisitScheduleRollup(site.id),
   ]);
 
   const linkedStudyBudgetMeta = siteBudget?.study_budget_id
@@ -104,6 +110,14 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
       'Unnamed contact',
   }));
 
+  const { data: siteInstitutionLink } = await supabase
+    .from('institution_study_site')
+    .select('institution_id')
+    .eq('study_site_id', site.id)
+    .limit(1)
+    .maybeSingle();
+  const siteInstitutionId = siteInstitutionLink?.institution_id ?? null;
+
   return (
     <div className="p-6">
       <Suspense
@@ -127,7 +141,9 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
           siteTasks={siteTasks}
           directoryContactOptions={directoryContactOptions}
           directoryCatalog={directoryCatalogRes.categories}
+          directoryCatalogError={directoryCatalogRes.error}
           institutionsForQuickContact={institutionsRes.data ?? []}
+          siteInstitutionId={siteInstitutionId}
           siteBudget={siteBudget}
           studyBudgetName={linkedStudyBudgetMeta?.name ?? null}
           budgetAllocations={budgetAllocationsObj}
@@ -136,6 +152,8 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
           sitePaymentSchedules={sitePaymentSchedules}
           initialSiteSubjects={initialSiteSubjects}
           siteFunnel={siteFunnel}
+          ecrfRollup={ecrfRollup}
+          visitSchedule={visitSchedule}
           studySitesForSubjects={studySitesForSubjects}
           financeApprovalTemplateOptions={financeApprovalTemplateOptions}
           studyBudgetOptions={studyBudgetOptions}

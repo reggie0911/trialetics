@@ -1,5 +1,12 @@
 # Report Submission and Approval Workflow
 
+> **Compliance:** the signing pipeline (submit, approve, void) is a
+> 21 CFR Part 11 electronic-record/signature flow. See
+> [`PART11_CONTROLS.md`](./PART11_CONTROLS.md) for the per-clause control
+> mapping (printed name, attestation, server timestamp, content hash,
+> audit immutability, post-sign lock, void audit) and the test/trigger
+> that evidences each control.
+
 ## Role-based access (CRA / CPM)
 
 | Capability | Who |
@@ -185,7 +192,7 @@ flowchart TB
 
 - **Client-side**: Use `react-signature-canvas` or similar; export as base64 PNG
 - **Storage**: Store in `trip_reports.approval_signature_data` or separate `visit_report_signatures` table with `trip_report_id` FK
-- **Compliance**: Consider 21 CFR Part 11 if applicable (electronic records/signatures); may need additional controls (e.g., no backspace after sign, timestamp, user attestation)
+- **Compliance**: 21 CFR Part 11 controls (printed name, canonical attestation, server-side timestamp, SHA-256 content hash, password reverification, append-only audit, post-sign lock) are implemented and documented in [`PART11_CONTROLS.md`](./PART11_CONTROLS.md).
 
 ### Phase 6: Distribution and Action Items
 
@@ -225,7 +232,7 @@ flowchart TB
 | submitted | authoring | CRA (author): Recall |
 | under_review | returned | Reviewer: Return to CRA |
 | returned | submitted | CRA: Resubmit (same as Send to Review) |
-| under_review | approved_and_signed | Reviewer: Approve (+ signature capture) |
+| under_review | approved_and_signed | Reviewer: Approve (+ signature capture). Also reachable in batch via `approveReportsBulk` ([continuous-session signing](./PART11_CONTROLS.md#7-continuous-session-signing-bulk-approve)) — one credential challenge, one audit row per report sharing a `signing_session_id`. |
 | approved_and_signed | returned | Company admin: Void Approval (reason + password) |
 
 ---

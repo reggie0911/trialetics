@@ -42,6 +42,22 @@ const TRIP_REPORT_AUDIT_ACTION_LABELS: Record<string, string> = {
 
 const TRIP_REPORT_AUDIT_NOTE_MAX = 120;
 
+/** Friendly labels for post-visit date fields in audit notes. */
+const POST_VISIT_DATE_FIELD_LABELS: Record<string, string> = {
+  expected_send_date_confirmation_letter: 'Expected Send Date: Confirmation Letter',
+  expected_send_date_followup_letter: 'Expected Send Date: Follow-up Letter',
+  date_followup_letter_uploaded: 'Date Follow-up Letter Uploaded',
+  date_mvl_log_uploaded: 'Date Monitoring Visit Log Uploaded',
+};
+
+/** Render a YYYY-MM-DD value (or null) for an audit note. */
+function formatAuditDateValue(raw: unknown): string {
+  if (raw == null) return '—';
+  const str = String(raw).trim();
+  if (!str) return '—';
+  return str.split('T')[0];
+}
+
 /** Note column text for `trip_report_status_events.metadata`. */
 export function formatTripReportAuditEventNote(metadata: Record<string, unknown> | null | undefined): string {
   if (!metadata || typeof metadata !== 'object') return '—';
@@ -53,6 +69,14 @@ export function formatTripReportAuditEventNote(metadata: Record<string, unknown>
       reason.length > TRIP_REPORT_AUDIT_NOTE_MAX ? `${reason.slice(0, TRIP_REPORT_AUDIT_NOTE_MAX)}…` : reason;
     return `Void approval — ${clipped}`;
   }
+  if (metadata.event === 'post_visit_date_changed') {
+    const fieldRaw = metadata.field;
+    const field = typeof fieldRaw === 'string' ? fieldRaw : '';
+    const fieldLabel = POST_VISIT_DATE_FIELD_LABELS[field] ?? titleCaseFromSnake(field || 'Post-visit date');
+    const from = formatAuditDateValue(metadata.from);
+    const to = formatAuditDateValue(metadata.to);
+    return `${fieldLabel}: ${from} → ${to}`;
+  }
   const action = metadata.action;
   if (typeof action === 'string' && action.trim() !== '') {
     return TRIP_REPORT_AUDIT_ACTION_LABELS[action] ?? titleCaseFromSnake(action);
@@ -60,13 +84,14 @@ export function formatTripReportAuditEventNote(metadata: Record<string, unknown>
   return '—';
 }
 
-export type VisitReportType = 'sqv' | 'siv' | 'monitoring' | 'close_out';
+export type VisitReportType = 'sqv' | 'siv' | 'monitoring' | 'close_out' | 'training';
 
 export const VISIT_REPORT_TYPE_LABELS: Record<VisitReportType, string> = {
   sqv: 'Site Qualification Visit',
   siv: 'Site Initiation Visit',
   monitoring: 'Interim Monitoring Visit',
-  close_out: 'Closeout Visit',
+  close_out: 'Close-Out Visit',
+  training: 'Training Visit',
 };
 
 export type VisitLocation = 'onsite' | 'remote';
@@ -141,11 +166,73 @@ export interface VisitReportTemplateWithQuestionCount extends VisitReportTemplat
   question_count?: number;
 }
 
+/**
+ * Reason a `visit_report_template_versions` row was created. `on_create`
+ * snapshots the template at report-create time; `on_first_edit` re-snapshots
+ * the template on the first author edit while the report is still
+ * `report_pending` if the underlying template has changed since the
+ * create-snapshot. See `lib/actions/visit-report-template-versions.ts`.
+ */
+export type VisitReportTemplateSnapshotReason = 'on_create' | 'on_first_edit';
+
+/**
+ * Immutable snapshot of a `visit_report_templates` row taken at report
+ * create or first-edit time so editing the live template never silently
+ * mutates historical trip reports.
+ */
+export interface VisitReportTemplateVersion {
+  id: string;
+  template_id: string;
+  version_number: number;
+  name: string;
+  visit_report_type: VisitReportType;
+  days_submission: number;
+  days_approval: number;
+  snapshot_reason: VisitReportTemplateSnapshotReason;
+  snapshot_taken_by: string | null;
+  created_at: string;
+}
+
+/**
+ * Snapshotted question rows for a `visit_report_template_versions` row.
+ * `source_question_id` preserves the original
+ * `visit_report_template_questions.id` so pre-snapshot responses can be
+ * migrated to the new snapshot's question ids on the on_first_edit path.
+ */
+export interface VisitReportTemplateQuestionVersion {
+  id: string;
+  template_version_id: string;
+  source_question_id: string | null;
+  report_order: number;
+  report_section: string | null;
+  report_sub_section: string | null;
+  question_text: string;
+  sort_order: number;
+  created_at: string;
+}
+
+/**
+ * Discriminator returned by `loadTemplateForReport`. Lets callers tell
+ * whether a report is reading from a locked-in snapshot vs. lazily
+ * falling back to the live template.
+ */
+export type VisitReportTemplateSource =
+  | { kind: 'live'; templateId: string }
+  | { kind: 'snapshot'; versionId: string };
+
+/**
+ * Trip-report template types kept in lockstep with the active monitoring
+ * visit set in `lib/types/ctms.ts` so a visit's `visit_type` always has a
+ * matching template via the equality match in
+ * `components/ctms/trip-reports/visit-report-authoring.tsx`. Each option's
+ * label embeds the same `(ABBREV)` suffix used by `VISIT_TYPE_OPTIONS`.
+ */
 export const VISIT_REPORT_TYPE_OPTIONS: { value: VisitReportType; label: string }[] = [
-  { value: 'sqv', label: 'Site Qualification Visit' },
-  { value: 'siv', label: 'Site Initiation Visit' },
-  { value: 'monitoring', label: 'Interim Monitoring Visit' },
-  { value: 'close_out', label: 'Closeout Visit' },
+  { value: 'sqv',        label: 'Site Qualification Visit (SQV)' },
+  { value: 'siv',        label: 'Site Initiation Visit (SIV)' },
+  { value: 'monitoring', label: 'Interim Monitoring Visit (IMV)' },
+  { value: 'close_out',  label: 'Close-Out Visit (COV)' },
+  { value: 'training',   label: 'Training Visit (TV)' },
 ];
 
 export const VISIT_LOCATION_OPTIONS: { value: VisitLocation; label: string }[] = [

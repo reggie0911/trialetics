@@ -4,6 +4,8 @@ import { getStudyById, getStudyCounts, getStudies } from '@/lib/actions/studies'
 import { getStudyCountries } from '@/lib/actions/countries';
 import { getStudySites } from '@/lib/actions/sites';
 import { getStudySubjects, getEnrollmentFunnel } from '@/lib/actions/subjects';
+import { getStudyEcrfRollup } from '@/lib/actions/ecrf-rollup';
+import { getStudyVisitScheduleRollup } from '@/lib/actions/visit-schedule-rollup';
 import {
   getTeamDirectory,
   getTeamRoles,
@@ -11,6 +13,8 @@ import {
   getJoinLinks,
 } from '@/lib/actions/team';
 import { getStudyVisits } from '@/lib/actions/visits';
+import { listStudyVisitDefinitions } from '@/lib/actions/study-visit-definitions';
+import { listStudyCrfs } from '@/lib/actions/study-crfs';
 import { getStudyBudgets, getStudyPayments, getStudyFinancialSummary } from '@/lib/actions/financials';
 import { listFinanceInvoicesForStudy } from '@/lib/actions/finance-invoices';
 import { getStudyKriValues, getEnrollmentCurve } from '@/lib/actions/reports';
@@ -57,6 +61,10 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     kriValues,
     enrollmentCurve,
     financeApprovalTemplateOptions,
+    ecrfVisitDefinitions,
+    ecrfStudyCrfs,
+    ecrfRollup,
+    visitSchedule,
   ] = await Promise.all([
     getStudyById(id),
     getStudyCounts(id),
@@ -77,6 +85,10 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     getStudyKriValues(id),
     getEnrollmentCurve(id),
     listFinanceApprovalTemplateOptions().catch(() => []),
+    isAdmin ? listStudyVisitDefinitions(id).catch(() => []) : Promise.resolve([]),
+    isAdmin ? listStudyCrfs(id).catch(() => []) : Promise.resolve([]),
+    getStudyEcrfRollup(id),
+    getStudyVisitScheduleRollup(id),
   ]);
 
   if (!study) notFound();
@@ -107,6 +119,10 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
         enrollmentCurve={enrollmentCurve}
         isAdmin={isAdmin}
         financeApprovalTemplateOptions={financeApprovalTemplateOptions}
+        ecrfVisitDefinitions={ecrfVisitDefinitions}
+        ecrfStudyCrfs={ecrfStudyCrfs}
+        ecrfRollup={ecrfRollup}
+        visitSchedule={visitSchedule}
       />
     </div>
   );

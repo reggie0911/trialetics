@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -181,6 +181,8 @@ export function StudyForm({
 }: StudyFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  /** Snapshot of country codes when the edit form loaded — used to detect destructive removals. */
+  const initialRegionCodesRef = useRef<string[] | null>(null);
 
   const form = useForm<StudyFormValues>({
     resolver: zodResolver(studyFormSchema),
@@ -208,10 +210,30 @@ export function StudyForm({
     }
   }, [mode, form]);
 
+  useEffect(() => {
+    if (mode === 'edit' && study) {
+      initialRegionCodesRef.current =
+        normalizeStudyRegionsInput(study.overview?.study_sites?.regions) ?? [];
+    } else {
+      initialRegionCodesRef.current = null;
+    }
+  }, [mode, study?.id, study?.overview]);
+
   async function onSubmit(values: StudyFormValues) {
     setIsSubmitting(true);
 
     try {
+      if (mode === 'edit' && initialRegionCodesRef.current?.length) {
+        const current = new Set(values.overview.regions);
+        const removed = initialRegionCodesRef.current.filter((c) => !current.has(c));
+        if (removed.length > 0) {
+          const ok = window.confirm(
+            `Removing ${removed.length} country(ies) from the study will also delete any regulatory submissions tied to them. Continue?`,
+          );
+          if (!ok) return;
+        }
+      }
+
       const { overview: overviewForm, ...restValues } = values;
       const overview = buildStudyOverviewForSave(overviewForm);
 

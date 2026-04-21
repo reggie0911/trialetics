@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, MoreHorizontal, Pencil } from 'lucide-react';
+import { Plus, MoreHorizontal, Pencil, Search } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -33,6 +34,9 @@ import { UpdateAssigneeTaskModal } from './update-assignee-task-modal';
 import type { TaskWithRelations } from '@/lib/types/tasks';
 import { TASK_PRIORITY_OPTIONS } from '@/lib/types/tasks';
 import type { TaskDashboardCounts } from '@/lib/actions/tasks';
+import { useClientPagination } from '@/lib/hooks/use-client-pagination';
+import { TablePaginationFooter } from '@/components/ui/table-pagination-footer';
+import { formatPlanDate } from '@/lib/utils/visit-window';
 
 const STATUS_OPTIONS = [
   { value: 'all', label: 'All' },
@@ -41,15 +45,6 @@ const STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
   { value: 'blocked', label: 'Blocked' },
 ];
-
-function formatDate(dateStr: string | null) {
-  if (!dateStr) return '—';
-  const d = new Date(dateStr);
-  const day = d.getDate().toString().padStart(2, '0');
-  const month = d.toLocaleString('en-US', { month: 'short' });
-  const year = d.getFullYear();
-  return `${day}-${month}-${year}`;
-}
 
 function assigneeDisplay(task: TaskWithRelations): string {
   const p = task.profiles;
@@ -60,7 +55,7 @@ function assigneeDisplay(task: TaskWithRelations): string {
 interface MyTasksClientProps {
   initialTasks: TaskWithRelations[];
   initialCounts: TaskDashboardCounts;
-  studies: { id: string; title: string }[];
+  studies: { id: string; title: string; study_name: string | null; protocol_number: string }[];
   profileId: string;
   isAdmin?: boolean;
 }
@@ -74,13 +69,34 @@ export function MyTasksClient({
 }: MyTasksClientProps) {
   const router = useRouter();
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editTaskId, setEditTaskId] = useState<string | null>(null);
 
-  const filteredTasks = initialTasks.filter((t) => {
-    if (statusFilter !== 'all' && t.status !== statusFilter) return false;
-    return true;
+  const filteredTasks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return initialTasks.filter((t) => {
+      if (statusFilter !== 'all' && t.status !== statusFilter) return false;
+      if (q) {
+        const hay = [
+          t.title ?? '',
+          t.study_sites?.name ?? '',
+          assigneeDisplay(t),
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [initialTasks, statusFilter, searchQuery]);
+
+  const pagination = useClientPagination({
+    totalItems: filteredTasks.length,
+    initialPageSize: 10,
+    resetKey: [searchQuery, statusFilter],
   });
+  const pageRows = pagination.paginate(filteredTasks);
 
   // On My Tasks, Description / Site / Assignee are always editable (tasks shown are assigned to the current user)
   const staticDescriptionSiteAndAssignee = false;
@@ -133,19 +149,31 @@ export function MyTasksClient({
       </Card>
 
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue
-              placeholder="Select Status"
-              getDisplayLabel={(v) => STATUS_OPTIONS.find((o) => o.value === v)?.label ?? 'Select Status'}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+            <Input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search task, site, assignee..."
+              className="pl-7 h-9 w-[260px]"
             />
-          </SelectTrigger>
-          <SelectContent>
-            {STATUS_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue
+                placeholder="Select Status"
+                getDisplayLabel={(v) => STATUS_OPTIONS.find((o) => o.value === v)?.label ?? 'Select Status'}
+              />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <Button size="sm" className="gap-1.5" onClick={() => setCreateModalOpen(true)}>
           <Plus className="h-4 w-4" />
           New Task
@@ -154,12 +182,12 @@ export function MyTasksClient({
 
       {filteredTasks.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground text-sm rounded-md border">
-          <p>No tasks assigned to you.</p>
+          <p>{initialTasks.length === 0 ? 'No tasks assigned to you.' : 'No tasks match the current filters.'}</p>
         </div>
       ) : (
         <div className="rounded-md border">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="w-10 text-xs">#</TableHead>
                 <TableHead className="text-xs">Task Name</TableHead>
@@ -167,52 +195,66 @@ export function MyTasksClient({
                 <TableHead className="text-xs">Assigned to</TableHead>
                 <TableHead className="text-xs">Due Date</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Priority</TableHead>
+                <TableHead className="text-xs text-right">Priority</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTasks.map((task, idx) => (
-                <TableRow key={task.id}>
-                  <TableCell className="font-medium">{idx + 1}</TableCell>
-                  <TableCell>{task.title}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {task.study_sites?.name ?? '—'}
-                  </TableCell>
-                  <TableCell>{assigneeDisplay(task)}</TableCell>
-                  <TableCell>
-                    {formatDate(task.due_date)}
-                    {task.due_date && new Date(task.due_date) < new Date() && (
-                      <span className="text-destructive ml-1">Overdue</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={task.status} />
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">
-                      {TASK_PRIORITY_OPTIONS.find((o) => o.value === task.priority)?.label ?? task.priority}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setEditTaskId(task.id)}>
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Edit Task
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {pageRows.map((task, idx) => {
+                const isOverdue =
+                  !!task.due_date && new Date(task.due_date) < new Date();
+                return (
+                  <TableRow key={task.id} className="group even:bg-muted/30">
+                    <TableCell className="font-medium">
+                      {pagination.startIndex + idx + 1}
+                    </TableCell>
+                    <TableCell>{task.title}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {task.study_sites?.name ?? '—'}
+                    </TableCell>
+                    <TableCell>{assigneeDisplay(task)}</TableCell>
+                    <TableCell>
+                      <span className={isOverdue ? 'text-destructive' : ''}>
+                        {formatPlanDate(task.due_date)}
+                      </span>
+                      {isOverdue && (
+                        <span className="text-destructive ml-1">Overdue</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={task.status} />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant="secondary">
+                        {TASK_PRIORITY_OPTIONS.find((o) => o.value === task.priority)?.label ?? task.priority}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent hover:text-accent-foreground focus-visible:opacity-100 group-hover:opacity-100">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setEditTaskId(task.id)}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit Task
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </div>
       )}
+
+      <TablePaginationFooter
+        pagination={pagination}
+        totalItems={filteredTasks.length}
+        itemNoun="task"
+      />
 
       <CreateTaskModal
         open={createModalOpen}
