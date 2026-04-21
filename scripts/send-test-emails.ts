@@ -13,6 +13,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createElement as h } from 'react';
 import { render } from '@react-email/render';
+// Standalone test script intentionally bypasses lib/email (which depends on
+// server-only, the Supabase admin client, and email_log writes that require a
+// Next.js runtime). See header comment for context.
+// eslint-disable-next-line no-restricted-imports
 import { Resend } from 'resend';
 
 import { InviteUser } from '@/emails/invite-user';
