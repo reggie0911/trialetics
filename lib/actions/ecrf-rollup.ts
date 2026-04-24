@@ -1,7 +1,14 @@
 'use server';
 
 import { createClient } from '@/lib/server';
+import { buildEcrfAlerts } from '@/lib/parsers/ecrf-alerts';
+import {
+  deriveDataEntryByStatus,
+  missingCrfsFor,
+} from '@/lib/parsers/ecrf-tracking-extras';
 import type {
+  EcrfTrend,
+  EcrfTrendKind,
   SiteEcrfRollup,
   SiteEcrfRollupBundle,
   StudyEcrfRollupBundle,
@@ -54,7 +61,7 @@ interface SubjectMetaRow {
   status: SubjectStatus;
   site_id: string | null;
   template_synced_at: string | null;
-  study_sites: { site_number: string | null } | null;
+  study_sites: { site_number: string | null; name: string | null } | null;
 }
 
 interface StudySiteMetaRow {
@@ -163,6 +170,7 @@ function buildSubjectRollupRows(
         status: s.status,
         site_id: s.site_id,
         site_number: s.study_sites?.site_number ?? null,
+        site_name: s.study_sites?.name ?? null,
         dataExpectedTotal: num(summary?.data_expected_total),
         dataEntryTotal: num(summary?.data_entry_total),
         sdvTotal: num(summary?.sdv_total),
@@ -236,13 +244,180 @@ export async function getSiteEcrfRollup(
   };
 }
 
+// ─── Dashboard extras ─────────────────────────────────────────────────────────
+
+interface SubjectActivityRow {
+  subject_id: string;
+  last_entry_at: string | null;
+  last_sdv_at: string | null;
+  last_lock_at: string | null;
+  overdue_query_count: number | null;
+}
+
+interface SiteActivityRow {
+  study_id: string;
+  site_id: string;
+  last_entry_at: string | null;
+  last_sdv_at: string | null;
+  last_lock_at: string | null;
+  overdue_query_count: number | null;
+}
+
+interface VisitExtrasRow {
+  study_id: string;
+  site_id: string;
+  visit_name: string;
+  visit_number: number | null;
+  sort_order: number | null;
+  timepoint_label: string | null;
+  timepoint_days: number | null;
+  subject_count: number | null;
+  total_count: number | null;
+  done_count: number | null;
+  in_window_count: number | null;
+  out_of_window_count: number | null;
+  overdue_count: number | null;
+  due_now_count: number | null;
+  upcoming_count: number | null;
+  pending_count: number | null;
+  window_days: number | null;
+}
+
+interface MetricDailyRow {
+  study_id: string;
+  metric: EcrfTrendKind;
+  day: string;
+  count: number | null;
+}
+
+const TREND_KINDS: EcrfTrendKind[] = [
+  'data_entry',
+  'sdv',
+  'lock',
+  'queries_resolved',
+];
+
+/**
+ * Build a 7-point sparkline series + a "vs prior 7 days" delta percentage for
+ * each tracked metric. The view returns up to 14 days of activity; we split
+ * the window in half and pad missing days with zero so every card always has
+ * 7 points to plot.
+ */
+function buildTrends(rows: MetricDailyRow[]): EcrfTrend[] {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const days: string[] = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+
+  const byMetric = new Map<EcrfTrendKind, Map<string, number>>();
+  for (const kind of TREND_KINDS) {
+    byMetric.set(kind, new Map());
+  }
+  for (const row of rows) {
+    const m = byMetric.get(row.metric);
+    if (!m) continue;
+    m.set(row.day.slice(0, 10), num(row.count));
+  }
+
+  return TREND_KINDS.map((kind) => {
+    const series = byMetric.get(kind) ?? new Map();
+    const padded = days.map((day) => ({ day, value: series.get(day) ?? 0 }));
+    const recent = padded.slice(-7);
+    const prior = padded.slice(0, 7);
+    const recentSum = recent.reduce((acc, p) => acc + p.value, 0);
+    const priorSum = prior.reduce((acc, p) => acc + p.value, 0);
+    const deltaPct7d =
+      priorSum > 0
+        ? Math.round(((recentSum - priorSum) / priorSum) * 100)
+        : recentSum > 0
+        ? null
+        : 0;
+    return {
+      kind,
+      points: recent,
+      deltaPct7d,
+    } satisfies EcrfTrend;
+  });
+}
+
+/**
+ * Collapse the per-(site, visit_name) extras into per-visit rows by summing
+ * the bucket counts across every site in the study. Sort/timepoint metadata
+ * is taken from the row with the lowest sort_order so the table reads in
+ * protocol order.
+ */
+function collapseVisitExtras(
+  rows: VisitExtrasRow[],
+): Map<string, {
+  subjectsExpected: number;
+  subjectsCompleted: number;
+  subjectsOverdue: number;
+  subjectsDueNow: number;
+  subjectsUpcoming: number;
+  timepointLabel: string | null;
+  timepointDays: number | null;
+  windowDays: number | null;
+  sortOrder: number;
+}> {
+  const out = new Map<
+    string,
+    {
+      subjectsExpected: number;
+      subjectsCompleted: number;
+      subjectsOverdue: number;
+      subjectsDueNow: number;
+      subjectsUpcoming: number;
+      timepointLabel: string | null;
+      timepointDays: number | null;
+      windowDays: number | null;
+      sortOrder: number;
+    }
+  >();
+
+  for (const row of rows) {
+    const existing = out.get(row.visit_name);
+    const sortOrder = num(row.sort_order);
+    if (existing) {
+      existing.subjectsExpected += num(row.subject_count);
+      existing.subjectsCompleted += num(row.done_count);
+      existing.subjectsOverdue += num(row.overdue_count);
+      existing.subjectsDueNow += num(row.due_now_count);
+      existing.subjectsUpcoming += num(row.upcoming_count);
+      // Prefer the lowest sort_order's timepoint metadata.
+      if (sortOrder < existing.sortOrder) {
+        existing.sortOrder = sortOrder;
+        existing.timepointLabel = row.timepoint_label;
+        existing.timepointDays = row.timepoint_days;
+        existing.windowDays = row.window_days;
+      }
+    } else {
+      out.set(row.visit_name, {
+        subjectsExpected: num(row.subject_count),
+        subjectsCompleted: num(row.done_count),
+        subjectsOverdue: num(row.overdue_count),
+        subjectsDueNow: num(row.due_now_count),
+        subjectsUpcoming: num(row.upcoming_count),
+        timepointLabel: row.timepoint_label,
+        timepointDays: row.timepoint_days,
+        windowDays: row.window_days,
+        sortOrder,
+      });
+    }
+  }
+  return out;
+}
+
 // ─── Study-scoped rollup ──────────────────────────────────────────────────────
 
 /**
  * Read-only eCRF rollup for an entire study. Same shape as the site bundle
- * with an additional `bySite` section. The "By Visit" rollup is summed across
- * sites in app code so we can reuse the single (study, site, visit) view
- * instead of materialising a fourth SQL view.
+ * with an additional `bySite` section, plus the dashboard extras (trends,
+ * alerts, donut buckets, last-activity timestamps) used by the redesigned
+ * eCRF Tracking page.
  */
 export async function getStudyEcrfRollup(
   studyId: string,
@@ -252,20 +427,30 @@ export async function getStudyEcrfRollup(
   const { data: subjectMetaData } = await supabase
     .from('subjects')
     .select(
-      'id, subject_number, status, site_id, template_synced_at, study_sites(site_number)',
+      'id, subject_number, status, site_id, template_synced_at, study_sites(site_number, name)',
     )
     .eq('study_id', studyId);
   const subjects = (subjectMetaData as unknown as SubjectMetaRow[] | null) ?? [];
 
   const subjectIds = subjects.map((s) => s.id);
   const summaryById = new Map<string, SubjectSummaryRow>();
+  const subjectActivityById = new Map<string, SubjectActivityRow>();
   if (subjectIds.length > 0) {
-    const { data: summaries } = await supabase
-      .from('v_subject_ecrf_tracking_summary')
-      .select('*')
-      .in('subject_id', subjectIds);
+    const [{ data: summaries }, { data: activity }] = await Promise.all([
+      supabase
+        .from('v_subject_ecrf_tracking_summary')
+        .select('*')
+        .in('subject_id', subjectIds),
+      supabase
+        .from('v_subject_ecrf_activity')
+        .select('*')
+        .in('subject_id', subjectIds),
+    ]);
     for (const row of (summaries as SubjectSummaryRow[] | null) ?? []) {
       summaryById.set(row.subject_id, row);
+    }
+    for (const row of (activity as SubjectActivityRow[] | null) ?? []) {
+      subjectActivityById.set(row.subject_id, row);
     }
   }
 
@@ -273,15 +458,45 @@ export async function getStudyEcrfRollup(
     .from('v_visit_ecrf_tracking_summary')
     .select('*')
     .eq('study_id', studyId);
-  const byVisit = collapseVisitsAcrossSites(
+  const byVisitBase = collapseVisitsAcrossSites(
     (visitRowsRaw as VisitSummaryRow[] | null) ?? [],
   );
 
-  const { data: siteRowsRaw } = await supabase
-    .from('v_site_ecrf_tracking_summary')
-    .select('*')
-    .eq('study_id', studyId);
+  const [
+    { data: siteRowsRaw },
+    { data: siteActivityRaw },
+    { data: visitExtrasRaw },
+    { data: metricDailyRaw },
+  ] = await Promise.all([
+    supabase
+      .from('v_site_ecrf_tracking_summary')
+      .select('*')
+      .eq('study_id', studyId),
+    supabase
+      .from('v_site_ecrf_activity')
+      .select('*')
+      .eq('study_id', studyId),
+    supabase
+      .from('v_visit_ecrf_extras')
+      .select('*')
+      .eq('study_id', studyId),
+    supabase
+      .from('v_ecrf_metric_daily')
+      .select('*')
+      .eq('study_id', studyId),
+  ]);
   const siteRows = (siteRowsRaw as SiteSummaryRow[] | null) ?? [];
+
+  const siteActivityById = new Map<string, SiteActivityRow>();
+  for (const row of (siteActivityRaw as SiteActivityRow[] | null) ?? []) {
+    siteActivityById.set(row.site_id, row);
+  }
+
+  const visitExtrasByName = collapseVisitExtras(
+    (visitExtrasRaw as VisitExtrasRow[] | null) ?? [],
+  );
+
+  const trends = buildTrends((metricDailyRaw as MetricDailyRow[] | null) ?? []);
 
   const siteIds = siteRows.map((r) => r.site_id);
   const siteMetaById = new Map<string, StudySiteMetaRow>();
@@ -298,24 +513,74 @@ export async function getStudyEcrfRollup(
   const bySite: SiteEcrfRollup[] = siteRows
     .map((row) => {
       const meta = siteMetaById.get(row.site_id);
+      const activity = siteActivityById.get(row.site_id);
+      const dataExpectedTotal = num(row.data_expected_total);
+      const dataEntryTotal = num(row.data_entry_total);
       return {
         site_id: row.site_id,
         site_number: meta?.site_number ?? '—',
         site_name: meta?.name ?? '—',
         country: meta?.study_countries?.country_name ?? null,
         subjectCount: num(row.subject_count),
-        dataExpectedTotal: num(row.data_expected_total),
-        dataEntryTotal: num(row.data_entry_total),
+        dataExpectedTotal,
+        dataEntryTotal,
         sdvTotal: num(row.sdv_total),
         lockTotal: num(row.lock_total),
         openQueryCount: num(row.open_query_count),
         answeredQueryCount: num(row.answered_query_count),
+        lastEntryAt: activity?.last_entry_at ?? null,
+        lastSdvAt: activity?.last_sdv_at ?? null,
+        overdueQueryCount: num(activity?.overdue_query_count),
+        missingCrfs: missingCrfsFor({ dataExpectedTotal, dataEntryTotal }),
       } satisfies SiteEcrfRollup;
     })
     .sort((a, b) => a.site_number.localeCompare(b.site_number));
 
-  const bySubject = buildSubjectRollupRows(subjects, summaryById);
+  const bySubject = buildSubjectRollupRows(subjects, summaryById).map(
+    (row) => {
+      const activity = subjectActivityById.get(row.subject_id);
+      return {
+        ...row,
+        lastEntryAt: activity?.last_entry_at ?? null,
+        lastSdvAt: activity?.last_sdv_at ?? null,
+        lastLockAt: activity?.last_lock_at ?? null,
+        overdueQueryCount: num(activity?.overdue_query_count),
+        missingCrfs: missingCrfsFor(row),
+      } satisfies SubjectEcrfRollupRow;
+    },
+  );
+
+  const byVisit: VisitEcrfRollup[] = byVisitBase
+    .map((row) => {
+      const extras = visitExtrasByName.get(row.visit_name);
+      return {
+        ...row,
+        timepointLabel: extras?.timepointLabel ?? null,
+        timepointDays: extras?.timepointDays ?? null,
+        windowDays: extras?.windowDays ?? null,
+        subjectsExpected: extras?.subjectsExpected ?? row.subjectCount,
+        subjectsCompleted: extras?.subjectsCompleted ?? 0,
+        subjectsOverdue: extras?.subjectsOverdue ?? 0,
+        subjectsDueNow: extras?.subjectsDueNow ?? 0,
+        subjectsUpcoming: extras?.subjectsUpcoming ?? 0,
+        missingCrfs: missingCrfsFor(row),
+        sortOrder: extras?.sortOrder ?? Number.MAX_SAFE_INTEGER,
+      } satisfies VisitEcrfRollup;
+    })
+    .sort((a, b) => {
+      const so = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+      if (so !== 0) return so;
+      return a.visit_name.localeCompare(b.visit_name);
+    });
+
   const totals = sumTotals(Array.from(summaryById.values()));
+  const dataEntryByStatus = deriveDataEntryByStatus(bySubject);
+  const alerts = buildEcrfAlerts({
+    studyId,
+    bySubject,
+    bySite,
+    byVisit,
+  });
 
   return {
     totals,
@@ -323,5 +588,21 @@ export async function getStudyEcrfRollup(
     byVisit,
     bySite,
     lastTemplateSyncedAt: latestTemplateSyncedAt(subjects),
+    generatedAt: new Date().toISOString(),
+    trends,
+    alerts,
+    dataEntryByStatus,
   };
+}
+
+/**
+ * Server action invoked by the dashboard's "Refresh Data" button. Re-runs
+ * `getStudyEcrfRollup` (cached views are recomputed inside Postgres) and
+ * returns the fresh bundle so the client can swap it into local state without
+ * a full route re-render.
+ */
+export async function refreshStudyEcrfRollup(
+  studyId: string,
+): Promise<StudyEcrfRollupBundle> {
+  return getStudyEcrfRollup(studyId);
 }

@@ -120,16 +120,13 @@ export function QuickContactFormFields({
         <p className="text-xs text-muted-foreground mb-1">Primary role (from library)</p>
         {!roleLibraryReady && (
           <Alert className="py-2 text-xs border-amber-500/40 bg-amber-500/5 [&_svg]:text-amber-600 dark:[&_svg]:text-amber-500">
-            <AlertTitle className="text-xs">Directory role library unavailable</AlertTitle>
+            <AlertTitle className="text-xs">Role library unavailable</AlertTitle>
             <AlertDescription className="text-xs">
-              Role categories and titles are not loaded. Ensure you are signed in, directory migrations are applied
-              (including seeds for <code className="text-[11px]">directory_role_*</code>), and refresh the page. Open
-              the{' '}
+              Refresh the page or open{' '}
               <Link href="/protected/directory" className="underline underline-offset-2 font-medium">
                 Directory
               </Link>{' '}
-              to confirm; if it stays empty, check Supabase RLS on those tables (authenticated users should be able to
-              read the global catalog).
+              to verify. If it persists, check auth and that directory role seeds/RLS are applied.
             </AlertDescription>
           </Alert>
         )}

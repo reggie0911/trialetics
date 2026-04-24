@@ -11,6 +11,10 @@ import type {
   ProcedureGrid,
   StudyEnrollmentActuals,
 } from '@/lib/types/ctms';
+import {
+  ECRF_SCHEDULE_PRESETS,
+  type EcrfSchedulePresetId,
+} from '@/lib/ecrf-schedule-presets';
 
 // ─── Visit Definitions ────────────────────────────────────────────────────────
 
@@ -67,12 +71,19 @@ async function resolveActiveVersionId(
   return { versionId: created.id as string, error: null };
 }
 
+function normalizeNonNegativeInt(value: number | null | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.trunc(value));
+}
+
 export async function createStudyVisitDefinition(
   studyId: string,
   input: {
     visit_name: string;
     timepoint_label?: string | null;
     timepoint_days?: number | null;
+    window_before_days?: number | null;
+    window_after_days?: number | null;
     sort_order?: number;
     version_id?: string;
   }
@@ -107,6 +118,8 @@ export async function createStudyVisitDefinition(
         visit_name: input.visit_name,
         timepoint_label: input.timepoint_label ?? null,
         timepoint_days: input.timepoint_days ?? null,
+        window_before_days: normalizeNonNegativeInt(input.window_before_days),
+        window_after_days: normalizeNonNegativeInt(input.window_after_days),
         sort_order: input.sort_order ?? 0,
       })
       .select()
@@ -138,6 +151,8 @@ export async function updateStudyVisitDefinition(
     visit_name?: string;
     timepoint_label?: string | null;
     timepoint_days?: number | null;
+    window_before_days?: number | null;
+    window_after_days?: number | null;
     sort_order?: number;
   }
 ): Promise<{ error: string | null }> {
@@ -153,9 +168,21 @@ export async function updateStudyVisitDefinition(
     const { error: draftError } = await assertDraftVersion(supabase, studyId, versionId);
     if (draftError) return { error: draftError };
 
+    const cleanUpdates: Record<string, unknown> = { ...updates };
+    if (Object.prototype.hasOwnProperty.call(updates, 'window_before_days')) {
+      cleanUpdates.window_before_days = normalizeNonNegativeInt(
+        updates.window_before_days,
+      );
+    }
+    if (Object.prototype.hasOwnProperty.call(updates, 'window_after_days')) {
+      cleanUpdates.window_after_days = normalizeNonNegativeInt(
+        updates.window_after_days,
+      );
+    }
+
     const { error } = await supabase
       .from('study_visit_definitions')
-      .update(updates)
+      .update(cleanUpdates)
       .eq('id', id)
       .eq('study_id', studyId);
     if (error) return { error: error.message };
@@ -192,6 +219,171 @@ export async function deleteStudyVisitDefinition(
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unexpected error.' };
+  }
+}
+
+export async function duplicateStudyVisitDefinition(
+  visitId: string,
+  studyId: string
+): Promise<{ data: StudyVisitDefinition | null; error: string | null }> {
+  const supabase = await createClient();
+  try {
+    const { error: adminError } = await assertEcrfAdminForStudy(supabase, studyId);
+    if (adminError) return { data: null, error: adminError };
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { data: null, error: writeGuard };
+
+    const { data: source, error: loadError } = await supabase
+      .from('study_visit_definitions')
+      .select('*')
+      .eq('id', visitId)
+      .eq('study_id', studyId)
+      .maybeSingle();
+    if (loadError) return { data: null, error: loadError.message };
+    if (!source) return { data: null, error: 'Visit not found.' };
+
+    const sourceVisit = source as unknown as StudyVisitDefinition;
+    const versionId = sourceVisit.template_version_id;
+    const { error: draftError } = await assertDraftVersion(supabase, studyId, versionId);
+    if (draftError) return { data: null, error: draftError };
+
+    // Append duplicate at the end of the version's visit ordering.
+    const { count } = await supabase
+      .from('study_visit_definitions')
+      .select('*', { count: 'exact', head: true })
+      .eq('study_id', studyId)
+      .eq('template_version_id', versionId);
+    const nextOrder = typeof count === 'number' ? count : 0;
+
+    const baseName = sourceVisit.visit_name.replace(/\s*\(copy(?:\s+\d+)?\)$/i, '');
+    const newName = `${baseName} (copy)`;
+
+    const { data: newVisit, error: insertError } = await supabase
+      .from('study_visit_definitions')
+      .insert({
+        study_id: studyId,
+        template_version_id: versionId,
+        visit_name: newName,
+        timepoint_label: sourceVisit.timepoint_label,
+        timepoint_days: sourceVisit.timepoint_days,
+        window_before_days: sourceVisit.window_before_days,
+        window_after_days: sourceVisit.window_after_days,
+        sort_order: nextOrder,
+      })
+      .select()
+      .single();
+    if (insertError || !newVisit) {
+      return { data: null, error: insertError?.message ?? 'Failed to duplicate visit.' };
+    }
+
+    // Clone child CRFs (and questions). Done sequentially so we can map old→new ids.
+    const { data: sourceCrfs, error: crfsError } = await supabase
+      .from('study_crfs')
+      .select('*')
+      .eq('visit_definition_id', visitId)
+      .order('sort_order', { ascending: true });
+    if (crfsError) return { data: null, error: crfsError.message };
+
+    const newVisitId = (newVisit as { id: string }).id;
+    for (const crf of (sourceCrfs ?? []) as Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      sort_order: number;
+    }>) {
+      const { data: newCrf, error: crfInsertError } = await supabase
+        .from('study_crfs')
+        .insert({
+          study_id: studyId,
+          template_version_id: versionId,
+          visit_definition_id: newVisitId,
+          name: crf.name,
+          description: crf.description,
+          sort_order: crf.sort_order,
+        })
+        .select('id')
+        .single();
+      if (crfInsertError || !newCrf) continue;
+
+      const { data: sourceQuestions } = await supabase
+        .from('study_crf_questions')
+        .select('label, help_text, question_type, options, required, sort_order')
+        .eq('crf_id', crf.id)
+        .order('sort_order', { ascending: true });
+      const questionRows = (sourceQuestions ?? []).map((q) => ({
+        crf_id: (newCrf as { id: string }).id,
+        template_version_id: versionId,
+        ...q,
+      }));
+      if (questionRows.length > 0) {
+        await supabase.from('study_crf_questions').insert(questionRows);
+      }
+    }
+
+    revalidateStudyCtmsLayout(studyId);
+    return { data: newVisit as unknown as StudyVisitDefinition, error: null };
+  } catch (err) {
+    return { data: null, error: err instanceof Error ? err.message : 'Unexpected error.' };
+  }
+}
+
+// ─── Auto-generate Schedule ──────────────────────────────────────────────────
+// Preset constants live in `lib/ecrf-schedule-presets.ts` so they remain
+// importable from client components. Re-importing them here keeps the action
+// self-contained.
+
+/**
+ * Insert a canonical visit schedule into a draft version. Refuses if the
+ * version already has visits to avoid surprise overwrites — callers should
+ * delete or pick a different version first.
+ */
+export async function autoGenerateStudyVisitSchedule(
+  studyId: string,
+  versionId: string,
+  preset: EcrfSchedulePresetId
+): Promise<{ inserted: number; error: string | null }> {
+  const supabase = await createClient();
+  try {
+    const { error: adminError } = await assertEcrfAdminForStudy(supabase, studyId);
+    if (adminError) return { inserted: 0, error: adminError };
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { inserted: 0, error: writeGuard };
+    const { error: draftError } = await assertDraftVersion(supabase, studyId, versionId);
+    if (draftError) return { inserted: 0, error: draftError };
+
+    const visits = ECRF_SCHEDULE_PRESETS[preset];
+    if (!visits) return { inserted: 0, error: 'Unknown preset.' };
+
+    const { count } = await supabase
+      .from('study_visit_definitions')
+      .select('*', { count: 'exact', head: true })
+      .eq('study_id', studyId)
+      .eq('template_version_id', versionId);
+    if ((count ?? 0) > 0) {
+      return {
+        inserted: 0,
+        error: 'Auto-generate is only available for empty draft versions.',
+      };
+    }
+
+    const rows = visits.map((v, idx) => ({
+      study_id: studyId,
+      template_version_id: versionId,
+      visit_name: v.visit_name,
+      timepoint_label: v.timepoint_label,
+      timepoint_days: v.timepoint_days,
+      window_before_days: v.window_before_days,
+      window_after_days: v.window_after_days,
+      sort_order: idx,
+    }));
+
+    const { error } = await supabase.from('study_visit_definitions').insert(rows);
+    if (error) return { inserted: 0, error: error.message };
+
+    revalidateStudyCtmsLayout(studyId);
+    return { inserted: rows.length, error: null };
+  } catch (err) {
+    return { inserted: 0, error: err instanceof Error ? err.message : 'Unexpected error.' };
   }
 }
 

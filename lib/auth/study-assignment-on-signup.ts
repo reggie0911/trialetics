@@ -1,14 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { isUniqueViolation } from '@/lib/db/is-unique-violation';
 import type { TeamMemberRole } from '@/lib/types/ctms';
-
-function isUniqueViolation(error: { code?: string; message?: string }): boolean {
-  return (
-    error.code === '23505' ||
-    error.message?.includes('duplicate') === true ||
-    error.message?.includes('unique') === true
-  );
-}
 
 /**
  * Complete pending email invitation: mark accepted and insert study_team_members when study_id set.

@@ -1,12 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Info, X } from 'lucide-react';
+import { Info } from 'lucide-react';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,9 +18,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Alert, AlertTitle, AlertDescription, AlertAction } from '@/components/ui/alert';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import type { DashboardStats, Study } from '@/lib/types/ctms';
-import { closeStudy, reactivateStudy } from '@/lib/actions/studies';
+import { reactivateStudy } from '@/lib/actions/studies';
 import { StudyList } from '@/components/ctms/studies/study-list';
 
 interface DashboardContentProps {
@@ -80,43 +79,17 @@ export function DashboardContent({
 }: DashboardContentProps) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const [studyToClose, setStudyToClose] = useState<Study | null>(null);
   const [studyToReactivate, setStudyToReactivate] = useState<Study | null>(null);
-  const [deactivatePassword, setDeactivatePassword] = useState('');
   const [reactivatePassword, setReactivatePassword] = useState('');
-  const [isClosing, setIsClosing] = useState(false);
   const [isReactivating, setIsReactivating] = useState(false);
-  const [studyHintDismissed, setStudyHintDismissed] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (!isAdmin) {
-      setStudyToClose(null);
       setStudyToReactivate(null);
     }
   }, [isAdmin]);
-
-  const handleDeactivateConfirm = async () => {
-    if (!isAdmin || !studyToClose) return;
-    const pwd = deactivatePassword.trim();
-    if (!pwd) {
-      toast.error('Password is required.');
-      return;
-    }
-    setIsClosing(true);
-    const { error } = await closeStudy(studyToClose.id, pwd);
-    setIsClosing(false);
-    if (error) {
-      toast.error(error);
-      setDeactivatePassword('');
-      return;
-    }
-    toast.success('Study deactivated');
-    setStudyToClose(null);
-    setDeactivatePassword('');
-    router.refresh();
-  };
 
   const handleReactivateConfirm = async () => {
     if (!isAdmin || !studyToReactivate) return;
@@ -142,26 +115,13 @@ export function DashboardContent({
   return (
     <>
       <div className="p-6 lg:p-8 space-y-8" suppressHydrationWarning>
-        {studySelectionHint && !studyHintDismissed && (
-          <Alert className="pr-12">
+        {studies.length === 0 && (
+          <Alert>
             <Info className="size-4" aria-hidden />
-            <AlertTitle>Open a study to continue</AlertTitle>
+            <AlertTitle>Select a study to continue</AlertTitle>
             <AlertDescription>
-              CTMS areas such as visits, sites, and tasks are tied to a study. Choose one in the{' '}
-              <strong>Studies</strong> table below.
+              Open a study below to access trip reports, tasks, financials, and other modules.
             </AlertDescription>
-            <AlertAction>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="size-8 shrink-0"
-                aria-label="Dismiss"
-                onClick={() => setStudyHintDismissed(true)}
-              >
-                <X className="size-4" />
-              </Button>
-            </AlertAction>
           </Alert>
         )}
 
@@ -175,30 +135,32 @@ export function DashboardContent({
           </p>
         </div>
 
-        <Card className="rounded-lg bg-white dark:bg-card">
-          <CardContent className="flex flex-wrap items-center gap-4 md:gap-6 py-4">
-            {statCards.map((card) => (
-              <Link
-                key={card.title}
-                href={card.href}
-                className="flex items-center gap-2 text-sm font-medium text-foreground hover:text-primary transition-colors"
-                title={card.tooltipFn(stats)}
-              >
-                {card.markerColor && (
-                  <span className={`h-2 w-4 shrink-0 rounded-full ${card.markerColor}`} aria-hidden />
-                )}
-                <span>
-                  {card.title} ({stats[card.key]})
-                </span>
-              </Link>
-            ))}
-          </CardContent>
-        </Card>
-
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle>Studies</CardTitle>
-            <CardDescription>Search, filter, open, or create a study</CardDescription>
+        <Card
+          id="studies"
+          className="w-full rounded-lg bg-white dark:bg-card"
+          aria-label="Studies"
+        >
+          <CardHeader className="!flex border-b pb-3">
+            <div
+              className="flex w-full min-w-0 flex-wrap items-center justify-end gap-4 md:gap-6"
+              role="group"
+              aria-label="Summary statistics"
+            >
+              {statCards.map((card) => (
+                <div
+                  key={card.title}
+                  className="flex items-center gap-2 text-sm font-medium text-foreground"
+                  title={card.tooltipFn(stats)}
+                >
+                  {card.markerColor && (
+                    <span className={`h-2 w-4 shrink-0 rounded-full ${card.markerColor}`} aria-hidden />
+                  )}
+                  <span>
+                    {card.title} ({stats[card.key]})
+                  </span>
+                </div>
+              ))}
+            </div>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <StudyList
@@ -206,60 +168,22 @@ export function DashboardContent({
               showNewStudyButton
               showEditDeactivate
               isAdmin={isAdmin}
-              onDeactivateRequest={isAdmin ? setStudyToClose : undefined}
               onReactivateRequest={isAdmin ? setStudyToReactivate : undefined}
             />
           </CardContent>
         </Card>
-      </div>
 
-      <AlertDialog
-        open={Boolean(studyToClose && isAdmin)}
-        onOpenChange={(open) => {
-          if (!open && !isClosing) {
-            setStudyToClose(null);
-            setDeactivatePassword('');
-          }
-        }}
-      >
-        <AlertDialogContent className="gap-4">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Deactivate study</AlertDialogTitle>
-            <AlertDialogDescription>
-              {studyToClose && (
-                <>
-                  This will mark &ldquo;{studyToClose.title}&rdquo; as closed. The study will no longer be active,
-                  but all associated data will be preserved.
-                </>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="grid gap-2 py-1">
-            <Label htmlFor="deactivate-study-password">Confirm your password</Label>
-            <Input
-              id="deactivate-study-password"
-              type="password"
-              autoComplete="current-password"
-              value={deactivatePassword}
-              onChange={(e) => setDeactivatePassword(e.target.value)}
-              disabled={isClosing}
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isClosing} type="button">
-              Cancel
-            </AlertDialogCancel>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={isClosing || !deactivatePassword.trim()}
-              onClick={() => void handleDeactivateConfirm()}
-            >
-              {isClosing ? 'Deactivating…' : 'Deactivate'}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        {studySelectionHint && (
+          <Alert className="pr-12">
+            <Info className="size-4" aria-hidden />
+            <AlertTitle>Open a study to continue</AlertTitle>
+            <AlertDescription>
+              CTMS areas such as visits, sites, and tasks are tied to a study. Choose one in the{' '}
+              <strong>Studies</strong> table below.
+            </AlertDescription>
+          </Alert>
+        )}
+      </div>
 
       <AlertDialog
         open={Boolean(studyToReactivate && isAdmin)}

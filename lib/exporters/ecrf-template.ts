@@ -203,6 +203,94 @@ function fullRow(
   };
 }
 
+/**
+ * Build a side-by-side diff CSV that augments each row with a "delta" column.
+ * Used when callers pass `?compareVersionId=` to the template route.
+ */
+export function buildCompareTemplateCsv(input: {
+  left: EcrfTemplateExportInput;
+  right: EcrfTemplateExportInput;
+  leftLabel: string;
+  rightLabel: string;
+}): string {
+  const fingerprint = (
+    visit: string,
+    crf: string,
+    question: string
+  ) => `${visit}\u0001${crf}\u0001${question}`;
+
+  const rowsFor = (data: EcrfTemplateExportInput): Map<string, EcrfBulkRow> => {
+    const out = new Map<string, EcrfBulkRow>();
+    const csv = buildPopulatedTemplateCsv(data);
+    const parsed = Papa.parse<string[]>(csv, { skipEmptyLines: true });
+    const rows = (parsed.data as string[][]).slice(1); // drop header
+    for (const cells of rows) {
+      const row: EcrfBulkRow = {
+        visit_name: cells[0] || '',
+        visit_timepoint_label: cells[1] || null,
+        visit_timepoint_days: cells[2] ? Number(cells[2]) : null,
+        crf_name: cells[3] || null,
+        crf_description: cells[4] || null,
+        question_label: cells[5] || null,
+        question_help_text: cells[6] || null,
+        question_type: (cells[7] || null) as EcrfBulkRow['question_type'],
+        question_required: cells[8] === 'true',
+        question_options: cells[9] ? cells[9].split('|') : null,
+      };
+      out.set(
+        fingerprint(row.visit_name ?? '', row.crf_name ?? '', row.question_label ?? ''),
+        row
+      );
+    }
+    return out;
+  };
+
+  const leftRows = rowsFor(input.left);
+  const rightRows = rowsFor(input.right);
+  const allKeys = new Set([...leftRows.keys(), ...rightRows.keys()]);
+
+  const headerRow = ['Delta', `${input.leftLabel} → ${input.rightLabel}`, ...FRIENDLY_HEADER_ROW];
+  const matrix: string[][] = [headerRow];
+
+  for (const key of allKeys) {
+    const l = leftRows.get(key);
+    const r = rightRows.get(key);
+    let delta = 'unchanged';
+    if (l && !r) delta = 'removed';
+    else if (!l && r) delta = 'added';
+    else if (l && r && JSON.stringify(rowToTuple(l)) !== JSON.stringify(rowToTuple(r))) {
+      delta = 'changed';
+    }
+    const display = r ?? l;
+    if (!display) continue;
+    matrix.push([delta, `${input.leftLabel} | ${input.rightLabel}`, ...rowToTuple(display)]);
+  }
+
+  return Papa.unparse(matrix, { newline: '\r\n' });
+}
+
+export function compareTemplateFilenameFor(
+  studyName: string,
+  leftLabel: string | null,
+  rightLabel: string | null
+): string {
+  const safeStudy = slugifyFilenamePart(studyName);
+  const safeLeft = slugifyFilenamePart(leftLabel ?? 'left');
+  const safeRight = slugifyFilenamePart(rightLabel ?? 'right');
+  return `ecrf-compare-${safeStudy || 'study'}-${safeLeft}-vs-${safeRight}.csv`;
+}
+
+export function comparePdfFilenameFor(
+  studyName: string,
+  leftLabel: string | null,
+  rightLabel: string | null
+): string {
+  const safeStudy = slugifyFilenamePart(studyName);
+  const safeLeft = slugifyFilenamePart(leftLabel ?? 'left');
+  const safeRight = slugifyFilenamePart(rightLabel ?? 'right');
+  return `ecrf-compare-${safeStudy || 'study'}-${safeLeft}-vs-${safeRight}.pdf`;
+}
+
 function slugifyFilenamePart(value: string): string {
   return value.replace(/[^a-z0-9_-]+/gi, '-').replace(/-+/g, '-').toLowerCase();
 }

@@ -24,10 +24,13 @@ export function SubjectCrfHistorySheet({
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-3xl">
-        <SheetHeader>
-          <SheetTitle className="flex items-center gap-2">
-            <History className="h-4 w-4" />
+      <SheetContent
+        side="right"
+        className="h-full w-full min-h-0 flex-col overflow-hidden gap-0 p-6 sm:max-w-3xl sm:p-8"
+      >
+        <SheetHeader className="shrink-0 space-y-1.5 p-0 pb-4 pr-10 sm:pr-12">
+          <SheetTitle className="flex items-center gap-2 pr-0">
+            <History className="h-4 w-4 shrink-0" />
             Change history
           </SheetTitle>
           <SheetDescription>
@@ -37,7 +40,7 @@ export function SubjectCrfHistorySheet({
           </SheetDescription>
         </SheetHeader>
 
-        <div className="mt-4 px-1">
+        <div className="min-h-0 flex-1 overflow-y-auto pb-2">
           {subjectCrf && (
             <SubjectCrfEventsTable
               subjectId={subjectCrf.subject_id}

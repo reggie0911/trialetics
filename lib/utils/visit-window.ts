@@ -1,5 +1,9 @@
 import type {
+  NextAction,
+  SubjectRiskLevel,
   SubjectVisit,
+  VisitPriority,
+  VisitScheduleBucketCounts,
   WindowStatus,
   WindowStatusMeta,
 } from '@/lib/types/ctms';
@@ -165,6 +169,89 @@ export function daysOutOfWindow(
   if (actualUtc < startUtc) return Math.round((actualUtc - startUtc) / dayMs);
   if (actualUtc > endUtc)   return Math.round((actualUtc - endUtc)   / dayMs);
   return 0;
+}
+
+// ─── Visit Window Compliance — priority / risk / next-action ──────────────────
+
+/**
+ * Internal: open visits that haven't been resolved into the `done` bucket.
+ * Used as the denominator for the priority / risk thresholds so a row that
+ * only has completed visits doesn't get flagged as "at risk" when its tiny
+ * residual overdue count happens to exceed a threshold.
+ */
+function openCount(buckets: VisitScheduleBucketCounts): number {
+  return Math.max(0, buckets.total - buckets.done);
+}
+
+/**
+ * Derive a per-row priority from its bucket counts. The thresholds are
+ * deliberately conservative so a single overdue visit doesn't tip a 100-visit
+ * site into "critical".
+ *
+ *   overdue / open >= 0.5 -> critical
+ *   overdue / open >= 0.2 -> at_risk
+ *   else                  -> on_track
+ */
+export function derivePriority(buckets: VisitScheduleBucketCounts): VisitPriority {
+  const open = openCount(buckets);
+  if (open <= 0) return 'on_track';
+  const ratio = buckets.overdue / open;
+  if (ratio >= 0.5) return 'critical';
+  if (ratio >= 0.2) return 'at_risk';
+  return 'on_track';
+}
+
+/**
+ * Subject-level risk mirrors the visit-level priority thresholds with the
+ * names the UI surfaces — `high` / `medium` / `low` — so a recruiter can scan
+ * the By Subject table and instantly find the participants who need a call.
+ */
+export function deriveSubjectRisk(buckets: VisitScheduleBucketCounts): SubjectRiskLevel {
+  const open = openCount(buckets);
+  if (open <= 0) return 'low';
+  const ratio = buckets.overdue / open;
+  if (ratio >= 0.5) return 'high';
+  if (ratio >= 0.2) return 'medium';
+  return 'low';
+}
+
+/**
+ * Suggested next action for the row, used in the dense rollup table cells.
+ * Selection rules (first match wins) — overdue is always the loudest signal:
+ *
+ *   overdue > 0                                 -> 'resolve_overdue'
+ *   out_of_window > 0                           -> 'enter_missing_data' (data quality)
+ *   due_now > 0                                 -> 'review_overdue' (action today)
+ *   upcoming > 0 + (open ratio big)             -> 'prepare_upcoming'
+ *   upcoming > 0                                -> 'monitor_upcoming'
+ *   pending > 0                                 -> 'plan_visit'
+ *   open > 0                                    -> 'complete_remaining'
+ *   else                                        -> 'all_clear'
+ */
+export function deriveNextAction(buckets: VisitScheduleBucketCounts): NextAction {
+  if (buckets.overdue > 0) {
+    return { kind: 'resolve_overdue', label: 'Resolve overdue visits' };
+  }
+  if (buckets.out_of_window > 0) {
+    return { kind: 'enter_missing_data', label: 'Document deviation' };
+  }
+  if (buckets.due_now > 0) {
+    return { kind: 'review_overdue', label: 'Action today' };
+  }
+  const open = openCount(buckets);
+  if (buckets.upcoming > 0) {
+    const ratio = open > 0 ? buckets.upcoming / open : 0;
+    return ratio >= 0.5
+      ? { kind: 'prepare_upcoming', label: 'Prepare upcoming visits' }
+      : { kind: 'monitor_upcoming', label: 'Monitor upcoming visits' };
+  }
+  if (buckets.pending > 0) {
+    return { kind: 'plan_visit', label: 'Plan visit windows' };
+  }
+  if (open > 0) {
+    return { kind: 'complete_remaining', label: 'Complete remaining visits' };
+  }
+  return { kind: 'all_clear', label: 'All clear' };
 }
 
 /**

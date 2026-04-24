@@ -48,10 +48,24 @@ import {
 
 // ─── Visit Form Dialog ─────────────────────────────────────────────────────────
 
+const nonNegativeIntField = z
+  .string()
+  .optional()
+  .refine(
+    (raw) => {
+      if (!raw || raw.trim() === '') return true;
+      const n = Number(raw);
+      return Number.isFinite(n) && Number.isInteger(n) && n >= 0;
+    },
+    { message: 'Must be a whole number ≥ 0' },
+  );
+
 const visitSchema = z.object({
   visit_name: z.string().min(1, 'Visit name is required'),
   timepoint_label: z.string().optional(),
   timepoint_days: z.string().optional(),
+  window_before_days: nonNegativeIntField,
+  window_after_days: nonNegativeIntField,
 });
 type VisitFormValues = z.infer<typeof visitSchema>;
 
@@ -59,6 +73,13 @@ function parseTimepointDays(raw: string | undefined): number | null {
   if (!raw || raw.trim() === '') return null;
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
+}
+
+function parseNonNegativeInt(raw: string | undefined): number {
+  if (!raw || raw.trim() === '') return 0;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.trunc(n));
 }
 
 export function VisitFormDialog({
@@ -86,8 +107,16 @@ export function VisitFormDialog({
         timepoint_label: visit.timepoint_label ?? '',
         timepoint_days:
           typeof visit.timepoint_days === 'number' ? String(visit.timepoint_days) : '',
+        window_before_days: String(visit.window_before_days ?? 0),
+        window_after_days: String(visit.window_after_days ?? 0),
       }
-    : { visit_name: '', timepoint_label: '', timepoint_days: '' };
+    : {
+        visit_name: '',
+        timepoint_label: '',
+        timepoint_days: '',
+        window_before_days: '0',
+        window_after_days: '0',
+      };
 
   const form = useForm<VisitFormValues>({
     resolver: zodResolver(visitSchema),
@@ -102,11 +131,15 @@ export function VisitFormDialog({
   const onSubmit = form.handleSubmit(async (values) => {
     const timepointDays = parseTimepointDays(values.timepoint_days);
     const labelTrimmed = values.timepoint_label?.trim() || null;
+    const windowBefore = parseNonNegativeInt(values.window_before_days);
+    const windowAfter = parseNonNegativeInt(values.window_after_days);
     if (isEdit) {
       const { error } = await updateStudyVisitDefinition(visit.id, studyId, {
         visit_name: values.visit_name,
         timepoint_label: labelTrimmed,
         timepoint_days: timepointDays,
+        window_before_days: windowBefore,
+        window_after_days: windowAfter,
       });
       if (error) {
         toast.error(error);
@@ -118,6 +151,8 @@ export function VisitFormDialog({
         visit_name: values.visit_name,
         timepoint_label: labelTrimmed,
         timepoint_days: timepointDays,
+        window_before_days: windowBefore,
+        window_after_days: windowAfter,
         sort_order: nextSortOrder ?? 0,
         version_id: versionId,
       });
@@ -175,6 +210,54 @@ export function VisitFormDialog({
                 {...form.register('timepoint_days')}
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">Window (relative to planned day)</Label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">
+                  Days before
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  placeholder="0"
+                  className="text-xs"
+                  {...form.register('window_before_days')}
+                />
+                {form.formState.errors.window_before_days && (
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.window_before_days.message}
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">
+                  Days after
+                </Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  placeholder="0"
+                  className="text-xs"
+                  {...form.register('window_after_days')}
+                />
+                {form.formState.errors.window_after_days && (
+                  <p className="text-xs text-destructive">
+                    {form.formState.errors.window_after_days.message}
+                  </p>
+                )}
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Allowed range around the planned visit date. Leave both at 0 for a
+              single-day window.
+            </p>
           </div>
 
           <DialogFooter>

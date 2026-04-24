@@ -39,6 +39,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { normalizeReportOrderBySection } from '@/lib/utils/normalize-report-order-by-section';
 import { bulkUploadTemplateQuestions } from '@/lib/actions/visit-reports';
+import { studySelectLabel } from '@/lib/ctms/study-display';
 import type { VisitReportTemplate } from '@/lib/types/visit-reports';
 import type { GeneratedVisitReportQuestion } from '@/lib/ai/generate-visit-report-questions';
 
@@ -63,6 +64,7 @@ const FOCUS_SECTION_OPTIONS = [
 interface StudyOption {
   id: string;
   title: string;
+  study_name: string | null;
   protocol_number: string | null;
   description?: string | null;
   therapeutic_area?: string | null;
@@ -265,26 +267,18 @@ export function AIQuestionWizard({
                           if (!v || v === STUDY_NONE) return 'Preload from study';
                           const study = studies.find((s) => s.id === v);
                           if (!study) return 'Select study';
-                          const label = study.protocol_number
-                            ? `${study.title} (${study.protocol_number})`
-                            : study.title;
-                          return label && label.length > 0 ? label.charAt(0).toUpperCase() + label.slice(1) : 'Select study';
+                          const label = studySelectLabel(study);
+                          return label && label.length > 0 ? label : 'Select study';
                         }}
                       />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={STUDY_NONE}>Preload from study</SelectItem>
-                      {studies.map((s) => {
-                        const label = s.protocol_number
-                          ? `${s.title} (${s.protocol_number})`
-                          : s.title;
-                        const displayLabel = label && label.length > 0 ? label.charAt(0).toUpperCase() + label.slice(1) : s.title;
-                        return (
-                          <SelectItem key={s.id} value={s.id}>
-                            {displayLabel}
-                          </SelectItem>
-                        );
-                      })}
+                      {studies.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {studySelectLabel(s)}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>

@@ -19,7 +19,7 @@ export default async function TemplateBuilderPage({
   if (!template) notFound();
   const studyId = template.study_id;
   if (!studyId) {
-    redirect('/protected/studies?studyRequired=1');
+  redirect('/protected/studies#studies');
   }
   const suffix = mode === 'view' ? '?mode=view' : '';
   redirect(`/protected/studies/${studyId}/trip-reports/templates/${id}${suffix}`);

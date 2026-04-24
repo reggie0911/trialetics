@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Pencil,
-  ArrowLeft,
   Users,
   Building2,
   Mail,
@@ -37,6 +36,7 @@ import type {
   PaymentScheduleWithSite,
   SiteEcrfRollupBundle,
   SiteVisitScheduleBundle,
+  SiteVisitWindowComplianceBundle,
   SubjectWithSite,
   EnrollmentFunnelData,
 } from '@/lib/types/ctms';
@@ -53,7 +53,8 @@ import { SiteFinancialsPanel } from './site-financials-panel';
 import type { SiteBudgetStudyOption } from '@/components/ctms/financials/site-budget-from-study-dialog';
 import { SubjectsTab } from '@/components/ctms/subjects/subjects-tab';
 import { SiteEcrfTrackingTab } from '@/components/ctms/ecrf-tracking/site-ecrf-tracking-tab';
-import { SiteVisitScheduleTab } from '@/components/ctms/visit-schedule/site-visit-schedule-tab';
+import { SiteVisitScheduleTab } from '@/components/ctms/visit-window-compliance/site-visit-window-compliance-tab';
+import { useStudyBreadcrumbLeaf } from '@/components/ctms/studies/study-breadcrumb-context';
 import type { TaskWithRelations } from '@/lib/types/tasks';
 
 const noOpSubscribe = () => () => {};
@@ -64,9 +65,13 @@ const SITE_MAIN_TABS = new Set([
   'tasks',
   'subjects',
   'ecrf-tracking',
-  'visit-schedule',
+  'visit-window-compliance',
   'financials',
 ]);
+
+const LEGACY_SITE_TAB_REDIRECTS: Record<string, string> = {
+  'visit-schedule': 'visit-window-compliance',
+};
 
 /** Radix Tabs uses @radix-ui/react-id, which can disagree with React 19 SSR useId(); mount tabs only on the client. */
 function useIsClient() {
@@ -182,6 +187,7 @@ interface SiteDetailTabsProps {
   siteFunnel: EnrollmentFunnelData;
   ecrfRollup: SiteEcrfRollupBundle;
   visitSchedule: SiteVisitScheduleBundle;
+  visitWindowCompliance: SiteVisitWindowComplianceBundle;
   studySitesForSubjects: Pick<StudySite, 'id' | 'site_number' | 'name'>[];
   financeApprovalTemplateOptions: FinanceApprovalTemplateOption[];
   studyBudgetOptions?: SiteBudgetStudyOption[];
@@ -210,6 +216,7 @@ export function SiteDetailTabs({
   siteFunnel,
   ecrfRollup,
   visitSchedule,
+  visitWindowCompliance,
   studySitesForSubjects,
   financeApprovalTemplateOptions,
   studyBudgetOptions = [],
@@ -231,8 +238,17 @@ export function SiteDetailTabs({
 
   useEffect(() => {
     const t = searchParams.get('tab');
-    if (t && SITE_MAIN_TABS.has(t)) setMainTab(t);
-  }, [searchParams]);
+    if (!t) return;
+    const redirected = LEGACY_SITE_TAB_REDIRECTS[t];
+    if (redirected) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('tab', redirected);
+      router.replace(`?${params.toString()}`, { scroll: false });
+      setMainTab(redirected);
+      return;
+    }
+    if (SITE_MAIN_TABS.has(t)) setMainTab(t);
+  }, [searchParams, router]);
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return null;
@@ -279,29 +295,16 @@ export function SiteDetailTabs({
     []
   );
 
-  const studyBackHref = ctmsStudyRouteId
-    ? `/protected/studies/${ctmsStudyRouteId}/sites`
-    : `/protected/studies/${study.id}`;
   const siteEditHref = ctmsStudyRouteId
     ? `/protected/studies/${ctmsStudyRouteId}/sites/${site.id}/edit`
     : `/protected/studies/${study.id}/sites/${site.id}/edit`;
+
+  useStudyBreadcrumbLeaf(site.name ?? site.site_number ?? null);
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              render={<Link href={studyBackHref} />}
-              nativeButton={false}
-              className="-ml-2"
-            >
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              {study.protocol_number}
-            </Button>
-          </div>
           <h1 className="text-2xl font-semibold tracking-tight">{site.name}</h1>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -347,7 +350,7 @@ export function SiteDetailTabs({
             <ClipboardList className="mr-1 h-3.5 w-3.5" />
             eCRF Tracking
           </TabsTrigger>
-          <TabsTrigger value="visit-schedule">
+          <TabsTrigger value="visit-window-compliance">
             <CalendarClock className="mr-1 h-3.5 w-3.5" />
             Visit Window Compliance
           </TabsTrigger>
@@ -565,17 +568,16 @@ export function SiteDetailTabs({
           <SiteEcrfTrackingTab
             studyId={site.study_id}
             siteId={site.id}
-            scopeLabel={`Site ${site.site_number}${site.name ? ` — ${site.name}` : ''}`}
             bundle={ecrfRollup}
           />
         </TabsContent>
 
-        <TabsContent value="visit-schedule">
+        <TabsContent value="visit-window-compliance">
           <SiteVisitScheduleTab
             studyId={site.study_id}
             siteId={site.id}
-            scopeLabel={`Site ${site.site_number}${site.name ? ` — ${site.name}` : ''}`}
             bundle={visitSchedule}
+            complianceBundle={visitWindowCompliance}
           />
         </TabsContent>
 

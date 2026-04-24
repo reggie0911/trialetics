@@ -97,7 +97,14 @@ export default async function StudyTripReportsPage({ params, searchParams }: Pag
           summarySort={summarySort}
           templateCount={templateCount}
           initialTemplates={templatesWithCount}
-          studies={[{ id: study.id, title: study.title, protocol_number: study.protocol_number }]}
+          studies={[
+            {
+              id: study.id,
+              title: study.title,
+              study_name: study.study_name,
+              protocol_number: study.protocol_number,
+            },
+          ]}
           trackerRows={trackerData.rows}
           trackerTotal={trackerData.total}
           trackerPage={trackerData.page}

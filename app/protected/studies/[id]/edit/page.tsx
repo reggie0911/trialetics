@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { getStudyById } from '@/lib/actions/studies';
+import { createClient } from '@/lib/server';
 import { StudyForm } from '@/components/ctms/studies/study-form';
 
 interface EditStudyPageProps {
@@ -20,6 +21,20 @@ export default async function EditStudyPage({ params }: EditStudyPageProps) {
     redirect(`/protected/studies/${id}?tab=overview&readOnly=1`);
   }
 
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect('/auth/login');
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('user_id', user.id)
+    .single();
+
+  const isAdmin = profile?.role === 'admin';
+
   return (
     <div className="p-6 space-y-6 max-w-4xl">
       <div className="space-y-1">
@@ -33,7 +48,7 @@ export default async function EditStudyPage({ params }: EditStudyPageProps) {
         </p>
       </div>
 
-      <StudyForm study={study} mode="edit" />
+      <StudyForm study={study} mode="edit" isAdmin={isAdmin} />
     </div>
   );
 }

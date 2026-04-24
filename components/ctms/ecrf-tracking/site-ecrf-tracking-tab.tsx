@@ -6,15 +6,26 @@ import { ExternalLink, Search } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { StatusBadge } from '@/components/ui/status-badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TablePaginationFooter } from '@/components/ui/table-pagination-footer';
 import { useClientPagination } from '@/lib/hooks/use-client-pagination';
-import type {
-  SiteEcrfRollupBundle,
-  SubjectEcrfRollupRow,
-  VisitEcrfRollup,
+import {
+  SUBJECT_STATUS_OPTIONS,
+  type SiteEcrfRollupBundle,
+  type SubjectEcrfRollupRow,
+  type SubjectStatus,
+  type VisitEcrfRollup,
 } from '@/lib/types/ctms';
+import { cn } from '@/lib/utils';
 
 import { EcrfTrackingHeader } from './ecrf-tracking-header';
 import {
@@ -26,7 +37,6 @@ import {
 interface SiteEcrfTrackingTabProps {
   studyId: string;
   siteId: string;
-  scopeLabel: string;
   bundle: SiteEcrfRollupBundle;
 }
 
@@ -35,13 +45,23 @@ interface TabSearchInputProps {
   onChange: (next: string) => void;
   placeholder: string;
   ariaLabel: string;
+  className?: string;
+  id?: string;
 }
 
-function TabSearchInput({ value, onChange, placeholder, ariaLabel }: TabSearchInputProps) {
+function TabSearchInput({
+  value,
+  onChange,
+  placeholder,
+  ariaLabel,
+  className,
+  id,
+}: TabSearchInputProps) {
   return (
-    <div className="relative w-full sm:w-64">
+    <div className={cn('relative w-full sm:w-64', className)}>
       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
+        id={id}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -55,14 +75,13 @@ function TabSearchInput({ value, onChange, placeholder, ariaLabel }: TabSearchIn
 /**
  * Site-scope eCRF Tracking tab. Read-only rollup composed of the shared header
  * (overall KPIs + export buttons) plus inner Tabs ("By Visit" / "By Subject")
- * with per-tab search + client-side pagination. Each subject row exposes an
+ * with per-tab filters + client-side pagination. Each subject row exposes an
  * "Open" button that drills into the existing editable per-subject matrix in
  * `SubjectEcrfTrackingPanel`.
  */
 export function SiteEcrfTrackingTab({
   studyId,
   siteId,
-  scopeLabel,
   bundle,
 }: SiteEcrfTrackingTabProps) {
   const router = useRouter();
@@ -71,6 +90,9 @@ export function SiteEcrfTrackingTab({
 
   const [visitSearch, setVisitSearch] = useState('');
   const [subjectSearch, setSubjectSearch] = useState('');
+  const [subjectStatusFilter, setSubjectStatusFilter] = useState<
+    'all' | SubjectStatus
+  >('all');
 
   const filteredVisits = useMemo(() => {
     const q = visitSearch.trim().toLowerCase();
@@ -81,13 +103,16 @@ export function SiteEcrfTrackingTab({
   }, [bundle.byVisit, visitSearch]);
 
   const filteredSubjects = useMemo(() => {
+    let rows = bundle.bySubject;
+    if (subjectStatusFilter !== 'all') {
+      rows = rows.filter((r) => r.status === subjectStatusFilter);
+    }
     const q = subjectSearch.trim().toLowerCase();
-    if (!q) return bundle.bySubject;
-    return bundle.bySubject.filter((row) => {
-      const haystack = [row.subject_number, row.status].join(' ').toLowerCase();
-      return haystack.includes(q);
-    });
-  }, [bundle.bySubject, subjectSearch]);
+    if (!q) return rows;
+    return rows.filter((row) =>
+      row.subject_number.toLowerCase().includes(q),
+    );
+  }, [bundle.bySubject, subjectSearch, subjectStatusFilter]);
 
   const visitPagination = useClientPagination({
     totalItems: filteredVisits.length,
@@ -99,7 +124,7 @@ export function SiteEcrfTrackingTab({
   const subjectPagination = useClientPagination({
     totalItems: filteredSubjects.length,
     initialPageSize: 10,
-    resetKey: [subjectSearch],
+    resetKey: [subjectSearch, subjectStatusFilter],
   });
   const subjectPage = subjectPagination.paginate(filteredSubjects);
 
@@ -167,14 +192,25 @@ export function SiteEcrfTrackingTab({
   const visitEmpty = visitSearch.trim()
     ? 'No visits match your search.'
     : 'No visits have been snapshotted onto subjects at this site yet.';
-  const subjectEmpty = subjectSearch.trim()
-    ? 'No subjects match your search.'
-    : 'No subjects enrolled at this site.';
+
+  const subjectHasActiveFilters =
+    Boolean(subjectSearch.trim()) || subjectStatusFilter !== 'all';
+  const subjectEmpty =
+    bundle.bySubject.length === 0
+      ? 'No subjects enrolled at this site.'
+      : 'No subjects match your filters.';
+
+  const subjectNumberFilterId = `ecrf-site-by-subject-number-${siteId}`;
+  const subjectStatusFilterId = `ecrf-site-by-subject-status-${siteId}`;
+
+  const clearSubjectTableFilters = () => {
+    setSubjectSearch('');
+    setSubjectStatusFilter('all');
+  };
 
   return (
     <div className="space-y-4">
       <EcrfTrackingHeader
-        scopeLabel={scopeLabel}
         totals={bundle.totals}
         subjectCount={bundle.bySubject.length}
         lastTemplateSyncedAt={bundle.lastTemplateSyncedAt}
@@ -226,12 +262,76 @@ export function SiteEcrfTrackingTab({
           <EcrfRollupTable
             variant="panel"
             toolbar={
-              <TabSearchInput
-                value={subjectSearch}
-                onChange={setSubjectSearch}
-                placeholder="Search subjects..."
-                ariaLabel="Search By Subject rows"
-              />
+              <div className="min-w-0 w-full max-w-full overflow-x-auto">
+                <div className="flex w-max min-w-0 max-w-full flex-nowrap items-end gap-2 pb-0.5">
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Label
+                      htmlFor={subjectNumberFilterId}
+                      className="whitespace-nowrap text-xs text-muted-foreground"
+                    >
+                      Subject
+                    </Label>
+                    <TabSearchInput
+                      id={subjectNumberFilterId}
+                      value={subjectSearch}
+                      onChange={setSubjectSearch}
+                      placeholder="Filter by subject #..."
+                      ariaLabel="Filter by subject number"
+                      className="min-w-[10rem] max-w-sm w-[12rem] shrink-0 sm:min-w-[12rem] sm:max-w-md sm:w-64"
+                    />
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Label
+                      htmlFor={subjectStatusFilterId}
+                      className="whitespace-nowrap text-xs text-muted-foreground"
+                    >
+                      Status
+                    </Label>
+                    <Select
+                      value={subjectStatusFilter}
+                      onValueChange={(v) =>
+                        setSubjectStatusFilter(v as 'all' | SubjectStatus)
+                      }
+                    >
+                      <SelectTrigger
+                        id={subjectStatusFilterId}
+                        className="h-9 w-[180px] text-xs"
+                        aria-label="Filter by status"
+                      >
+                        <SelectValue
+                          getDisplayLabel={(v) => {
+                            if (v == null || v === 'all')
+                              return 'All statuses';
+                            return (
+                              SUBJECT_STATUS_OPTIONS.find((o) => o.value === v)
+                                ?.label ?? v
+                            );
+                          }}
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        {SUBJECT_STATUS_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {subjectHasActiveFilters && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 shrink-0 text-xs"
+                      onClick={clearSubjectTableFilters}
+                    >
+                      Clear filters
+                    </Button>
+                  )}
+                </div>
+              </div>
             }
             rows={subjectPage}
             columns={subjectColumns}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 
 import {
@@ -64,7 +65,15 @@ export function EditSiteModal({
         <DialogHeader>
           <DialogTitle>Edit Site</DialogTitle>
           <DialogDescription>
-            Update site details. Changes will refresh the page.
+            Update site details. Changes will refresh the page. Site phone is stored on the
+            site&apos;s primary contact —{' '}
+            <Link
+              href={`/protected/studies/${studyId}/sites/${siteId}?tab=contacts`}
+              className="text-primary underline-offset-4 hover:underline"
+            >
+              open Contacts
+            </Link>{' '}
+            to add or change it.
           </DialogDescription>
         </DialogHeader>
         {loading && (

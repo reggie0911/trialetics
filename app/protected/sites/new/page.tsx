@@ -10,5 +10,5 @@ export default async function NewSitePage({ searchParams }: NewSitePageProps) {
   if (studyId) {
     redirect(`/protected/studies/${studyId}/sites/new`);
   }
-  redirect('/protected/studies?studyRequired=1');
+  redirect('/protected/studies#studies');
 }

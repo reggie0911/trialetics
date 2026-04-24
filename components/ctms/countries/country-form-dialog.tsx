@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, Pencil } from 'lucide-react';
@@ -41,8 +41,13 @@ const addSchema = z.object({
 
 const editSchema = z.object({
   status: z.string().min(1),
-  regulatory_status: z.string().min(1),
 });
+
+type CountryFormValues = {
+  country_code?: string;
+  status: string;
+  regulatory_status?: string;
+};
 
 interface CountryFormDialogProps {
   studyId: string;
@@ -53,6 +58,9 @@ interface CountryFormDialogProps {
   disabled?: boolean;
   /** Shown on hover when `disabled` is true. */
   disabledTooltip?: string;
+  /** When provided, dialog is controlled and the internal trigger is not rendered. */
+  controlledOpen?: boolean;
+  onControlledOpenChange?: (next: boolean) => void;
 }
 
 export function CountryFormDialog({
@@ -62,12 +70,23 @@ export function CountryFormDialog({
   onSuccess,
   disabled = false,
   disabledTooltip,
+  controlledOpen,
+  onControlledOpenChange,
 }: CountryFormDialogProps) {
-  const [open, setOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (next: boolean) => {
+    if (isControlled) {
+      onControlledOpenChange?.(next);
+    } else {
+      setInternalOpen(next);
+    }
+  };
   const isEdit = !!country;
 
-  const form = useForm<{ country_code?: string; status: string; regulatory_status: string }>({
-    resolver: zodResolver(isEdit ? editSchema : addSchema),
+  const form = useForm<CountryFormValues>({
+    resolver: zodResolver(isEdit ? editSchema : addSchema) as Resolver<CountryFormValues>,
     defaultValues: isEdit
       ? {
           status: country.status,
@@ -90,7 +109,6 @@ export function CountryFormDialog({
         id: country.id,
         study_id: studyId,
         status: values.status as CountryStatus,
-        regulatory_status: values.regulatory_status as RegulatoryStatus,
       });
       if (error) {
         toast.error(error);
@@ -150,7 +168,7 @@ export function CountryFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      {disabled && disabledTooltip ? (
+      {isControlled ? null : disabled && disabledTooltip ? (
         <Tooltip>
           <TooltipTrigger render={<span className="inline-flex" />}>{trigger}</TooltipTrigger>
           <TooltipContent side="bottom" className="max-w-xs text-xs">
@@ -165,7 +183,7 @@ export function CountryFormDialog({
           <DialogTitle>{isEdit ? 'Edit Country' : 'Add Country'}</DialogTitle>
           <DialogDescription>
             {isEdit
-              ? `Update participation status for ${country.country_name}.`
+              ? `Update participation status for ${country.country_name}. Regulatory status is computed from submission rows.`
               : 'Add a country to this study.'}
           </DialogDescription>
         </DialogHeader>
@@ -222,27 +240,29 @@ export function CountryFormDialog({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="regulatory_status">Regulatory Status</Label>
-            <Select
-              value={form.watch('regulatory_status')}
-              onValueChange={(val) => form.setValue('regulatory_status', val)}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue
-                  placeholder="Select Regulatory Status"
-                  getDisplayLabel={(v) => REGULATORY_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? v}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {REGULATORY_STATUS_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {!isEdit && (
+            <div className="space-y-2">
+              <Label htmlFor="regulatory_status">Regulatory Status</Label>
+              <Select
+                value={form.watch('regulatory_status')}
+                onValueChange={(val) => form.setValue('regulatory_status', val)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue
+                    placeholder="Select Regulatory Status"
+                    getDisplayLabel={(v) => REGULATORY_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? v}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {REGULATORY_STATUS_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <DialogFooter>
             <Button

@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 
+import { StudyBreadcrumbProvider } from '@/components/ctms/studies/study-breadcrumb-context';
 import { StudyCompactHeader } from '@/components/ctms/studies/study-compact-header';
 import { StudyHubShell } from '@/components/ctms/study-hub-shell';
 import { StudyContextBridge } from '@/components/copilot/study-context-bridge';
@@ -38,17 +39,17 @@ export default async function StudyScopedLayout({
         studyStatus={study.status}
         isStudyReadOnly={isStudyReadOnly}
       />
-      <StudyCompactHeader
-        studyId={id}
-        headingName={headingName}
-        protocolNumber={study.protocol_number}
-        phase={study.phase}
-        status={study.status}
-        isStudyReadOnly={isStudyReadOnly}
-      />
-      <StudyHubShell studyId={id} studyStatus={study.status} isAdmin={isAdmin}>
-        {children}
-      </StudyHubShell>
+      <StudyBreadcrumbProvider>
+        <StudyCompactHeader
+          studyId={id}
+          headingName={headingName}
+          phase={study.phase}
+          status={study.status}
+        />
+        <StudyHubShell studyId={id} studyStatus={study.status} isAdmin={isAdmin}>
+          {children}
+        </StudyHubShell>
+      </StudyBreadcrumbProvider>
     </div>
   );
 }

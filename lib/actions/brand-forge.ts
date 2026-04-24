@@ -6,8 +6,9 @@ import { revalidatePath } from 'next/cache';
 import { validateStoredMockupPromptFields } from '@/lib/brand-forge/mockup-prompt';
 import { createClient } from '@/lib/server';
 import type { BrandBriefFormValues, BFProject } from '@/lib/types/brand-forge';
+import { brandForgePath } from '@/lib/nav/brand-forge-paths';
 
-export async function createBrandForgeProject(values: BrandBriefFormValues) {
+export async function createBrandForgeProject(values: BrandBriefFormValues, studyId?: string | null) {
   const supabase = await createClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) {
@@ -30,6 +31,7 @@ export async function createBrandForgeProject(values: BrandBriefFormValues) {
     .from('bf_projects')
     .insert({
       company_id: profile.company_id,
+      study_id: studyId ?? null,
       created_by: user.id,
       name: projectName,
       status: 'draft',
@@ -79,6 +81,10 @@ export async function createBrandForgeProject(values: BrandBriefFormValues) {
   }
 
   revalidatePath('/protected/brand-forge');
+  if (studyId) {
+    revalidatePath(brandForgePath(studyId));
+    redirect(brandForgePath(studyId, project.id, 'logos'));
+  }
   redirect(`/protected/brand-forge/${project.id}/logos`);
 }
 
@@ -87,7 +93,7 @@ export type BrandBriefEditRedirectTarget = 'logos' | 'overview';
 export async function updateBrandForgeBrief(
   projectId: string,
   values: BrandBriefFormValues,
-  redirectTo: BrandBriefEditRedirectTarget = 'logos',
+  redirectTo: BrandBriefEditRedirectTarget = 'logos'
 ) {
   const supabase = await createClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -107,7 +113,7 @@ export async function updateBrandForgeBrief(
 
   const { data: project } = await supabase
     .from('bf_projects')
-    .select('id')
+    .select('id, study_id')
     .eq('id', projectId)
     .eq('company_id', profile.company_id)
     .single();
@@ -180,10 +186,15 @@ export async function updateBrandForgeBrief(
   revalidatePath(`/protected/brand-forge/${projectId}/logos`);
   revalidatePath(`/protected/brand-forge/${projectId}/gallery`);
   revalidatePath(`/protected/brand-forge/${projectId}/edit`);
-  const nextPath =
-    redirectTo === 'overview'
-      ? `/protected/brand-forge/${projectId}`
-      : `/protected/brand-forge/${projectId}/logos`;
+  const nextPath = redirectTo === 'overview'
+    ? `/protected/brand-forge/${projectId}`
+    : `/protected/brand-forge/${projectId}/logos`;
+  if (project.study_id) {
+    const nestedPath = redirectTo === 'overview'
+      ? brandForgePath(project.study_id, projectId)
+      : brandForgePath(project.study_id, projectId, 'logos');
+    redirect(nestedPath);
+  }
   redirect(nextPath);
 }
 

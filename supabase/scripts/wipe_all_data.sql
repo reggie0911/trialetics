@@ -24,8 +24,15 @@
 --   • Pre-check queries are included; run them alone first if desired.
 --
 -- NOTES
---   • Tables dropped in later migrations (e.g. kanban task_labels, subject_milestones)
---     are not referenced here.
+--   • Tables dropped in later migrations (e.g. kanban task_labels, subject_milestones,
+--     site_startup_checklist, study_visit_crfs) are not referenced here.
+--   • The Copilot / AI suite tables (copilot_*, 26 tables created in migrations
+--     20260496000000 through 20260500000000) are intentionally NOT wiped by this
+--     script. If you need to wipe Copilot data, do so out-of-band.
+--   • The transaction sets `SET LOCAL session_replication_role = 'replica'` so the
+--     Part 11 immutability triggers on trip_report_status_events and
+--     trip_report_signature_audit (which RAISE EXCEPTION on DELETE) do not fire.
+--     `SET LOCAL` is reverted automatically at COMMIT/ROLLBACK.
 --   • After wipe, new signups still get company + profile via handle_new_user.
 --
 -- =============================================================================
@@ -40,6 +47,11 @@
 -- UNION ALL SELECT 'storage.objects', COUNT(*) FROM storage.objects;
 
 BEGIN;
+
+-- Bypass user-defined triggers for this transaction so the Part 11 BEFORE DELETE
+-- guards on trip_report_status_events / trip_report_signature_audit do not fire.
+-- Reverted automatically at COMMIT.
+SET LOCAL session_replication_role = 'replica';
 
 -- =============================================================================
 -- SECTION 1 — Storage (run wipe_storage.mjs; SQL DELETE is blocked on hosted Supabase)
@@ -149,15 +161,24 @@ DELETE FROM public.ip_items;
 -- =============================================================================
 -- SECTION 8 — Visit / trip reports & monitoring
 -- =============================================================================
+-- trip_report_status_events / trip_report_signature_audit have BEFORE DELETE
+-- triggers that RAISE EXCEPTION (Part 11). The session_replication_role = replica
+-- set above lets these DELETEs succeed.
+-- trip_reports.template_version_id is RESTRICT, so version tables must be wiped
+-- after trip_reports. visit_report_template_versions.template_id is RESTRICT,
+-- so versions must be wiped before templates.
 DELETE FROM public.trip_report_status_events;
-DELETE FROM public.visit_report_attachments;
+DELETE FROM public.trip_report_signature_audit;
 DELETE FROM public.trip_report_action_items;
 DELETE FROM public.trip_report_crf_entries;
 DELETE FROM public.trip_report_attendees;
 DELETE FROM public.trip_report_question_responses;
+DELETE FROM public.visit_report_attachments;
 DELETE FROM public.follow_up_items;
 DELETE FROM public.trip_report_findings;
 DELETE FROM public.trip_reports;
+DELETE FROM public.visit_report_template_question_versions;
+DELETE FROM public.visit_report_template_versions;
 DELETE FROM public.visit_report_template_questions;
 DELETE FROM public.visit_report_templates;
 DELETE FROM public.monitoring_visits;
@@ -186,8 +207,15 @@ DELETE FROM public.study_procedure_visit_costs;
 DELETE FROM public.budget_line_items;
 DELETE FROM public.study_budget_sections;
 DELETE FROM public.study_budgets;
+-- eCRF chain: subject_crfs → study_crf*/study_ecrf_template_versions
+-- (subject_crf_metric_events cascades from subject_crfs but is wiped explicitly).
+-- study_ecrf_template_versions is RESTRICT-referenced by subject_crfs, study_crfs,
+-- and study_crf_questions, so it must be wiped after them.
+DELETE FROM public.subject_crf_metric_events;
+DELETE FROM public.subject_crfs;
 DELETE FROM public.study_crf_questions;
 DELETE FROM public.study_crfs;
+DELETE FROM public.study_ecrf_template_versions;
 DELETE FROM public.study_visit_definitions;
 DELETE FROM public.study_budget_templates;
 DELETE FROM public.payment_schedules;
@@ -215,6 +243,7 @@ DELETE FROM public.directory_role_categories;
 -- =============================================================================
 -- SECTION 12 — Subjects & study team
 -- =============================================================================
+DELETE FROM public.subject_visit_events;
 DELETE FROM public.subject_visits;
 DELETE FROM public.subjects;
 DELETE FROM public.study_team_members;
@@ -251,6 +280,7 @@ DELETE FROM public.transactions;
 DELETE FROM public.platform_documentation;
 DELETE FROM public.company_module_audit;
 DELETE FROM public.docs_feedback;
+DELETE FROM public.email_log;
 DELETE FROM public.company_join_links;
 DELETE FROM public.invitations;
 DELETE FROM public.subscriptions;

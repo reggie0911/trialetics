@@ -6,6 +6,7 @@ import { createClient } from '@/lib/server';
 import { assertStudyWritable, assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
 import { syncInstitutionForStudySite, syncSiteContactToDirectory } from '@/lib/actions/site-directory-sync';
 import { geocodeSiteAddress } from '@/lib/maps/geocoding';
+import { pickPrincipalInvestigatorContact } from '@/lib/sites/pi-contact-helpers';
 import {
   SITE_CONTACT_ROLE_PRINCIPAL_INVESTIGATOR,
   type StudySite,
@@ -71,7 +72,8 @@ async function syncPiFieldsFromSiteContacts(siteId: string, studyId: string): Pr
     return;
   }
 
-  const pick = list.find((r) => r.is_primary) ?? list[0];
+  const pick = pickPrincipalInvestigatorContact(list);
+  if (!pick) return;
   const { error } = await supabase
     .from('study_sites')
     .update({
@@ -150,6 +152,7 @@ async function syncPrincipalInvestigatorContact(params: {
     .select('id')
     .eq('site_id', params.siteId)
     .or(siteContactPrincipalInvestigatorRoleOrFilter())
+    .order('is_primary', { ascending: false })
     .order('id', { ascending: true })
     .limit(1);
 

@@ -52,6 +52,9 @@ interface SubmissionFormDialogProps {
   onSuccess: () => void;
   disabled?: boolean;
   disabledTooltip?: string;
+  /** When provided, dialog is controlled and the internal trigger is not rendered. */
+  controlledOpen?: boolean;
+  onControlledOpenChange?: (next: boolean) => void;
 }
 
 export function SubmissionFormDialog({
@@ -61,8 +64,19 @@ export function SubmissionFormDialog({
   onSuccess,
   disabled = false,
   disabledTooltip,
+  controlledOpen,
+  onControlledOpenChange,
 }: SubmissionFormDialogProps) {
-  const [open, setOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (next: boolean) => {
+    if (isControlled) {
+      onControlledOpenChange?.(next);
+    } else {
+      setInternalOpen(next);
+    }
+  };
   const isEdit = !!submission;
 
   const form = useForm<SubmissionFormValues>({
@@ -158,7 +172,7 @@ export function SubmissionFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      {disabled && disabledTooltip ? (
+      {isControlled ? null : disabled && disabledTooltip ? (
         <Tooltip>
           <TooltipTrigger render={<span className="inline-flex" />}>{trigger}</TooltipTrigger>
           <TooltipContent side="bottom" className="max-w-xs text-xs">

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { FormFillCard } from './form-fill-card';
 import { FieldMappingStep } from '../tables/field-mapping-step';
 import { TableUpdateGrid } from '../tables/table-update-grid';
@@ -15,6 +15,32 @@ import type {
   TemplateSectionProposal,
 } from '@/lib/ai/types';
 
+interface ParsedTablePreview {
+  headers: string[];
+  sampleRows: string[][];
+  fileName?: string;
+  totalRows?: number;
+}
+
+/**
+ * Context the host needs to re-POST `/api/ai/table-fill` when the user
+ * adjusts the column mapping. Without it, payload.ops is whatever the
+ * server built with the auto/cached mapping and the user's manual changes
+ * are silently ignored at apply time.
+ */
+interface TableRebuildContext {
+  parsed: {
+    headers: string[];
+    rows: Record<string, unknown>[];
+    sourceDocumentId?: string;
+    docType?: string;
+  };
+  existingRows?: { id: string; values: Record<string, unknown> }[];
+  duplicateKey?: string;
+  scope?: TableUpdatePayload['scope'];
+  tableLabel?: string;
+}
+
 function confidenceToNumber(level: 'low' | 'medium' | 'high'): number {
   if (level === 'high') return 0.9;
   if (level === 'medium') return 0.7;
@@ -23,7 +49,24 @@ function confidenceToNumber(level: 'low' | 'medium' | 'high'): number {
 
 type ActiveSurface =
   | { kind: 'form_fill'; payload: FormFillPayload; currentValues: Record<string, unknown>; proposalId?: string }
-  | { kind: 'table_update'; payload: TableUpdatePayload; targetFields: { path: string; label: string }[]; proposalId?: string; sourceSignature?: string; step: 'mapping' | 'rows' }
+  | {
+      kind: 'table_update';
+      payload: TableUpdatePayload;
+      targetFields: { path: string; label: string }[];
+      proposalId?: string;
+      sourceSignature?: string;
+      parsedPreview?: ParsedTablePreview;
+      rebuildContext?: TableRebuildContext;
+      /**
+       * Mapping the user confirmed in the mapping step + whether they want
+       * it cached for next time. We defer the cache write to the apply
+       * PATCH so we don't pollute the cache with mappings the user never
+       * actually applied.
+       */
+      pendingMapping?: Record<string, { fieldPath: string; confidence?: 'low' | 'medium' | 'high' }>;
+      saveMappingForFuture?: boolean;
+      step: 'mapping' | 'rows';
+    }
   | { kind: 'template_fill'; payload: TemplateFillPayload; proposalId?: string };
 
 /**
@@ -57,6 +100,8 @@ export function CopilotFillsHost() {
         targetFields?: { path: string; label: string }[];
         proposalId?: string;
         sourceSignature?: string;
+        parsedPreview?: ParsedTablePreview;
+        rebuildContext?: TableRebuildContext;
         skipMapping?: boolean;
       }>).detail;
       if (!detail?.payload) return;
@@ -66,6 +111,8 @@ export function CopilotFillsHost() {
         targetFields: detail.targetFields ?? [],
         proposalId: detail.proposalId,
         sourceSignature: detail.sourceSignature,
+        parsedPreview: detail.parsedPreview,
+        rebuildContext: detail.rebuildContext,
         step: detail.skipMapping ? 'rows' : 'mapping',
       });
     };
@@ -124,38 +171,145 @@ export function CopilotFillsHost() {
     saveForFuture: boolean
   ) => {
     if (active?.kind !== 'table_update') return;
-    if (saveForFuture && active.sourceSignature) {
-      await fetch('/api/ai/field-mappings', {
+
+    // Compare against the mapping the server originally produced. If the user
+    // didn't change anything, payload.ops is already correct and we can skip
+    // the round-trip; otherwise re-POST so the server rebuilds row values
+    // using the user's mapping (and re-runs duplicate detection).
+    const serverMapping = active.payload.mapping ?? {};
+    const isUnchanged =
+      Object.keys(mapping).length === Object.keys(serverMapping).length &&
+      Object.entries(mapping).every(([col, m]) => serverMapping[col]?.fieldPath === m.fieldPath);
+
+    if (isUnchanged || !active.rebuildContext) {
+      setActive(prev =>
+        prev?.kind === 'table_update'
+          ? { ...prev, pendingMapping: mapping, saveMappingForFuture: saveForFuture, step: 'rows' }
+          : prev
+      );
+      return;
+    }
+
+    setBusy(true);
+    try {
+      // The server expects `cachedMapping: Record<string, { fieldPath: string }>`.
+      // Strip the optional confidence field before sending.
+      const cachedMapping: Record<string, { fieldPath: string }> = {};
+      for (const [col, m] of Object.entries(mapping)) {
+        if (m?.fieldPath) cachedMapping[col] = { fieldPath: m.fieldPath };
+      }
+      const res = await fetch('/api/ai/table-fill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sourceSignature: active.sourceSignature,
-          targetTableId: active.payload.tableId,
-          mapping,
+          tableId: active.payload.tableId,
+          tableLabel: active.rebuildContext.tableLabel ?? active.payload.tableLabel,
+          parsed: active.rebuildContext.parsed,
+          existingRows: active.rebuildContext.existingRows,
+          duplicateKey: active.rebuildContext.duplicateKey,
+          scope: active.rebuildContext.scope,
+          cachedMapping,
+          // Skip the deterministic match — we know exactly what the user wants.
+          useCachedMapping: false,
+          // Don't create a second proposal artifact for the same upload.
+          persistAsProposal: false,
         }),
-      }).catch(() => undefined);
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        payload?: TableUpdatePayload;
+        sourceSignature?: string;
+        error?: string;
+      };
+      if (!res.ok || !json.payload) {
+        throw new Error(json.error ?? 'Failed to rebuild rows with that mapping.');
+      }
+      setActive(prev =>
+        prev?.kind === 'table_update'
+          ? {
+              ...prev,
+              payload: json.payload!,
+              sourceSignature: json.sourceSignature ?? prev.sourceSignature,
+              pendingMapping: mapping,
+              saveMappingForFuture: saveForFuture,
+              step: 'rows',
+            }
+          : prev
+      );
+    } catch (err) {
+      console.error('Mapping rebuild failed', err);
+      // Fall through to the rows step with the stale ops rather than
+      // trapping the user in the mapping screen.
+      setActive(prev =>
+        prev?.kind === 'table_update'
+          ? { ...prev, pendingMapping: mapping, saveMappingForFuture: saveForFuture, step: 'rows' }
+          : prev
+      );
+    } finally {
+      setBusy(false);
     }
-    setActive(prev => (prev?.kind === 'table_update' ? { ...prev, step: 'rows' } : prev));
   }, [active]);
 
   const handleTableApply = useCallback(async (accepted: { rowIndex: number; values: Record<string, unknown>; op: 'insert' | 'update' }[]) => {
     if (active?.kind !== 'table_update') return;
     setBusy(true);
     try {
+      // Build a one-shot listener for `copilot:fill-completed` so the dialog
+      // stays open (and shows the busy state) until the page has actually
+      // finished the bulk write. Falls back to a 30s timeout so the dialog
+      // can't get permanently stuck if the page never reports.
+      const completedTableId = active.payload.tableId;
+      const completedPromise = new Promise<void>(resolve => {
+        if (typeof window === 'undefined') {
+          resolve();
+          return;
+        }
+        const onComplete = (event: Event) => {
+          const detail = (event as CustomEvent<{ kind?: string; tableId?: string }>).detail;
+          if (detail?.kind !== 'table_update' || detail.tableId !== completedTableId) return;
+          window.removeEventListener('copilot:fill-completed', onComplete as EventListener);
+          clearTimeout(timer);
+          resolve();
+        };
+        const timer = setTimeout(() => {
+          window.removeEventListener('copilot:fill-completed', onComplete as EventListener);
+          resolve();
+        }, 30_000);
+        window.addEventListener('copilot:fill-completed', onComplete as EventListener);
+      });
+
+      // Audit + (optionally) cache the user's confirmed mapping. Bundling
+      // this into the apply PATCH replaces the old separate POST to
+      // `/api/ai/field-mappings` so we have a single source of truth and
+      // never cache an unconfirmed mapping.
+      const mappingForCache: Record<string, { fieldPath: string; confidence?: number }> | undefined =
+        active.saveMappingForFuture && active.pendingMapping
+          ? Object.fromEntries(
+              Object.entries(active.pendingMapping)
+                .filter(([, m]) => m?.fieldPath)
+                .map(([col, m]) => [
+                  col,
+                  { fieldPath: m.fieldPath, confidence: m.confidence ? confidenceToNumber(m.confidence) : undefined },
+                ])
+            )
+          : undefined;
+
       await fetch('/api/ai/table-fill', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tableId: active.payload.tableId,
+          tableId: completedTableId,
           proposalId: active.proposalId ?? null,
           acceptedRows: accepted,
+          mapping: mappingForCache,
+          sourceSignature: mappingForCache ? active.sourceSignature : undefined,
         }),
       }).catch(() => undefined);
       window.dispatchEvent(
         new CustomEvent('copilot:fill-applied', {
-          detail: { kind: 'table_update', tableId: active.payload.tableId, acceptedRows: accepted },
+          detail: { kind: 'table_update', tableId: completedTableId, acceptedRows: accepted },
         })
       );
+      await completedPromise;
       close();
     } finally {
       setBusy(false);
@@ -188,10 +342,9 @@ export function CopilotFillsHost() {
   }, [active, close]);
 
   return (
-    <Sheet open={!!active} onOpenChange={open => (open ? null : close())}>
-      <SheetContent
-        side="right"
-        className="w-full max-w-[680px] p-0 flex flex-col"
+    <Dialog open={!!active} onOpenChange={open => (open ? null : close())}>
+      <DialogContent
+        className="max-w-5xl w-[min(96vw,1024px)] h-[min(85vh,800px)] p-0 overflow-hidden flex flex-col"
         showCloseButton={false}
       >
         {active?.kind === 'form_fill' ? (
@@ -209,6 +362,8 @@ export function CopilotFillsHost() {
           <FieldMappingStep
             payload={active.payload}
             targetFields={active.targetFields}
+            parsedPreview={active.parsedPreview}
+            busy={busy}
             onConfirm={handleMappingConfirmed}
             onBack={close}
           />
@@ -231,7 +386,7 @@ export function CopilotFillsHost() {
             onDiscard={close}
           />
         ) : null}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }

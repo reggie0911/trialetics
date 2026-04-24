@@ -53,6 +53,13 @@ export interface ExtractedDocument {
 
 const MAX_SECTION_CHARS = 60_000;
 const MAX_TOTAL_CHARS = 250_000;
+/**
+ * Hard cap on rows extracted from a single tabular source (CSV/TSV/XLSX).
+ * The Copilot review surface and downstream bulk-write batchers assume any
+ * file beyond this is truncated; the trigger surfaces a warning when it
+ * detects the total row count exceeds what we returned.
+ */
+const MAX_TABLE_ROWS = 5_000;
 
 function clip(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n)}\n[…truncated…]` : s;
@@ -148,8 +155,8 @@ export async function extractSpreadsheet(buffer: Buffer): Promise<ExtractedDocum
           rows.push(cells);
         });
         const headers = rows[0] ?? [];
-        const dataRows = rows.slice(1, 201);
-        const flat = rows.slice(0, 201).map(r => r.join(' | ')).join('\n');
+        const dataRows = rows.slice(1, MAX_TABLE_ROWS + 1);
+        const flat = rows.slice(0, MAX_TABLE_ROWS + 1).map(r => r.join(' | ')).join('\n');
         return {
           kind: 'sheet' as const,
           label: `Sheet: ${ws.name}`,
@@ -183,14 +190,39 @@ export async function extractSpreadsheet(buffer: Buffer): Promise<ExtractedDocum
 // CSV / TSV / plain text
 // ---------------------------------------------------------------------------
 export async function extractTextLike(buffer: Buffer, mimeType: string): Promise<ExtractedDocument> {
-  const text = clip(buffer.toString('utf-8'), MAX_TOTAL_CHARS);
+  // Strip a UTF-8 BOM so headers parse cleanly when present.
+  const raw = buffer.toString('utf-8').replace(/^\uFEFF/, '');
+  const text = clip(raw, MAX_TOTAL_CHARS);
+  const isTabular = mimeType.includes('csv') || mimeType.includes('tsv');
+
+  let structured: Record<string, unknown> | undefined;
+  if (isTabular) {
+    try {
+      const Papa = (await import('papaparse')).default;
+      const delimiter = mimeType.includes('tsv') ? '\t' : ',';
+      const parsed = Papa.parse<string[]>(raw, {
+        delimiter,
+        skipEmptyLines: true,
+      });
+      const rows = (parsed.data ?? []).filter(r => Array.isArray(r) && r.some(c => String(c ?? '').trim() !== ''));
+      const headers = (rows[0] ?? []).map(c => String(c ?? '').trim());
+      const sampleRows = rows.slice(1, MAX_TABLE_ROWS + 1).map(r => r.map(c => String(c ?? '')));
+      if (headers.length) {
+        structured = { headers, rowCount: rows.length, sampleRows };
+      }
+    } catch {
+      // Best-effort: leave `structured` undefined and fall back to plain text.
+    }
+  }
+
   return {
     plainText: text,
     sections: [
       {
-        kind: mimeType.includes('csv') || mimeType.includes('tsv') ? 'table' : 'text',
-        label: mimeType.includes('csv') || mimeType.includes('tsv') ? 'CSV/TSV body' : 'Text body',
+        kind: isTabular ? 'table' : 'text',
+        label: isTabular ? 'CSV/TSV body' : 'Text body',
         content: clip(text, MAX_SECTION_CHARS),
+        structured,
       },
     ],
     metadata: {},

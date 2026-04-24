@@ -7,6 +7,8 @@ import { assertStudyWritable, assertStudyWritableForCurrentUser } from '@/lib/se
 import { createAdminClient } from '@/lib/server-admin';
 import { sendEmail } from '@/lib/email';
 import { InviteUser } from '@/emails/invite-user';
+import { AddedToStudy } from '@/emails/added-to-study';
+import { isUniqueViolation } from '@/lib/db/is-unique-violation';
 import type {
   TeamRole,
   StudyTeamMember,
@@ -15,6 +17,7 @@ import type {
   TeamMemberWithStudies,
 } from '@/lib/types/ctms';
 import { TEAM_ROLE_LABEL } from '@/lib/types/ctms';
+import { studySelectLabel } from '@/lib/ctms/study-display';
 import {
   JOIN_STUDY_ID_META_KEY,
   JOIN_STUDY_ROLE_META_KEY,
@@ -265,7 +268,7 @@ export async function getTeamDirectory(): Promise<TeamMemberWithStudies[]> {
 
   const { data: profiles, error: profilesError } = await admin
     .from('profiles')
-    .select('id, first_name, last_name, email, avatar_url, role')
+    .select('id, user_id, first_name, last_name, email, avatar_url, role')
     .eq('company_id', companyId)
     .order('first_name');
 
@@ -276,23 +279,58 @@ export async function getTeamDirectory(): Promise<TeamMemberWithStudies[]> {
 
   const { data: assignments, error: assignError } = await admin
     .from('study_team_members')
-    .select('id, study_id, profile_id, role, is_active, custom_role_id, team_roles(role_name), studies(title), study_sites(name)')
+    .select('id, study_id, profile_id, role, is_active, custom_role_id, team_roles(role_name), studies(title, study_name, protocol_number), study_sites(name)')
     .in('profile_id', profileIds);
 
   if (assignError) throw new Error(assignError.message);
 
+  // Best-effort fetch of last sign-in from auth.users via the admin API.
+  // Failures here are non-fatal — the directory still renders without "Last Active".
+  const lastSignInByUserId = new Map<string, string | null>();
+  try {
+    let page = 1;
+    const perPage = 200;
+    // Cap pagination to avoid runaway loops in unexpectedly large companies.
+    for (let i = 0; i < 25; i++) {
+      const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
+      if (error) break;
+      const users = data?.users ?? [];
+      if (users.length === 0) break;
+      for (const u of users) {
+        lastSignInByUserId.set(u.id, u.last_sign_in_at ?? null);
+      }
+      if (users.length < perPage) break;
+      page += 1;
+    }
+  } catch {
+    // Swallow — last_sign_in_at will be null for everyone.
+  }
+
   return profiles.map((profile) => {
     const memberAssignments = (assignments ?? [])
       .filter((a: Record<string, unknown>) => a.profile_id === profile.id)
-      .map((a: Record<string, unknown>) => ({
-        id: a.id as string,
-        study_id: a.study_id as string,
-        study_title: (a.studies as Record<string, unknown> | null)?.title as string ?? '—',
-        role: a.role as TeamMemberRole,
-        custom_role_name: (a.team_roles as Record<string, unknown> | null)?.role_name as string | null,
-        site_name: (a.study_sites as Record<string, unknown> | null)?.name as string | null,
-        is_active: a.is_active as boolean,
-      }));
+      .map((a: Record<string, unknown>) => {
+        const studyRecord = a.studies as
+          | { title?: string | null; study_name?: string | null; protocol_number?: string | null }
+          | null;
+        const studyLabel = studyRecord
+          ? studySelectLabel({
+              study_name: studyRecord.study_name ?? null,
+              protocol_number: studyRecord.protocol_number ?? '',
+              title: studyRecord.title ?? '—',
+            })
+          : '—';
+        return {
+          id: a.id as string,
+          study_id: a.study_id as string,
+          study_title: studyLabel,
+          protocol_number: (studyRecord?.protocol_number ?? '').trim(),
+          role: a.role as TeamMemberRole,
+          custom_role_name: (a.team_roles as Record<string, unknown> | null)?.role_name as string | null,
+          site_name: (a.study_sites as Record<string, unknown> | null)?.name as string | null,
+          is_active: a.is_active as boolean,
+        };
+      });
 
     return {
       profile_id: profile.id,
@@ -301,9 +339,68 @@ export async function getTeamDirectory(): Promise<TeamMemberWithStudies[]> {
       email: profile.email,
       avatar_url: profile.avatar_url,
       app_role: (profile.role as 'admin' | 'user') ?? 'user',
+      last_sign_in_at: lastSignInByUserId.get(profile.user_id as string) ?? null,
       assignments: memberAssignments,
     };
   });
+}
+
+/**
+ * Best-effort company domain for the current user's company. Used by the
+ * Study Team dashboard's "External Users" KPI to flag members whose email
+ * domain doesn't match the org. There is no `companies.domain` column
+ * today, so we derive from the most common email domain among admins, then
+ * fall back to the requesting user's domain.
+ */
+export async function getCompanyDomain(): Promise<string | null> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('company_id, email')
+      .eq('user_id', user.id)
+      .single();
+    if (!profile?.company_id) return null;
+
+    const admin = createAdminClient();
+    const { data: profiles } = await admin
+      .from('profiles')
+      .select('email, role')
+      .eq('company_id', profile.company_id);
+
+    const domainCounts = new Map<string, number>();
+    for (const row of profiles ?? []) {
+      const email = (row as { email?: string | null }).email ?? '';
+      const role = (row as { role?: string | null }).role ?? '';
+      const at = email.indexOf('@');
+      if (at < 0) continue;
+      const domain = email.slice(at + 1).toLowerCase().trim();
+      if (!domain) continue;
+      domainCounts.set(domain, (domainCounts.get(domain) ?? 0) + (role === 'admin' ? 2 : 1));
+    }
+
+    if (domainCounts.size > 0) {
+      let best: string | null = null;
+      let bestCount = -1;
+      for (const [domain, count] of domainCounts) {
+        if (count > bestCount) {
+          best = domain;
+          bestCount = count;
+        }
+      }
+      if (best) return best;
+    }
+
+    const fallbackEmail = (profile.email as string | null) ?? user.email ?? null;
+    if (!fallbackEmail) return null;
+    const at = fallbackEmail.indexOf('@');
+    return at >= 0 ? fallbackEmail.slice(at + 1).toLowerCase().trim() : null;
+  } catch {
+    return null;
+  }
 }
 
 // =====================================================
@@ -507,8 +604,78 @@ export async function inviteUser(
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-
     const admin = createAdminClient();
+
+    const inviterContext = await loadInviterContext(profile.id, profile.company_id);
+    const studyLabel =
+      (study.study_name as string | null)?.trim() ||
+      (study.protocol_number as string | null)?.trim() ||
+      null;
+    const roleLabel = TEAM_ROLE_LABEL[study_role] ?? null;
+    const inviteeFirstName = first_name?.trim() ?? '';
+
+    // If the email already belongs to a profile in this company, skip the
+    // Supabase auth invite link (which errors for registered users) and
+    // assign the existing profile to the study directly. The invitations row
+    // upsert above already keeps the Pending tab in sync.
+    const { data: existingProfile } = await admin
+      .from('profiles')
+      .select('id, first_name')
+      .eq('company_id', profile.company_id)
+      .eq('email', emailTrimmed)
+      .maybeSingle();
+
+    if (existingProfile) {
+      const profileId = (existingProfile as { id: string }).id;
+      const profileFirstName =
+        (existingProfile as { first_name?: string | null }).first_name?.trim() ?? '';
+
+      const { error: stmErr } = await admin.from('study_team_members').insert({
+        study_id,
+        profile_id: profileId,
+        role: study_role,
+      });
+
+      if (stmErr && !isUniqueViolation(stmErr)) {
+        console.error('[inviteUser] study_team_members insert error:', stmErr);
+        if (stmErr.message?.includes('study_team_members_role_check')) {
+          return { data: null, error: STUDY_TEAM_ROLE_CONSTRAINT_HINT };
+        }
+        return {
+          data: null,
+          error: `Could not add to study team: ${stmErr.message}`,
+        };
+      }
+
+      const studyUrl = `${siteUrl}/protected/studies/${study_id}`;
+      const sendResult = await sendEmail({
+        to: emailTrimmed,
+        replyTo: inviterContext.email ?? undefined,
+        subject: `${inviterContext.name} added you to ${studyLabel ?? 'a study'} on Trialetics`,
+        category: 'invite',
+        idempotencyKey: `${invitationRow.id as string}:added-to-study`,
+        template: (
+          <AddedToStudy
+            inviteeFirstName={inviteeFirstName || profileFirstName}
+            inviterName={inviterContext.name}
+            companyName={inviterContext.companyName}
+            studyLabel={studyLabel ?? 'a study'}
+            roleLabel={roleLabel}
+            studyUrl={studyUrl}
+          />
+        ),
+      });
+
+      if (sendResult.error) {
+        // Email failure should not roll back the membership; surface a soft warning.
+        console.error('[inviteUser] AddedToStudy email send error:', sendResult.error);
+      }
+
+      revalidateStudyCtmsLayout(study_id);
+      revalidatePath('/protected/team');
+      return { data: { invited: true }, error: null };
+    }
+
     const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
       type: 'invite',
       email: emailTrimmed,
@@ -536,13 +703,6 @@ export async function inviteUser(
 
     const inviteLink = `${siteUrl}/auth/confirm?token_hash=${tokenHash}&type=invite`;
 
-    const inviterContext = await loadInviterContext(profile.id, profile.company_id);
-    const studyLabel =
-      (study.study_name as string | null)?.trim() ||
-      (study.protocol_number as string | null)?.trim() ||
-      null;
-    const roleLabel = TEAM_ROLE_LABEL[study_role] ?? null;
-
     const sendResult = await sendEmail({
       to: emailTrimmed,
       replyTo: inviterContext.email ?? undefined,
@@ -551,7 +711,7 @@ export async function inviteUser(
       idempotencyKey: `${invitationRow.id as string}:invite`,
       template: (
         <InviteUser
-          inviteeFirstName={first_name?.trim() ?? ''}
+          inviteeFirstName={inviteeFirstName}
           inviterName={inviterContext.name}
           companyName={inviterContext.companyName}
           studyLabel={studyLabel}

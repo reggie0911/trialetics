@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import type { SubjectVisit } from '@/lib/types/ctms';
+import type { SubjectVisit, VisitScheduleBucketCounts } from '@/lib/types/ctms';
 
 import {
   bucketVisitsByWindowStatus,
   computeVisitWindowStatus,
   daysOutOfWindow,
+  derivePriority,
+  deriveSubjectRisk,
+  deriveNextAction,
   formatPlanDate,
 } from './visit-window';
 
@@ -243,6 +246,97 @@ describe('daysOutOfWindow', () => {
         window_end:   '2026-04-22',
       }),
     ).toBe(0);
+  });
+});
+
+function counts(overrides: Partial<VisitScheduleBucketCounts> = {}): VisitScheduleBucketCounts {
+  return {
+    total: 0,
+    done: 0,
+    in_window: 0,
+    out_of_window: 0,
+    overdue: 0,
+    due_now: 0,
+    upcoming: 0,
+    pending: 0,
+    ...overrides,
+  };
+}
+
+describe('derivePriority', () => {
+  it('returns on_track when no open visits remain', () => {
+    expect(derivePriority(counts({ total: 5, done: 5 }))).toBe('on_track');
+  });
+
+  it('returns critical when overdue / open >= 0.5', () => {
+    expect(
+      derivePriority(counts({ total: 10, done: 0, overdue: 5, upcoming: 5 })),
+    ).toBe('critical');
+  });
+
+  it('returns at_risk when overdue / open >= 0.2', () => {
+    expect(
+      derivePriority(counts({ total: 10, done: 0, overdue: 2, upcoming: 8 })),
+    ).toBe('at_risk');
+  });
+
+  it('returns on_track when overdue / open is below the at_risk threshold', () => {
+    expect(
+      derivePriority(counts({ total: 10, done: 0, overdue: 1, upcoming: 9 })),
+    ).toBe('on_track');
+  });
+});
+
+describe('deriveSubjectRisk', () => {
+  it('mirrors derivePriority thresholds with risk-level names', () => {
+    expect(deriveSubjectRisk(counts({ total: 5, done: 5 }))).toBe('low');
+    expect(
+      deriveSubjectRisk(counts({ total: 4, done: 0, overdue: 2, upcoming: 2 })),
+    ).toBe('high');
+    expect(
+      deriveSubjectRisk(counts({ total: 10, done: 0, overdue: 2, upcoming: 8 })),
+    ).toBe('medium');
+    expect(
+      deriveSubjectRisk(counts({ total: 10, done: 0, overdue: 1, upcoming: 9 })),
+    ).toBe('low');
+  });
+});
+
+describe('deriveNextAction', () => {
+  it('prefers resolving overdue visits first', () => {
+    const action = deriveNextAction(
+      counts({ total: 5, overdue: 1, due_now: 1, out_of_window: 1, upcoming: 2 }),
+    );
+    expect(action.kind).toBe('resolve_overdue');
+  });
+
+  it('flags out-of-window deviations next', () => {
+    expect(
+      deriveNextAction(counts({ total: 4, out_of_window: 1, upcoming: 3 })).kind,
+    ).toBe('enter_missing_data');
+  });
+
+  it('prompts action today when due_now > 0', () => {
+    expect(
+      deriveNextAction(counts({ total: 4, due_now: 1, upcoming: 3 })).kind,
+    ).toBe('review_overdue');
+  });
+
+  it('switches between prepare / monitor based on the upcoming ratio', () => {
+    expect(
+      deriveNextAction(counts({ total: 5, upcoming: 4, pending: 1 })).kind,
+    ).toBe('prepare_upcoming');
+    expect(
+      deriveNextAction(counts({ total: 5, upcoming: 1, pending: 4 })).kind,
+    ).toBe('monitor_upcoming');
+  });
+
+  it('falls through to plan_visit when only pending remains', () => {
+    expect(deriveNextAction(counts({ total: 3, pending: 3 })).kind).toBe('plan_visit');
+  });
+
+  it('returns all_clear when every visit is done', () => {
+    expect(deriveNextAction(counts({ total: 4, done: 4 })).kind).toBe('all_clear');
   });
 });
 

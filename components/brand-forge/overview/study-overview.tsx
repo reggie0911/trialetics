@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Loader2,
   Sparkles,
@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { brandForgePath, brandForgeStudyIdFromPathname } from '@/lib/nav/brand-forge-paths';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -67,6 +68,8 @@ export function StudyOverview({
   workspaceStatus,
 }: StudyOverviewProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const studyId = brandForgeStudyIdFromPathname(pathname);
   const [isGenerating, setIsGenerating] = useState(false);
   const [direction, setDirection] = useState<BFBrandDirection | null>(brandDirection);
   const [, startTransition] = useTransition();
@@ -102,7 +105,7 @@ export function StudyOverview({
   };
 
   const inputs = brandInputs;
-  const editStudyHref = `/protected/brand-forge/${projectId}/edit?returnTo=overview`;
+  const editStudyHref = `${brandForgePath(studyId, projectId, 'edit')}?returnTo=overview`;
 
   return (
     <div className="space-y-6">
@@ -214,13 +217,13 @@ export function StudyOverview({
             <div className="space-y-2">
               {[
                 { label: 'Brand Direction', done: !!direction, href: '' },
-                { label: 'Logos', done: workspaceStatus.logos, href: `/protected/brand-forge/${projectId}/logos` },
-                { label: 'Colors', done: workspaceStatus.colors, href: `/protected/brand-forge/${projectId}/colors` },
-                { label: 'Typography', done: workspaceStatus.typography, href: `/protected/brand-forge/${projectId}/typography` },
-                { label: 'Imagery', done: workspaceStatus.imagery, href: `/protected/brand-forge/${projectId}/imagery` },
-                { label: 'Mockups', done: workspaceStatus.mockups, href: `/protected/brand-forge/${projectId}/mockups` },
-                { label: 'Recruitment', done: workspaceStatus.recruitment, href: `/protected/brand-forge/${projectId}/recruitment` },
-                { label: 'Templates', done: workspaceStatus.templates, href: `/protected/brand-forge/${projectId}/templates` },
+                { label: 'Logos', done: workspaceStatus.logos, href: brandForgePath(studyId, projectId, 'logos') },
+                { label: 'Colors', done: workspaceStatus.colors, href: brandForgePath(studyId, projectId, 'colors') },
+                { label: 'Typography', done: workspaceStatus.typography, href: brandForgePath(studyId, projectId, 'typography') },
+                { label: 'Imagery', done: workspaceStatus.imagery, href: brandForgePath(studyId, projectId, 'imagery') },
+                { label: 'Mockups', done: workspaceStatus.mockups, href: brandForgePath(studyId, projectId, 'mockups') },
+                { label: 'Recruitment', done: workspaceStatus.recruitment, href: brandForgePath(studyId, projectId, 'recruitment') },
+                { label: 'Templates', done: workspaceStatus.templates, href: brandForgePath(studyId, projectId, 'templates') },
               ].map((item) => (
                 <div key={item.label} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">

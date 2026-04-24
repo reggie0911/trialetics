@@ -1,12 +1,12 @@
+import { redirect } from 'next/navigation';
 import { requireTrackerAccess } from '@/lib/actions/tracker-access';
-import { CustomTrackersClient } from '@/components/custom-trackers/custom-trackers-client';
+import { getStudies } from '@/lib/actions/studies';
 
 export default async function CustomTrackersPage() {
-  const profile = await requireTrackerAccess();
-
-  return (
-    <div className="container max-w-6xl py-8 px-4">
-      <CustomTrackersClient companyId={profile.company_id} profileId={profile.id} />
-    </div>
-  );
+  await requireTrackerAccess();
+  const studies = await getStudies();
+  if (studies.length === 1) {
+    redirect(`/protected/studies/${studies[0].id}/custom-trackers`);
+  }
+  redirect('/protected/studies#studies');
 }

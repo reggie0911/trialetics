@@ -65,11 +65,23 @@ export async function updateSession(request: NextRequest) {
 
   const isProtectedRoute = request.nextUrl.pathname === '/protected' || request.nextUrl.pathname.startsWith('/protected/')
   const isDeactivatedPage = request.nextUrl.pathname === '/auth/deactivated'
+  const studyPathRegex = /^\/protected\/studies\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\/|$)/i
+  const isGateLanding =
+    request.nextUrl.pathname === '/protected' ||
+    request.nextUrl.pathname === '/protected/studies' ||
+    request.nextUrl.pathname === '/protected/studies/new' ||
+    request.nextUrl.pathname.startsWith('/protected/studies/catalog')
+  const isAccountExempt =
+    request.nextUrl.pathname === '/protected/settings' ||
+    request.nextUrl.pathname.startsWith('/protected/settings/')
+  const isPlatformExempt =
+    request.nextUrl.pathname.startsWith('/protected/platform/')
+  const isStudyScopedPath = studyPathRegex.test(request.nextUrl.pathname)
 
   if (user && isProtectedRoute && !isDeactivatedPage) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('is_active')
+      .select('is_active, is_platform_admin, company_id')
       .eq('user_id', user.id)
       .single()
 
@@ -77,6 +89,24 @@ export async function updateSession(request: NextRequest) {
       const url = request.nextUrl.clone()
       url.pathname = '/auth/deactivated'
       return NextResponse.redirect(url)
+    }
+
+    const gateCandidate = !isGateLanding && !isStudyScopedPath && !isAccountExempt
+    const platformAllowed = isPlatformExempt && profile?.is_platform_admin === true
+
+    if (gateCandidate && !platformAllowed && profile?.company_id) {
+      const { data: company } = await supabase
+        .from('companies')
+        .select('has_ctms_access')
+        .eq('id', profile.company_id)
+        .maybeSingle()
+
+      if (company?.has_ctms_access !== false) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/protected/studies'
+        url.hash = 'studies'
+        return NextResponse.redirect(url)
+      }
     }
   }
 

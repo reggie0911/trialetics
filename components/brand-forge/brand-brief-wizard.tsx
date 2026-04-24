@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { usePathname } from 'next/navigation';
 import { ChevronRight, ChevronLeft, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -15,6 +16,7 @@ import {
   updateBrandForgeBrief,
   type BrandBriefEditRedirectTarget,
 } from '@/lib/actions/brand-forge';
+import { brandForgeStudyIdFromPathname } from '@/lib/nav/brand-forge-paths';
 import { DEFAULT_BRAND_BRIEF, type BrandBriefFormValues } from '@/lib/types/brand-forge';
 import { cn } from '@/lib/utils';
 
@@ -40,6 +42,8 @@ export function BrandBriefWizard({
   initialValues,
   editSuccessRedirect = 'logos',
 }: BrandBriefWizardProps = {}) {
+  const pathname = usePathname();
+  const studyId = brandForgeStudyIdFromPathname(pathname);
   const isEdit = mode === 'edit' && projectId;
   const [step, setStep] = useState(0);
   const [isPending, startTransition] = useTransition();
@@ -75,7 +79,7 @@ export function BrandBriefWizard({
         }
         return;
       }
-      const result = await createBrandForgeProject(formData);
+      const result = await createBrandForgeProject(formData, studyId);
       if (result?.error) {
         toast.error('Failed to create project', { description: result.error });
       }

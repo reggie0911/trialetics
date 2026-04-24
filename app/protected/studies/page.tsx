@@ -5,7 +5,7 @@ import { getCtmsDashboardProps } from '@/lib/dashboard/get-ctms-dashboard-props'
 import { DashboardContent } from '@/components/ctms/dashboard-content';
 
 interface StudiesPageProps {
-  searchParams: Promise<{ studyRequired?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export default async function StudiesPage({ searchParams }: StudiesPageProps) {
@@ -36,11 +36,9 @@ export default async function StudiesPage({ searchParams }: StudiesPageProps) {
     redirect('/protected');
   }
 
-  const sp = await searchParams;
-  const studySelectionHint =
-    sp.studyRequired === '1' || sp.studyRequired === 'true' || sp.studyRequired === 'yes';
+  await searchParams;
 
   const dashboardProps = await getCtmsDashboardProps(supabase, profile);
 
-  return <DashboardContent {...dashboardProps} studySelectionHint={studySelectionHint} />;
+  return <DashboardContent {...dashboardProps} />;
 }

@@ -1,10 +1,7 @@
 'use client';
 
-import { useState, useCallback, useTransition } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useState, useCallback, useMemo, useTransition } from 'react';
 import {
-  ArrowLeft,
   CalendarDays,
   ClipboardCheck,
   History,
@@ -15,7 +12,6 @@ import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Button } from '@/components/ui/button';
 import {
   Tooltip,
   TooltipContent,
@@ -23,9 +19,9 @@ import {
 } from '@/components/ui/tooltip';
 import { getSubjectById } from '@/lib/actions/subjects';
 import type { SubjectWithDetails } from '@/lib/types/ctms';
-import type { Study } from '@/lib/types/ctms';
 
 import { useStudyHub } from '@/components/ctms/study-hub-context';
+import { useStudyBreadcrumbLeaf } from '@/components/ctms/studies/study-breadcrumb-context';
 import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
 
 import { SubjectActivityPanel } from './subject-activity-panel';
@@ -44,24 +40,25 @@ function DetailRow({ label, value }: { label: string; value: string | null | und
 
 interface SubjectDetailTabsProps {
   subject: SubjectWithDetails;
-  study: Pick<Study, 'id' | 'title' | 'protocol_number'>;
   sites: { id: string; site_number: string; name: string }[];
-  isAdmin: boolean;
-  /** When set, back navigation targets the study subject list (study-scoped CTMS routes). */
-  studyId?: string;
+  /**
+   * The study's currently-live eCRF template version id. The Visits panel
+   * scopes its rows to this version so prior-version snapshots stay hidden.
+   */
+  liveTemplateVersionId?: string | null;
 }
 
 export function SubjectDetailTabs({
   subject: initialSubject,
-  study,
   sites,
-  isAdmin,
-  studyId,
+  liveTemplateVersionId = null,
 }: SubjectDetailTabsProps) {
   const readOnly = useStudyHub()?.isStudyReadOnly ?? false;
   const disabledTooltip = readOnly ? STUDY_DEACTIVATED_TOOLTIP : undefined;
   const [subject, setSubject] = useState(initialSubject);
   const [, startTransition] = useTransition();
+
+  useStudyBreadcrumbLeaf(`Subject ${subject.subject_number}`);
 
   const refreshSubject = useCallback(() => {
     startTransition(async () => {
@@ -73,6 +70,13 @@ export function SubjectDetailTabs({
       }
     });
   }, [subject.id]);
+
+  const liveVisitCount = useMemo(() => {
+    const all = subject.subject_visits ?? [];
+    if (!liveTemplateVersionId) return all.length;
+    return all.filter((v) => v.template_version_id === liveTemplateVersionId)
+      .length;
+  }, [subject.subject_visits, liveTemplateVersionId]);
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return null;
@@ -87,26 +91,6 @@ export function SubjectDetailTabs({
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              render={
-                <Link
-                  href={
-                    studyId
-                      ? `/protected/studies/${study.id}/subjects`
-                      : `/protected/studies/${study.id}`
-                  }
-                />
-              }
-              nativeButton={false}
-              className="-ml-2"
-            >
-              <ArrowLeft className="mr-1 h-4 w-4" />
-              {study.protocol_number}
-            </Button>
-          </div>
           <h1 className="text-2xl font-semibold tracking-tight">
             Subject {subject.subject_number}
           </h1>
@@ -148,7 +132,7 @@ export function SubjectDetailTabs({
               render={
                 <TabsTrigger value="visits">
                   <CalendarDays className="mr-1 h-3.5 w-3.5" />
-                  Visits ({subject.subject_visits?.length ?? 0})
+                  Visits ({liveVisitCount})
                 </TabsTrigger>
               }
             />
@@ -247,6 +231,7 @@ export function SubjectDetailTabs({
             anchorKind={subject.visit_anchor_kind}
             screeningDate={subject.screening_date}
             randomizationDate={subject.randomization_date}
+            liveTemplateVersionId={liveTemplateVersionId}
           />
         </TabsContent>
 

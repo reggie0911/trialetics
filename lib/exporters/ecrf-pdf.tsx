@@ -575,3 +575,89 @@ export async function renderEcrfPdf(input: EcrfPdfInput): Promise<Buffer> {
   const arrayBuffer = await blob.arrayBuffer();
   return Buffer.from(arrayBuffer);
 }
+
+/**
+ * Renders a side-by-side compare PDF that shows the left and right versions
+ * back-to-back. Each version retains the same chrome as the single-version
+ * export so reviewers can scan both with a familiar layout. A shared section
+ * banner above each block calls out which version they are looking at.
+ */
+export interface EcrfComparePdfInput {
+  study: EcrfPdfStudy;
+  company?: EcrfPdfCompany | null;
+  logo?: EcrfPdfLogo | null;
+  left: {
+    version: EcrfTemplateVersion;
+    visits: StudyVisitDefinition[];
+    crfs: StudyCrf[];
+    questions: StudyCrfQuestion[];
+  };
+  right: {
+    version: EcrfTemplateVersion;
+    visits: StudyVisitDefinition[];
+    crfs: StudyCrf[];
+    questions: StudyCrfQuestion[];
+  };
+  generatedAt: Date;
+  generatedBy: string | null;
+}
+
+export async function renderEcrfComparePdf(input: EcrfComparePdfInput): Promise<Buffer> {
+  // The simplest reliable way to compose two single-version exports is to
+  // render two documents and concatenate their pages via @react-pdf/renderer's
+  // multi-Page support inside one Document. We do this by inlining both Page
+  // trees here; it duplicates the structure of EcrfPdfDocument but keeps the
+  // chrome identical.
+  const leftInput: EcrfPdfInput = {
+    study: input.study,
+    company: input.company,
+    logo: input.logo,
+    version: input.left.version,
+    visits: input.left.visits,
+    crfs: input.left.crfs,
+    questions: input.left.questions,
+    generatedAt: input.generatedAt,
+    generatedBy: input.generatedBy,
+  };
+  const rightInput: EcrfPdfInput = {
+    ...leftInput,
+    version: input.right.version,
+    visits: input.right.visits,
+    crfs: input.right.crfs,
+    questions: input.right.questions,
+  };
+
+  const leftGroups = groupTree(leftInput);
+  const rightGroups = groupTree(rightInput);
+
+  const doc = (
+    <Document
+      title={`eCRF compare — ${input.study.name} — ${versionDisplayLabel(input.left.version)} vs ${versionDisplayLabel(input.right.version)}`}
+      author={input.generatedBy ?? 'Trialetics'}
+    >
+      <Page size="A4" style={styles.page}>
+        <PdfHeader input={leftInput} />
+        <PdfSummary groups={leftGroups} totalQuestions={leftInput.questions.length} />
+        {leftGroups.length === 0 ? (
+          <Text style={styles.emptyVisit}>No visits defined in this template version.</Text>
+        ) : (
+          leftGroups.map((g) => <PdfVisit key={g.visit.id} group={g} />)
+        )}
+        <PdfFooter input={leftInput} />
+      </Page>
+      <Page size="A4" style={styles.page}>
+        <PdfHeader input={rightInput} />
+        <PdfSummary groups={rightGroups} totalQuestions={rightInput.questions.length} />
+        {rightGroups.length === 0 ? (
+          <Text style={styles.emptyVisit}>No visits defined in this template version.</Text>
+        ) : (
+          rightGroups.map((g) => <PdfVisit key={g.visit.id} group={g} />)
+        )}
+        <PdfFooter input={rightInput} />
+      </Page>
+    </Document>
+  );
+  const blob = await pdf(doc as never).toBlob();
+  const arrayBuffer = await blob.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}

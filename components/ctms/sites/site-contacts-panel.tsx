@@ -51,7 +51,6 @@ import {
 } from '@/components/ui/select';
 
 import type { SiteContact } from '@/lib/types/ctms';
-import { isPrincipalInvestigatorSiteRoleLabel } from '@/lib/types/ctms';
 import type { InstitutionRow } from '@/lib/types/directory';
 import { directoryContactFormSchema } from '@/lib/validation/directory';
 import { createDirectoryContact } from '@/lib/actions/directory-contacts';
@@ -72,6 +71,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { formatPhoneNumber } from '@/lib/utils';
 import { useClientPagination } from '@/lib/hooks/use-client-pagination';
 import { TablePaginationFooter } from '@/components/ui/table-pagination-footer';
+import {
+  findPrincipalInvestigatorRoleId,
+  shouldWarnOnPrincipalInvestigatorRoleChange,
+} from '@/lib/sites/pi-contact-helpers';
 
 const CONTACTS_TABLE_COL_COUNT = 6;
 
@@ -87,17 +90,6 @@ const contactSchema = z.object({
 });
 
 type ContactFormValues = z.infer<typeof contactSchema>;
-
-/** Resolve directory role id for Principal Investigator site contact role label. */
-export function findPrincipalInvestigatorRoleId(
-  catalog: QuickContactCatalogCategory[]
-): string | null {
-  for (const cat of catalog) {
-    const r = cat.roles.find((x) => isPrincipalInvestigatorSiteRoleLabel(x.name));
-    if (r) return r.id;
-  }
-  return null;
-}
 
 interface SiteContactsPanelProps {
   companyId: string;
@@ -188,24 +180,25 @@ export function SiteContactsPanel({
     <div className="space-y-4">
       {directoryCatalogError && (
         <Alert variant="destructive" className="text-sm">
-          <AlertTitle>Could not load directory role catalog</AlertTitle>
+          <AlertTitle>Role catalog failed to load</AlertTitle>
           <AlertDescription className="text-xs">
-            {directoryCatalogError}. Check that you are signed in and migrations are applied. Try the{' '}
+            {directoryCatalogError}. Refresh, or open{' '}
             <Link href="/protected/directory" className="underline underline-offset-2 font-medium">
               Directory
             </Link>{' '}
-            page after refreshing.
+            after signing in.
           </AlertDescription>
         </Alert>
       )}
       {!directoryCatalogError && !catalogRolesOk && (
         <Alert className="text-sm border-amber-500/40 bg-amber-500/5">
-          <AlertTitle>Directory role catalog is empty</AlertTitle>
+          <AlertTitle>Role catalog is empty</AlertTitle>
           <AlertDescription className="text-xs">
-            Role categories and titles are missing from the database. Apply CTMS directory migrations (including
-            seeds for <code className="text-[11px]">directory_role_categories</code> /{' '}
-            <code className="text-[11px]">directory_roles</code>) and the migration that grants authenticated users
-            read access to the global role catalog.
+            Apply directory migrations and role seeds, then refresh. Confirm on the{' '}
+            <Link href="/protected/directory" className="underline underline-offset-2 font-medium">
+              Directory
+            </Link>{' '}
+            page.
           </AlertDescription>
         </Alert>
       )}
@@ -224,7 +217,7 @@ export function SiteContactsPanel({
           size="sm"
           className="ml-auto text-xs h-9"
           onClick={() => {
-            setLocalAddIntent('pi');
+            setLocalAddIntent(null);
             setAddOpen(true);
           }}
         >
@@ -232,6 +225,9 @@ export function SiteContactsPanel({
           Add contact
         </Button>
       </div>
+      <p className="text-xs text-muted-foreground">
+        PI details shown in site forms and overview cards are synced from site contacts.
+      </p>
 
       <ContactFormDialog
         companyId={companyId}
@@ -409,7 +405,7 @@ function getDefaultValues(contact?: SiteContact): ContactFormValues {
   };
 }
 
-function ContactFormDialog({
+export function ContactFormDialog({
   companyId,
   open,
   onOpenChange,
@@ -508,6 +504,12 @@ function ContactFormDialog({
 
   const onSubmitEdit = async (values: ContactFormValues) => {
     if (!contact) return;
+    if (shouldWarnOnPrincipalInvestigatorRoleChange(contact.role, values.role)) {
+      const ok = window.confirm(
+        'This contact is currently the Principal Investigator. Changing the role may clear PI fields on the site if no other PI contact remains. Continue?'
+      );
+      if (!ok) return;
+    }
     const directoryContactId =
       values.directory_contact_id === DIRECTORY_LINK_NONE
         ? null
@@ -636,9 +638,10 @@ function ContactFormDialog({
                   id="site_add_is_primary"
                   checked={addIsPrimary}
                   onCheckedChange={(c) => setAddIsPrimary(!!c)}
+                  disabled={addPrimaryFieldsLocked}
                 />
                 <Label htmlFor="site_add_is_primary" className="text-sm font-normal">
-                  Primary contact for this site
+                  {addPrimaryFieldsLocked ? 'Primary contact for this site (locked for PI)' : 'Primary contact for this site'}
                 </Label>
               </div>
             </QuickContactFormFields>

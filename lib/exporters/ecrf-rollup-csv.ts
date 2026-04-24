@@ -158,6 +158,7 @@ export function buildEcrfRollupCsv(
   matrix.push([
     'Subject #',
     'Site #',
+    'Site name',
     'Status',
     'Expected',
     'DE',
@@ -174,6 +175,7 @@ export function buildEcrfRollupCsv(
     matrix.push([
       subject.subject_number,
       subject.site_number ?? '',
+      subject.site_name ?? '',
       subject.status,
       String(subject.dataExpectedTotal),
       String(subject.dataEntryTotal),

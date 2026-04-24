@@ -45,6 +45,14 @@ const siteFormSchema = z.object({
   city: z.string().optional(),
   state: z.string().optional(),
   postal_code: z.string().optional(),
+  pi_name: z.string().optional(),
+  pi_email: z
+    .string()
+    .optional()
+    .refine(
+      (v) => v == null || v.trim() === '' || z.string().email().safeParse(v.trim()).success,
+      { message: 'Invalid email' }
+    ),
   status: z.enum(['identified', 'selected', 'initiated', 'activated', 'enrolling', 'closed']).optional(),
   activation_date: z.string().optional(),
   target_enrollment: z.coerce.number().min(0).optional(),
@@ -88,6 +96,8 @@ export function SiteForm({
       city: site?.city ?? '',
       state: site?.state ?? '',
       postal_code: site?.postal_code ?? '',
+      pi_name: site?.pi_name ?? '',
+      pi_email: site?.pi_email ?? '',
       status: site?.status ?? 'identified',
       activation_date: site?.activation_date ?? '',
       target_enrollment: site?.target_enrollment ?? 0,
@@ -145,6 +155,8 @@ export function SiteForm({
         const { data, error } = await createSite({
           study_id: studyId,
           ...values,
+          pi_name: values.pi_name?.trim() || undefined,
+          pi_email: values.pi_email?.trim() || undefined,
           activation_date: activationDateForSave,
         });
         if (error) {
@@ -158,6 +170,10 @@ export function SiteForm({
           id: site!.id,
           study_id: studyId,
           ...values,
+          // Empty strings so `updateSite` maps them to null; `undefined` would skip the column.
+          pi_name: values.pi_name?.trim() ?? '',
+          pi_email: values.pi_email?.trim() ?? '',
+          // `pi_directory_contact_id` is not part of the form; server keeps the existing FK.
           activation_date: activationDateForSave,
         });
         if (error) {

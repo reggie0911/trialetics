@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -56,6 +56,8 @@ interface SubjectFormDialogProps {
   lockSiteSelection?: boolean;
   disabled?: boolean;
   disabledTooltip?: string;
+  controlledOpen?: boolean;
+  onControlledOpenChange?: (open: boolean) => void;
 }
 
 export function SubjectFormDialog({
@@ -67,9 +69,13 @@ export function SubjectFormDialog({
   lockSiteSelection = false,
   disabled = false,
   disabledTooltip,
+  controlledOpen,
+  onControlledOpenChange,
 }: SubjectFormDialogProps) {
   const [open, setOpen] = useState(false);
   const isEdit = !!subject;
+  const isControlled = controlledOpen !== undefined;
+  const dialogOpen = controlledOpen ?? open;
 
   const form = useForm<SubjectFormValues>({
     resolver: zodResolver(subjectSchema),
@@ -124,11 +130,45 @@ export function SubjectFormDialog({
 
   const handleOpenChange = (next: boolean) => {
     if (disabled && next) return;
-    setOpen(next);
+    if (!isControlled) {
+      setOpen(next);
+    }
+    onControlledOpenChange?.(next);
     if (next) {
       resetFormForDialog();
     }
   };
+
+  useEffect(() => {
+    if (!controlledOpen) return;
+
+    if (subject) {
+      form.reset({
+        subject_number: subject.subject_number,
+        site_id: subject.site_id ?? '',
+        screening_number: subject.screening_number ?? '',
+        randomization_number: subject.randomization_number ?? '',
+        status: subject.status,
+        screening_date: subject.screening_date ?? '',
+        randomization_date: subject.randomization_date ?? '',
+      });
+      return;
+    }
+
+    const initialSite =
+      lockSiteSelection && defaultSiteIdWhenCreate
+        ? defaultSiteIdWhenCreate
+        : (defaultSiteIdWhenCreate ?? '');
+    form.reset({
+      subject_number: '',
+      site_id: initialSite,
+      screening_number: '',
+      randomization_number: '',
+      status: 'pre_screening',
+      screening_date: '',
+      randomization_date: '',
+    });
+  }, [controlledOpen, defaultSiteIdWhenCreate, form, lockSiteSelection, subject]);
 
   const onSubmit = async (values: SubjectFormValues) => {
     if (isEdit) {
@@ -158,7 +198,10 @@ export function SubjectFormDialog({
       toast.success('Subject enrolled');
     }
 
-    setOpen(false);
+    if (!isControlled) {
+      setOpen(false);
+    }
+    onControlledOpenChange?.(false);
     resetFormForDialog();
     onSuccess();
   };
@@ -197,7 +240,7 @@ export function SubjectFormDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
       {disabled && disabledTooltip ? (
         <Tooltip>
           <TooltipTrigger render={<span className="inline-flex" />}>{trigger}</TooltipTrigger>
@@ -370,7 +413,7 @@ export function SubjectFormDialog({
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={form.formState.isSubmitting}>

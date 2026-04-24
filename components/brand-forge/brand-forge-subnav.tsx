@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { brandForgePath, brandForgeStudyIdFromPathname } from '@/lib/nav/brand-forge-paths';
 import { cn } from '@/lib/utils';
 
 /** First segment after /brand-forge/ that is not a study project UUID (e.g. `new`). */
@@ -25,25 +26,27 @@ const SUBNAV_TOOLTIPS: Record<string, string> = {
 
 export function BrandForgeSubnav() {
   const pathname = usePathname();
+  const studyId = brandForgeStudyIdFromPathname(pathname);
+  const basePath = brandForgePath(studyId);
 
-  const projectIdMatch = pathname.match(/\/protected\/brand-forge\/([^/]+)/);
+  const projectIdMatch = pathname.match(/\/brand-forge\/([^/]+)/);
   const projectId = projectIdMatch?.[1];
   const isProjectRoute =
     projectId != null && !RESERVED_BRANDFORGE_SEGMENTS.has(projectId);
 
   const links = [
-    { href: '/protected/brand-forge', label: 'Studies', exact: true },
+    { href: basePath, label: 'Studies', exact: true },
     ...(isProjectRoute
       ? [
-          { href: `/protected/brand-forge/${projectId}`, label: 'Overview', exact: true },
-          { href: `/protected/brand-forge/${projectId}/logos`, label: 'Logos', exact: false },
-          { href: `/protected/brand-forge/${projectId}/colors`, label: 'Colors', exact: false },
-          { href: `/protected/brand-forge/${projectId}/typography`, label: 'Typography', exact: false },
-          { href: `/protected/brand-forge/${projectId}/imagery`, label: 'Imagery', exact: false },
-          { href: `/protected/brand-forge/${projectId}/mockups`, label: 'Mockups', exact: false },
-          { href: `/protected/brand-forge/${projectId}/recruitment`, label: 'Recruitment', exact: false },
-          { href: `/protected/brand-forge/${projectId}/templates`, label: 'Templates', exact: false },
-          { href: `/protected/brand-forge/${projectId}/exports`, label: 'Exports', exact: false },
+          { href: brandForgePath(studyId, projectId ?? ''), label: 'Overview', exact: true },
+          { href: brandForgePath(studyId, projectId ?? '', 'logos'), label: 'Logos', exact: false },
+          { href: brandForgePath(studyId, projectId ?? '', 'colors'), label: 'Colors', exact: false },
+          { href: brandForgePath(studyId, projectId ?? '', 'typography'), label: 'Typography', exact: false },
+          { href: brandForgePath(studyId, projectId ?? '', 'imagery'), label: 'Imagery', exact: false },
+          { href: brandForgePath(studyId, projectId ?? '', 'mockups'), label: 'Mockups', exact: false },
+          { href: brandForgePath(studyId, projectId ?? '', 'recruitment'), label: 'Recruitment', exact: false },
+          { href: brandForgePath(studyId, projectId ?? '', 'templates'), label: 'Templates', exact: false },
+          { href: brandForgePath(studyId, projectId ?? '', 'exports'), label: 'Exports', exact: false },
         ]
       : []),
     { href: '/protected/docs/brand-forge', label: 'User Manual', exact: false },
