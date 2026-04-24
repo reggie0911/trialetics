@@ -15,8 +15,6 @@ import type { SubjectTrackingSummary } from '@/lib/types/ctms';
 import { summaryToPercentages } from '@/components/ctms/subjects/subject-tracking-summary-cell';
 
 interface EcrfTrackingHeaderProps {
-  /** Display label for the scope ("Site AUR-204-101" or "Study ABC-001"). */
-  scopeLabel: string;
   /** Aggregated counters for the whole scope. */
   totals: SubjectTrackingSummary;
   /** Per-row count rendered alongside the CRF totals (subjects in scope). */
@@ -52,7 +50,6 @@ function PctBadge({ value }: { value: number | null }) {
  * single-sourced.
  */
 export function EcrfTrackingHeader({
-  scopeLabel,
   totals,
   subjectCount,
   lastTemplateSyncedAt,
@@ -68,11 +65,6 @@ export function EcrfTrackingHeader({
   return (
     <div className="flex flex-col gap-3 rounded-md border bg-card p-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold">eCRF Tracking</h3>
-          <span className="text-xs text-muted-foreground">— {scopeLabel}</span>
-        </div>
-
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <span className="font-medium uppercase tracking-wide text-foreground">
             Overall

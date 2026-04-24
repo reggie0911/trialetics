@@ -19,8 +19,6 @@ import {
   UserPlus,
   Mail,
   RefreshCw,
-  Link2,
-  Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -92,11 +90,7 @@ import {
   inviteUser,
   resendInvite,
   revokeInvite,
-  createJoinLink,
-  getJoinLinks,
-  revokeJoinLink,
   type PendingInvitation,
-  type JoinLink,
 } from '@/lib/actions/team';
 import { scopeTeamMembersToStudy } from '@/lib/team/scope-team-members';
 
@@ -122,7 +116,6 @@ interface TeamDirectoryProps {
   studies: Study[];
   teamRoles: TeamRole[];
   pendingInvitations?: PendingInvitation[];
-  joinLinks?: JoinLink[];
   isAdmin?: boolean;
   /** When set, only members with assignments on this study are shown (assignments filtered to this study). */
   studyContextId?: string;
@@ -136,7 +129,6 @@ export function TeamDirectory({
   studies,
   teamRoles,
   pendingInvitations = [],
-  joinLinks: initialJoinLinks = [],
   isAdmin,
   studyContextId,
 }: TeamDirectoryProps) {
@@ -154,7 +146,6 @@ export function TeamDirectory({
   const [editingAssignment, setEditingAssignment] = useState<{ member: TeamMemberWithStudies; assignment: TeamMemberWithStudies['assignments'][number] } | null>(null);
   const [addingAssignmentFor, setAddingAssignmentFor] = useState<TeamMemberWithStudies | null>(null);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
-  const [joinLinkDialogOpen, setJoinLinkDialogOpen] = useState(false);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'members' | 'pending'>('members');
   const [, startTransition] = useTransition();
@@ -359,24 +350,6 @@ export function TeamDirectory({
           <div className="flex items-center gap-2">
             {isAdmin && (
               <>
-                {readOnly ? (
-                  <Tooltip>
-                    <TooltipTrigger render={<span className="inline-flex" />}>
-                      <Button variant="outline" size="sm" disabled aria-label="Join links">
-                        <Link2 className="mr-2 h-4 w-4" />
-                        Join Links
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="max-w-xs text-xs">
-                      {STUDY_DEACTIVATED_TOOLTIP}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <Button variant="outline" size="sm" onClick={() => setJoinLinkDialogOpen(true)}>
-                    <Link2 className="mr-2 h-4 w-4" />
-                    Join Links
-                  </Button>
-                )}
                 {readOnly ? (
                   <Tooltip>
                     <TooltipTrigger render={<span className="inline-flex" />}>
@@ -758,17 +731,6 @@ export function TeamDirectory({
         onSuccess={() => { setInviteDialogOpen(false); refreshMembers(); router.refresh(); }}
         studies={studies}
       />
-
-      {/* Join Link Manager Dialog */}
-      {isAdmin && (
-        <JoinLinkManagerDialog
-          open={joinLinkDialogOpen}
-          onOpenChange={setJoinLinkDialogOpen}
-          initialLinks={initialJoinLinks}
-          studies={studies}
-          onSuccess={() => { router.refresh(); }}
-        />
-      )}
     </div>
   );
 }
@@ -1563,331 +1525,6 @@ function InviteUserDialog({
             </Button>
           </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// =====================================================
-// Join Link Manager Dialog
-// =====================================================
-
-const joinLinkFormSchema = z.object({
-  label: z.string().optional(),
-  role: z.enum(['admin', 'user']),
-  expiresInDays: z.union([z.literal(0), z.literal(7), z.literal(30), z.literal(90)]),
-  maxUses: z.string().optional(),
-  study_id: z.string().optional(),
-  study_role: z.string().optional(),
-});
-
-type JoinLinkFormValues = z.infer<typeof joinLinkFormSchema>;
-
-function JoinLinkManagerDialog({
-  open,
-  onOpenChange,
-  initialLinks,
-  studies,
-  onSuccess,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  initialLinks: JoinLink[];
-  studies: Study[];
-  onSuccess: () => void;
-}) {
-  const [links, setLinks] = useState<JoinLink[]>(initialLinks);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [revokingId, setRevokingId] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
-
-  const form = useForm<JoinLinkFormValues>({
-    resolver: zodResolver(joinLinkFormSchema),
-    defaultValues: {
-      label: '',
-      role: 'user',
-      expiresInDays: 0,
-      maxUses: '',
-      study_id: '',
-      study_role: 'clinical_research_associate',
-    },
-  });
-
-  const joinLinkStudyId = form.watch('study_id');
-  const hasStudies = studies.length > 0;
-
-  const loadLinks = useCallback(async () => {
-    const data = await getJoinLinks();
-    setLinks(data);
-  }, []);
-
-  useEffect(() => {
-    if (open) {
-      setLinks(initialLinks);
-      startTransition(() => {
-        loadLinks();
-      });
-    }
-  }, [open, loadLinks, initialLinks]);
-
-  const handleCopy = (token: string) => {
-    const siteUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    const url = `${siteUrl}/join/${token}`;
-    navigator.clipboard.writeText(url);
-    toast.success('Link copied to clipboard');
-  };
-
-  const handleRevoke = async (linkId: string) => {
-    setRevokingId(linkId);
-    try {
-      const { error } = await revokeJoinLink(linkId);
-      if (error) {
-        toast.error(error);
-      } else {
-        toast.success('Join link revoked');
-        await loadLinks();
-        onSuccess();
-      }
-    } finally {
-      setRevokingId(null);
-    }
-  };
-
-  const handleCreate = async (values: JoinLinkFormValues) => {
-    setIsLoading(true);
-    try {
-      const { data, error } = await createJoinLink({
-        role: values.role,
-        label: values.label?.trim() || undefined,
-        expiresInDays: values.expiresInDays === 0 ? undefined : values.expiresInDays,
-        maxUses: values.maxUses ? parseInt(values.maxUses, 10) : undefined,
-      });
-      if (error) {
-        toast.error(error);
-      } else if (data) {
-        toast.success('Join link created');
-        setLinks((prev) => [data, ...prev]);
-        form.reset({
-          label: '',
-          role: 'user',
-          expiresInDays: 0,
-          maxUses: '',
-          study_id: '',
-          study_role: 'clinical_research_associate',
-        });
-        setShowCreateForm(false);
-        handleCopy(data.token);
-        onSuccess();
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const formatExpiry = (expiresAt: string | null) => {
-    if (!expiresAt) return 'Never';
-    const d = new Date(expiresAt);
-    return d.toLocaleDateString();
-  };
-
-  const formatUses = (useCount: number, maxUses: number | null) => {
-    if (maxUses == null) return `${useCount} / Unlimited`;
-    return `${useCount} / ${maxUses}`;
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Join Links</DialogTitle>
-          <DialogDescription>
-            Share these links so new users can create an account and join your company. Anyone with a link can sign up.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          {!showCreateForm ? (
-            <Button variant="outline" size="sm" onClick={() => setShowCreateForm(true)} className="w-full">
-              <Plus className="mr-2 h-4 w-4" />
-              Generate New Link
-            </Button>
-          ) : (
-            <form onSubmit={form.handleSubmit(handleCreate)} className="space-y-4 rounded-md border p-4">
-              <div className="space-y-2">
-                <Label>Label (optional)</Label>
-                <Input placeholder="e.g. Marketing team" {...form.register('label')} />
-              </div>
-              <div className="space-y-2">
-                <Label>Role</Label>
-                <Select
-                  value={form.watch('role')}
-                  onValueChange={(v) => form.setValue('role', v as 'admin' | 'user')}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="user">User</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Study (optional)</Label>
-                <Select
-                  value={form.watch('study_id') || '__none__'}
-                  onValueChange={(v) => {
-                    if (v === '__none__') {
-                      form.setValue('study_id', '');
-                      form.setValue('study_role', 'clinical_research_associate');
-                    } else {
-                      form.setValue('study_id', v);
-                    }
-                  }}
-                  disabled={!hasStudies}
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder="No study assignment"
-                      getDisplayLabel={(v) =>
-                        !v || v === '__none__'
-                          ? 'No study assignment'
-                          : studySelectDisplayLabel(studies, v, 'Select study')
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">No study assignment</SelectItem>
-                    {studies.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        <span className="flex items-center gap-2">
-                          <span className="truncate">{studyShortLabel(s)}</span>
-                          {s.study_name?.trim() && (
-                            <span className="text-muted-foreground text-xs">
-                              {s.protocol_number}
-                            </span>
-                          )}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {!hasStudies && (
-                  <p className="text-xs text-muted-foreground">Create a study first to assign new members to a study.</p>
-                )}
-              </div>
-              {joinLinkStudyId && joinLinkStudyId !== '__none__' && (
-                <div className="space-y-2">
-                  <Label>Study role</Label>
-                  <Select
-                    value={form.watch('study_role') || 'clinical_research_associate'}
-                    onValueChange={(v) => form.setValue('study_role', v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue
-                        getDisplayLabel={(v) => TEAM_ROLE_OPTIONS.find((o) => o.value === v)?.label ?? String(v)}
-                      />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {TEAM_ROLE_OPTIONS.filter((o) => o.value !== 'custom').map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className="space-y-2">
-                <Label>Expires in</Label>
-                <Select
-                  value={String(form.watch('expiresInDays'))}
-                  onValueChange={(v) => form.setValue('expiresInDays', parseInt(v, 10) as 0 | 7 | 30 | 90)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="0">Never</SelectItem>
-                    <SelectItem value="7">7 days</SelectItem>
-                    <SelectItem value="30">30 days</SelectItem>
-                    <SelectItem value="90">90 days</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Max uses (optional)</Label>
-                <Input type="number" min={1} placeholder="Unlimited" {...form.register('maxUses')} />
-              </div>
-              <div className="flex gap-2">
-                <Button type="button" variant="ghost" onClick={() => setShowCreateForm(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading ? 'Creating...' : 'Create Link'}
-                </Button>
-              </div>
-            </form>
-          )}
-
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Active links</p>
-            {links.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No active join links. Generate one above.</p>
-            ) : (
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {links.map((link) => (
-                  <div
-                    key={link.id}
-                    className="flex items-center justify-between gap-2 rounded-md border p-3 text-sm"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium truncate">{link.label || 'Unnamed link'}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Role: {link.role}
-                        {link.study_id
-                          ? ` · Study: ${studies.find((s) => s.id === link.study_id)?.title ?? link.study_id} (${TEAM_ROLE_LABEL[link.study_role as TeamMemberRole] ?? link.study_role})`
-                          : ''}
-                        {' '}
-                        · Expires: {formatExpiry(link.expires_at)} · Uses: {formatUses(link.use_count, link.max_uses)}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCopy(link.token)}>
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger
-                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-accent hover:text-accent-foreground text-destructive hover:text-destructive disabled:pointer-events-none disabled:opacity-50"
-                          disabled={revokingId === link.id}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Revoke this join link?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Anyone with this link will no longer be able to use it to join your company.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              onClick={() => handleRevoke(link.id)}
-                            >
-                              Revoke
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
       </DialogContent>
     </Dialog>
   );

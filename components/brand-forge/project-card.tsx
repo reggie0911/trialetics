@@ -35,6 +35,7 @@ interface ProjectCardProps {
   };
   onDeleted?: (projectId: string) => void;
   onProjectUpdated?: (projectId: string, patch: Partial<BFProject>) => void;
+  basePath?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -43,8 +44,8 @@ const statusColors: Record<string, string> = {
   archived: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
 };
 
-export function ProjectCard({ project, onDeleted, onProjectUpdated }: ProjectCardProps) {
-  const href = `/protected/brand-forge/${project.id}/logos`;
+export function ProjectCard({ project, onDeleted, onProjectUpdated, basePath = '/protected/brand-forge' }: ProjectCardProps) {
+  const href = `${basePath}/${project.id}/logos`;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);

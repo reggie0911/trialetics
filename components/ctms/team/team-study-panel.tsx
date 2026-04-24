@@ -1,8 +1,8 @@
 'use client';
 
-import { TeamDirectory } from '@/components/ctms/team/team-directory';
+import { StudyTeamDashboard } from '@/components/ctms/team/study-team-dashboard';
 import type { TeamMemberWithStudies, TeamRole, Study } from '@/lib/types/ctms';
-import type { JoinLink, PendingInvitation } from '@/lib/actions/team';
+import type { PendingInvitation } from '@/lib/actions/team';
 
 export interface TeamStudyPanelProps {
   studyId: string;
@@ -10,7 +10,7 @@ export interface TeamStudyPanelProps {
   studies: Study[];
   teamRoles: TeamRole[];
   pendingInvitations: PendingInvitation[];
-  joinLinks: JoinLink[];
+  companyDomain: string | null;
   isAdmin: boolean;
 }
 
@@ -20,26 +20,18 @@ export function TeamStudyPanel({
   studies,
   teamRoles,
   pendingInvitations,
-  joinLinks,
+  companyDomain,
   isAdmin,
 }: TeamStudyPanelProps) {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Team</h1>
-        <p className="text-sm text-muted-foreground">
-          Members and study assignments for this trial (company directory filtered to this study).
-        </p>
-      </div>
-      <TeamDirectory
-        members={teamDirectoryMembers}
-        studies={studies}
-        teamRoles={teamRoles}
-        pendingInvitations={pendingInvitations}
-        joinLinks={joinLinks}
-        isAdmin={isAdmin}
-        studyContextId={studyId}
-      />
-    </div>
+    <StudyTeamDashboard
+      studyId={studyId}
+      teamDirectoryMembers={teamDirectoryMembers}
+      studies={studies}
+      teamRoles={teamRoles}
+      pendingInvitations={pendingInvitations}
+      companyDomain={companyDomain}
+      isAdmin={isAdmin}
+    />
   );
 }

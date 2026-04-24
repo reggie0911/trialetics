@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2, Upload } from 'lucide-react';
+import { Download, Loader2, Upload } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -39,8 +39,23 @@ export interface CopilotImportTriggerProps {
   scope?: { kind: 'study' | 'site' | 'global'; id?: string; label?: string };
   studyId?: string | null;
   disabled?: boolean;
-  /** Callback fired with the accepted rows once the user confirms. */
-  onApplied?: (rows: { rowIndex: number; values: Record<string, unknown>; op: 'insert' | 'update' }[]) => void;
+  /** Optional helper action shown in the dialog for downloading an import template. */
+  downloadTemplateLabel?: string;
+  onDownloadTemplate?: () => void;
+  /**
+   * Callback fired with the accepted rows once the user confirms.
+   *
+   * Return a Promise (or `void`) — if a Promise is returned, the trigger
+   * will await it and dispatch `copilot:fill-completed` only after it
+   * settles, which the host uses to keep the review dialog open during
+   * the actual bulk write and to show a busy state.
+   */
+  onApplied?: (
+    rows: { rowIndex: number; values: Record<string, unknown>; op: 'insert' | 'update' }[]
+  ) => void | Promise<unknown>;
+  /** When provided the trigger is controlled and its built-in button is hidden. */
+  controlledOpen?: boolean;
+  onControlledOpenChange?: (next: boolean) => void;
 }
 
 export function CopilotImportTrigger({
@@ -52,15 +67,28 @@ export function CopilotImportTrigger({
   scope,
   studyId,
   disabled,
+  downloadTemplateLabel = 'Download template',
+  onDownloadTemplate,
   onApplied,
+  controlledOpen,
+  onControlledOpenChange,
 }: CopilotImportTriggerProps) {
-  const [open, setOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (next: boolean) => {
+    if (isControlled) {
+      onControlledOpenChange?.(next);
+    } else {
+      setInternalOpen(next);
+    }
+  };
   const [busy, setBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !onApplied) return;
-    const handler = (event: Event) => {
+    const handler = async (event: Event) => {
       const detail = (event as CustomEvent<{
         kind: string;
         tableId?: string;
@@ -68,7 +96,21 @@ export function CopilotImportTrigger({
       }>).detail;
       if (detail?.kind !== 'table_update') return;
       if (detail.tableId !== tableId) return;
-      onApplied(detail.acceptedRows ?? []);
+      // Run the page's bulk-write handler. We always dispatch
+      // `copilot:fill-completed` once it settles so the host can close
+      // the review dialog and drop its busy state — the host falls back
+      // to a timeout if this never fires.
+      try {
+        await Promise.resolve(onApplied(detail.acceptedRows ?? []));
+      } catch (err) {
+        console.error('copilot import handler failed', err);
+      } finally {
+        window.dispatchEvent(
+          new CustomEvent('copilot:fill-completed', {
+            detail: { kind: 'table_update', tableId },
+          })
+        );
+      }
     };
     window.addEventListener('copilot:fill-applied', handler as EventListener);
     return () => window.removeEventListener('copilot:fill-applied', handler as EventListener);
@@ -91,17 +133,26 @@ export function CopilotImportTrigger({
 
       const docRes = await fetch(`/api/ai/documents/${ingestResult.documentId}`);
       const docJson = (await docRes.json().catch(() => ({}))) as {
-        chunks?: { structured?: { headers?: string[]; sampleRows?: string[][] } | null }[];
+        chunks?: { structured?: { headers?: string[]; sampleRows?: string[][]; rowCount?: number } | null }[];
       };
-      const structured = docJson.chunks?.find(c => c.structured?.headers && c.structured.sampleRows)?.structured;
-      if (!structured?.headers || !structured.sampleRows?.length) {
+      const structured = docJson.chunks?.find(c => c.structured?.headers?.length)?.structured;
+      const headers = (structured?.headers ?? []).map((h) => h.trim()).filter(Boolean);
+      const sampleRows = structured?.sampleRows ?? [];
+      const totalRows =
+        typeof structured?.rowCount === 'number'
+          ? Math.max(0, structured.rowCount - 1)
+          : sampleRows.length;
+      if (!headers.length) {
         throw new Error('Couldn\u2019t find a structured table in that file. Try a CSV or Excel sheet.');
+      }
+      if (!sampleRows.length) {
+        throw new Error('We found your columns, but no data rows. Add at least one row under the header and try again.');
       }
 
       // Convert sampleRows (string[][]) into the row objects the API expects.
-      const rows = structured.sampleRows.map((cells, idx) => {
+      const rows = sampleRows.map((cells, idx) => {
         const obj: Record<string, unknown> = {};
-        structured.headers!.forEach((h, i) => {
+        headers.forEach((h, i) => {
           if (cells[i] !== undefined && cells[i] !== '') obj[h] = cells[i];
         });
         return { sourceRowIndex: idx, values: obj };
@@ -114,7 +165,7 @@ export function CopilotImportTrigger({
           tableId,
           tableLabel,
           parsed: {
-            headers: structured.headers,
+            headers,
             rows,
             sourceDocumentId: ingestResult.documentId,
             docType: ingestResult.docType,
@@ -135,6 +186,22 @@ export function CopilotImportTrigger({
         throw new Error(tableJson.error ?? 'Table mapping failed');
       }
 
+      // Rebuild context lets the host re-POST `/api/ai/table-fill` with the
+      // user's confirmed mapping (passed as `cachedMapping`) so payload.ops
+      // actually reflects what the user selected in the mapping step.
+      const rebuildContext = {
+        parsed: {
+          headers,
+          rows,
+          sourceDocumentId: ingestResult.documentId,
+          docType: ingestResult.docType,
+        },
+        existingRows,
+        duplicateKey,
+        scope,
+        tableLabel,
+      };
+
       window.dispatchEvent(
         new CustomEvent('copilot:open-table-update', {
           detail: {
@@ -142,12 +209,24 @@ export function CopilotImportTrigger({
             targetFields,
             proposalId: tableJson.proposalId,
             sourceSignature: tableJson.sourceSignature,
+            parsedPreview: {
+              headers,
+              sampleRows,
+              fileName: file.name,
+              totalRows,
+            },
+            rebuildContext,
             // Skip the mapping step when we found a cached mapping the
             // user previously confirmed for this column signature.
             skipMapping: tableJson.mappingHit === true,
           },
         })
       );
+      if (totalRows > sampleRows.length) {
+        toast.warning(
+          `Only the first ${sampleRows.length.toLocaleString()} of ${totalRows.toLocaleString()} rows will be imported. Split the file to import the rest.`
+        );
+      }
       setOpen(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong';
@@ -159,12 +238,14 @@ export function CopilotImportTrigger({
 
   return (
     <>
-      <ImportIntoTableButton
-        tableId={tableId}
-        tableLabel={tableLabel}
-        disabled={disabled}
-        onClick={() => setOpen(true)}
-      />
+      {isControlled ? null : (
+        <ImportIntoTableButton
+          tableId={tableId}
+          tableLabel={tableLabel}
+          disabled={disabled}
+          onClick={() => setOpen(true)}
+        />
+      )}
 
       <Dialog open={open} onOpenChange={o => (busy ? null : setOpen(o))}>
         <DialogContent className="max-w-md">
@@ -175,6 +256,21 @@ export function CopilotImportTrigger({
               flags duplicates, and lets you review every row before saving.
             </DialogDescription>
           </DialogHeader>
+
+          {onDownloadTemplate ? (
+            <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+              Need a starter file?{' '}
+              <button
+                type="button"
+                className="group inline-flex items-center gap-1 rounded-sm font-medium text-foreground underline decoration-dotted underline-offset-4 transition-all duration-200 hover:-translate-y-px hover:text-[var(--copilot-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--copilot-accent)]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={onDownloadTemplate}
+                disabled={busy}
+              >
+                <Download className="h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110" aria-hidden="true" />
+                {downloadTemplateLabel}
+              </button>
+            </div>
+          ) : null}
 
           <div
             role="button"

@@ -1,7 +1,6 @@
+import { redirect } from 'next/navigation';
 import { requireEtmfAccess } from '@/lib/actions/etmf-access';
-import { getEtmfDocument, getTmfTree, getEtmfAuditLog } from '@/lib/actions/etmf';
-import { DocumentViewClient } from '@/components/etmf/document-view/document-view-client';
-import { notFound } from 'next/navigation';
+import { getEtmfDocument } from '@/lib/actions/etmf';
 
 interface DocumentViewPageProps {
   params: Promise<{ documentId: string }>;
@@ -11,22 +10,9 @@ export default async function DocumentViewPage({ params }: DocumentViewPageProps
   await requireEtmfAccess();
 
   const { documentId } = await params;
-
-  const [docRes, treeRes, auditRes] = await Promise.all([
-    getEtmfDocument(documentId),
-    getTmfTree(),
-    getEtmfAuditLog(documentId),
-  ]);
-
-  if (!docRes.success || !docRes.data) {
-    notFound();
+  const docRes = await getEtmfDocument(documentId);
+  if (docRes.success && docRes.data?.study_id) {
+    redirect(`/protected/studies/${docRes.data.study_id}/etmf/library/${documentId}`);
   }
-
-  return (
-    <DocumentViewClient
-      document={docRes.data}
-      tmfTree={treeRes.data || []}
-      auditLog={auditRes.data || []}
-    />
-  );
+  redirect('/protected/studies#studies');
 }

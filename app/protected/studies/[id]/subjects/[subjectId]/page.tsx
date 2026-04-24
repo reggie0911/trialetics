@@ -16,19 +16,19 @@ export default async function StudySubjectDetailPage({ params }: PageProps) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/auth/login');
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('user_id', user.id)
-    .single();
-
   const subject = await getSubjectById(subjectId);
   if (!subject) notFound();
   if (subject.study_id !== studyId) notFound();
 
-  const [study, sitesRaw] = await Promise.all([
+  const [study, sitesRaw, liveVersion] = await Promise.all([
     getStudyById(studyId),
     getStudySites(studyId),
+    supabase
+      .from('study_ecrf_template_versions')
+      .select('id')
+      .eq('study_id', studyId)
+      .eq('status', 'live')
+      .maybeSingle(),
   ]);
 
   if (!study) notFound();
@@ -43,14 +43,8 @@ export default async function StudySubjectDetailPage({ params }: PageProps) {
     <div className="p-6">
       <SubjectDetailTabs
         subject={subject}
-        study={{
-          id: study.id,
-          title: study.title,
-          protocol_number: study.protocol_number,
-        }}
         sites={sites}
-        isAdmin={profile?.role === 'admin'}
-        studyId={studyId}
+        liveTemplateVersionId={liveVersion.data?.id ?? null}
       />
     </div>
   );

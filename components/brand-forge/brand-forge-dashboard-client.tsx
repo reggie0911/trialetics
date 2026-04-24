@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Plus, Loader2, FlaskConical } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { createClient } from '@/lib/client';
+import { brandForgeBasePath, brandForgeStudyIdFromPathname } from '@/lib/nav/brand-forge-paths';
 import { ProjectCard } from './project-card';
 import type { BFProject } from '@/lib/types/brand-forge';
 
@@ -22,17 +24,26 @@ type ProjectWithInputs = BFProject & {
 };
 
 export function BrandForgeDashboardClient({ companyId }: BrandForgeDashboardClientProps) {
+  const pathname = usePathname();
+  const studyId = brandForgeStudyIdFromPathname(pathname);
+  const basePath = brandForgeBasePath(studyId);
   const [projects, setProjects] = useState<ProjectWithInputs[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function loadProjects() {
       const supabase = createClient();
-      const { data } = await supabase
+      let query = supabase
         .from('bf_projects')
         .select('*, bf_brand_inputs(therapeutic_area, phase, protocol_number)')
         .eq('company_id', companyId)
         .order('created_at', { ascending: false });
+
+      if (studyId) {
+        query = query.eq('study_id', studyId);
+      }
+
+      const { data } = await query;
 
       const mapped = (data ?? []).map((row: Record<string, unknown>) => {
         const inputs = row.bf_brand_inputs as Record<string, unknown> | Record<string, unknown>[] | null;
@@ -49,7 +60,7 @@ export function BrandForgeDashboardClient({ companyId }: BrandForgeDashboardClie
       setIsLoading(false);
     }
     loadProjects();
-  }, [companyId]);
+  }, [companyId, studyId]);
 
   if (isLoading) {
     return (
@@ -73,7 +84,7 @@ export function BrandForgeDashboardClient({ companyId }: BrandForgeDashboardClie
             </p>
           </div>
           <Button asChild size="sm">
-            <Link href="/protected/brand-forge/new">
+            <Link href={`${basePath}/new`}>
               <Plus className="mr-2 h-4 w-4" />
               New study brand
             </Link>
@@ -88,7 +99,7 @@ export function BrandForgeDashboardClient({ companyId }: BrandForgeDashboardClie
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">{projects.length} stud{projects.length !== 1 ? 'ies' : 'y'}</p>
         <Button asChild size="sm">
-          <Link href="/protected/brand-forge/new">
+          <Link href={`${basePath}/new`}>
             <Plus className="mr-2 h-4 w-4" />
             New study brand
           </Link>
@@ -103,6 +114,7 @@ export function BrandForgeDashboardClient({ companyId }: BrandForgeDashboardClie
             onProjectUpdated={(id, patch) =>
               setProjects((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)))
             }
+            basePath={basePath}
           />
         ))}
       </div>

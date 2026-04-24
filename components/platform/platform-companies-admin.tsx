@@ -2,7 +2,8 @@
 
 import { Fragment, useEffect, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ChevronDown, ChevronRight, Loader2, Plus } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, ChevronDown, ChevronRight, Loader2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -306,11 +307,30 @@ export function PlatformCompaniesAdmin({
         </DialogContent>
       </Dialog>
 
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Platform — module access</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage company modules, built-in study tracker routes, and configurable custom tracker definitions.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Platform — module access</h1>
+          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+            Manage company modules, built-in study tracker routes, and configurable custom
+            tracker definitions.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0 self-start"
+          asChild
+        >
+          <Link
+            href="/protected/studies"
+            className="inline-flex items-center gap-1.5"
+            aria-label="Go to Studies"
+          >
+            Studies
+            <ArrowRight className="size-3.5" aria-hidden />
+          </Link>
+        </Button>
       </div>
 
       <Tabs tabsId="platform-companies" value={activeTab} onValueChange={onTabChange} className="gap-0">

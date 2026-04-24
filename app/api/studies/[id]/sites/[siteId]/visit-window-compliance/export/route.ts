@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 
-import { getSiteVisitScheduleRollup } from '@/lib/actions/visit-schedule-rollup';
+import { getSiteVisitScheduleRollup } from '@/lib/actions/visit-window-compliance-rollup';
 import {
   buildVisitScheduleRollupCsv,
   siteVisitScheduleCsvFilename,
@@ -10,9 +10,9 @@ import { createClient } from '@/lib/server';
 export const runtime = 'nodejs';
 
 /**
- * GET /api/studies/[id]/sites/[siteId]/visit-schedule/export
+ * GET /api/studies/[id]/sites/[siteId]/visit-window-compliance/export
  *
- * Site-scoped CSV export of the Visit Schedule rollup. Defensively validates
+ * Site-scoped CSV export of the Visit Window Compliance rollup. Defensively validates
  * that the resolved site's `study_id` matches the URL `[id]` so a CRA cannot
  * exfiltrate a sibling study's site by URL guessing.
  */

@@ -123,6 +123,50 @@ async function getCompanyId(): Promise<string> {
   return profile.company_id;
 }
 
+/**
+ * Returns the current user's `profiles.id` (not auth user id).
+ * Used so the study creator can be auto-assigned to `study_team_members`.
+ */
+async function getCurrentProfileId(
+  supabase: SupabaseClient,
+): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  return (profile?.id as string | undefined) ?? null;
+}
+
+/**
+ * Auto-assign the study creator to `study_team_members` so they appear on the
+ * study's Team tab (which filters via `scopeTeamMembersToStudy`). Best-effort:
+ * the study has already been created, so we log on failure and continue.
+ */
+async function assignCreatorToStudyTeam(
+  supabase: SupabaseClient,
+  studyId: string,
+  profileId: string,
+): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from('study_team_members')
+      .insert({
+        study_id: studyId,
+        profile_id: profileId,
+        role: 'clinical_project_manager',
+        is_active: true,
+      });
+    if (error && !/duplicate|unique/i.test(error.message)) {
+      console.error('[assignCreatorToStudyTeam]', error.message);
+    }
+  } catch (e) {
+    console.error('[assignCreatorToStudyTeam]', e);
+  }
+}
+
 async function enforceActiveStudyLimit(params: {
   supabase: Awaited<ReturnType<typeof createClient>>;
   companyId: string;
@@ -270,6 +314,11 @@ export async function createStudy(input: CreateStudyInput): Promise<{ data: Stud
     const studyId = data.id as string;
     const regionCodes = input.overview?.study_sites?.regions ?? [];
     await syncStudyCountriesFromOverview(supabase, studyId, regionCodes);
+
+    const creatorProfileId = await getCurrentProfileId(supabase);
+    if (creatorProfileId) {
+      await assignCreatorToStudyTeam(supabase, studyId, creatorProfileId);
+    }
 
     revalidatePath('/protected');
     revalidatePath('/protected/studies');

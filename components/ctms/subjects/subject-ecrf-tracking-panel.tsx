@@ -548,24 +548,34 @@ export function SubjectEcrfTrackingPanel({
               Export PDF
             </a>
           </Button>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleResync}
-                  disabled={disabled || isResyncing}
-                />
-              }
-            >
-              <RefreshCcw className={cn('mr-1 h-3.5 w-3.5', isResyncing && 'animate-spin')} />
-              {isResyncing ? 'Syncing…' : 'Resync to latest live template'}
-            </TooltipTrigger>
-            {disabled && disabledTooltip && (
-              <TooltipContent>{disabledTooltip}</TooltipContent>
-            )}
-          </Tooltip>
+          <div className="flex flex-col items-end gap-1">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResync}
+                    disabled={disabled || isResyncing}
+                  />
+                }
+              >
+                <RefreshCcw className={cn('mr-1 h-3.5 w-3.5', isResyncing && 'animate-spin')} />
+                {isResyncing ? 'Syncing…' : 'Resync to latest live template'}
+              </TooltipTrigger>
+              {disabled && disabledTooltip ? (
+                <TooltipContent>{disabledTooltip}</TooltipContent>
+              ) : (
+                <TooltipContent className="max-w-xs text-xs">
+                  Subjects are auto-synced when a new template version is
+                  published. Use this only if a single subject got out of sync.
+                </TooltipContent>
+              )}
+            </Tooltip>
+            <p className="text-[11px] text-muted-foreground">
+              Auto-syncs on publish. Use only for recovery.
+            </p>
+          </div>
         </div>
       </CardHeader>
 

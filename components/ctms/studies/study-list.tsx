@@ -13,7 +13,7 @@ import {
   type PaginationState,
   type SortingState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, Archive, ExternalLink, Pencil, Plus, RotateCcw, Search, X } from 'lucide-react';
+import { ArrowUpDown, ExternalLink, Pencil, Plus, RotateCcw, Search, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,16 +47,15 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 import type { Study } from '@/lib/types/ctms';
 import { STUDY_STATUS_OPTIONS, STUDY_PHASE_OPTIONS } from '@/lib/types/ctms';
+import { formatPlanDate } from '@/lib/utils/visit-window';
 
 interface StudyListProps {
   studies: Study[];
   /** When false, hides the toolbar link to `/protected/studies/new`. Default true. */
   showNewStudyButton?: boolean;
-  /** When true, Actions column includes Open, Edit, and optional Deactivate for admins. */
+  /** When true, Actions column includes Open, Edit, and optional Reactivate for admins. */
   showEditDeactivate?: boolean;
   isAdmin?: boolean;
-  /** Called when user clicks Deactivate (parent should confirm). */
-  onDeactivateRequest?: (study: Study) => void;
   /** Called when admin clicks Reactivate on a closed study (parent should confirm). */
   onReactivateRequest?: (study: Study) => void;
 }
@@ -66,7 +65,6 @@ export function StudyList({
   showNewStudyButton = true,
   showEditDeactivate = false,
   isAdmin = false,
-  onDeactivateRequest,
   onReactivateRequest,
 }: StudyListProps) {
   const router = useRouter();
@@ -87,6 +85,7 @@ export function StudyList({
       result = result.filter(
         (s) =>
           s.title.toLowerCase().includes(q) ||
+          (s.study_name?.toLowerCase().includes(q) ?? false) ||
           s.protocol_number.toLowerCase().includes(q) ||
           (s.sponsor?.toLowerCase().includes(q) ?? false) ||
           (s.therapeutic_area?.toLowerCase().includes(q) ?? false)
@@ -126,6 +125,26 @@ export function StudyList({
         cell: ({ row }) => (
           <span className="font-medium">{row.getValue('protocol_number')}</span>
         ),
+      },
+      {
+        accessorKey: 'study_name',
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="-ml-3 h-8"
+            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          >
+            Study Name
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
+        cell: ({ row }) => {
+          const value = row.getValue('study_name') as string | null;
+          return (
+            <span className="max-w-[220px] truncate block">{value || '—'}</span>
+          );
+        },
       },
       {
         accessorKey: 'title',
@@ -168,13 +187,6 @@ export function StudyList({
         ),
       },
       {
-        accessorKey: 'sponsor',
-        header: 'Sponsor',
-        cell: ({ row }) => (
-          <span className="text-muted-foreground">{row.getValue('sponsor') || '—'}</span>
-        ),
-      },
-      {
         accessorKey: 'updated_at',
         header: ({ column }) => (
           <Button
@@ -187,10 +199,11 @@ export function StudyList({
             <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
         ),
-        cell: ({ row }) => {
-          const date = new Date(row.getValue('updated_at') as string);
-          return <span className="text-muted-foreground text-xs">{date.toLocaleDateString()}</span>;
-        },
+        cell: ({ row }) => (
+          <span className="text-muted-foreground text-xs">
+            {formatPlanDate(row.getValue('updated_at') as string)}
+          </span>
+        ),
       },
       {
         id: 'actions',
@@ -200,74 +213,45 @@ export function StudyList({
           const study = row.original;
           return (
             <div className="flex flex-wrap items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
-              <Tooltip>
-                <TooltipTrigger render={<span className="inline-flex" />}>
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    render={<Link href={`/protected/studies/${study.id}`} />}
-                    nativeButton={false}
-                    aria-label="Open study"
-                  >
-                    <ExternalLink className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">Open study</TooltipContent>
-              </Tooltip>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 px-2 text-xs"
+                render={<Link href={`/protected/studies/${study.id}`} />}
+                nativeButton={false}
+              >
+                <ExternalLink className="size-3.5 shrink-0" aria-hidden />
+                Open
+              </Button>
               {showEditDeactivate && (
                 <>
-                  <Tooltip>
-                    <TooltipTrigger render={<span className="inline-flex" />}>
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        disabled={study.status === 'closed'}
-                        render={
-                          study.status === 'closed' ? undefined : (
-                            <Link href={`/protected/studies/${study.id}/edit`} />
-                          )
-                        }
-                        nativeButton={study.status === 'closed'}
-                        aria-label={study.status === 'closed' ? 'Edit study (deactivated)' : 'Edit study'}
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {study.status === 'closed' ? 'Study is deactivated' : 'Edit study'}
-                    </TooltipContent>
-                  </Tooltip>
-                  {isAdmin && study.status !== 'closed' && onDeactivateRequest && (
-                    <Tooltip>
-                      <TooltipTrigger render={<span className="inline-flex" />}>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="icon-sm"
-                          aria-label="Deactivate study"
-                          onClick={() => onDeactivateRequest(study)}
-                        >
-                          <Archive className="size-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">Deactivate study</TooltipContent>
-                    </Tooltip>
-                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 px-2 text-xs"
+                    disabled={study.status === 'closed'}
+                    render={
+                      study.status === 'closed' ? undefined : (
+                        <Link href={`/protected/studies/${study.id}/edit`} />
+                      )
+                    }
+                    nativeButton={study.status === 'closed'}
+                    title={study.status === 'closed' ? 'Study is deactivated' : undefined}
+                  >
+                    <Pencil className="size-3.5 shrink-0" aria-hidden />
+                    Edit
+                  </Button>
                   {isAdmin && study.status === 'closed' && onReactivateRequest && (
-                    <Tooltip>
-                      <TooltipTrigger render={<span className="inline-flex" />}>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label="Reactivate study"
-                          onClick={() => onReactivateRequest(study)}
-                        >
-                          <RotateCcw className="size-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">Reactivate study</TooltipContent>
-                    </Tooltip>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 gap-1.5 px-2 text-xs"
+                      onClick={() => onReactivateRequest(study)}
+                    >
+                      <RotateCcw className="size-3.5 shrink-0" aria-hidden />
+                      Reactivate
+                    </Button>
                   )}
                 </>
               )}
@@ -276,7 +260,7 @@ export function StudyList({
         },
       },
     ],
-    [showEditDeactivate, isAdmin, onDeactivateRequest, onReactivateRequest]
+    [showEditDeactivate, isAdmin, onReactivateRequest]
   );
 
   const table = useReactTable({
@@ -384,13 +368,13 @@ export function StudyList({
               <Button
                 render={<Link href="/protected/studies/new" />}
                 nativeButton={false}
-                aria-label="Create a new study"
+                aria-label="Create New Study"
               >
                 <Plus className="mr-2 h-4 w-4" />
-                New Study
+                Create New Study
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="bottom">Create a new study</TooltipContent>
+            <TooltipContent side="bottom">Create New Study</TooltipContent>
           </Tooltip>
         ) : null}
       </div>

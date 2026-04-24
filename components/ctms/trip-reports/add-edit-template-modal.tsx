@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select';
 
 import { createTemplate, updateTemplate } from '@/lib/actions/visit-reports';
+import { studySelectLabel } from '@/lib/ctms/study-display';
 import type { VisitReportTemplate } from '@/lib/types/visit-reports';
 import {
   VISIT_REPORT_TYPE_OPTIONS,
@@ -48,6 +49,7 @@ const STUDY_NONE = '__none__';
 interface StudyOption {
   id: string;
   title: string;
+  study_name: string | null;
   protocol_number: string | null;
 }
 
@@ -96,6 +98,7 @@ export function AddEditTemplateModal({
         visit_report_type: (template?.visit_report_type as FormValues['visit_report_type']) ?? 'monitoring',
         days_submission: template?.days_submission ?? 14,
         days_approval: template?.days_approval ?? 7,
+        days_basis: template?.days_basis === 'business' ? 'business' : 'calendar',
       });
     }
   }, [open, template, reset]);
@@ -173,7 +176,7 @@ export function AddEditTemplateModal({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="study_id">Study</Label>
+            <Label htmlFor="study_id">Study Name</Label>
             <Select
               value={watch('study_id') ?? STUDY_NONE}
               onValueChange={(v) => setValue('study_id', v ?? STUDY_NONE)}
@@ -184,7 +187,7 @@ export function AddEditTemplateModal({
                   getDisplayLabel={(v) => {
                     if (!v || v === STUDY_NONE) return 'None';
                     const s = studies.find((x) => x.id === v);
-                    return s ? (s.protocol_number ? `${s.title} (${s.protocol_number})` : s.title) : v;
+                    return s ? studySelectLabel(s) : v;
                   }}
                 />
               </SelectTrigger>
@@ -192,7 +195,7 @@ export function AddEditTemplateModal({
                 <SelectItem value={STUDY_NONE}>None</SelectItem>
                 {studies.map((s) => (
                   <SelectItem key={s.id} value={s.id}>
-                    {s.protocol_number ? `${s.title} (${s.protocol_number})` : s.title}
+                    {studySelectLabel(s)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -252,7 +255,7 @@ export function AddEditTemplateModal({
           <div className="space-y-2">
             <Label htmlFor="days_basis">Day count</Label>
             <Select
-              value={watch('days_basis')}
+              value={watch('days_basis') ?? 'calendar'}
               onValueChange={(v) => setValue('days_basis', v as FormValues['days_basis'])}
             >
               <SelectTrigger id="days_basis" className="text-[12px]">

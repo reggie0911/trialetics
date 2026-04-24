@@ -62,6 +62,14 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { parseStudyIdFromPathname } from '@/lib/nav/ctms-study-paths';
 
+function isAccountHref(href: string): boolean {
+  return href === '/protected/settings/billing' || href.startsWith('/protected/settings/');
+}
+
+function isPlatformHref(href: string): boolean {
+  return href.startsWith('/protected/platform/');
+}
+
 type CtmsNavItemDef =
   | {
       label: string;
@@ -79,11 +87,7 @@ type CtmsNavItemDef =
 
 const ctmsNavItems: CtmsNavItemDef[] = [
   { label: 'Dashboard', icon: LayoutDashboard, exact: true, fixedHref: '/protected' },
-  {
-    label: 'Contacts & Organizations',
-    icon: ContactRound,
-    fixedHref: '/protected/directory',
-  },
+  { label: 'Contacts & Organizations', icon: ContactRound, studySegment: 'directory' },
   { label: 'Trip Reports', icon: FileText, studySegment: 'trip-reports' },
   { label: 'My Tasks', icon: CheckSquare, studySegment: 'my-tasks' },
   { label: 'Project Team Tasks', icon: ListTodo, studySegment: 'tasks' },
@@ -192,9 +196,9 @@ function getPageName(pathname: string, customNames: CustomTrackerNavItem[]): str
   if (pathname === '/protected/studies') return 'Studies';
   if (pathname === '/protected/studies/new') return 'New study';
   if (pathname.startsWith('/protected/financials/approval-templates')) return 'Approval templates';
-  if (pathname.startsWith('/protected/brand-forge')) return 'BrandForge';
-  if (pathname.startsWith('/protected/eisf')) return 'eISF';
-  if (pathname.startsWith('/protected/etmf')) return 'eTMF';
+  if (pathname.startsWith('/protected/brand-forge') || pathname.includes('/brand-forge')) return 'BrandForge';
+  if (pathname.startsWith('/protected/eisf') || pathname.includes('/eisf')) return 'eISF';
+  if (pathname.startsWith('/protected/etmf') || pathname.includes('/etmf')) return 'eTMF';
   if (pathname.startsWith('/protected/platform/')) return 'Platform admin';
   for (const t of customNames) {
     if (pathname === `/protected/custom-trackers/${t.slug}` || pathname.startsWith(`/protected/custom-trackers/${t.slug}/`)) {
@@ -257,6 +261,11 @@ export function TopNavbar({
   );
 
   const pageName = getPageName(pathname, customTrackerNavItems);
+  const studyId = parseStudyIdFromPathname(pathname);
+  const navGated = hasCtmsAccess && !studyId;
+  const brandforgeHref = studyId ? `/protected/studies/${studyId}/brand-forge` : '/protected/studies#studies';
+  const studyScopedHref = (segment: string): string =>
+    studyId ? `/protected/studies/${studyId}/${segment}` : '/protected/studies#studies';
 
   /** Platform admins always see BrandForge in nav; tenants need the company flag. */
   const showBrandforgeInNav = hasBrandforgeAccess || isPlatformAdmin;
@@ -275,6 +284,18 @@ export function TopNavbar({
   const isCtmsItemLocked = (item: CtmsNavItemDef) =>
     (item.minPlan ? !planMeetsTier(normalizedPlan, item.minPlan) : false);
 
+  const shouldGateHref = (href: string): boolean => {
+    if (!navGated) return false;
+    if (isAccountHref(href)) return false;
+    if (isPlatformAdmin && isPlatformHref(href)) return false;
+    return href.startsWith('/protected/');
+  };
+
+  const guardedHref = (href: string): string =>
+    shouldGateHref(href) ? '/protected/studies#studies' : href;
+
+  const navigate = (href: string) => router.push(guardedHref(href));
+
   const planBadgeLabel: Record<SubscriptionPlan, string | null> = {
     independent_consultant: null,
     launch: 'LCH',
@@ -287,8 +308,8 @@ export function TopNavbar({
     hasCtmsAccess &&
     (ctmsNavWithHref.some(({ item, href }) => isCtmsNavItemActive(pathname, item, href)) ||
       pathname.startsWith('/protected/studies/'));
-  const isEtmfActive = pathname === '/protected/etmf' || pathname.startsWith('/protected/etmf/');
-  const isEisfActive = pathname === '/protected/eisf' || pathname.startsWith('/protected/eisf/');
+  const isEtmfActive = pathname === '/protected/etmf' || pathname.startsWith('/protected/etmf/') || pathname.includes('/etmf');
+  const isEisfActive = pathname === '/protected/eisf' || pathname.startsWith('/protected/eisf/') || pathname.includes('/eisf');
   const isCustomActive =
     studyTrackerNavItems.some((item) => isActive(item.href)) ||
     pathname.startsWith('/protected/custom-trackers');
@@ -296,7 +317,7 @@ export function TopNavbar({
   const handleLogout = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push('/auth/login');
+    navigate('/auth/login');
   };
 
   const initials = userName
@@ -312,7 +333,7 @@ export function TopNavbar({
         {/* Left: Logo + Page Name */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="[&_img]:w-[96px] [&_img]:h-auto">
-            <Logo onlyLogo href="/protected" />
+            <Logo onlyLogo href={navGated ? '/protected/studies#studies' : '/protected'} />
           </div>
           <Separator orientation="vertical" className="h-6" />
           <span className="text-base font-light text-[rgb(50,51,56)] dark:text-white hidden sm:inline">{companyName ?? pageName}</span>
@@ -322,6 +343,24 @@ export function TopNavbar({
         <div className="flex items-center gap-1 shrink-0 ml-auto">
           {/* Compact Nav Dropdowns (desktop) */}
           <div className="hidden lg:flex items-center gap-1">
+            {studyId && (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Link
+                      href="/protected/studies#studies"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal text-muted-foreground hover:text-foreground hover:bg-muted transition-colors whitespace-nowrap border border-border"
+                    />
+                  }
+                >
+                  Switch study
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  Return to the studies dashboard and open a different study context.
+                </TooltipContent>
+              </Tooltip>
+            )}
+
             {/* CTMS — always shown (like eTMF); menu items only when licensed */}
             <DropdownMenu>
               <Tooltip>
@@ -329,6 +368,7 @@ export function TopNavbar({
                   <DropdownMenuTrigger
                     className={cn(
                       'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
+                      navGated && 'opacity-50 cursor-not-allowed',
                       hasCtmsAccess
                         ? isCtmsActive
                           ? 'bg-primary/10 text-primary'
@@ -357,7 +397,7 @@ export function TopNavbar({
                           locked && 'opacity-50',
                           navActive && 'bg-primary/10 text-primary font-medium',
                         )}
-                        onClick={() => router.push(locked ? '/protected/settings/billing' : href)}
+                        onClick={() => navigate(locked ? '/protected/settings/billing' : href)}
                       >
                         <item.icon className="mr-2 h-4 w-4" />
                         {item.label}
@@ -378,6 +418,7 @@ export function TopNavbar({
                   <DropdownMenuTrigger
                     className={cn(
                       'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
+                      navGated && 'opacity-50 cursor-not-allowed',
                       hasEtmfAccess
                         ? isEtmfActive
                           ? 'bg-primary/10 text-primary'
@@ -396,23 +437,23 @@ export function TopNavbar({
               <DropdownMenuContent align="end" sideOffset={8} className="min-w-48">
                 {hasEtmfAccess ? (
                   <>
-                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/etmf')}>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => navigate(studyScopedHref('etmf'))}>
                       <FileText className="mr-2 h-4 w-4" />
                       Overview
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/etmf/library')}>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => navigate(studyScopedHref('etmf/library'))}>
                       <FileText className="mr-2 h-4 w-4" />
                       Document Library
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/etmf/expected-documents')}>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => navigate(studyScopedHref('etmf/expected-documents'))}>
                       <FileText className="mr-2 h-4 w-4" />
                       Expected Document List
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/etmf/staff-expected-documents')}>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => navigate(studyScopedHref('etmf/staff-expected-documents'))}>
                       <FileText className="mr-2 h-4 w-4" />
                       Site Staff EDL
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/etmf/bulk-upload')}>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => navigate(studyScopedHref('etmf/bulk-upload'))}>
                       <FileText className="mr-2 h-4 w-4" />
                       Bulk Uploader
                     </DropdownMenuItem>
@@ -430,6 +471,7 @@ export function TopNavbar({
                   <DropdownMenuTrigger
                     className={cn(
                       'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
+                      navGated && 'opacity-50 cursor-not-allowed',
                       hasEisfAccess
                         ? isEisfActive
                           ? 'bg-primary/10 text-primary'
@@ -448,19 +490,19 @@ export function TopNavbar({
               <DropdownMenuContent align="end" sideOffset={8} className="min-w-52">
                 {hasEisfAccess ? (
                   <>
-                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/eisf')}>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => navigate(studyScopedHref('eisf'))}>
                       <FolderOpen className="mr-2 h-4 w-4" />
                       Overview
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/eisf/folders')}>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => navigate(studyScopedHref('eisf/folders'))}>
                       <FolderOpen className="mr-2 h-4 w-4" />
                       Site folders
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/eisf/requests')}>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => navigate(studyScopedHref('eisf/requests'))}>
                       <FileText className="mr-2 h-4 w-4" />
                       Document requests
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/eisf/rules')}>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => navigate(studyScopedHref('eisf/rules'))}>
                       <Shield className="mr-2 h-4 w-4" />
                       Required documents
                     </DropdownMenuItem>
@@ -479,6 +521,7 @@ export function TopNavbar({
                     <DropdownMenuTrigger
                       className={cn(
                         'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
+                        navGated && 'opacity-50 cursor-not-allowed',
                         isCustomActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted',
                       )}
                     >
@@ -497,7 +540,7 @@ export function TopNavbar({
                         Study trackers
                       </div>
                       {studyTrackerMenuItems.map((item) => (
-                        <DropdownMenuItem key={item.href} className="cursor-pointer" onClick={() => router.push(item.href)}>
+                        <DropdownMenuItem key={item.href} className="cursor-pointer" onClick={() => navigate(item.href)}>
                           <item.icon className="mr-2 h-4 w-4" />
                           {item.label}
                         </DropdownMenuItem>
@@ -516,13 +559,13 @@ export function TopNavbar({
                         <DropdownMenuItem
                           key={t.id}
                           className="cursor-pointer"
-                          onClick={() => router.push(`/protected/custom-trackers/${t.slug}`)}
+                          onClick={() => navigate(studyScopedHref(`custom-trackers/${t.slug}`))}
                         >
                           <FileText className="mr-2 h-4 w-4" />
                           {t.name}
                         </DropdownMenuItem>
                       ))}
-                      <DropdownMenuItem className="cursor-pointer" onClick={() => router.push('/protected/custom-trackers')}>
+                      <DropdownMenuItem className="cursor-pointer" onClick={() => navigate(studyScopedHref('custom-trackers'))}>
                         <FileText className="mr-2 h-4 w-4" />
                         All custom trackers…
                       </DropdownMenuItem>
@@ -536,7 +579,10 @@ export function TopNavbar({
             <DropdownMenu>
               <Tooltip>
                 <TooltipTrigger render={<span className="inline-flex" />}>
-                  <DropdownMenuTrigger className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal text-muted-foreground hover:text-foreground hover:bg-muted transition-colors whitespace-nowrap outline-none border border-border">
+                  <DropdownMenuTrigger className={cn(
+                    'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal text-muted-foreground hover:text-foreground hover:bg-muted transition-colors whitespace-nowrap outline-none border border-border',
+                    navGated && !isPlatformAdmin && 'opacity-50 cursor-not-allowed',
+                  )}>
                     Modules
                     <ChevronDown className="h-3 w-3" />
                   </DropdownMenuTrigger>
@@ -557,7 +603,7 @@ export function TopNavbar({
                         <DropdownMenuItem
                           key={item.href}
                           className={cn('cursor-pointer', locked && 'opacity-50')}
-                          onClick={() => router.push(locked ? '/protected/settings/billing' : item.href)}
+                          onClick={() => navigate(locked ? '/protected/settings/billing' : item.href)}
                         >
                           <Clock className="mr-2 h-4 w-4" />
                           {item.label}
@@ -575,7 +621,7 @@ export function TopNavbar({
                     </div>
                     <DropdownMenuItem
                       className="cursor-pointer"
-                      onClick={() => router.push('/protected/brand-forge')}
+                      onClick={() => navigate(brandforgeHref)}
                     >
                       <Palette className="mr-2 h-4 w-4" />
                       BrandForge
@@ -590,21 +636,21 @@ export function TopNavbar({
                     </div>
                     <DropdownMenuItem
                       className="cursor-pointer"
-                      onClick={() => router.push('/protected/platform/companies')}
+                      onClick={() => navigate('/protected/platform/companies')}
                     >
                       <Shield className="mr-2 h-4 w-4" />
                       Company module access
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="cursor-pointer"
-                      onClick={() => router.push('/protected/platform/docs')}
+                      onClick={() => navigate('/protected/platform/docs')}
                     >
                       <FilePenLine className="mr-2 h-4 w-4" />
                       Documentation editor
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="cursor-pointer"
-                      onClick={() => router.push('/protected/platform/analytics')}
+                      onClick={() => navigate('/protected/platform/analytics')}
                     >
                       <LineChart className="mr-2 h-4 w-4" />
                       Platform analytics
@@ -621,9 +667,10 @@ export function TopNavbar({
               <TooltipTrigger
                 render={
                   <Link
-                    href="/protected/docs"
+                    href={guardedHref('/protected/docs')}
                     className={cn(
                       'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap border border-border',
+                      navGated && 'opacity-50 cursor-not-allowed',
                       pathname.startsWith('/protected/docs')
                         ? 'bg-primary/10 text-primary'
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted',
@@ -680,14 +727,14 @@ export function TopNavbar({
               {isPlatformAdmin && (
                 <>
                   <DropdownMenuItem
-                    onClick={() => router.push('/protected/platform/companies')}
+                    onClick={() => navigate('/protected/platform/companies')}
                     className="cursor-pointer"
                   >
                     <Shield className="mr-2 h-4 w-4" />
                     Company module access
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() => router.push('/protected/platform/docs')}
+                    onClick={() => navigate('/protected/platform/docs')}
                     className="cursor-pointer"
                   >
                     <FilePenLine className="mr-2 h-4 w-4" />
@@ -695,7 +742,7 @@ export function TopNavbar({
                   </DropdownMenuItem>
                 </>
               )}
-              <DropdownMenuItem onClick={() => router.push('/protected/settings/billing')} className="cursor-pointer">
+              <DropdownMenuItem onClick={() => navigate('/protected/settings/billing')} className="cursor-pointer">
                 <CreditCard className="mr-2 h-4 w-4" />
                 Billing
                 {planBadgeLabel[normalizedPlan] && (
@@ -732,6 +779,20 @@ export function TopNavbar({
             <SheetDescription className="sr-only">Application navigation menu</SheetDescription>
           </SheetHeader>
           <div className="flex flex-col py-2 overflow-y-auto max-h-[calc(100vh-60px)]">
+            {studyId && (
+              <>
+                <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Study</p>
+                <Link
+                  href="/protected/studies#studies"
+                  onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
+                >
+                  <LayoutDashboard className="h-4 w-4" />
+                  Switch study
+                </Link>
+                <Separator className="my-2" />
+              </>
+            )}
             <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">CTMS</p>
             {hasCtmsAccess ? (
               ctmsNavWithHref.map(({ item, href }) => {
@@ -740,7 +801,7 @@ export function TopNavbar({
                 return (
                   <Link
                     key={`${item.label}-${href}`}
-                    href={locked ? '/protected/settings/billing' : href}
+                    href={guardedHref(locked ? '/protected/settings/billing' : href)}
                     onClick={() => setMobileOpen(false)}
                     className={cn(
                       'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
@@ -762,7 +823,7 @@ export function TopNavbar({
             {hasEisfAccess ? (
               <>
                 <Link
-                  href="/protected/eisf"
+                  href={guardedHref(studyScopedHref('eisf'))}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
@@ -773,7 +834,7 @@ export function TopNavbar({
                   Overview
                 </Link>
                 <Link
-                  href="/protected/eisf/folders"
+                  href={guardedHref(studyScopedHref('eisf/folders'))}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
@@ -784,7 +845,7 @@ export function TopNavbar({
                   Site folders
                 </Link>
                 <Link
-                  href="/protected/eisf/requests"
+                  href={guardedHref(studyScopedHref('eisf/requests'))}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
@@ -795,7 +856,7 @@ export function TopNavbar({
                   Document requests
                 </Link>
                 <Link
-                  href="/protected/eisf/rules"
+                  href={guardedHref(studyScopedHref('eisf/rules'))}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
@@ -814,7 +875,7 @@ export function TopNavbar({
             {hasEtmfAccess ? (
               <>
                 <Link
-                  href="/protected/etmf"
+                  href={guardedHref(studyScopedHref('etmf'))}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
@@ -825,7 +886,7 @@ export function TopNavbar({
                   Overview
                 </Link>
                 <Link
-                  href="/protected/etmf/library"
+                  href={guardedHref(studyScopedHref('etmf/library'))}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
@@ -836,7 +897,7 @@ export function TopNavbar({
                   Document Library
                 </Link>
                 <Link
-                  href="/protected/etmf/expected-documents"
+                  href={guardedHref(studyScopedHref('etmf/expected-documents'))}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
@@ -847,7 +908,7 @@ export function TopNavbar({
                   Expected Document List
                 </Link>
                 <Link
-                  href="/protected/etmf/staff-expected-documents"
+                  href={guardedHref(studyScopedHref('etmf/staff-expected-documents'))}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
@@ -858,7 +919,7 @@ export function TopNavbar({
                   Site Staff EDL
                 </Link>
                 <Link
-                  href="/protected/etmf/bulk-upload"
+                  href={guardedHref(studyScopedHref('etmf/bulk-upload'))}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
@@ -885,7 +946,7 @@ export function TopNavbar({
                       return (
                         <Link
                           key={item.href}
-                          href={item.href}
+                          href={guardedHref(item.href)}
                           onClick={() => setMobileOpen(false)}
                           className={cn(
                             'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
@@ -907,7 +968,7 @@ export function TopNavbar({
                     {customTrackerNavItems.map((t) => (
                       <Link
                         key={t.id}
-                        href={`/protected/custom-trackers/${t.slug}`}
+                        href={guardedHref(studyScopedHref(`custom-trackers/${t.slug}`))}
                         onClick={() => setMobileOpen(false)}
                         className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
                       >
@@ -916,7 +977,7 @@ export function TopNavbar({
                       </Link>
                     ))}
                     <Link
-                      href="/protected/custom-trackers"
+                      href={guardedHref(studyScopedHref('custom-trackers'))}
                       onClick={() => setMobileOpen(false)}
                       className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
                     >
@@ -938,7 +999,7 @@ export function TopNavbar({
                   return (
                     <Link
                       key={item.href}
-                      href={locked ? '/protected/settings/billing' : item.href}
+                      href={guardedHref(locked ? '/protected/settings/billing' : item.href)}
                       onClick={() => setMobileOpen(false)}
                       className={cn(
                         'flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted',
@@ -957,11 +1018,11 @@ export function TopNavbar({
               <>
                 <p className="px-4 py-1 text-[10px] text-muted-foreground">Brand & Creative</p>
                 <Link
-                  href="/protected/brand-forge"
+                  href={guardedHref(brandforgeHref)}
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
-                    pathname.startsWith('/protected/brand-forge')
+                    pathname.startsWith('/protected/brand-forge') || pathname.includes('/brand-forge')
                       ? 'bg-primary/10 text-primary font-medium'
                       : 'text-muted-foreground hover:bg-muted',
                   )}
@@ -975,7 +1036,7 @@ export function TopNavbar({
               <>
                 {(hasCtmsAccess || showBrandforgeInNav) && <p className="px-4 py-1 text-[10px] text-muted-foreground">Platform</p>}
                 <Link
-                  href="/protected/platform/companies"
+                  href={guardedHref('/protected/platform/companies')}
                   onClick={() => setMobileOpen(false)}
                   className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
                 >
@@ -983,7 +1044,7 @@ export function TopNavbar({
                   Company module access
                 </Link>
                 <Link
-                  href="/protected/platform/docs"
+                  href={guardedHref('/protected/platform/docs')}
                   onClick={() => setMobileOpen(false)}
                   className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
                 >
@@ -991,7 +1052,7 @@ export function TopNavbar({
                   Documentation editor
                 </Link>
                 <Link
-                  href="/protected/platform/analytics"
+                  href={guardedHref('/protected/platform/analytics')}
                   onClick={() => setMobileOpen(false)}
                   className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
                 >
@@ -1007,7 +1068,7 @@ export function TopNavbar({
             <Separator className="my-2" />
             <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Help</p>
             <Link
-              href="/protected/docs"
+              href={guardedHref('/protected/docs')}
               onClick={() => setMobileOpen(false)}
               className={cn(
                 'flex items-center gap-2 px-4 py-2 text-sm transition-colors',

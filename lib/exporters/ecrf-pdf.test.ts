@@ -28,6 +28,8 @@ function fixture(): EcrfPdfInput {
     visit_name: 'Baseline',
     timepoint_label: 'Day 0',
     timepoint_days: 0,
+    window_before_days: 0,
+    window_after_days: 0,
     sort_order: 0,
     created_at: '2026-01-01T00:00:00Z',
   };

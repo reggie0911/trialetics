@@ -30,6 +30,7 @@ import {
 import { toast } from 'sonner';
 
 import { Card, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -95,9 +96,11 @@ import { exportToCSV } from '@/lib/utils/table-export';
 import {
   VISIT_REPORT_STATUS_LABELS,
   VISIT_REPORT_TYPE_LABELS,
+  VISIT_REPORT_TYPE_OPTIONS,
   TEMPLATE_STATUS_LABELS,
 } from '@/lib/types/visit-reports';
 import { TRIP_REPORT_CLAIM_REVIEW_PATH } from '@/lib/constants/visit-reports';
+import { TRIP_REPORT_DEFAULT_PAGE_SIZE } from '@/lib/trip-report-compliance';
 import type { VisitReportStatus, VisitReportTemplate } from '@/lib/types/visit-reports';
 import type { Study } from '@/lib/types/ctms';
 import { ctmsStudyPath } from '@/lib/nav/ctms-study-paths';
@@ -141,6 +144,25 @@ function formatDate(dateStr: string | null): string {
   }
 }
 
+const ADMIN_TEMPLATE_PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
+const ADMIN_TEMPLATE_PAGE_SIZE_MAX = 200;
+
+function parseAdminTemplatePage(raw: string | null): number {
+  const n = Number.parseInt(raw ?? '', 10);
+  if (!Number.isFinite(n) || n < 1) return 1;
+  return Math.floor(n);
+}
+
+function parseAdminTemplatePageSize(raw: string | null): number {
+  const n = Number.parseInt(raw ?? '', 10);
+  if (!Number.isFinite(n) || n < 1) return TRIP_REPORT_DEFAULT_PAGE_SIZE;
+  const capped = Math.min(ADMIN_TEMPLATE_PAGE_SIZE_MAX, n);
+  if ((ADMIN_TEMPLATE_PAGE_SIZE_OPTIONS as readonly number[]).includes(capped)) {
+    return capped;
+  }
+  return TRIP_REPORT_DEFAULT_PAGE_SIZE;
+}
+
 interface TripReportsPageClientProps {
   initialSummaryList: TripReportSummaryRow[];
   summaryTotal?: number;
@@ -149,7 +171,7 @@ interface TripReportsPageClientProps {
   summarySort?: { column: string; direction: 'asc' | 'desc' } | null;
   templateCount: number;
   initialTemplates: TemplateWithQuestionCount[];
-  studies: Pick<Study, 'id' | 'title' | 'protocol_number'>[];
+  studies: Pick<Study, 'id' | 'title' | 'study_name' | 'protocol_number'>[];
   trackerRows: TripReportTrackerRow[];
   trackerTotal?: number;
   trackerPage?: number;
@@ -226,6 +248,11 @@ export function TripReportsPageClient({
   const [trackerVisitTypeFilter, setTrackerVisitTypeFilter] = useState<string>(searchParams.get('tType') ?? 'all');
   const [trackerAuthorFilter, setTrackerAuthorFilter] = useState<string>(searchParams.get('tAuthor') ?? 'all');
   const [trackerComplianceFilter, setTrackerComplianceFilter] = useState<string>(searchParams.get('tCompliance') ?? 'all');
+  const [adminVisitTypeFilter, setAdminVisitTypeFilter] = useState<string>(searchParams.get('aVtype') ?? 'all');
+
+  useEffect(() => {
+    setAdminVisitTypeFilter(searchParams.get('aVtype') ?? 'all');
+  }, [searchParams]);
 
   const adminSort = (() => {
     const raw = searchParams.get('aSort');
@@ -235,9 +262,14 @@ export function TripReportsPageClient({
     return { column, direction: direction as 'asc' | 'desc' };
   })();
 
+  const templatesFilteredByVisitType = useMemo(() => {
+    if (adminVisitTypeFilter === 'all') return initialTemplates;
+    return initialTemplates.filter((t) => t.visit_report_type === adminVisitTypeFilter);
+  }, [initialTemplates, adminVisitTypeFilter]);
+
   const sortedTemplates = useMemo(() => {
-    if (!adminSort) return initialTemplates;
-    const arr = [...initialTemplates];
+    if (!adminSort) return templatesFilteredByVisitType;
+    const arr = [...templatesFilteredByVisitType];
     const { column, direction } = adminSort;
     const get = (t: TemplateWithQuestionCount): unknown => {
       switch (column) {
@@ -265,7 +297,18 @@ export function TripReportsPageClient({
       return direction === 'asc' ? cmp : -cmp;
     });
     return arr;
-  }, [initialTemplates, adminSort]);
+  }, [templatesFilteredByVisitType, adminSort]);
+
+  const adminTemplatesTotal = sortedTemplates.length;
+  const adminParsedPageSize = parseAdminTemplatePageSize(searchParams.get('aPs'));
+  const adminTotalPages = Math.max(1, Math.ceil(adminTemplatesTotal / adminParsedPageSize) || 1);
+  const adminParsedPage = parseAdminTemplatePage(searchParams.get('aPage'));
+  const adminCurrentPage = Math.min(Math.max(1, adminParsedPage), adminTotalPages);
+
+  const paginatedTemplates = useMemo(() => {
+    const start = (adminCurrentPage - 1) * adminParsedPageSize;
+    return sortedTemplates.slice(start, start + adminParsedPageSize);
+  }, [sortedTemplates, adminCurrentPage, adminParsedPageSize]);
 
   useEffect(() => {
     const tab = searchParams.get('tab');
@@ -295,7 +338,13 @@ export function TripReportsPageClient({
     setOrDelete('tType', trackerVisitTypeFilter);
     setOrDelete('tAuthor', trackerAuthorFilter);
     setOrDelete('tCompliance', trackerComplianceFilter);
+    setOrDelete('aVtype', adminVisitTypeFilter);
     params.delete('createVisit');
+    const aPageVal = params.get('aPage');
+    if (!aPageVal || aPageVal === '1') params.delete('aPage');
+    const aPsVal = params.get('aPs');
+    const defaultPs = String(TRIP_REPORT_DEFAULT_PAGE_SIZE);
+    if (!aPsVal || aPsVal === defaultPs) params.delete('aPs');
     const next = params.toString();
     const current = searchParams.toString();
     if (next === current) return;
@@ -312,6 +361,7 @@ export function TripReportsPageClient({
     trackerVisitTypeFilter,
     trackerAuthorFilter,
     trackerComplianceFilter,
+    adminVisitTypeFilter,
   ]);
   // Selections only refer to currently-rendered ids; clear them any
   // time the rendered set could change underneath us. Bulk approve and
@@ -401,6 +451,11 @@ export function TripReportsPageClient({
     else params.set(key, value);
     const next = params.toString();
     router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+  };
+
+  const onAdminVisitTypeFilterChange = (v: string) => {
+    setAdminVisitTypeFilter(v);
+    updatePagerParam('aPage', '1');
   };
 
   /**
@@ -1313,17 +1368,19 @@ export function TripReportsPageClient({
                           ] as const).map(([key, label]) => (
                             <div key={key} className="rounded border border-border/60 p-2">
                               <p className="text-[11px] text-muted-foreground">{label}</p>
-                              <div className="mt-0.5 flex justify-between text-sm">
-                                <span title="Overdue submissions">
-                                  Sub: <span className={trackerMetrics.submissionAging[key] > 0 ? 'font-semibold text-rose-600' : 'font-semibold'}>
+                              <div className="mt-0.5 flex justify-between gap-2 text-sm">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-[10px] leading-tight text-muted-foreground">Overdue submissions</p>
+                                  <p className={trackerMetrics.submissionAging[key] > 0 ? 'font-semibold text-rose-600' : 'font-semibold'}>
                                     {trackerMetrics.submissionAging[key]}
-                                  </span>
-                                </span>
-                                <span title="Overdue approvals">
-                                  App: <span className={trackerMetrics.approvalAging[key] > 0 ? 'font-semibold text-rose-600' : 'font-semibold'}>
+                                  </p>
+                                </div>
+                                <div className="min-w-0 flex-1 text-right">
+                                  <p className="text-[10px] leading-tight text-muted-foreground">Overdue approvals</p>
+                                  <p className={trackerMetrics.approvalAging[key] > 0 ? 'font-semibold text-rose-600' : 'font-semibold'}>
                                     {trackerMetrics.approvalAging[key]}
-                                  </span>
-                                </span>
+                                  </p>
+                                </div>
                               </div>
                             </div>
                           ))}
@@ -1337,8 +1394,8 @@ export function TripReportsPageClient({
                               <tr className="text-left text-muted-foreground">
                                 <th className="py-1 pr-2 font-medium">Author</th>
                                 <th className="py-1 pr-2 font-medium">Total</th>
-                                <th className="py-1 pr-2 font-medium" title="Overdue submissions">Sub OD</th>
-                                <th className="py-1 font-medium" title="Overdue approvals">App OD</th>
+                                <th className="py-1 pr-2 font-medium">Overdue submissions</th>
+                                <th className="py-1 font-medium">Overdue approvals</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -1362,10 +1419,10 @@ export function TripReportsPageClient({
                               <tr className="text-left text-muted-foreground">
                                 <th className="py-1 pr-2 font-medium">Site</th>
                                 <th className="py-1 pr-2 font-medium">Total</th>
-                                <th className="py-1 pr-2 font-medium" title="Overdue submissions">Sub OD</th>
-                                <th className="py-1 pr-2 font-medium" title="Overdue approvals">App OD</th>
-                                <th className="py-1 pr-2 font-medium" title="Compliant submissions">Sub OK</th>
-                                <th className="py-1 font-medium" title="Compliant approvals">App OK</th>
+                                <th className="py-1 pr-2 font-medium">Overdue submissions</th>
+                                <th className="py-1 pr-2 font-medium">Overdue approvals</th>
+                                <th className="py-1 pr-2 font-medium">Compliant submissions</th>
+                                <th className="py-1 font-medium">Compliant approvals</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -2056,22 +2113,63 @@ export function TripReportsPageClient({
           </TabsContent>
 
           <TabsContent value="admin" className="mt-4 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <Card className="w-fit">
-                <CardContent className="py-3 px-4 text-center">
-                  <p className="text-xs text-muted-foreground">Template Count</p>
-                  <p className="text-xl font-semibold">{templateCount}</p>
-                </CardContent>
-              </Card>
-              <Button size="sm" onClick={() => setCreateTemplateOpen(true)} aria-label="Create Template">
-                <FilePlus className="h-4 w-4 mr-1.5" />
-                Create Template
-              </Button>
+            <TooltipProvider delay={200}>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="flex flex-wrap items-end gap-4">
+                <Card className="w-fit">
+                  <CardContent className="py-3 px-4 text-center">
+                    <p className="text-xs text-muted-foreground">Template Count</p>
+                    <p className="text-xl font-semibold">{templateCount}</p>
+                  </CardContent>
+                </Card>
+                <div className="space-y-1.5">
+                  <Label htmlFor="admin-template-visit-type" className="text-xs text-muted-foreground">
+                    Visit type
+                  </Label>
+                  <Select value={adminVisitTypeFilter} onValueChange={onAdminVisitTypeFilterChange}>
+                    <SelectTrigger id="admin-template-visit-type" className="h-9 w-[220px] text-[12px]">
+                      <SelectValue
+                        placeholder="All visit types"
+                        getDisplayLabel={(v) =>
+                          !v || v === 'all'
+                            ? 'All visit types'
+                            : (VISIT_REPORT_TYPE_LABELS[v as keyof typeof VISIT_REPORT_TYPE_LABELS] ?? v)
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All visit types</SelectItem>
+                      {VISIT_REPORT_TYPE_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      size="sm"
+                      onClick={() => setCreateTemplateOpen(true)}
+                      aria-label="Create Template"
+                    >
+                      <FilePlus className="h-4 w-4 mr-1.5" />
+                      Create Template
+                    </Button>
+                  }
+                />
+                <TooltipContent side="top" className="max-w-[260px] text-[11px]">
+                  Add a new trip report template. Optionally scope it to this study and set visit type and due-day rules.
+                </TooltipContent>
+              </Tooltip>
             </div>
             <div className="rounded-md border">
-              <Table className="text-[11px]">
-                <TableHeader>
-                  <TableRow className="h-8 hover:bg-transparent">
+              <Table className="text-[11px]" aria-label="Trip report templates">
+                <TableHeader className="bg-muted/50 [&_tr]:border-b-0">
+                  <TableRow className="h-8 hover:bg-transparent border-b border-border">
                     <TableHead className="h-8 w-8 min-w-8 px-1.5 py-1 text-[11px] leading-none">#</TableHead>
                     <TableHead className="h-8 min-w-0 px-1.5 py-1 text-[11px] leading-none">{renderSortHeader('Template Name', 'name', 'aSort', adminSort, 'aPage')}</TableHead>
                     <TableHead className="h-8 w-[194px] px-1.5 py-1 text-[11px] leading-none">{renderSortHeader('Question Count', 'question_count', 'aSort', adminSort, 'aPage')}</TableHead>
@@ -2086,13 +2184,20 @@ export function TripReportsPageClient({
                   {sortedTemplates.length === 0 ? (
                     <TableRow className="h-auto hover:bg-transparent">
                         <TableCell colSpan={8} className="px-1.5 py-6 text-center text-[11px] text-muted-foreground">
-                        No templates yet. Create a template to get started.
+                        {initialTemplates.length === 0
+                          ? 'No templates yet. Create a template to get started.'
+                          : 'No templates match this visit type. Choose "All visit types" to see every template.'}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    sortedTemplates.map((t, idx) => (
-                      <TableRow key={t.id} className="h-8">
-                        <TableCell className="px-1.5 py-1 text-[11px] leading-tight text-muted-foreground">{idx + 1}</TableCell>
+                    paginatedTemplates.map((t, idx) => {
+                      const globalRowIndex = (adminCurrentPage - 1) * adminParsedPageSize + idx;
+                      return (
+                      <TableRow
+                        key={t.id}
+                        className={cn('h-8', globalRowIndex % 2 === 1 && 'bg-muted/30')}
+                      >
+                        <TableCell className="px-1.5 py-1 text-[11px] leading-tight text-muted-foreground">{globalRowIndex + 1}</TableCell>
                         <TableCell className="max-w-[220px] truncate px-1.5 py-1 text-[11px] font-medium leading-tight">
                           <span className="inline-flex items-center gap-1">
                             <span className="truncate">{t.name}</span>
@@ -2137,70 +2242,126 @@ export function TripReportsPageClient({
                         </TableCell>
                         <TableCell className="px-1.5 py-1">
                           <div className="flex items-center gap-1.5">
-                            <Link
-                              href={`${tripBaseForTemplate(t)}/templates/${t.id}`}
-                              className={cn(
-                                buttonVariants({ variant: 'ghost', size: 'icon' }),
-                                'flex h-auto flex-col gap-0.5 p-1 text-muted-foreground hover:text-foreground'
-                              )}
-                              aria-label="Edit template"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                              <span className="text-[10px] font-normal leading-none">Edit</span>
-                            </Link>
-                            <Link
-                              href={`${tripBaseForTemplate(t)}/templates/${t.id}?mode=view`}
-                              className={cn(
-                                buttonVariants({ variant: 'ghost', size: 'icon' }),
-                                'flex h-auto flex-col gap-0.5 p-1 text-muted-foreground hover:text-foreground'
-                              )}
-                              aria-label="View template"
-                            >
-                              <FileText className="h-3.5 w-3.5" />
-                              <span className="text-[10px] font-normal leading-none">View</span>
-                            </Link>
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <Link
+                                    href={`${tripBaseForTemplate(t)}/templates/${t.id}`}
+                                    className={cn(
+                                      buttonVariants({ variant: 'ghost', size: 'icon' }),
+                                      'flex h-auto flex-col gap-0.5 p-1 text-muted-foreground hover:text-foreground'
+                                    )}
+                                    aria-label="Edit template"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                    <span className="text-[10px] font-normal leading-none">Edit</span>
+                                  </Link>
+                                }
+                              />
+                              <TooltipContent side="top" className="max-w-[260px] text-[11px]">
+                                Open the template builder to edit questions, timing, and study assignment.
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger
+                                render={
+                                  <Link
+                                    href={`${tripBaseForTemplate(t)}/templates/${t.id}?mode=view`}
+                                    className={cn(
+                                      buttonVariants({ variant: 'ghost', size: 'icon' }),
+                                      'flex h-auto flex-col gap-0.5 p-1 text-muted-foreground hover:text-foreground'
+                                    )}
+                                    aria-label="View template"
+                                  >
+                                    <FileText className="h-3.5 w-3.5" />
+                                    <span className="text-[10px] font-normal leading-none">View</span>
+                                  </Link>
+                                }
+                              />
+                              <TooltipContent side="top" className="max-w-[260px] text-[11px]">
+                                Open a read-only preview of this template (no edits).
+                              </TooltipContent>
+                            </Tooltip>
                             {t.template_status === 'inactive' ? (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="flex h-auto flex-col gap-0.5 p-1 text-muted-foreground hover:text-foreground"
-                                onClick={() => setActionTemplate({ id: t.id, report_count: t.report_count ?? 0, template_status: t.template_status })}
-                                aria-label="Reactivate template"
-                              >
-                                <Power className="h-3.5 w-3.5" />
-                                <span className="text-[10px] font-normal leading-none">Reactivate</span>
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="flex h-auto flex-col gap-0.5 p-1 text-muted-foreground hover:text-foreground"
+                                      onClick={() => setActionTemplate({ id: t.id, report_count: t.report_count ?? 0, template_status: t.template_status })}
+                                      aria-label="Reactivate template"
+                                    >
+                                      <Power className="h-3.5 w-3.5" />
+                                      <span className="text-[10px] font-normal leading-none">Reactivate</span>
+                                    </Button>
+                                  }
+                                />
+                                <TooltipContent side="top" className="max-w-[260px] text-[11px]">
+                                  Restore this template so it can be selected for new site visit reports.
+                                </TooltipContent>
+                              </Tooltip>
                             ) : (t.report_count ?? 0) === 0 ? (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="flex h-auto flex-col gap-0.5 p-1 text-muted-foreground hover:text-destructive"
-                                onClick={() => setActionTemplate({ id: t.id, report_count: t.report_count ?? 0, template_status: t.template_status })}
-                                aria-label="Delete template"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                <span className="text-[10px] font-normal leading-none">Delete</span>
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="flex h-auto flex-col gap-0.5 p-1 text-muted-foreground hover:text-destructive"
+                                      onClick={() => setActionTemplate({ id: t.id, report_count: t.report_count ?? 0, template_status: t.template_status })}
+                                      aria-label="Delete template"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      <span className="text-[10px] font-normal leading-none">Delete</span>
+                                    </Button>
+                                  }
+                                />
+                                <TooltipContent side="top" className="max-w-[260px] text-[11px]">
+                                  Permanently delete this template and its questions. Only available when no trip reports reference it.
+                                </TooltipContent>
+                              </Tooltip>
                             ) : (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="flex h-auto flex-col gap-0.5 p-1 text-muted-foreground hover:text-foreground"
-                                onClick={() => setActionTemplate({ id: t.id, report_count: t.report_count ?? 0, template_status: t.template_status })}
-                                aria-label="Deactivate template"
-                              >
-                                <PowerOff className="h-3.5 w-3.5" />
-                                <span className="text-[10px] font-normal leading-none">Deactivate</span>
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="flex h-auto flex-col gap-0.5 p-1 text-muted-foreground hover:text-foreground"
+                                      onClick={() => setActionTemplate({ id: t.id, report_count: t.report_count ?? 0, template_status: t.template_status })}
+                                      aria-label="Deactivate template"
+                                    >
+                                      <PowerOff className="h-3.5 w-3.5" />
+                                      <span className="text-[10px] font-normal leading-none">Deactivate</span>
+                                    </Button>
+                                  }
+                                />
+                                <TooltipContent side="top" className="max-w-[260px] text-[11px]">
+                                  Hide this template from new reports. Existing reports keep their locked-in copy; you can reactivate later.
+                                </TooltipContent>
+                              </Tooltip>
                             )}
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))
+                    );
+                    })
                   )}
                 </TableBody>
               </Table>
             </div>
+            {renderPager(
+              'Templates',
+              adminCurrentPage,
+              adminTotalPages,
+              adminParsedPageSize,
+              adminTemplatesTotal,
+              'aPage',
+              'aPs'
+            )}
+            </TooltipProvider>
           </TabsContent>
         </Tabs>
 

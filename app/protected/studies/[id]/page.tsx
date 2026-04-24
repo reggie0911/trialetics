@@ -5,12 +5,15 @@ import { getStudyCountries } from '@/lib/actions/countries';
 import { getStudySites } from '@/lib/actions/sites';
 import { getStudySubjects, getEnrollmentFunnel } from '@/lib/actions/subjects';
 import { getStudyEcrfRollup } from '@/lib/actions/ecrf-rollup';
-import { getStudyVisitScheduleRollup } from '@/lib/actions/visit-schedule-rollup';
+import {
+  getStudyVisitScheduleRollup,
+  getStudyVisitWindowComplianceRollup,
+} from '@/lib/actions/visit-window-compliance-rollup';
 import {
   getTeamDirectory,
   getTeamRoles,
   getPendingInvitations,
-  getJoinLinks,
+  getCompanyDomain,
 } from '@/lib/actions/team';
 import { getStudyVisits } from '@/lib/actions/visits';
 import { listStudyVisitDefinitions } from '@/lib/actions/study-visit-definitions';
@@ -52,7 +55,7 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     teamStudies,
     teamRoles,
     pendingTeamInvitations,
-    joinTeamLinks,
+    companyDomain,
     monitoringVisits,
     budgets,
     studyPayments,
@@ -65,6 +68,7 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     ecrfStudyCrfs,
     ecrfRollup,
     visitSchedule,
+    visitWindowCompliance,
   ] = await Promise.all([
     getStudyById(id),
     getStudyCounts(id),
@@ -76,7 +80,7 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     getStudies(),
     getTeamRoles(),
     getPendingInvitations(),
-    isAdmin ? getJoinLinks() : Promise.resolve([]),
+    getCompanyDomain(),
     getStudyVisits(id),
     getStudyBudgets(id),
     getStudyPayments(id),
@@ -89,6 +93,7 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     isAdmin ? listStudyCrfs(id).catch(() => []) : Promise.resolve([]),
     getStudyEcrfRollup(id),
     getStudyVisitScheduleRollup(id),
+    getStudyVisitWindowComplianceRollup(id),
   ]);
 
   if (!study) notFound();
@@ -109,7 +114,7 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
         teamStudies={teamStudies}
         teamRoles={teamRoles}
         pendingTeamInvitations={pendingTeamInvitations}
-        joinTeamLinks={joinTeamLinks}
+        companyDomain={companyDomain}
         monitoringVisits={monitoringVisits}
         budgets={budgets}
         payments={studyPayments}
@@ -123,6 +128,7 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
         ecrfStudyCrfs={ecrfStudyCrfs}
         ecrfRollup={ecrfRollup}
         visitSchedule={visitSchedule}
+        visitWindowCompliance={visitWindowCompliance}
       />
     </div>
   );

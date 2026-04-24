@@ -1,15 +1,28 @@
 'use server';
 
 import { createClient } from '@/lib/server';
+import {
+  derivePriority,
+  deriveSubjectRisk,
+  deriveNextAction,
+} from '@/lib/utils/visit-window';
 import type {
+  SiteRowExtras,
   SiteVisitScheduleBundle,
+  SiteVisitWindowComplianceBundle,
   StudyVisitScheduleBundle,
+  SubjectRowExtras,
   SubjectStatus,
   VisitAnchorKind,
+  VisitRowExtras,
   VisitScheduleBucketCounts,
   VisitScheduleSiteRow,
   VisitScheduleSubjectRow,
   VisitScheduleVisitRow,
+  VisitWindowAlert,
+  VisitWindowComplianceBundle,
+  VisitWindowTrend,
+  VisitWindowTrendKind,
 } from '@/lib/types/ctms';
 
 // ─── Row shapes from the SQL views ────────────────────────────────────────────
@@ -66,6 +79,37 @@ interface StudySiteMetaRow {
   site_number: string;
   name: string;
   study_countries: { country_name: string | null } | null;
+}
+
+interface DailyTrendRow {
+  study_id: string;
+  site_id: string | null;
+  day: string;
+  window_bucket:
+    | 'done'
+    | 'in_window'
+    | 'out_of_window'
+    | 'overdue'
+    | 'due_now'
+    | 'upcoming'
+    | 'pending';
+  bucket_count: number | null;
+}
+
+interface VisitDefinitionMetaRow {
+  visit_name: string;
+  window_before_days: number | null;
+  window_after_days: number | null;
+}
+
+interface SubjectVisitOverdueRow {
+  subject_id: string;
+  visit_name: string;
+  planned_date: string | null;
+  window_end: string | null;
+  actual_date: string | null;
+  status: string | null;
+  subjects: { site_id: string | null } | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -347,3 +391,501 @@ export async function getStudyVisitScheduleRollup(
     lastActualDate: latestActualDate(summaryRows),
   };
 }
+
+// ─── Visit Window Compliance — extra computations (trends / alerts / extras) ──
+
+/** Build a 14-day series from oldest -> today (inclusive) so callers always
+ *  get a stable axis even when a day has zero events. */
+function buildDayAxis(today: Date, daysBack: number): string[] {
+  const axis: string[] = [];
+  for (let i = daysBack - 1; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    axis.push(`${y}-${m}-${day}`);
+  }
+  return axis;
+}
+
+function deltaPct(recent: number, prior: number): number | null {
+  if (prior <= 0) return null;
+  return ((recent - prior) / prior) * 100;
+}
+
+/**
+ * Roll the daily-trend rows into per-bucket time series + 7-day delta. The
+ * `done_pct` series is computed at the end from the summed totals so a
+ * percentage is the natural unit (rather than a raw count).
+ */
+function buildTrendsFromDailyRows(
+  rows: DailyTrendRow[],
+  today: Date,
+): VisitWindowTrend[] {
+  const axis14 = buildDayAxis(today, 14);
+  const recentAxis = axis14.slice(7);
+  const priorAxis = axis14.slice(0, 7);
+
+  type Bucket = DailyTrendRow['window_bucket'];
+  const bucketKinds: Exclude<VisitWindowTrendKind, 'done_pct'>[] = [
+    'in_window',
+    'out_of_window',
+    'overdue',
+    'due_now',
+    'upcoming',
+    'pending',
+  ];
+
+  const seriesByBucket = new Map<Bucket, Map<string, number>>();
+  for (const row of rows) {
+    const inner = seriesByBucket.get(row.window_bucket) ?? new Map<string, number>();
+    inner.set(row.day, num(row.bucket_count) + (inner.get(row.day) ?? 0));
+    seriesByBucket.set(row.window_bucket, inner);
+  }
+
+  const trends: VisitWindowTrend[] = bucketKinds.map((kind) => {
+    const inner = seriesByBucket.get(kind) ?? new Map<string, number>();
+    const points = recentAxis.map((day) => ({ day, value: inner.get(day) ?? 0 }));
+    const recentSum = points.reduce((acc, p) => acc + p.value, 0);
+    const priorSum = priorAxis.reduce(
+      (acc, day) => acc + (inner.get(day) ?? 0),
+      0,
+    );
+    return { kind, points, deltaPct7d: deltaPct(recentSum, priorSum) };
+  });
+
+  // done_pct is the share of the day's volume that landed in the `done` bucket.
+  const donePoints = recentAxis.map((day) => {
+    const total = (['done', 'in_window', 'out_of_window', 'overdue', 'due_now', 'upcoming', 'pending'] as Bucket[])
+      .reduce((acc, b) => acc + (seriesByBucket.get(b)?.get(day) ?? 0), 0);
+    const done = seriesByBucket.get('done')?.get(day) ?? 0;
+    return { day, value: total > 0 ? Math.round((done / total) * 100) : 0 };
+  });
+  const recentDoneTotal = donePoints.reduce((acc, p) => acc + p.value, 0);
+  const priorDoneTotal = priorAxis.reduce((acc, day) => {
+    const total = (['done', 'in_window', 'out_of_window', 'overdue', 'due_now', 'upcoming', 'pending'] as Bucket[])
+      .reduce((acc2, b) => acc2 + (seriesByBucket.get(b)?.get(day) ?? 0), 0);
+    const done = seriesByBucket.get('done')?.get(day) ?? 0;
+    return acc + (total > 0 ? Math.round((done / total) * 100) : 0);
+  }, 0);
+  trends.push({
+    kind: 'done_pct',
+    points: donePoints,
+    deltaPct7d: deltaPct(recentDoneTotal, priorDoneTotal),
+  });
+
+  return trends;
+}
+
+/** 7-day in-window % / overdue % series for the footer compliance chart. */
+function buildComplianceTrend(
+  rows: DailyTrendRow[],
+  today: Date,
+): VisitWindowComplianceBundle['complianceTrend'] {
+  const axis = buildDayAxis(today, 7);
+  type Bucket = DailyTrendRow['window_bucket'];
+  const totals = new Map<string, Map<Bucket, number>>();
+  for (const row of rows) {
+    const day = row.day;
+    if (!axis.includes(day)) continue;
+    const inner = totals.get(day) ?? new Map<Bucket, number>();
+    inner.set(row.window_bucket, num(row.bucket_count) + (inner.get(row.window_bucket) ?? 0));
+    totals.set(day, inner);
+  }
+  return axis.map((day) => {
+    const inner = totals.get(day) ?? new Map<Bucket, number>();
+    const dayTotal = (['done', 'in_window', 'out_of_window', 'overdue', 'due_now', 'upcoming', 'pending'] as Bucket[])
+      .reduce((acc, b) => acc + (inner.get(b) ?? 0), 0);
+    const inWindow = inner.get('in_window') ?? 0;
+    const overdue = inner.get('overdue') ?? 0;
+    const inWindowPct = dayTotal > 0 ? Math.round((inWindow / dayTotal) * 100) : 0;
+    const overduePct = dayTotal > 0 ? Math.round((overdue / dayTotal) * 100) : 0;
+    return { day, in_window_pct: inWindowPct, overdue_pct: overduePct };
+  });
+}
+
+function buildStudyAlerts(rollup: StudyVisitScheduleBundle): VisitWindowAlert[] {
+  const out: VisitWindowAlert[] = [];
+
+  if (rollup.overall.overdue > 0) {
+    out.push({
+      id: `alert-overdue-${rollup.overall.overdue}`,
+      severity: 'critical',
+      title: `${rollup.overall.overdue} visit${rollup.overall.overdue === 1 ? '' : 's'} overdue`,
+      detail: 'Immediate action required to bring these visits back into compliance.',
+      scope: 'study',
+    });
+  }
+
+  if (rollup.overall.due_now > 0) {
+    out.push({
+      id: `alert-due-now-${rollup.overall.due_now}`,
+      severity: 'warn',
+      title: `${rollup.overall.due_now} visit${rollup.overall.due_now === 1 ? '' : 's'} due now`,
+      detail: 'Window is open today — schedule or complete to stay on track.',
+      scope: 'study',
+    });
+  }
+
+  const sitesWithOverdue = rollup.bySite.filter((s) => s.overdue > 0).length;
+  if (sitesWithOverdue > 0) {
+    out.push({
+      id: `alert-sites-${sitesWithOverdue}`,
+      severity: 'warn',
+      title: `${sitesWithOverdue} site${sitesWithOverdue === 1 ? '' : 's'} with overdue visits`,
+      detail: 'Review the By Site tab to coordinate site outreach.',
+      scope: 'study',
+    });
+  }
+
+  // Per-site critical alerts (drill-link to the site row).
+  const criticalSites = rollup.bySite.filter((s) => derivePriority(s) === 'critical');
+  for (const site of criticalSites) {
+    out.push({
+      id: `alert-site-${site.site_id}`,
+      severity: 'critical',
+      title: `Site ${site.site_number} is critical`,
+      detail: `${site.overdue} overdue / ${Math.max(1, site.total - site.done)} open visits.`,
+      scope: 'site',
+      scopeId: site.site_id,
+    });
+  }
+
+  return out;
+}
+
+function buildSiteAlerts(rollup: SiteVisitScheduleBundle): VisitWindowAlert[] {
+  const out: VisitWindowAlert[] = [];
+  if (rollup.overall.overdue > 0) {
+    out.push({
+      id: `alert-overdue-${rollup.overall.overdue}`,
+      severity: 'critical',
+      title: `${rollup.overall.overdue} visit${rollup.overall.overdue === 1 ? '' : 's'} overdue`,
+      detail: 'Immediate action required to bring these visits back into compliance.',
+      scope: 'site',
+    });
+  }
+  if (rollup.overall.due_now > 0) {
+    out.push({
+      id: `alert-due-now-${rollup.overall.due_now}`,
+      severity: 'warn',
+      title: `${rollup.overall.due_now} visit${rollup.overall.due_now === 1 ? '' : 's'} due now`,
+      detail: 'Window is open today — schedule or complete to stay on track.',
+      scope: 'site',
+    });
+  }
+  return out;
+}
+
+function buildTopOverdueVisitTypes(
+  rollup: StudyVisitScheduleBundle,
+): VisitWindowComplianceBundle['topOverdueVisitTypes'] {
+  const total = rollup.byVisit.reduce((acc, v) => acc + v.overdue, 0);
+  if (total <= 0) return [];
+  return rollup.byVisit
+    .filter((v) => v.overdue > 0)
+    .sort((a, b) => b.overdue - a.overdue)
+    .slice(0, 4)
+    .map((v) => ({
+      visit_name: v.visit_name,
+      overdue: v.overdue,
+      pct: Math.round((v.overdue / total) * 100),
+    }));
+}
+
+/**
+ * Days since `iso`, or `null` when missing/unparseable. Positive = past,
+ * negative = future. Mirrors the ISO-date math elsewhere in this module.
+ */
+function daysSince(iso: string | null, today: Date): number | null {
+  if (!iso) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return null;
+  const utcThen = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const utcNow = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.round((utcNow - utcThen) / (24 * 60 * 60 * 1000));
+}
+
+interface OverdueAggregate {
+  oldestOverdueDate: string | null;
+  oldestOverdueDays: number | null;
+  lastActivityDate: string | null;
+}
+
+function aggregateOverdues(
+  rows: SubjectVisitOverdueRow[],
+  today: Date,
+  pickKey: (row: SubjectVisitOverdueRow) => string | null,
+): Map<string, OverdueAggregate> {
+  const out = new Map<string, OverdueAggregate>();
+  for (const row of rows) {
+    const key = pickKey(row);
+    if (!key) continue;
+    const isOverdue =
+      !row.actual_date &&
+      row.window_end !== null &&
+      daysSince(row.window_end, today) !== null &&
+      (daysSince(row.window_end, today) ?? 0) > 0;
+    const activity = row.actual_date ?? row.planned_date ?? null;
+
+    const cur = out.get(key) ?? {
+      oldestOverdueDate: null,
+      oldestOverdueDays: null,
+      lastActivityDate: null,
+    };
+    if (isOverdue && row.window_end) {
+      if (!cur.oldestOverdueDate || row.window_end < cur.oldestOverdueDate) {
+        cur.oldestOverdueDate = row.window_end;
+        cur.oldestOverdueDays = daysSince(row.window_end, today);
+      }
+    }
+    if (activity && (!cur.lastActivityDate || activity > cur.lastActivityDate)) {
+      cur.lastActivityDate = activity;
+    }
+    out.set(key, cur);
+  }
+  return out;
+}
+
+function buildExtras(
+  rollup: StudyVisitScheduleBundle,
+  visitDefs: Map<string, VisitDefinitionMetaRow>,
+  overduesBySite: Map<string, OverdueAggregate>,
+  overduesBySubject: Map<string, OverdueAggregate>,
+  overduesByVisit: Map<string, OverdueAggregate>,
+): VisitWindowComplianceBundle['extras'] {
+  const sites: Record<string, SiteRowExtras> = {};
+  for (const row of rollup.bySite) {
+    const o = overduesBySite.get(row.site_id) ?? {
+      oldestOverdueDate: null,
+      oldestOverdueDays: null,
+      lastActivityDate: row.last_actual_date,
+    };
+    sites[row.site_id] = {
+      priority: derivePriority(row),
+      nextAction: deriveNextAction(row),
+      oldestOverdueDate: o.oldestOverdueDate,
+      oldestOverdueDays: o.oldestOverdueDays,
+      lastActivityDate: o.lastActivityDate ?? row.last_actual_date,
+    };
+  }
+
+  const visits: Record<string, VisitRowExtras> = {};
+  for (const row of rollup.byVisit) {
+    const def = visitDefs.get(row.visit_name);
+    const before = def?.window_before_days ?? null;
+    const after = def?.window_after_days ?? null;
+    const symmetric =
+      before !== null && after !== null && before === after ? after : null;
+    const o = overduesByVisit.get(row.visit_name) ?? {
+      oldestOverdueDate: null,
+      oldestOverdueDays: null,
+      lastActivityDate: null,
+    };
+    visits[row.visit_name] = {
+      priority: derivePriority(row),
+      nextAction: deriveNextAction(row),
+      windowDays: symmetric,
+      windowMinusDays: before === null ? null : -before,
+      windowPlusDays: after,
+      oldestOverdueDate: o.oldestOverdueDate,
+      oldestOverdueDays: o.oldestOverdueDays,
+      lastActivityDate: o.lastActivityDate,
+    };
+  }
+
+  const subjects: Record<string, SubjectRowExtras> = {};
+  for (const row of rollup.bySubject) {
+    const o = overduesBySubject.get(row.subject_id) ?? {
+      oldestOverdueDate: null,
+      oldestOverdueDays: null,
+      lastActivityDate: row.last_actual_date,
+    };
+    subjects[row.subject_id] = {
+      riskLevel: deriveSubjectRisk(row),
+      nextAction: deriveNextAction(row),
+      oldestOverdueDate: o.oldestOverdueDate,
+      oldestOverdueDays: o.oldestOverdueDays,
+      lastActivityDate: o.lastActivityDate ?? row.last_actual_date,
+    };
+  }
+
+  return { sites, visits, subjects };
+}
+
+/**
+ * Visit Window Compliance bundle for the redesigned page. Wraps
+ * `getStudyVisitScheduleRollup` (so the existing exporters & dashboards keep
+ * the unchanged shape they depend on) and layers in trends, alerts,
+ * top-overdue, compliance trend, and per-row priority/risk/next-action.
+ */
+export async function getStudyVisitWindowComplianceRollup(
+  studyId: string,
+): Promise<VisitWindowComplianceBundle> {
+  const supabase = await createClient();
+  const today = new Date();
+
+  const rollup = await getStudyVisitScheduleRollup(studyId);
+
+  const [trendRowsRes, visitDefsRes, overdueRowsRes] = await Promise.all([
+    supabase
+      .from('v_visit_window_daily_trend')
+      .select('study_id, site_id, day, window_bucket, bucket_count')
+      .eq('study_id', studyId),
+    supabase
+      .from('study_visit_definitions')
+      .select('visit_name, window_before_days, window_after_days')
+      .eq('study_id', studyId),
+    supabase
+      .from('subject_visits')
+      .select(
+        'subject_id, visit_name, planned_date, window_end, actual_date, status, subjects!inner(site_id, study_id)',
+      )
+      .eq('subjects.study_id', studyId),
+  ]);
+
+  const trendRows = (trendRowsRes.data as DailyTrendRow[] | null) ?? [];
+  const trends = buildTrendsFromDailyRows(trendRows, today);
+  const complianceTrend = buildComplianceTrend(trendRows, today);
+
+  const visitDefs = new Map<string, VisitDefinitionMetaRow>();
+  for (const row of (visitDefsRes.data as VisitDefinitionMetaRow[] | null) ?? []) {
+    visitDefs.set(row.visit_name, row);
+  }
+
+  const overdueRows = (overdueRowsRes.data as unknown as SubjectVisitOverdueRow[] | null) ?? [];
+  const overduesBySite = aggregateOverdues(
+    overdueRows,
+    today,
+    (r) => r.subjects?.site_id ?? null,
+  );
+  const overduesBySubject = aggregateOverdues(
+    overdueRows,
+    today,
+    (r) => r.subject_id,
+  );
+  const overduesByVisit = aggregateOverdues(overdueRows, today, (r) => r.visit_name);
+
+  const extras = buildExtras(
+    rollup,
+    visitDefs,
+    overduesBySite,
+    overduesBySubject,
+    overduesByVisit,
+  );
+
+  return {
+    rollup,
+    trends,
+    alerts: buildStudyAlerts(rollup),
+    topOverdueVisitTypes: buildTopOverdueVisitTypes(rollup),
+    complianceTrend,
+    extras,
+    generatedAt: today.toISOString(),
+  };
+}
+
+/**
+ * Site-scoped sibling of `getStudyVisitWindowComplianceRollup`. Same KPI strip
+ * + alerts banner, no by-site rollup, no compliance/top-overdue cards (those
+ * are study-wide).
+ */
+export async function getSiteVisitWindowComplianceRollup(
+  siteId: string,
+): Promise<SiteVisitWindowComplianceBundle> {
+  const supabase = await createClient();
+  const today = new Date();
+
+  const rollup = await getSiteVisitScheduleRollup(siteId);
+
+  const [trendRowsRes, studyIdRes, overdueRowsRes] = await Promise.all([
+    supabase
+      .from('v_visit_window_daily_trend')
+      .select('study_id, site_id, day, window_bucket, bucket_count')
+      .eq('site_id', siteId),
+    supabase.from('study_sites').select('study_id').eq('id', siteId).maybeSingle(),
+    supabase
+      .from('subject_visits')
+      .select(
+        'subject_id, visit_name, planned_date, window_end, actual_date, status, subjects!inner(site_id, study_id)',
+      )
+      .eq('subjects.site_id', siteId),
+  ]);
+
+  const trendRows = (trendRowsRes.data as DailyTrendRow[] | null) ?? [];
+  const trends = buildTrendsFromDailyRows(trendRows, today);
+
+  // Visit definitions live at the study scope so we look them up after
+  // resolving the parent study_id.
+  const studyId = (studyIdRes.data as { study_id: string | null } | null)?.study_id ?? null;
+  const visitDefs = new Map<string, VisitDefinitionMetaRow>();
+  if (studyId) {
+    const { data: defs } = await supabase
+      .from('study_visit_definitions')
+      .select('visit_name, window_before_days, window_after_days')
+      .eq('study_id', studyId);
+    for (const row of (defs as VisitDefinitionMetaRow[] | null) ?? []) {
+      visitDefs.set(row.visit_name, row);
+    }
+  }
+
+  const overdueRows = (overdueRowsRes.data as unknown as SubjectVisitOverdueRow[] | null) ?? [];
+  const overduesBySubject = aggregateOverdues(
+    overdueRows,
+    today,
+    (r) => r.subject_id,
+  );
+  const overduesByVisit = aggregateOverdues(overdueRows, today, (r) => r.visit_name);
+
+  // Reuse buildExtras with an empty `bySite` so we only compute visit + subject
+  // extras here. Alternatively call the helper directly:
+  const visits: Record<string, VisitRowExtras> = {};
+  for (const row of rollup.byVisit) {
+    const def = visitDefs.get(row.visit_name);
+    const before = def?.window_before_days ?? null;
+    const after = def?.window_after_days ?? null;
+    const symmetric =
+      before !== null && after !== null && before === after ? after : null;
+    const o = overduesByVisit.get(row.visit_name) ?? {
+      oldestOverdueDate: null,
+      oldestOverdueDays: null,
+      lastActivityDate: null,
+    };
+    visits[row.visit_name] = {
+      priority: derivePriority(row),
+      nextAction: deriveNextAction(row),
+      windowDays: symmetric,
+      windowMinusDays: before === null ? null : -before,
+      windowPlusDays: after,
+      oldestOverdueDate: o.oldestOverdueDate,
+      oldestOverdueDays: o.oldestOverdueDays,
+      lastActivityDate: o.lastActivityDate,
+    };
+  }
+
+  const subjects: Record<string, SubjectRowExtras> = {};
+  for (const row of rollup.bySubject) {
+    const o = overduesBySubject.get(row.subject_id) ?? {
+      oldestOverdueDate: null,
+      oldestOverdueDays: null,
+      lastActivityDate: row.last_actual_date,
+    };
+    subjects[row.subject_id] = {
+      riskLevel: deriveSubjectRisk(row),
+      nextAction: deriveNextAction(row),
+      oldestOverdueDate: o.oldestOverdueDate,
+      oldestOverdueDays: o.oldestOverdueDays,
+      lastActivityDate: o.lastActivityDate ?? row.last_actual_date,
+    };
+  }
+
+  return {
+    rollup,
+    trends,
+    alerts: buildSiteAlerts(rollup),
+    extras: { visits, subjects },
+    generatedAt: today.toISOString(),
+  };
+}
+

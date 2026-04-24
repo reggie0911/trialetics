@@ -510,11 +510,76 @@ export interface SubjectTrackingSummary {
 }
 
 /**
+ * Coarse "where is this subject / site / visit in the eCRF lifecycle" status,
+ * derived from `dataExpected / dataEntry / sdv / lock` totals. Used as a
+ * colored pill in the "By Subject" and "By Site" tables, and to compute the
+ * default "Next Action" CTA for each row. Computed client-side in
+ * `lib/parsers/ecrf-tracking-extras.ts` so the rules stay single-sourced.
+ */
+export type EcrfDataStatus =
+  | 'not_started'
+  | 'no_data'
+  | 'partial_data'
+  | 'ready_for_sdv'
+  | 'sdv_in_progress'
+  | 'ready_for_lock'
+  | 'locked';
+
+/**
+ * Bucket totals for the "Data Entry by Status" donut on the "By Site" right
+ * rail. Counts are CRFs (data points), not subjects.
+ */
+export interface EcrfDataEntryByStatus {
+  not_entered: number;
+  in_progress: number;
+  complete: number;
+}
+
+/**
+ * Daily count of false→true transitions for one of the four tracked metrics.
+ * Sourced from `v_ecrf_metric_daily`. The dashboard renders the last 7 days as
+ * a sparkline and uses the previous 7 days to compute `deltaPct7d`.
+ */
+export type EcrfTrendKind =
+  | 'data_entry'
+  | 'sdv'
+  | 'lock'
+  | 'queries_resolved';
+
+export interface EcrfTrend {
+  kind: EcrfTrendKind;
+  /** `count` per day for the last 7 days, oldest-first. */
+  points: { day: string; value: number }[];
+  /** Percentage change vs the prior 7-day window. `null` when prior = 0. */
+  deltaPct7d: number | null;
+}
+
+/**
+ * Single alert surfaced in the per-tab callout row + the right-rail "Top
+ * Issues" list. Severity drives the icon + accent color; `ctaHref` powers the
+ * deep-link button on the card.
+ */
+export interface EcrfAlert {
+  id: string;
+  severity: 'critical' | 'warn' | 'info';
+  scope: 'subject' | 'site' | 'visit' | 'study';
+  title: string;
+  subtitle?: string;
+  count: number;
+  ctaLabel?: string;
+  ctaHref?: string;
+}
+
+/**
  * Per-visit eCRF rollup row (study or site scope). Sourced from
  * `v_visit_ecrf_tracking_summary` (filtered by site_id at site scope, summed
  * across site_id at study scope). Counters only — percentages are computed
  * client-side via `computeSubjectCrfPercentages` so the open-query cap rule
  * stays single-sourced.
+ *
+ * The optional `*_extras` fields are populated at study scope from
+ * `v_visit_ecrf_extras` so the redesigned table can render Timepoint /
+ * Window / Due Status next to DE / SDV / Lock without an extra round-trip.
  */
 export interface VisitEcrfRollup {
   visit_name: string;
@@ -525,12 +590,31 @@ export interface VisitEcrfRollup {
   lockTotal: number;
   openQueryCount: number;
   answeredQueryCount: number;
+
+  // ─ Dashboard extras (populated at study scope) ─
+  timepointLabel?: string | null;
+  timepointDays?: number | null;
+  windowDays?: number | null;
+  /** Counts of `subject_visits` for this visit_name across every site. */
+  subjectsExpected?: number;
+  subjectsCompleted?: number;
+  subjectsOverdue?: number;
+  subjectsDueNow?: number;
+  subjectsUpcoming?: number;
+  /** dataExpectedTotal - dataEntryTotal, surfaced for the table column. */
+  missingCrfs?: number;
+  /** sort_order pulled from study_visit_definitions so visits read in protocol order. */
+  sortOrder?: number;
 }
 
 /**
  * Per-site eCRF rollup row (study scope only). Sourced from
  * `v_site_ecrf_tracking_summary` joined to `study_sites` for the human-readable
  * site_number / name / country columns rendered by the "By Site" table.
+ *
+ * The optional `*_extras` fields are populated from `v_site_ecrf_activity` so
+ * the dashboard can render Last Entry / Last SDV / Overdue Queries columns
+ * without N+1 queries.
  */
 export interface SiteEcrfRollup {
   site_id: string;
@@ -544,12 +628,23 @@ export interface SiteEcrfRollup {
   lockTotal: number;
   openQueryCount: number;
   answeredQueryCount: number;
+
+  // ─ Dashboard extras (populated at study scope) ─
+  lastEntryAt?: string | null;
+  lastSdvAt?: string | null;
+  overdueQueryCount?: number;
+  missingCrfs?: number;
 }
 
 /**
  * Per-subject eCRF rollup row (site or study scope). Each row links back to
  * its subject detail page so reviewers can drill from the rollup into the
  * editable matrix in `SubjectEcrfTrackingPanel`.
+ *
+ * The optional `*_extras` fields are populated from `v_subject_ecrf_activity`
+ * so the dashboard can render Last Entry / Last SDV / Overdue Queries columns
+ * without N+1 queries. `dataStatus` and `nextAction` are derived in JS from
+ * the totals via `lib/parsers/ecrf-tracking-extras.ts`.
  */
 export interface SubjectEcrfRollupRow {
   subject_id: string;
@@ -557,12 +652,21 @@ export interface SubjectEcrfRollupRow {
   status: SubjectStatus;
   site_id: string | null;
   site_number: string | null;
+  /** Clinical / display name of the site (from `study_sites.name`). */
+  site_name: string | null;
   dataExpectedTotal: number;
   dataEntryTotal: number;
   sdvTotal: number;
   lockTotal: number;
   openQueryCount: number;
   answeredQueryCount: number;
+
+  // ─ Dashboard extras ─
+  lastEntryAt?: string | null;
+  lastSdvAt?: string | null;
+  lastLockAt?: string | null;
+  overdueQueryCount?: number;
+  missingCrfs?: number;
 }
 
 /**
@@ -580,10 +684,19 @@ export interface SiteEcrfRollupBundle {
 
 /**
  * Study-scoped eCRF rollup bundle. Extends the site-scoped shape with an
- * additional per-site rollup section.
+ * additional per-site rollup section plus the dashboard extras (trends,
+ * alerts, donut buckets) that drive the redesigned eCRF Tracking page.
  */
 export interface StudyEcrfRollupBundle extends SiteEcrfRollupBundle {
   bySite: SiteEcrfRollup[];
+  /** ISO timestamp the bundle was assembled — drives the "Last updated" stamp. */
+  generatedAt: string;
+  /** 7-day sparkline series for each KPI card. */
+  trends: EcrfTrend[];
+  /** Pre-computed alert feed shared by the callout row and "Top Issues" rail. */
+  alerts: EcrfAlert[];
+  /** CRF-level totals broken into Not Entered / In Progress / Complete buckets. */
+  dataEntryByStatus: EcrfDataEntryByStatus;
 }
 
 // ─── Visit Schedule rollup (read-only site / study aggregations) ─────────────
@@ -668,6 +781,156 @@ export interface SiteVisitScheduleBundle {
  */
 export interface StudyVisitScheduleBundle extends SiteVisitScheduleBundle {
   bySite: VisitScheduleSiteRow[];
+}
+
+// ─── Visit Window Compliance — extra UI bundle ───────────────────────────────
+
+/**
+ * KPI cards on the Visit Window Compliance page each show a small 7-day
+ * sparkline driven by `points` and a `vs last 7 days` delta computed against
+ * the prior 7-day window. `done_pct` is the special "Overall Summary" trend
+ * (% of total visits that are in the `done` bucket on each day).
+ */
+export type VisitWindowTrendKind =
+  | 'in_window'
+  | 'out_of_window'
+  | 'overdue'
+  | 'due_now'
+  | 'upcoming'
+  | 'pending'
+  | 'done_pct';
+
+export interface VisitWindowTrend {
+  kind: VisitWindowTrendKind;
+  /** `count` (or percentage for `done_pct`) per day for the last 7 days, oldest-first. */
+  points: { day: string; value: number }[];
+  /** Percentage change vs the prior 7-day window. `null` when prior = 0. */
+  deltaPct7d: number | null;
+}
+
+export type VisitWindowAlertSeverity = 'critical' | 'warn' | 'info';
+
+/**
+ * Single alert surfaced in the red "Needs attention" banner and the full
+ * alert sheet. Severity drives the inline icon + tone; `scope`/`scopeId`
+ * lets the UI deep-link to the affected site, subject, or visit row.
+ */
+export interface VisitWindowAlert {
+  id: string;
+  severity: VisitWindowAlertSeverity;
+  title: string;
+  detail: string;
+  scope: 'study' | 'site' | 'subject' | 'visit';
+  scopeId?: string;
+}
+
+export type VisitPriority = 'critical' | 'at_risk' | 'on_track';
+export type SubjectRiskLevel = 'high' | 'medium' | 'low';
+
+/**
+ * Suggested next action for a row, derived from its bucket counts. Drives the
+ * "Next Action" column in the By Visit / By Subject tables.
+ */
+export type NextActionKind =
+  | 'resolve_overdue'
+  | 'enter_missing_data'
+  | 'complete_remaining'
+  | 'review_overdue'
+  | 'prepare_upcoming'
+  | 'monitor_upcoming'
+  | 'plan_visit'
+  | 'all_clear';
+
+export interface NextAction {
+  kind: NextActionKind;
+  label: string;
+}
+
+/**
+ * Optional per-row enrichments layered on top of the base rollup rows for the
+ * Visit Window Compliance UI. They live on top-level maps in
+ * `VisitWindowComplianceBundle.extras` (rather than mutating the base row
+ * shapes) so existing exporters that consume `*VisitScheduleBundle` keep
+ * working unchanged.
+ */
+export interface SiteRowExtras {
+  priority: VisitPriority;
+  nextAction: NextAction;
+  /** Earliest open overdue date, oldest first (drives the "Last Activity / Oldest overdue" column). */
+  oldestOverdueDate: string | null;
+  /** Days since the oldest overdue (positive when in the past). */
+  oldestOverdueDays: number | null;
+  /** Most recent activity date across the row (used as fallback when no overdue). */
+  lastActivityDate: string | null;
+}
+
+export interface VisitRowExtras {
+  priority: VisitPriority;
+  nextAction: NextAction;
+  /** Symmetric `± N days` window from the protocol definition. */
+  windowDays: number | null;
+  /** Asymmetric `[-minus, +plus]` if the protocol uses an asymmetric window. */
+  windowMinusDays: number | null;
+  windowPlusDays: number | null;
+  oldestOverdueDate: string | null;
+  oldestOverdueDays: number | null;
+  lastActivityDate: string | null;
+}
+
+export interface SubjectRowExtras {
+  riskLevel: SubjectRiskLevel;
+  nextAction: NextAction;
+  oldestOverdueDate: string | null;
+  oldestOverdueDays: number | null;
+  lastActivityDate: string | null;
+}
+
+/**
+ * Study-level Visit Window Compliance bundle. Wraps the underlying
+ * `StudyVisitScheduleBundle` (still consumed by the CSV/PDF exporters and the
+ * overview dashboard) and adds the trends, alerts, top-overdue, and
+ * compliance-trend feeds the redesigned page needs.
+ */
+export interface VisitWindowComplianceBundle {
+  /** The underlying rollup — preserved verbatim so exporters/dashboards keep working. */
+  rollup: StudyVisitScheduleBundle;
+  trends: VisitWindowTrend[];
+  alerts: VisitWindowAlert[];
+  topOverdueVisitTypes: {
+    visit_name: string;
+    overdue: number;
+    pct: number;
+  }[];
+  /** Daily `in_window %` and `overdue %` for the last 7 days, oldest-first. */
+  complianceTrend: {
+    day: string;
+    in_window_pct: number;
+    overdue_pct: number;
+  }[];
+  /** Per-row enrichments keyed by the underlying row primary keys. */
+  extras: {
+    sites: Record<string, SiteRowExtras>;
+    visits: Record<string, VisitRowExtras>;
+    subjects: Record<string, SubjectRowExtras>;
+  };
+  /** ISO timestamp the bundle was assembled — drives the "Last updated" line. */
+  generatedAt: string;
+}
+
+/**
+ * Site-level Visit Window Compliance bundle. Same shape as the study version
+ * minus the by-site rollup + study-only feeds (top-overdue / compliance-trend
+ * are also study-wide, so they're omitted at site scope).
+ */
+export interface SiteVisitWindowComplianceBundle {
+  rollup: SiteVisitScheduleBundle;
+  trends: VisitWindowTrend[];
+  alerts: VisitWindowAlert[];
+  extras: {
+    visits: Record<string, VisitRowExtras>;
+    subjects: Record<string, SubjectRowExtras>;
+  };
+  generatedAt: string;
 }
 
 export interface SubjectWithDetails extends Subject {
@@ -774,10 +1037,14 @@ export interface TeamMemberWithStudies {
   email: string | null;
   avatar_url: string | null;
   app_role: 'admin' | 'user';
+  /** Last successful sign-in (from auth.users.last_sign_in_at), or null if never signed in. */
+  last_sign_in_at: string | null;
   assignments: {
     id: string;
     study_id: string;
     study_title: string;
+    /** Compact protocol identifier for the study (e.g. "LUMINA-201"). */
+    protocol_number: string;
     role: TeamMemberRole;
     custom_role_name: string | null;
     site_name: string | null;
@@ -1068,8 +1335,14 @@ export interface StudyVisitDefinition {
   visit_name: string;
   timepoint_label: string | null;
   timepoint_days: number | null;
+  /** Allowed days BEFORE planned date inside the protocol window. */
+  window_before_days: number;
+  /** Allowed days AFTER planned date inside the protocol window. */
+  window_after_days: number;
   sort_order: number;
   created_at: string;
+  updated_at?: string;
+  updated_by?: string | null;
 }
 
 export interface ProcedureVisitCost {
@@ -1127,6 +1400,8 @@ export interface StudyCrf {
   description: string | null;
   sort_order: number;
   created_at: string;
+  updated_at?: string;
+  updated_by?: string | null;
 }
 
 export interface StudyCrfQuestion {
@@ -1140,6 +1415,8 @@ export interface StudyCrfQuestion {
   required: boolean;
   sort_order: number;
   created_at: string;
+  updated_at?: string;
+  updated_by?: string | null;
 }
 
 // ─── eCRF Template Versions ──────────────────────────────────────────────────
@@ -1156,12 +1433,121 @@ export interface EcrfTemplateVersion {
   created_at: string;
   published_at: string | null;
   archived_at: string | null;
+  updated_at?: string;
+  updated_by?: string | null;
 }
 
 export interface EcrfTemplateVersionWithCounts extends EcrfTemplateVersion {
   visit_count: number;
   crf_count: number;
   question_count: number;
+}
+
+// ─── eCRF Template Change Events ─────────────────────────────────────────────
+
+export type EcrfTemplateEventEntityKind = 'version' | 'visit' | 'crf' | 'question';
+
+export type EcrfTemplateEventAction =
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'reorder'
+  | 'publish'
+  | 'archive'
+  | 'clone'
+  | 'bulk_import';
+
+/** Append-only audit row written by triggers on the four template tables. */
+export interface EcrfTemplateChangeEvent {
+  id: string;
+  study_id: string;
+  template_version_id: string;
+  entity_kind: EcrfTemplateEventEntityKind;
+  entity_id: string;
+  entity_label: string | null;
+  action: EcrfTemplateEventAction;
+  field: string | null;
+  old_value: unknown;
+  new_value: unknown;
+  actor_id: string | null;
+  /** Optional display name resolved by the server action via `profiles`. */
+  actor_name?: string | null;
+  /** Optional avatar URL resolved by the server action via `profiles`. */
+  actor_avatar_url?: string | null;
+  created_at: string;
+}
+
+// ─── eCRF Template Diff (Compare versions) ───────────────────────────────────
+
+export interface EcrfTemplateDiffFieldChange {
+  field: string;
+  left: unknown;
+  right: unknown;
+}
+
+export interface EcrfTemplateDiffQuestion {
+  id: string;
+  label: string;
+  question_type: QuestionType;
+  /** Set when this question was added on the right side. */
+  added?: boolean;
+  /** Set when this question was removed on the right side. */
+  removed?: boolean;
+  /** Field-level changes when both sides have the question with the same fingerprint. */
+  changes?: EcrfTemplateDiffFieldChange[];
+}
+
+export interface EcrfTemplateDiffCrf {
+  id: string;
+  name: string;
+  added?: boolean;
+  removed?: boolean;
+  changes?: EcrfTemplateDiffFieldChange[];
+  questions: EcrfTemplateDiffQuestion[];
+}
+
+export interface EcrfTemplateDiffVisit {
+  id: string;
+  visit_name: string;
+  added?: boolean;
+  removed?: boolean;
+  changes?: EcrfTemplateDiffFieldChange[];
+  crfs: EcrfTemplateDiffCrf[];
+}
+
+export interface EcrfTemplateDiffSummary {
+  added: number;
+  removed: number;
+  changed: number;
+}
+
+export interface EcrfTemplateDiff {
+  left: EcrfTemplateVersion;
+  right: EcrfTemplateVersion;
+  visits: EcrfTemplateDiffVisit[];
+  totals: {
+    visits: EcrfTemplateDiffSummary;
+    crfs: EcrfTemplateDiffSummary;
+    questions: EcrfTemplateDiffSummary;
+  };
+}
+
+// ─── eCRF Template Schedule Presets ──────────────────────────────────────────
+
+/** Lightweight preset row used by the "Auto-generate Schedule" Quick Action. */
+export interface EcrfSchedulePresetVisit {
+  visit_name: string;
+  timepoint_label?: string | null;
+  timepoint_days: number;
+  window_before_days?: number;
+  window_after_days?: number;
+}
+
+export interface EcrfSchedulePreset {
+  id: string;
+  label: string;
+  description: string;
+  visits: EcrfSchedulePresetVisit[];
 }
 
 export type PaymentType = 'startup' | 'milestone' | 'per_subject' | 'pass_through';
@@ -1596,8 +1982,10 @@ export interface StudyPortfolioRow {
 
 export interface EnrollmentDataPoint {
   month: string;
-  planned: number;
-  actual: number;
+  planned: number | null;
+  actual: number | null;
+  forecast?: number | null;
+  target?: number | null;
 }
 
 export const KRI_CATEGORY_OPTIONS: { value: KriCategory; label: string }[] = [

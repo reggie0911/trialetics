@@ -1,29 +1,13 @@
+import { redirect } from 'next/navigation';
 import { requireEtmfAccess } from '@/lib/actions/etmf-access';
-import { getEtmfStudies, getEtmfExpectedDocuments, getTmfReferenceModel } from '@/lib/actions/etmf';
-import { EdlClient } from '@/components/etmf/edl/edl-client';
-import type { EtmfExpectedDocument } from '@/lib/types/etmf';
+import { getEtmfStudies } from '@/lib/actions/etmf';
 
 export default async function ExpectedDocumentsPage() {
   await requireEtmfAccess();
-
   const { data: studies } = await getEtmfStudies();
-  const { data: tmfRefs } = await getTmfReferenceModel();
-  const defaultStudyId = studies?.[0]?.id;
-
-  let edlData: EtmfExpectedDocument[] | null = null;
-  if (defaultStudyId) {
-    const { data } = await getEtmfExpectedDocuments(defaultStudyId);
-    edlData = data ?? null;
+  const studyList = studies || [];
+  if (studyList.length === 1) {
+    redirect(`/protected/studies/${studyList[0].id}/etmf/expected-documents`);
   }
-
-  return (
-    <div className="p-6 lg:p-8 space-y-6">
-      <EdlClient
-        studies={studies || []}
-        initialStudyId={defaultStudyId || null}
-        initialEdl={edlData}
-        tmfRefs={tmfRefs || []}
-      />
-    </div>
-  );
+  redirect('/protected/studies#studies');
 }

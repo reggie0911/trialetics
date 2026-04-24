@@ -33,6 +33,7 @@ export default async function StudyTemplateBuilderPage({
         studies={studies.map((s) => ({
           id: s.id,
           title: s.title,
+          study_name: s.study_name,
           protocol_number: s.protocol_number,
           description: s.description,
           therapeutic_area: s.therapeutic_area,

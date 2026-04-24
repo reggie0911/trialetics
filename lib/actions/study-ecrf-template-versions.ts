@@ -187,10 +187,32 @@ export async function cloneVersion(
   }
 }
 
+export interface PublishVersionSyncSummary {
+  subjects: number;
+  visitsAdded: number;
+  crfsAdded: number;
+}
+
+export interface PublishVersionResult {
+  error: string | null;
+  /**
+   * Per-study fan-out summary returned by `resync_ecrf_for_study` once the
+   * version is live. `null` means the publish itself succeeded but the
+   * follow-up resync failed (warning surfaced separately).
+   */
+  syncSummary?: PublishVersionSyncSummary | null;
+  /**
+   * Non-fatal warning surfaced when the publish flipped to live but the
+   * subject fan-out errored. Callers should toast this so admins know to
+   * use the per-subject "Resync to latest live template" recovery path.
+   */
+  warning?: string | null;
+}
+
 export async function publishVersion(
   studyId: string,
   versionId: string
-): Promise<{ error: string | null }> {
+): Promise<PublishVersionResult> {
   const supabase = await createClient();
   try {
     const { error: adminError } = await assertEcrfAdminForStudy(supabase, studyId);
@@ -218,8 +240,38 @@ export async function publishVersion(
       return { error: error.message };
     }
 
+    // Fan a regulatory-safe (add-only) resync out to every non-terminal
+    // subject so the freshly-live template appears immediately without
+    // anyone needing to click the per-subject "Resync to latest live
+    // template" button. Failure here is non-fatal: the publish already
+    // committed.
+    let syncSummary: PublishVersionSyncSummary | null = null;
+    let warning: string | null = null;
+
+    const { data: syncRaw, error: syncError } = await supabase.rpc(
+      'resync_ecrf_for_study',
+      { p_study_id: studyId },
+    );
+    if (syncError) {
+      warning =
+        'Version published, but auto-sync to subjects failed: ' +
+        syncError.message +
+        ' Use "Resync to latest live template" on each affected subject.';
+    } else {
+      const syncObj = (syncRaw ?? {}) as {
+        subjects?: number;
+        visits_added?: number;
+        crfs_added?: number;
+      };
+      syncSummary = {
+        subjects: syncObj.subjects ?? 0,
+        visitsAdded: syncObj.visits_added ?? 0,
+        crfsAdded: syncObj.crfs_added ?? 0,
+      };
+    }
+
     revalidateStudyCtmsLayout(studyId);
-    return { error: null };
+    return { error: null, syncSummary, warning };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unexpected error.' };
   }

@@ -461,8 +461,14 @@ const VISIT_COLUMNS: ColumnSpec<VisitEcrfRollup>[] = [
 
 const SUBJECT_COLUMNS: ColumnSpec<SubjectEcrfRollupRow>[] = [
   { key: 'subject_number', header: 'Subject #', width: 90, render: (r) => r.subject_number },
-  { key: 'site_number', header: 'Site', width: 80, render: (r) => r.site_number ?? '—' },
-  { key: 'status', header: 'Status', width: 80, render: (r) => r.status },
+  { key: 'site_number', header: 'Site #', width: 52, render: (r) => r.site_number ?? '—' },
+  {
+    key: 'site_name',
+    header: 'Site name',
+    width: 120,
+    render: (r) => r.site_name ?? '—',
+  },
+  { key: 'status', header: 'Status', width: 72, render: (r) => r.status },
   {
     key: 'expected',
     header: 'Expected',

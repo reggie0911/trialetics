@@ -1,19 +1,17 @@
 /**
- * Server-action coverage for the visit-report attachment upload + download
- * paths after the audit/hardening pass:
+ * Server-action coverage for the visit-report attachment upload + download paths:
  *
  *   - `uploadVisitReportAttachment`
  *       * rejects oversize files
  *       * rejects MIME spoofing (declared PDF, bytes are EXE)
  *       * rejects when the per-report file count cap is hit
- *       * happy path inserts with `scan_status='pending'` and invokes the
- *         `scan-visit-report-attachment` edge function exactly once
+ *       * happy path inserts with `scan_status='skipped'` (AV scanning disabled)
  *
  *   - `getAttachmentDownloadUrl`
- *       * pending  -> "still being scanned"
+ *       * pending  -> "still being scanned" (legacy rows; should not occur post-migration)
  *       * infected -> "quarantined"
  *       * error    -> "scan failed"
- *       * clean    -> signed URL is returned
+ *       * clean / skipped -> signed URL is returned
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -339,7 +337,7 @@ describe('uploadVisitReportAttachment', () => {
     expect(out.data).toBeNull();
   });
 
-  it('happy path inserts scan_status=pending and invokes the scanner exactly once', async () => {
+  it('happy path inserts scan_status=skipped and does not invoke the scanner', async () => {
     const file = makeFile(PDF_BYTES, 'good.pdf', 'application/pdf');
     const fd = new FormData();
     fd.append('file', file);
@@ -363,15 +361,13 @@ describe('uploadVisitReportAttachment', () => {
     expect(storageUpload).toHaveBeenCalledTimes(1);
     expect(insertCapture).toHaveBeenCalledTimes(1);
     const inserted = insertCapture.mock.calls[0][0] as Record<string, unknown>;
-    expect(inserted.scan_status).toBe('pending');
+    expect(inserted.scan_status).toBe('skipped');
     expect(inserted.trip_report_id).toBe(REPORT_ID);
     expect(inserted.file_name).toBe('good.pdf');
 
-    // Wait a microtask so the fire-and-forget invoke promise settles.
+    // AV scanning is disabled; the Edge Function must not be invoked.
     await new Promise((r) => setTimeout(r, 0));
-    expect(functionsInvoke).toHaveBeenCalledTimes(1);
-    expect(functionsInvoke.mock.calls[0][0]).toBe('scan-visit-report-attachment');
-    expect(functionsInvoke.mock.calls[0][1]).toEqual({ body: { attachmentId: ATTACHMENT_ID } });
+    expect(functionsInvoke).toHaveBeenCalledTimes(0);
   });
 });
 

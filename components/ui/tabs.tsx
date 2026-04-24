@@ -130,7 +130,7 @@ const TabsList = React.forwardRef<HTMLDivElement, ScopedProps<TabsListProps>>(
           role="tablist"
           aria-orientation={context.orientation}
           className={cn(
-            'text-muted-foreground relative inline-flex w-fit items-center border-b border-border gap-0',
+            'text-muted-foreground relative inline-flex w-fit items-center gap-0 border-b border-border',
             className
           )}
           {...listProps}
@@ -168,7 +168,20 @@ const TabsTrigger = React.forwardRef<HTMLButtonElement, ScopedProps<TabsTriggerP
           id={triggerId}
           data-slot="tabs-trigger"
           className={cn(
-            "data-[state=active]:text-foreground data-[state=active]:border-foreground data-[state=active]:font-medium focus-visible:ring-ring/50 focus-visible:outline-ring text-muted-foreground relative inline-flex cursor-pointer items-center justify-center gap-1.5 border-b-2 border-transparent px-4 py-2 text-sm font-normal whitespace-nowrap transition-all hover:text-foreground/80 hover:font-medium focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 -mb-px",
+            // Layout — font-weight stays constant across states to avoid shifting siblings
+            'group/tab relative -mb-px inline-flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-t-md border-b-2 border-transparent px-3 py-2 text-sm font-medium',
+            // Smooth, scoped transitions (no transition-all -> no width animation)
+            'transition-[color,background-color,border-color] duration-200 ease-out',
+            // Default + hover state for inactive tabs
+            'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+            // Active state
+            'data-[state=active]:border-primary data-[state=active]:text-foreground',
+            // Focus ring
+            'focus-visible:ring-ring/50 focus-visible:outline-ring focus-visible:ring-[3px] focus-visible:outline-1',
+            // Disabled
+            'disabled:pointer-events-none disabled:opacity-50',
+            // Icon sizing
+            "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg]:transition-transform [&_svg]:duration-200 hover:[&_svg]:scale-110",
             className
           )}
           {...triggerProps}

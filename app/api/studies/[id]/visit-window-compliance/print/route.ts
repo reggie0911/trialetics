@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 
-import { getStudyVisitScheduleRollup } from '@/lib/actions/visit-schedule-rollup';
+import { getStudyVisitScheduleRollup } from '@/lib/actions/visit-window-compliance-rollup';
 import { studyVisitSchedulePdfFilename } from '@/lib/exporters/visit-schedule-rollup-csv';
 import { renderVisitScheduleRollupPdf } from '@/lib/exporters/visit-schedule-rollup-pdf';
 import { createClient } from '@/lib/server';
@@ -9,11 +9,11 @@ import { resolveEcrfPdfLogo } from '@/lib/server/ecrf-pdf-logo';
 export const runtime = 'nodejs';
 
 /**
- * GET /api/studies/[id]/visit-schedule/print
+ * GET /api/studies/[id]/visit-window-compliance/print
  *
- * Returns the study-level Visit Schedule rollup as a PDF (inline disposition
- * so the browser previews it). Mirrors the eCRF print route's auth + logo
- * resolution flow.
+ * Returns the study-level Visit Window Compliance rollup as a PDF (inline
+ * disposition so the browser previews it). Mirrors the eCRF print route's
+ * auth + logo resolution flow.
  */
 export async function GET(
   _request: NextRequest,

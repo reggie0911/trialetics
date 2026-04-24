@@ -1,27 +1,13 @@
+import { redirect } from 'next/navigation';
 import { requireEtmfAccess } from '@/lib/actions/etmf-access';
-import { getEtmfStudies, getEtmfDocuments } from '@/lib/actions/etmf';
-import { DocumentLibraryClient } from '@/components/etmf/library/document-library-client';
-import type { EtmfDocument } from '@/lib/types/etmf';
+import { getEtmfStudies } from '@/lib/actions/etmf';
 
 export default async function DocumentLibraryPage() {
   await requireEtmfAccess();
-
   const { data: studies } = await getEtmfStudies();
-  const defaultStudyId = studies?.[0]?.id;
-
-  let documents: EtmfDocument[] | null = null;
-  if (defaultStudyId) {
-    const { data } = await getEtmfDocuments(defaultStudyId);
-    documents = data ?? null;
+  const studyList = studies || [];
+  if (studyList.length === 1) {
+    redirect(`/protected/studies/${studyList[0].id}/etmf/library`);
   }
-
-  return (
-    <div className="p-6 lg:p-8 space-y-6">
-      <DocumentLibraryClient
-        studies={studies || []}
-        initialStudyId={defaultStudyId || null}
-        initialDocuments={documents}
-      />
-    </div>
-  );
+  redirect('/protected/studies#studies');
 }

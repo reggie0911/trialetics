@@ -3,12 +3,17 @@
 import {
   useCallback,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from 'react';
+import type { RefObject } from 'react';
 import {
   AlertTriangle,
+  Calendar,
+  ChevronDown,
   Download,
+  MoreHorizontal,
   Pencil,
   Printer,
   RotateCcw,
@@ -19,7 +24,6 @@ import { toast } from 'sonner';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { StatusBadge } from '@/components/ui/status-badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -53,15 +57,28 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 import {
   VISIT_ANCHOR_OPTIONS,
-  VISIT_STATUS_OPTIONS,
   WINDOW_STATUS_FILTER_OPTIONS,
   type SubjectVisit,
   type VisitAnchorKind,
   type VisitStatus,
   type WindowStatus,
+  type WindowStatusMeta,
 } from '@/lib/types/ctms';
 import {
   getSubjectById,
@@ -85,6 +102,13 @@ interface VisitsPanelProps {
   anchorKind: VisitAnchorKind;
   screeningDate: string | null;
   randomizationDate: string | null;
+  /**
+   * Study's live eCRF template_version_id. Visits whose snapshot
+   * `template_version_id` does not match are hidden from the panel so a
+   * single template version is shown at a time. When null (no live
+   * version yet), all rows fall back to visible to avoid a blank panel.
+   */
+  liveTemplateVersionId: string | null;
 }
 
 interface PendingDeviation {
@@ -101,6 +125,7 @@ export function VisitsPanel({
   anchorKind: initialAnchorKind,
   screeningDate: initialScreeningDate,
   randomizationDate: initialRandomizationDate,
+  liveTemplateVersionId,
 }: VisitsPanelProps) {
   const [visits, setVisits] = useState(initialVisits);
   const [anchorKind, setAnchorKind] = useState<VisitAnchorKind>(initialAnchorKind);
@@ -134,14 +159,33 @@ export function VisitsPanel({
     });
   }, [subjectId]);
 
-  const filteredVisits = useMemo(() => {
-    if (filter === 'all') return visits;
+  // Show only the visits whose snapshot version matches the study's live
+  // eCRF template version. When no live version exists, fall back to the
+  // full set so a publish-pending study doesn't render a blank panel.
+  const scopedVisits = useMemo(() => {
+    if (!liveTemplateVersionId) return visits;
     return visits.filter(
+      (v) => v.template_version_id === liveTemplateVersionId,
+    );
+  }, [visits, liveTemplateVersionId]);
+
+  const filteredVisits = useMemo(() => {
+    if (filter === 'all') return scopedVisits;
+    return scopedVisits.filter(
       (v) => computeVisitWindowStatus(v, today).kind === filter,
     );
-  }, [visits, filter, today]);
+  }, [scopedVisits, filter, today]);
 
-  const completedCount = visits.filter((v) => v.status === 'completed').length;
+  const completedCount = scopedVisits.filter(
+    (v) => v.status === 'completed',
+  ).length;
+  const showTimepointColumn = useMemo(
+    () =>
+      scopedVisits.some(
+        (v) => v.timepoint_days !== null && v.timepoint_days !== undefined,
+      ),
+    [scopedVisits],
+  );
 
   const persistPatch = useCallback(
     async (visit: SubjectVisit, patch: SubjectVisitTimingPatch) => {
@@ -208,6 +252,9 @@ export function VisitsPanel({
     }
   }, [pendingDeviation, persistPatch]);
 
+  const scheduleActionsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const [anchorEditorOpen, setAnchorEditorOpen] = useState(false);
+
   const handleRecompute = useCallback(async () => {
     if (!anchorDate) {
       toast.error('Set the anchor date before recomputing.');
@@ -233,32 +280,24 @@ export function VisitsPanel({
           <div>
             <h3 className="text-lg font-medium">Visit Schedule</h3>
             <p className="text-sm text-muted-foreground">
-              {completedCount} of {visits.length} visits completed.
+              {completedCount} of {scopedVisits.length} visits completed.
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs">
-          <span className="font-medium text-foreground">Anchor:</span>
-          <span className="text-muted-foreground">{anchorLabel}</span>
-          <span className="font-medium text-foreground">{formatPlanDate(anchorDate)}</span>
-          <AnchorEditorPopover
-            subjectId={subjectId}
-            anchorKind={anchorKind}
-            anchorDate={anchorDate}
-            onSaved={refreshVisits}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRecompute}
-            disabled={!anchorDate}
-          >
-            <RotateCcw className="mr-1 h-3.5 w-3.5" />
-            Recompute scheduled
-          </Button>
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <Label className="text-xs text-muted-foreground" htmlFor="visit-window-filter">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="font-medium text-foreground">Anchor:</span>
+            <span className="text-muted-foreground">{anchorLabel}</span>
+            <span className="font-medium text-foreground">
+              {formatPlanDate(anchorDate)}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:shrink-0">
+            <Label
+              className="text-xs text-muted-foreground"
+              htmlFor="visit-window-filter"
+            >
               Filter
             </Label>
             <Select
@@ -280,27 +319,76 @@ export function VisitsPanel({
                 ))}
               </SelectContent>
             </Select>
-            <Button asChild variant="outline" size="sm">
-              <a
-                href={`/api/studies/${studyId}/subjects/${subjectId}/visits/export`}
-                download
-              >
-                <Download className="mr-1 h-3.5 w-3.5" />
-                Export CSV
-              </a>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <a
-                href={`/api/studies/${studyId}/subjects/${subjectId}/visits/print`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <Printer className="mr-1 h-3.5 w-3.5" />
-                Export PDF
-              </a>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button asChild type="button" variant="outline" size="sm" className="gap-1.5">
+                  <button
+                    type="button"
+                    ref={scheduleActionsTriggerRef}
+                    aria-label="Schedule actions"
+                  >
+                    <span>Actions</span>
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  </button>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[220px]">
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setTimeout(() => setAnchorEditorOpen(true), 0);
+                  }}
+                >
+                  <Calendar className="size-4" />
+                  Change anchor
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!anchorDate}
+                  onSelect={() => {
+                    void handleRecompute();
+                  }}
+                >
+                  <RotateCcw className="size-4" />
+                  Recompute scheduled
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  render={
+                    <a
+                      className="cursor-pointer"
+                      href={`/api/studies/${studyId}/subjects/${subjectId}/visits/export`}
+                      download
+                    />
+                  }
+                >
+                  <Download className="size-4" />
+                  Export CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  render={
+                    <a
+                      className="cursor-pointer"
+                      href={`/api/studies/${studyId}/subjects/${subjectId}/visits/print`}
+                      target="_blank"
+                      rel="noreferrer"
+                    />
+                  }
+                >
+                  <Printer className="size-4" />
+                  Export PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
+        <AnchorEditorPopover
+          open={anchorEditorOpen}
+          onOpenChange={setAnchorEditorOpen}
+          positionAnchor={scheduleActionsTriggerRef}
+          subjectId={subjectId}
+          anchorKind={anchorKind}
+          anchorDate={anchorDate}
+          onSaved={refreshVisits}
+        />
 
         {!anchorDate && (
           <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/60 dark:bg-amber-500/10 dark:text-amber-200">
@@ -313,7 +401,7 @@ export function VisitsPanel({
         )}
       </div>
 
-      {visits.length === 0 ? (
+      {scopedVisits.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <p className="text-sm font-medium text-muted-foreground">
@@ -333,75 +421,84 @@ export function VisitsPanel({
               <TableRow>
                 <TableHead className="text-xs w-[50px]">#</TableHead>
                 <TableHead className="text-xs">Visit</TableHead>
-                <TableHead className="text-xs">Timepoint</TableHead>
+                {showTimepointColumn && (
+                  <TableHead className="text-xs">Timepoint (Days)</TableHead>
+                )}
                 <TableHead className="text-xs">Planned</TableHead>
                 <TableHead className="text-xs">Actual</TableHead>
-                <TableHead className="text-xs">Window</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-xs">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span className="inline-flex cursor-help items-center gap-1 border-b border-dashed border-muted-foreground/40" />
+                        }
+                      >
+                        Status
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Combines schedule (planned vs today) with lifecycle.
+                        Setting a row to Completed, Missed, or Skipped takes
+                        over and shows that lifecycle as the primary state.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </TableHead>
+                <TableHead className="text-xs">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span className="inline-flex cursor-help items-center gap-1 border-b border-dashed border-muted-foreground/40" />
+                        }
+                      >
+                        Window Start
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Earliest in-window date. Suffix shows the protocol
+                        offset before planned.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </TableHead>
+                <TableHead className="text-xs">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span className="inline-flex cursor-help items-center gap-1 border-b border-dashed border-muted-foreground/40" />
+                        }
+                      >
+                        Window End
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Latest in-window date. Suffix shows the protocol
+                        offset after planned.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </TableHead>
                 <TableHead className="text-xs">Notes</TableHead>
+                <TableHead className="text-xs w-[40px] text-right">
+                  <span className="sr-only">Actions</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredVisits.map((visit) => {
-                const meta = computeVisitWindowStatus(visit, today);
-                return (
-                  <TableRow key={visit.id}>
-                    <TableCell className="text-xs font-medium">
-                      {visit.visit_number}
-                    </TableCell>
-                    <TableCell className="text-xs font-medium">
-                      {visit.visit_name}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {renderTimepoint(visit)}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      <DateEditorPopover
-                        label="Planned date"
-                        value={visit.planned_date}
-                        onSave={(next) =>
-                          persistPatch(visit, { planned_date: next })
-                        }
-                      />
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      <DateEditorPopover
-                        label="Actual date"
-                        value={visit.actual_date}
-                        onSave={(next) => handleActualSave(visit, next)}
-                      />
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      <div className="flex flex-col gap-1">
-                        <span>
-                          {visit.window_start && visit.window_end
-                            ? `${formatPlanDate(visit.window_start)} – ${formatPlanDate(visit.window_end)}`
-                            : '--'}
-                        </span>
-                        <Badge variant={meta.variant} className="text-[10px]">
-                          {meta.label}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <StatusEditorPopover
-                        value={visit.status}
-                        onSave={(next) => persistPatch(visit, { status: next })}
-                      />
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      <NotesEditorPopover
-                        value={visit.notes}
-                        onSave={(next) => persistPatch(visit, { notes: next })}
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {filteredVisits.map((visit) => (
+                <VisitRow
+                  key={visit.id}
+                  visit={visit}
+                  today={today}
+                  showTimepointColumn={showTimepointColumn}
+                  onPersist={persistPatch}
+                  onActualSave={handleActualSave}
+                />
+              ))}
               {filteredVisits.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={8}
+                    colSpan={showTimepointColumn ? 10 : 9}
                     className="text-center text-xs text-muted-foreground"
                   >
                     No visits match this filter.
@@ -460,24 +557,252 @@ export function VisitsPanel({
 
 // ─── Cell editors ────────────────────────────────────────────────────────────
 
+/** Timepoint column: day offset from protocol only (no separate timepoint label). */
 function renderTimepoint(visit: SubjectVisit): string {
-  const parts: string[] = [];
-  if (visit.timepoint_label) parts.push(visit.timepoint_label);
-  if (visit.timepoint_days !== null) {
-    const sign = visit.timepoint_days > 0 ? '+' : '';
-    parts.push(`Day ${sign}${visit.timepoint_days}`);
+  if (visit.timepoint_days === null || visit.timepoint_days === undefined) {
+    return '--';
   }
-  return parts.length > 0 ? parts.join(' · ') : '--';
+  const sign = visit.timepoint_days > 0 ? '+' : '';
+  return `Day ${sign}${visit.timepoint_days}`;
+}
+
+/**
+ * Lifecycle chip metadata shown alongside the derived window state when the
+ * row's status overrides the schedule (`completed`/`missed`/`skipped`).
+ */
+function lifecycleChipMeta(
+  status: VisitStatus,
+):
+  | { label: string; variant: 'success' | 'destructive' | 'secondary' }
+  | null {
+  if (status === 'completed') return { label: 'Done', variant: 'success' };
+  if (status === 'missed') return { label: 'Missed', variant: 'destructive' };
+  if (status === 'skipped') return { label: 'Skipped', variant: 'secondary' };
+  return null;
+}
+
+/**
+ * Compute the derived window state ignoring the lifecycle takeover so the
+ * State pill can keep showing the schedule-anchored bucket while a secondary
+ * chip surfaces the lifecycle status.
+ */
+function computeBaseWindowMeta(
+  visit: SubjectVisit,
+  today: string,
+): WindowStatusMeta {
+  return computeVisitWindowStatus(
+    { ...visit, status: 'scheduled' },
+    today,
+  );
+}
+
+interface VisitRowProps {
+  visit: SubjectVisit;
+  today: string;
+  showTimepointColumn: boolean;
+  onPersist: (
+    visit: SubjectVisit,
+    patch: SubjectVisitTimingPatch,
+  ) => Promise<boolean>;
+  onActualSave: (
+    visit: SubjectVisit,
+    nextActual: string | null,
+  ) => Promise<boolean>;
+}
+
+function VisitRow({
+  visit,
+  today,
+  showTimepointColumn,
+  onPersist,
+  onActualSave,
+}: VisitRowProps) {
+  const [actualOpen, setActualOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [windowOffsetsOpen, setWindowOffsetsOpen] = useState(false);
+
+  const lifecycle = lifecycleChipMeta(visit.status);
+  const baseMeta = lifecycle
+    ? computeBaseWindowMeta(visit, today)
+    : computeVisitWindowStatus(visit, today);
+
+  // When lifecycle has taken over but no schedule is anchored, the base state
+  // is "Pending" which adds noise; in that case keep the lifecycle chip as
+  // the primary signal and skip the base pill.
+  const showBaseAlongsideLifecycle =
+    lifecycle !== null && baseMeta.kind !== 'pending';
+
+  const before = visit.window_before_days ?? 0;
+  const after = visit.window_after_days ?? 0;
+
+  const setStatus = (next: VisitStatus) => {
+    if (visit.status === next) return;
+    void onPersist(visit, { status: next });
+  };
+
+  return (
+    <TableRow>
+      <TableCell className="text-xs font-medium">
+        {visit.visit_number}
+      </TableCell>
+      <TableCell className="text-xs font-medium">{visit.visit_name}</TableCell>
+      {showTimepointColumn && (
+        <TableCell className="text-xs text-muted-foreground">
+          {renderTimepoint(visit)}
+        </TableCell>
+      )}
+      <TableCell className="text-xs text-muted-foreground">
+        <DateEditorPopover
+          label="Planned date"
+          value={visit.planned_date}
+          onSave={(next) => onPersist(visit, { planned_date: next })}
+        />
+      </TableCell>
+      <TableCell className="text-xs text-muted-foreground">
+        <DateEditorPopover
+          label="Actual date"
+          value={visit.actual_date}
+          onSave={(next) => onActualSave(visit, next)}
+          open={actualOpen}
+          onOpenChange={setActualOpen}
+        />
+      </TableCell>
+      <TableCell className="text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-1">
+          {(!lifecycle || showBaseAlongsideLifecycle) && (
+            <Badge variant={baseMeta.variant} className="text-[10px]">
+              {baseMeta.label}
+            </Badge>
+          )}
+          {lifecycle && (
+            <Badge variant={lifecycle.variant} className="text-[10px]">
+              {lifecycle.label}
+            </Badge>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="text-xs text-muted-foreground">
+        {visit.window_start ? (
+          <span>
+            {formatPlanDate(visit.window_start)}
+            {before > 0 && (
+              <span className="text-muted-foreground">{` (−${before}d)`}</span>
+            )}
+          </span>
+        ) : (
+          '--'
+        )}
+      </TableCell>
+      <TableCell className="text-xs text-muted-foreground">
+        {visit.window_end ? (
+          <span>
+            {formatPlanDate(visit.window_end)}
+            {after > 0 && (
+              <span className="text-muted-foreground">{` (+${after}d)`}</span>
+            )}
+          </span>
+        ) : (
+          '--'
+        )}
+      </TableCell>
+      <TableCell className="text-xs text-muted-foreground">
+        <NotesEditorPopover
+          value={visit.notes}
+          onSave={(next) => onPersist(visit, { notes: next })}
+          open={notesOpen}
+          onOpenChange={setNotesOpen}
+        />
+      </TableCell>
+      <TableCell className="text-right">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                aria-label="Row actions"
+              />
+            }
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[180px]">
+            <DropdownMenuItem onClick={() => setActualOpen(true)}>
+              Enter actual date…
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => setStatus('completed')}
+              disabled={visit.status === 'completed'}
+            >
+              Mark completed
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setStatus('missed')}
+              disabled={visit.status === 'missed'}
+            >
+              Mark missed
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setStatus('skipped')}
+              disabled={visit.status === 'skipped'}
+            >
+              Skip visit
+            </DropdownMenuItem>
+            {visit.status !== 'scheduled' && (
+              <DropdownMenuItem onClick={() => setStatus('scheduled')}>
+                Reset to scheduled
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setWindowOffsetsOpen(true)}>
+              Edit window ±…
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setNotesOpen(true)}>
+              Edit notes…
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <WindowOffsetsEditorPopover
+          before={before}
+          after={after}
+          open={windowOffsetsOpen}
+          onOpenChange={setWindowOffsetsOpen}
+          onSave={(nextBefore, nextAfter) =>
+            onPersist(visit, {
+              window_before_days: nextBefore,
+              window_after_days: nextAfter,
+            })
+          }
+        />
+      </TableCell>
+    </TableRow>
+  );
 }
 
 interface DateEditorPopoverProps {
   label: string;
   value: string | null;
   onSave: (next: string | null) => Promise<boolean | void>;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-function DateEditorPopover({ label, value, onSave }: DateEditorPopoverProps) {
-  const [open, setOpen] = useState(false);
+function DateEditorPopover({
+  label,
+  value,
+  onSave,
+  open: controlledOpen,
+  onOpenChange,
+}: DateEditorPopoverProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (!isControlled) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   const [draft, setDraft] = useState(value ?? '');
   const [saving, setSaving] = useState(false);
 
@@ -536,87 +861,26 @@ function DateEditorPopover({ label, value, onSave }: DateEditorPopoverProps) {
   );
 }
 
-interface StatusEditorPopoverProps {
-  value: VisitStatus;
-  onSave: (next: VisitStatus) => Promise<boolean | void>;
-}
-
-function StatusEditorPopover({ value, onSave }: StatusEditorPopoverProps) {
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<VisitStatus>(value);
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    if (draft === value) {
-      setOpen(false);
-      return;
-    }
-    setSaving(true);
-    const ok = await onSave(draft);
-    setSaving(false);
-    if (ok !== false) setOpen(false);
-  };
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        if (next) setDraft(value);
-        setOpen(next);
-      }}
-    >
-      <PopoverTrigger
-        render={
-          <button
-            type="button"
-            className="inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted"
-          />
-        }
-      >
-        <StatusBadge status={value} className="text-xs" />
-        <Pencil className="h-3 w-3 opacity-60" />
-      </PopoverTrigger>
-      <PopoverContent className="w-56 space-y-3 p-3">
-        <Label className="text-xs">Visit status</Label>
-        <Select
-          value={draft}
-          onValueChange={(v) => setDraft(v as VisitStatus)}
-        >
-          <SelectTrigger className="h-8 w-full text-xs">
-            <SelectValue
-              getDisplayLabel={(v) =>
-                VISIT_STATUS_OPTIONS.find((o) => o.value === v)?.label ?? v
-              }
-            />
-          </SelectTrigger>
-          <SelectContent>
-            {VISIT_STATUS_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={saving}>
-            Save
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 interface NotesEditorPopoverProps {
   value: string | null;
   onSave: (next: string | null) => Promise<boolean | void>;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-function NotesEditorPopover({ value, onSave }: NotesEditorPopoverProps) {
-  const [open, setOpen] = useState(false);
+function NotesEditorPopover({
+  value,
+  onSave,
+  open: controlledOpen,
+  onOpenChange,
+}: NotesEditorPopoverProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (!isControlled) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   const [draft, setDraft] = useState(value ?? '');
   const [saving, setSaving] = useState(false);
 
@@ -677,11 +941,142 @@ function NotesEditorPopover({ value, onSave }: NotesEditorPopoverProps) {
   );
 }
 
+interface WindowOffsetsEditorPopoverProps {
+  before: number;
+  after: number;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSave: (
+    nextBefore: number,
+    nextAfter: number,
+  ) => Promise<boolean | void>;
+}
+
+function WindowOffsetsEditorPopover({
+  before,
+  after,
+  open,
+  onOpenChange,
+  onSave,
+}: WindowOffsetsEditorPopoverProps) {
+  const [draftBefore, setDraftBefore] = useState(String(before));
+  const [draftAfter, setDraftAfter] = useState(String(after));
+  const [saving, setSaving] = useState(false);
+
+  const handleOpenChange = (next: boolean) => {
+    if (next) {
+      setDraftBefore(String(before));
+      setDraftAfter(String(after));
+    }
+    onOpenChange(next);
+  };
+
+  const parse = (raw: string): number | null => {
+    if (raw.trim() === '') return 0;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || !Number.isInteger(n) || n < 0) return null;
+    return n;
+  };
+
+  const nextBefore = parse(draftBefore);
+  const nextAfter = parse(draftAfter);
+  const isValid = nextBefore !== null && nextAfter !== null;
+  const isDirty =
+    isValid && (nextBefore !== before || nextAfter !== after);
+
+  const handleSave = async () => {
+    if (!isValid) return;
+    if (!isDirty) {
+      onOpenChange(false);
+      return;
+    }
+    setSaving(true);
+    const ok = await onSave(nextBefore!, nextAfter!);
+    setSaving(false);
+    if (ok !== false) onOpenChange(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger
+        nativeButton={false}
+        render={
+          <span aria-hidden className="sr-only" tabIndex={-1} />
+        }
+      />
+      <PopoverContent align="end" className="w-72 space-y-3 p-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Window (relative to planned day)</Label>
+          <p className="text-[11px] text-muted-foreground">
+            Per-subject override. Both fields must be whole numbers ≥ 0.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">
+              Days before
+            </Label>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              inputMode="numeric"
+              value={draftBefore}
+              onChange={(e) => setDraftBefore(e.target.value)}
+              className="text-xs"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[11px] text-muted-foreground">
+              Days after
+            </Label>
+            <Input
+              type="number"
+              min={0}
+              step={1}
+              inputMode="numeric"
+              value={draftAfter}
+              onChange={(e) => setDraftAfter(e.target.value)}
+              className="text-xs"
+            />
+          </div>
+        </div>
+        {!isValid && (
+          <p className="text-[11px] text-destructive">
+            Enter whole numbers ≥ 0 for both fields.
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={!isValid || saving}
+          >
+            <Save className="mr-1 h-3 w-3" />
+            Save
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 interface AnchorEditorPopoverProps {
   subjectId: string;
   anchorKind: VisitAnchorKind;
   anchorDate: string | null;
   onSaved: () => void;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Element to align the popover to (e.g. the Schedule &quot;Actions&quot; control). */
+  positionAnchor: RefObject<HTMLButtonElement | null>;
 }
 
 function AnchorEditorPopover({
@@ -689,8 +1084,10 @@ function AnchorEditorPopover({
   anchorKind,
   anchorDate,
   onSaved,
+  open,
+  onOpenChange,
+  positionAnchor,
 }: AnchorEditorPopoverProps) {
-  const [open, setOpen] = useState(false);
   const [draftKind, setDraftKind] = useState<VisitAnchorKind>(anchorKind);
   const [draftDate, setDraftDate] = useState<string>(anchorDate ?? '');
   const [recompute, setRecompute] = useState(true);
@@ -702,7 +1099,7 @@ function AnchorEditorPopover({
       setDraftDate(anchorDate ?? '');
       setRecompute(true);
     }
-    setOpen(next);
+    onOpenChange(next);
   };
 
   const handleSave = async () => {
@@ -724,20 +1121,19 @@ function AnchorEditorPopover({
     } else {
       toast.success('Anchor updated.');
     }
-    setOpen(false);
+    onOpenChange(false);
     onSaved();
   };
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger
-        render={
-          <Button variant="outline" size="sm" className="h-7 text-xs" />
-        }
+    <Popover open={open} onOpenChange={handleOpenChange} modal={false}>
+      <PopoverContent
+        className="w-72 space-y-3 p-3"
+        anchor={positionAnchor}
+        side="bottom"
+        align="end"
+        sideOffset={6}
       >
-        Change anchor
-      </PopoverTrigger>
-      <PopoverContent className="w-72 space-y-3 p-3">
         <div className="space-y-2">
           <Label className="text-xs">Anchor kind</Label>
           <Select
@@ -777,7 +1173,11 @@ function AnchorEditorPopover({
           Recompute scheduled visits after save
         </label>
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
           <Button size="sm" onClick={handleSave} disabled={saving}>

@@ -59,6 +59,8 @@ export default async function StudyTripReportAuthorPage({
         crfEntries={data.crfEntries}
         actionItems={data.actionItems}
         attachments={data.attachments}
+        siteSubjects={data.siteSubjects}
+        visitTotalsBySubjectVisitId={data.visitTotalsBySubjectVisitId}
         templates={templates}
         logoUrl={logoUrl}
         visitSequenceNumber={data.visitSequenceNumber}
@@ -71,6 +73,7 @@ export default async function StudyTripReportAuthorPage({
         accessDeniedMessage={data.accessDeniedMessage}
         auditEvents={data.auditEvents}
         reportSignerNames={data.reportSignerNames}
+        primarySitePhone={data.primarySitePhone}
         claimReviewError={claimReviewError}
         tripReportsBasePath={tripReportsBasePath}
       />

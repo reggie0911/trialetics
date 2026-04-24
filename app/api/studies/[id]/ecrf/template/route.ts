@@ -1,8 +1,10 @@
 import { NextRequest } from 'next/server';
 
 import {
+  buildCompareTemplateCsv,
   buildEmptyTemplateCsv,
   buildPopulatedTemplateCsv,
+  compareTemplateFilenameFor,
   templateFilenameFor,
 } from '@/lib/exporters/ecrf-template';
 import { createClient } from '@/lib/server';
@@ -57,12 +59,38 @@ export async function GET(
     'study';
 
   const versionIdParam = request.nextUrl.searchParams.get('versionId');
+  const compareVersionIdParam = request.nextUrl.searchParams.get('compareVersionId');
   const forceEmpty = request.nextUrl.searchParams.get('empty') === '1';
 
   let csv: string;
   let versionLabel: string | null = null;
+  let compareLabel: string | null = null;
 
-  if (versionIdParam && !forceEmpty) {
+  // Two paths:
+  //   1) versionId + compareVersionId  → side-by-side delta CSV
+  //   2) versionId only               → populated CSV for that version
+  //   3) neither                      → blank template
+  if (versionIdParam && compareVersionIdParam && !forceEmpty) {
+    const [leftRes, rightRes] = await Promise.all([
+      loadVersionWithRows(supabase, studyId, versionIdParam),
+      loadVersionWithRows(supabase, studyId, compareVersionIdParam),
+    ]);
+    if ('error' in leftRes) {
+      return Response.json({ error: leftRes.error }, { status: leftRes.status });
+    }
+    if ('error' in rightRes) {
+      return Response.json({ error: rightRes.error }, { status: rightRes.status });
+    }
+    versionLabel = leftRes.label;
+    compareLabel = rightRes.label;
+
+    csv = buildCompareTemplateCsv({
+      left: { visits: leftRes.visits, crfs: leftRes.crfs, questions: leftRes.questions },
+      right: { visits: rightRes.visits, crfs: rightRes.crfs, questions: rightRes.questions },
+      leftLabel: leftRes.label ?? 'Left',
+      rightLabel: rightRes.label ?? 'Right',
+    });
+  } else if (versionIdParam && !forceEmpty) {
     const { data: version, error: versionError } = await supabase
       .from('study_ecrf_template_versions')
       .select('*')
@@ -119,7 +147,9 @@ export async function GET(
     csv = buildEmptyTemplateCsv();
   }
 
-  const filename = templateFilenameFor(studyLabel, versionLabel);
+  const filename = compareLabel
+    ? compareTemplateFilenameFor(studyLabel, versionLabel, compareLabel)
+    : templateFilenameFor(studyLabel, versionLabel);
   const body = '\ufeff' + csv; // BOM so Excel auto-detects UTF-8
 
   return new Response(body, {
@@ -129,4 +159,68 @@ export async function GET(
       'Cache-Control': 'no-store',
     },
   });
+}
+
+interface VersionRowsResult {
+  version: EcrfTemplateVersion;
+  label: string | null;
+  visits: StudyVisitDefinition[];
+  crfs: StudyCrf[];
+  questions: StudyCrfQuestion[];
+}
+
+interface VersionRowsError {
+  error: string;
+  status: number;
+}
+
+async function loadVersionWithRows(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  studyId: string,
+  versionId: string
+): Promise<VersionRowsResult | VersionRowsError> {
+  const { data: version, error: versionError } = await supabase
+    .from('study_ecrf_template_versions')
+    .select('*')
+    .eq('id', versionId)
+    .maybeSingle();
+  if (versionError) return { error: versionError.message, status: 500 };
+  if (!version || (version as { study_id: string }).study_id !== studyId) {
+    return { error: 'Version not found in this study.', status: 404 };
+  }
+  const v = version as unknown as EcrfTemplateVersion;
+
+  const [visitsRes, crfsRes, questionsRes] = await Promise.all([
+    supabase
+      .from('study_visit_definitions')
+      .select('*')
+      .eq('study_id', studyId)
+      .eq('template_version_id', v.id)
+      .order('sort_order', { ascending: true }),
+    supabase
+      .from('study_crfs')
+      .select('*')
+      .eq('study_id', studyId)
+      .eq('template_version_id', v.id)
+      .order('sort_order', { ascending: true }),
+    supabase
+      .from('study_crf_questions')
+      .select('*')
+      .eq('template_version_id', v.id)
+      .order('sort_order', { ascending: true }),
+  ]);
+
+  const firstError =
+    visitsRes.error?.message ??
+    crfsRes.error?.message ??
+    questionsRes.error?.message;
+  if (firstError) return { error: firstError, status: 500 };
+
+  return {
+    version: v,
+    label: v.name,
+    visits: (visitsRes.data ?? []) as unknown as StudyVisitDefinition[],
+    crfs: (crfsRes.data ?? []) as unknown as StudyCrf[],
+    questions: (questionsRes.data ?? []) as unknown as StudyCrfQuestion[],
+  };
 }

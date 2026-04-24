@@ -10,7 +10,10 @@ import {
 } from '@/lib/actions/subjects';
 import { getTasksBySite } from '@/lib/actions/tasks';
 import { getSiteEcrfRollup } from '@/lib/actions/ecrf-rollup';
-import { getSiteVisitScheduleRollup } from '@/lib/actions/visit-schedule-rollup';
+import {
+  getSiteVisitScheduleRollup,
+  getSiteVisitWindowComplianceRollup,
+} from '@/lib/actions/visit-window-compliance-rollup';
 import { listDirectoryContacts } from '@/lib/actions/directory-contacts';
 import { getDirectoryRoleCatalog } from '@/lib/actions/directory-catalog';
 import { listInstitutions } from '@/lib/actions/directory-institutions';
@@ -63,6 +66,7 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
     studyBudgetOptions,
     ecrfRollup,
     visitSchedule,
+    visitWindowCompliance,
   ] = await Promise.all([
     getStudyById(studyId),
     getSubjectCountBySite(siteId),
@@ -80,6 +84,7 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
     listStudyBudgetOptions(site.study_id).catch(() => []),
     getSiteEcrfRollup(site.id),
     getSiteVisitScheduleRollup(site.id),
+    getSiteVisitWindowComplianceRollup(site.id),
   ]);
 
   const linkedStudyBudgetMeta = siteBudget?.study_budget_id
@@ -154,6 +159,7 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
           siteFunnel={siteFunnel}
           ecrfRollup={ecrfRollup}
           visitSchedule={visitSchedule}
+          visitWindowCompliance={visitWindowCompliance}
           studySitesForSubjects={studySitesForSubjects}
           financeApprovalTemplateOptions={financeApprovalTemplateOptions}
           studyBudgetOptions={studyBudgetOptions}

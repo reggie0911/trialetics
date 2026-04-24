@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 
-import { getSiteVisitScheduleRollup } from '@/lib/actions/visit-schedule-rollup';
+import { getSiteVisitScheduleRollup } from '@/lib/actions/visit-window-compliance-rollup';
 import { siteVisitSchedulePdfFilename } from '@/lib/exporters/visit-schedule-rollup-csv';
 import { renderVisitScheduleRollupPdf } from '@/lib/exporters/visit-schedule-rollup-pdf';
 import { createClient } from '@/lib/server';
@@ -9,9 +9,9 @@ import { resolveEcrfPdfLogo } from '@/lib/server/ecrf-pdf-logo';
 export const runtime = 'nodejs';
 
 /**
- * GET /api/studies/[id]/sites/[siteId]/visit-schedule/print
+ * GET /api/studies/[id]/sites/[siteId]/visit-window-compliance/print
  *
- * Site-scoped PDF print of the Visit Schedule rollup. Validates that the site
+ * Site-scoped PDF print of the Visit Window Compliance rollup. Validates that the site
  * belongs to the study and resolves the company logo through the same helper
  * as the eCRF print routes for visual consistency.
  */

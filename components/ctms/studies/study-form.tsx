@@ -4,8 +4,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Archive, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +41,7 @@ import { TRIP_REPORT_DAYS_BASIS_LABELS } from '@/lib/types/visit-reports';
 import { StudyCountryMultiSelect } from '@/components/ctms/studies/study-country-multi-select';
 import { StudyIsoDateInput } from '@/components/ctms/studies/study-iso-date-input';
 import { CopilotFillTrigger } from '@/components/copilot/forms/copilot-fill-trigger';
+import { DeactivateStudyDialog } from '@/components/ctms/studies/deactivate-study-dialog';
 
 const overviewFormSchema = z.object({
   study_type: z.string().optional(),
@@ -172,17 +173,26 @@ interface StudyFormProps {
   study?: Study;
   mode: 'create' | 'edit';
   onSuccess?: () => void;
+  /** When true and `mode` is edit, show Deactivate study in the footer (admins only). */
+  isAdmin?: boolean;
 }
 
 export function StudyForm({
   study,
   mode,
   onSuccess,
+  isAdmin = false,
 }: StudyFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deactivateOpen, setDeactivateOpen] = useState(false);
   /** Snapshot of country codes when the edit form loaded — used to detect destructive removals. */
   const initialRegionCodesRef = useRef<string[] | null>(null);
+
+  const handleDeactivateSuccess = useCallback(() => {
+    if (!study?.id) return;
+    router.push(`/protected/studies/${study.id}?tab=overview&readOnly=1`);
+  }, [router, study?.id]);
 
   const form = useForm<StudyFormValues>({
     resolver: zodResolver(studyFormSchema),
@@ -751,18 +761,39 @@ export function StudyForm({
           </CardContent>
         </Card>
 
-        <div className="flex items-center gap-3">
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {mode === 'create' ? 'Create Study' : 'Save Changes'}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.back()}
-          >
-            Cancel
-          </Button>
+        <div className="flex w-full flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {mode === 'create' ? 'Create Study' : 'Save Changes'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.back()}
+            >
+              Cancel
+            </Button>
+          </div>
+          {mode === 'edit' && isAdmin && study && (
+            <>
+              <Button
+                type="button"
+                variant="destructive"
+                className="border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30"
+                onClick={() => setDeactivateOpen(true)}
+              >
+                <Archive className="mr-2 h-4 w-4" />
+                Deactivate study
+              </Button>
+              <DeactivateStudyDialog
+                study={{ id: study.id, title: study.title }}
+                open={deactivateOpen}
+                onOpenChange={setDeactivateOpen}
+                onSuccess={handleDeactivateSuccess}
+              />
+            </>
+          )}
         </div>
       </form>
     </Form>

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 
-import { getStudyVisitScheduleRollup } from '@/lib/actions/visit-schedule-rollup';
+import { getStudyVisitScheduleRollup } from '@/lib/actions/visit-window-compliance-rollup';
 import {
   buildVisitScheduleRollupCsv,
   studyVisitScheduleCsvFilename,
@@ -10,11 +10,11 @@ import { createClient } from '@/lib/server';
 export const runtime = 'nodejs';
 
 /**
- * GET /api/studies/[id]/visit-schedule/export
+ * GET /api/studies/[id]/visit-window-compliance/export
  *
- * Returns the study-level Visit Schedule rollup as a UTF-8 CSV with sectioned
- * blocks (Overall / By Site / By Visit / By Subject). Read-only — RLS on the
- * underlying view enforces company scope.
+ * Returns the study-level Visit Window Compliance rollup as a UTF-8 CSV with
+ * sectioned blocks (Overall / By Site / By Visit / By Subject). Read-only —
+ * RLS on the underlying view enforces company scope.
  */
 export async function GET(
   _request: NextRequest,

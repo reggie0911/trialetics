@@ -94,11 +94,25 @@ export function EcrfVersionManagerDialog({
   const handlePublish = (versionId: string) => {
     startTransition(async () => {
       const res = await publishVersion(studyId, versionId);
-      if (res.error) toast.error(res.error);
-      else {
-        toast.success('Version is now live.');
-        refresh();
+      if (res.error) {
+        toast.error(res.error);
+        return;
       }
+      const summary = res.syncSummary;
+      if (summary) {
+        const subjectsLabel = summary.subjects === 1 ? 'subject' : 'subjects';
+        const description =
+          summary.subjects > 0
+            ? `Auto-synced ${summary.subjects} ${subjectsLabel} (+${summary.visitsAdded} visits, +${summary.crfsAdded} CRFs).`
+            : 'No active subjects required syncing.';
+        toast.success('Version is now live.', { description });
+      } else {
+        toast.success('Version is now live.');
+      }
+      if (res.warning) {
+        toast.warning(res.warning);
+      }
+      refresh();
     });
   };
 

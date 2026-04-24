@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition, useEffect, useMemo } from 'react';
+import { useState, useTransition, useEffect, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -28,6 +28,7 @@ import {
 import { createSiteVisitWithReport } from '@/lib/actions/visit-reports';
 import type { TemplateWithQuestionCount } from '@/lib/actions/visit-reports';
 import { getStudySites } from '@/lib/actions/sites';
+import { studySelectLabel } from '@/lib/ctms/study-display';
 import type { Study } from '@/lib/types/ctms';
 import type { StudySite } from '@/lib/types/ctms';
 import {
@@ -38,7 +39,7 @@ import {
 } from '@/lib/types/visit-reports';
 
 const schema = z.object({
-  study_id: z.string().min(1, 'Select a protocol'),
+  study_id: z.string().min(1, 'Select a study'),
   site_id: z.string().min(1, 'Select a site'),
   site_number: z.string().optional(),
   visit_type: z.enum(['sqv', 'siv', 'monitoring', 'close_out', 'training']),
@@ -57,7 +58,7 @@ type FormValues = z.infer<typeof schema>;
 interface CreateSiteVisitModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  studies: Pick<Study, 'id' | 'title' | 'protocol_number'>[];
+  studies: Pick<Study, 'id' | 'title' | 'study_name' | 'protocol_number'>[];
   templates: TemplateWithQuestionCount[];
   initialTemplateId?: string | null;
   onSuccess: () => void;
@@ -76,6 +77,8 @@ export function CreateSiteVisitModal({
 }: CreateSiteVisitModalProps) {
   const [sites, setSites] = useState<StudySite[]>([]);
   const [isPending, startTransition] = useTransition();
+  /** Resets when the dialog closes. First open may apply `initialTemplateId` (URL) if that template is in the current filter; later changes use the default (first by name) when visit type or study changes. */
+  const urlTemplatePreferenceAppliedForOpenRef = useRef(false);
 
   const {
     register,
@@ -110,16 +113,31 @@ export function CreateSiteVisitModal({
   }, [templates, visitType, studyId]);
 
   useEffect(() => {
-    if (open && initialTemplateId) {
-      setValue('template_id', initialTemplateId);
+    if (!open) {
+      urlTemplatePreferenceAppliedForOpenRef.current = false;
+      return;
     }
-  }, [open, initialTemplateId, setValue]);
+    const idSet = new Set(filteredTemplates.map((t) => t.id));
+    // Default when multiple: stable sort by name (case-insensitive) then first row.
+    const sorted = [...filteredTemplates].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    );
+    const defaultId = sorted[0]?.id ?? '';
+    if (!urlTemplatePreferenceAppliedForOpenRef.current) {
+      urlTemplatePreferenceAppliedForOpenRef.current = true;
+      if (initialTemplateId && idSet.has(initialTemplateId)) {
+        setValue('template_id', initialTemplateId, { shouldDirty: false });
+        return;
+      }
+    }
+    setValue('template_id', defaultId, { shouldDirty: false });
+  }, [open, visitType, studyId, filteredTemplates, initialTemplateId, setValue]);
 
   useEffect(() => {
     if (open && defaultStudyId) {
       setValue('study_id', defaultStudyId);
       setValue('site_id', '');
-      setValue('template_id', '');
+      setValue('site_number', '');
       startTransition(async () => {
         try {
           const list = await getStudySites(defaultStudyId);
@@ -149,7 +167,7 @@ export function CreateSiteVisitModal({
   const onStudyChange = (sid: string) => {
     setValue('study_id', sid);
     setValue('site_id', '');
-    setValue('template_id', '');
+    setValue('site_number', '');
     loadSites(sid);
   };
 
@@ -193,24 +211,26 @@ export function CreateSiteVisitModal({
           <div className="flex flex-col gap-4">
             {!defaultStudyId && (
               <div className="space-y-2">
-                <Label htmlFor="study_id">Protocol Name</Label>
+                <Label htmlFor="study_id">Study Name</Label>
                 <Select
                   value={studyId ?? ''}
                   onValueChange={onStudyChange}
                 >
                   <SelectTrigger id="study_id" className="text-[12px]">
                     <SelectValue
-                      placeholder="Select Protocol Name..."
+                      placeholder="Select study..."
                       getDisplayLabel={(v) => {
                         if (!v) return null;
                         const s = studies.find((x) => x.id === v);
-                        return s ? (s.protocol_number ? `${s.title} (${s.protocol_number})` : s.title) : v;
+                        return s ? studySelectLabel(s) : v;
                       }}
                     />
                   </SelectTrigger>
                   <SelectContent>
                     {studies.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>{s.title} ({s.protocol_number})</SelectItem>
+                      <SelectItem key={s.id} value={s.id}>
+                        {studySelectLabel(s)}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -252,10 +272,15 @@ export function CreateSiteVisitModal({
             <Label htmlFor="site_number">Site Number</Label>
             <Input
               id="site_number"
+              readOnly
+              title={siteId ? 'Filled from the selected site.' : 'Select a site to fill the site number.'}
               {...register('site_number')}
-              className="text-[12px]"
+              className="text-[12px] cursor-not-allowed bg-muted/50"
               placeholder="Site number"
             />
+            {siteId ? (
+              <p className="text-xs text-muted-foreground">Filled from the selected site.</p>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -326,6 +351,9 @@ export function CreateSiteVisitModal({
                 ))}
               </SelectContent>
             </Select>
+            {filteredTemplates.length > 1 && (
+              <p className="text-xs text-muted-foreground">Default template selected; you can change it.</p>
+            )}
           </div>
 
           <div className="space-y-2">

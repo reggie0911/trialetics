@@ -6,7 +6,9 @@ import type {
 } from '@/lib/actions/visit-reports';
 import type { VisitReportPdfData } from '@/components/ctms/trip-reports/visit-report-pdf-document';
 import type { VisitReportTemplateQuestion } from '@/lib/types/visit-reports';
+import type { SubjectCrfPercentages } from '@/lib/types/ctms';
 import { VISIT_REPORT_TYPE_LABELS } from '@/lib/types/visit-reports';
+import { studySelectLabel } from '@/lib/ctms/study-display';
 
 /** Normalized visit row for PDF field extraction (Supabase joins vary by query). */
 type VisitPdfRow = {
@@ -15,7 +17,11 @@ type VisitPdfRow = {
   start_date?: string | null;
   end_date?: string | null;
   planned_date?: string | null;
-  studies?: { title?: string | null; protocol_number?: string | null } | null;
+  studies?: {
+    title?: string | null;
+    study_name?: string | null;
+    protocol_number?: string | null;
+  } | null;
   study_sites?: {
     name?: string | null;
     site_number?: string | null;
@@ -96,6 +102,14 @@ export interface BuildVisitReportPdfDataInput {
   includeReviewerComments: boolean;
   /** When set, trims and maps section reviewer comment fields onto PDF data */
   sectionReviewerComments?: SectionReviewerCommentsState;
+  /**
+   * Visit-wide eCRF percentage rollup keyed by `subject_visit_id`.
+   * Same map produced by `getTripReportWithDetails` and consumed by
+   * `VisitReportAuthoring`. When provided, the PDF section 5 renders the
+   * grouped Subject + Visit cards with SDV%; when omitted (older callers),
+   * the legacy flat `crfEntries` table is rendered as a fallback.
+   */
+  visitTotalsBySubjectVisitId?: Record<string, SubjectCrfPercentages>;
 }
 
 export function buildVisitReportPdfData(input: BuildVisitReportPdfDataInput): VisitReportPdfData {
@@ -116,13 +130,20 @@ export function buildVisitReportPdfData(input: BuildVisitReportPdfDataInput): Vi
     reportSignerNames,
     includeReviewerComments,
     sectionReviewerComments: sectionCommentsInput,
+    visitTotalsBySubjectVisitId,
   } = input;
 
   const v = visit as VisitPdfRow;
   const visitTypeRaw = v?.visit_type ?? '—';
   const visitTypeLabel =
     VISIT_REPORT_TYPE_LABELS[visitTypeRaw as keyof typeof VISIT_REPORT_TYPE_LABELS] ?? visitTypeRaw;
-  const studyTitle = v?.studies?.title ?? '—';
+  const studyTitle = v?.studies
+    ? studySelectLabel({
+        study_name: v.studies.study_name ?? null,
+        protocol_number: v.studies.protocol_number ?? '',
+        title: v.studies.title ?? '—',
+      })
+    : '—';
   const protocolNumber = v?.studies?.protocol_number ?? '—';
   const siteName = v?.study_sites?.name ?? '—';
   const siteNumber = v?.study_sites?.site_number ?? '—';
@@ -152,6 +173,55 @@ export function buildVisitReportPdfData(input: BuildVisitReportPdfDataInput): Vi
   const sectionReviewerComments = sectionCommentsInput ?? sectionReviewerStateFromReport(report);
 
   const orderedSections = groupQuestionsIntoOrderedSections(questions);
+
+  /**
+   * Group recorded CRFs by `(subject_number, subject_visit_id)` to mirror the
+   * `linkedCrfGroups` / `unlinkedCrfEntries` split in `VisitReportAuthoring`.
+   * Rows without a `subject_crf_id` (legacy free-text or pre-eCRF reports)
+   * fall through to the unlinked bucket so they still print under section 5.
+   */
+  type LinkedGroup = NonNullable<VisitReportPdfData['crfLinkedGroups']>[number];
+  const linkedGroups: LinkedGroup[] = [];
+  const groupByKey = new Map<string, LinkedGroup>();
+  const unlinkedRows: NonNullable<VisitReportPdfData['crfUnlinkedEntries']> = [];
+  for (const e of crfEntries) {
+    if (!e.subject_crf_id) {
+      unlinkedRows.push({
+        subject_number: e.subject_number,
+        crf_name: e.crf_name,
+        sdv_status: e.sdv_status,
+      });
+      continue;
+    }
+    const key = `${e.subject_number ?? '?'}__${e.subject_visit_id ?? e.linked?.visit_name ?? ''}`;
+    let g = groupByKey.get(key);
+    if (!g) {
+      const totals = e.subject_visit_id
+        ? visitTotalsBySubjectVisitId?.[e.subject_visit_id] ?? null
+        : null;
+      g = {
+        subject_number: e.subject_number,
+        visit_name: e.linked?.visit_name ?? null,
+        sdvPct: totals?.sdvPct ?? null,
+        sdvCapped: !!(totals && totals.hasUnresolvedQuery && totals.sdvPct !== null),
+        sdvTotal: totals?.sdvTotal ?? 0,
+        dataEntryTotal: totals?.dataEntryTotal ?? 0,
+        entries: [],
+      };
+      groupByKey.set(key, g);
+      linkedGroups.push(g);
+    }
+    g.entries.push({
+      crf_name: e.linked?.crf_name ?? e.crf_name,
+      sdv_status: e.sdv_status,
+      data_entry: !!e.linked?.data_entry,
+      source_data_review: !!e.linked?.source_data_review,
+      source_data_verified: !!e.linked?.source_data_verified,
+      pi_signed: !!e.linked?.pi_signed,
+      data_management_lock: !!e.linked?.data_management_lock,
+      query_status: e.linked?.query_status ?? 'none',
+    });
+  }
 
   return {
     visitId,
@@ -184,6 +254,8 @@ export function buildVisitReportPdfData(input: BuildVisitReportPdfDataInput): Vi
       crf_name: e.crf_name,
       sdv_status: e.sdv_status,
     })),
+    crfLinkedGroups: linkedGroups,
+    crfUnlinkedEntries: unlinkedRows,
     sections: orderedSections.map((s) => ({
       name: s.name,
       questions: s.questions.map((q) => ({
@@ -237,5 +309,16 @@ export function buildVisitReportPdfData(input: BuildVisitReportPdfDataInput): Vi
     reviewer_comments_narrative: sectionReviewerComments.reviewer_comments_narrative.trim() || null,
     reviewer_comments_open_actions: sectionReviewerComments.reviewer_comments_open_actions.trim() || null,
     reviewer_comments_attachments: sectionReviewerComments.reviewer_comments_attachments.trim() || null,
+    docAvailability: {
+      monitoringVisitLog: (report?.monitoring_visit_log_available as 'yes' | 'no' | null | undefined) ?? null,
+      visitConfirmationLetter: (report?.visit_confirmation_letter_available as 'yes' | 'no' | null | undefined) ?? null,
+      visitFollowupLetter: (report?.visit_followup_letter_available as 'yes' | 'no' | null | undefined) ?? null,
+      monitoringVisitLogReason:
+        (report?.monitoring_visit_log_unavailable_reason as string | null | undefined) ?? null,
+      visitConfirmationLetterReason:
+        (report?.visit_confirmation_letter_unavailable_reason as string | null | undefined) ?? null,
+      visitFollowupLetterReason:
+        (report?.visit_followup_letter_unavailable_reason as string | null | undefined) ?? null,
+    },
   };
 }

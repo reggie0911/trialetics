@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Loader2, Palette } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -22,6 +22,7 @@ import {
   type BFBrandInputs,
   type GenerationModelId,
 } from '@/lib/types/brand-forge';
+import { brandForgePath, brandForgeStudyIdFromPathname } from '@/lib/nav/brand-forge-paths';
 
 interface LogoGalleryProps {
   projectId: string;
@@ -51,6 +52,8 @@ export function LogoGallery({
   hasBrandKit,
 }: LogoGalleryProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const studyId = brandForgeStudyIdFromPathname(pathname);
   const [concepts, setConcepts] = useState<BFLogoConcept[]>(() => dedupeConceptsById(initialConcepts));
   const [selectedStyle, setSelectedStyle] = useState<string>(GENERATION_STYLES[0].id);
   const [selectedModel, setSelectedModel] = useState<GenerationModelId>('ideogram-v3-turbo');
@@ -249,7 +252,7 @@ export function LogoGallery({
           return;
         }
       }
-      router.push(`/protected/brand-forge/${projectId}/brand-kit`);
+      router.push(brandForgePath(studyId, projectId, 'brand-kit'));
     } finally {
       setIsBrandKitNavigating(false);
     }

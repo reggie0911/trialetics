@@ -556,6 +556,10 @@ export interface SubjectVisitTimingPatch {
   actual_date?: string | null;
   window_start?: string | null;
   window_end?: string | null;
+  /** Per-subject override for days BEFORE planned date inside the window. */
+  window_before_days?: number | null;
+  /** Per-subject override for days AFTER planned date inside the window. */
+  window_after_days?: number | null;
   status?: VisitStatus;
   notes?: string | null;
 }
@@ -565,6 +569,8 @@ const ALLOWED_TIMING_FIELDS: Array<keyof SubjectVisitTimingPatch> = [
   'actual_date',
   'window_start',
   'window_end',
+  'window_before_days',
+  'window_after_days',
   'status',
   'notes',
 ];

@@ -11,6 +11,7 @@ import {
   Font,
 } from '@react-pdf/renderer';
 import { VISIT_REPORT_STATUS_LABELS, QUESTION_RESPONSE_LABELS } from '@/lib/types/visit-reports';
+import { SUBJECT_CRF_METRICS, SUBJECT_CRF_METRIC_SHORT_LABELS } from '@/lib/types/ctms';
 import {
   formatSignatureDisplayDateTime,
   parseTripReportSignaturePayload,
@@ -34,75 +35,75 @@ Font.register({
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 14,
-    paddingBottom: 50,
-    paddingHorizontal: 36,
+    paddingTop: 12,
+    paddingBottom: 40,
+    paddingHorizontal: 28,
     fontFamily: 'Poppins',
-    fontSize: 10,
+    fontSize: 9,
     color: '#111827',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 10,
-  },
-  title: { fontSize: 15, fontWeight: 700, marginBottom: 2 },
-  subtitle: { fontSize: 9, color: '#6b7280' },
-  section: {
     marginBottom: 6,
+  },
+  title: { fontSize: 12, fontWeight: 700, marginBottom: 2 },
+  subtitle: { fontSize: 8, color: '#6b7280' },
+  section: {
+    marginBottom: 3,
     border: '1px solid #d1d5db',
-    borderRadius: 4,
+    borderRadius: 3,
   },
   sectionHeader: {
     backgroundColor: '#f3f4f6',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
     borderBottom: '1px solid #d1d5db',
   },
-  sectionTitle: { fontSize: 10, fontWeight: 700, color: '#111827' },
+  sectionTitle: { fontSize: 9, fontWeight: 700, color: '#111827' },
   sectionContent: {
-    padding: 8,
+    padding: 5,
     flexDirection: 'column',
   },
   /* Info grid: alternating-row table style */
   infoGrid: { flexDirection: 'column', width: '100%' },
   infoGridRow: {
     flexDirection: 'row',
-    paddingVertical: 4,
-    paddingHorizontal: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 5,
     borderBottom: '1px solid #f3f4f6',
   },
   infoGridRowAlt: {
     backgroundColor: '#f9fafb',
   },
-  infoLabel: { width: 130, fontSize: 9, color: '#6b7280', fontWeight: 700, paddingRight: 8 },
-  infoValue: { flex: 1, fontSize: 10, color: '#111827' },
+  infoLabel: { width: 110, fontSize: 8, color: '#6b7280', fontWeight: 700, paddingRight: 8 },
+  infoValue: { flex: 1, fontSize: 9, color: '#111827' },
   infoRow: { flexDirection: 'row', marginBottom: 6, width: '100%' },
   infoCell: { flexDirection: 'row', width: '100%', marginBottom: 4 },
   infoCellHalf: { flexDirection: 'row', width: '48%', marginBottom: 4 },
   row: { flexDirection: 'row', marginBottom: 5, width: '100%' },
   label: { fontWeight: 700, marginRight: 8, fontSize: 10 },
-  listItem: { paddingVertical: 3, paddingHorizontal: 6, marginBottom: 3, border: '1px solid #e5e7eb', borderRadius: 4 },
-  questionRow: { marginBottom: 6, paddingBottom: 6, borderBottom: '1px solid #e5e7eb', width: '100%' },
-  questionText: { marginBottom: 2, fontSize: 10, color: '#111827', width: '100%' },
-  questionCommentLabel: { fontSize: 9, fontWeight: 700, color: '#6b7280', marginTop: 4 },
-  questionCommentBody: { fontSize: 10, color: '#374151', width: '100%', marginTop: 2, lineHeight: 1.4 },
+  listItem: { paddingVertical: 2, paddingHorizontal: 6, marginBottom: 2, border: '1px solid #e5e7eb', borderRadius: 4 },
+  questionRow: { marginBottom: 4, paddingBottom: 4, borderBottom: '1px solid #e5e7eb', width: '100%' },
+  questionText: { marginBottom: 2, fontSize: 9, color: '#111827', width: '100%' },
+  questionCommentLabel: { fontSize: 8, fontWeight: 700, color: '#6b7280', marginTop: 4 },
+  questionCommentBody: { fontSize: 9, color: '#374151', width: '100%', marginTop: 1, lineHeight: 1.3 },
   responseBadge: {
     backgroundColor: '#e5e7eb',
     paddingHorizontal: 6,
-    paddingVertical: 2,
-    fontSize: 9,
+    paddingVertical: 1,
+    fontSize: 8,
     fontWeight: 700,
     alignSelf: 'flex-start',
     color: '#374151',
   },
   footer: {
     position: 'absolute',
-    bottom: 16,
-    left: 36,
-    right: 36,
-    fontSize: 9,
+    bottom: 12,
+    left: 28,
+    right: 28,
+    fontSize: 8,
     color: '#9ca3af',
     textAlign: 'center',
     fontFamily: 'Poppins',
@@ -111,26 +112,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: '#f3f4f6',
     borderBottom: '1px solid #d1d5db',
-    paddingVertical: 4,
+    paddingVertical: 3,
     paddingHorizontal: 8,
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: 700,
     color: '#6b7280',
   },
   tableRow: {
     flexDirection: 'row',
     borderBottom: '1px solid #f3f4f6',
-    paddingVertical: 5,
+    paddingVertical: 3,
     paddingHorizontal: 8,
-    fontSize: 10,
+    fontSize: 9,
   },
-  emptyState: { color: '#9ca3af', paddingVertical: 4, fontSize: 10 },
+  emptyState: { color: '#9ca3af', paddingVertical: 3, fontSize: 9 },
   signatureRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
-    minHeight: 72,
+    minHeight: 56,
   },
   signatureRowAlt: {
     backgroundColor: '#f9fafb',
@@ -138,7 +139,7 @@ const styles = StyleSheet.create({
   signatureRoleCell: {
     width: '11%',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: 6,
     borderRightWidth: 1,
     borderRightColor: '#e5e7eb',
@@ -150,7 +151,7 @@ const styles = StyleSheet.create({
   },
   signatureBlockCell: {
     width: '46%',
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: 6,
     borderRightWidth: 1,
     borderRightColor: '#e5e7eb',
@@ -158,7 +159,7 @@ const styles = StyleSheet.create({
   signatureDateLabelCell: {
     width: '15%',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: 6,
     borderRightWidth: 1,
     borderRightColor: '#e5e7eb',
@@ -166,7 +167,7 @@ const styles = StyleSheet.create({
   signatureDateValueCell: {
     width: '28%',
     justifyContent: 'center',
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: 6,
   },
   signaturePanel: {
@@ -174,7 +175,7 @@ const styles = StyleSheet.create({
     borderColor: '#d1d5db',
     borderRadius: 4,
     backgroundColor: '#f3f4f6',
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: 8,
     minHeight: 56,
   },
@@ -184,14 +185,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
+    paddingVertical: 6,
     borderRadius: 4,
   },
   signatureScriptName: {
     fontFamily: 'DancingScript',
-    fontSize: 18,
+    fontSize: 14,
     color: '#111827',
-    marginBottom: 4,
+    marginBottom: 2,
     paddingRight: 40,
   },
   signatureVerified: {
@@ -201,20 +202,20 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   signatureMetaLine: {
-    fontSize: 8,
+    fontSize: 7.5,
     color: '#4b5563',
     marginTop: 2,
   },
   signatureMetaBold: {
-    fontSize: 8,
+    fontSize: 7.5,
     fontWeight: 700,
     color: '#111827',
   },
   signatureAttestLine: {
-    fontSize: 7,
+    fontSize: 6.5,
     color: '#6b7280',
     marginTop: 4,
-    lineHeight: 1.35,
+    lineHeight: 1.25,
   },
   signatureNotSignedText: {
     fontSize: 8,
@@ -225,10 +226,50 @@ const styles = StyleSheet.create({
     fontWeight: 700,
     color: '#111827',
   },
+  /* Section 5 — Monitored CRF(s) grouped layout */
+  crfLegend: { fontSize: 7.5, color: '#6b7280', marginBottom: 3, lineHeight: 1.25 },
+  crfLegendNote: { fontSize: 7.5, color: '#6b7280', marginBottom: 4, fontStyle: 'italic' },
+  crfGroup: { marginBottom: 3, border: '1px solid #e5e7eb', borderRadius: 3 },
+  crfGroupHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+    paddingVertical: 2,
+    paddingHorizontal: 5,
+    borderBottom: '1px solid #e5e7eb',
+  },
+  crfGroupTitle: { fontSize: 8.5, fontWeight: 700, color: '#111827' },
+  crfGroupCount: { fontSize: 8, fontWeight: 400, color: '#6b7280' },
+  crfGroupSdv: { fontSize: 8.5, fontWeight: 700, color: '#111827' },
+  crfRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+    paddingHorizontal: 5,
+    borderTop: '1px solid #f3f4f6',
+  },
+  crfName: { fontSize: 8.5, color: '#111827', width: '40%' },
+  crfChips: {
+    fontSize: 7.5,
+    color: '#374151',
+    fontFamily: 'Courier',
+    width: '60%',
+    textAlign: 'right',
+  },
+  crfUnlinkedBlock: { marginTop: 3, borderTop: '1px dashed #d1d5db', paddingTop: 3 },
+  crfUnlinkedHeader: { fontSize: 8, fontWeight: 700, color: '#6b7280', marginBottom: 2 },
+  crfUnlinkedRow: { fontSize: 8, color: '#374151', marginBottom: 1 },
+  attendeeRow: {
+    fontSize: 8.5,
+    color: '#111827',
+    paddingVertical: 2,
+    paddingHorizontal: 5,
+    borderTop: '1px solid #f3f4f6',
+  },
 });
 
 const TABLE_COLUMNS = {
-  attendees: ['60%', '40%'] as const,
   crf: ['30%', '40%', '30%'] as const,
   actionOpen: ['50%', '25%', '25%'] as const,
   actionClosed: ['45%', '25%', '30%'] as const,
@@ -358,7 +399,41 @@ export interface VisitReportPdfData {
   piEmail: string;
   siteAttendees: { first_name: string; last_name: string; role: string | null }[];
   sponsorAttendees: { first_name: string; last_name: string; role: string | null }[];
+  /**
+   * Legacy flat list of recorded CRF rows. Kept for backward compatibility
+   * with old callers and as a defensive fallback when the grouped fields below
+   * are missing. Built from `subject_number / crf_name / sdv_status` snapshots.
+   */
   crfEntries: { subject_number: string | null; crf_name: string | null; sdv_status: string | null }[];
+  /**
+   * Preferred shape for section 5 — mirrors the on-screen Monitored CRF(s) cards
+   * (one card per Subject + Visit, with live DE/SDR/SDV/PI/LOCK/Query state and
+   * the visit's overall SDV%). Set by `buildVisitReportPdfData` when the
+   * `visitTotalsBySubjectVisitId` rollup is supplied. Empty when the report has
+   * no eCRF-linked entries (legacy reports use `crfEntries` only).
+   */
+  crfLinkedGroups?: {
+    subject_number: string | null;
+    visit_name: string | null;
+    /** Visit-wide SDV% (null when there are no DE rows in the visit). */
+    sdvPct: number | null;
+    /** True when SDV% was capped at 99 due to open/answered queries in the visit. */
+    sdvCapped: boolean;
+    sdvTotal: number;
+    dataEntryTotal: number;
+    entries: {
+      crf_name: string | null;
+      sdv_status: string | null;
+      data_entry: boolean;
+      source_data_review: boolean;
+      source_data_verified: boolean;
+      pi_signed: boolean;
+      data_management_lock: boolean;
+      query_status: 'none' | 'open' | 'answered';
+    }[];
+  }[];
+  /** Free-text / legacy rows that have no `subject_crf_id` link. */
+  crfUnlinkedEntries?: { subject_number: string | null; crf_name: string | null; sdv_status: string | null }[];
   sections: { name: string; questions: { question_text: string; response: string | null; comments: string | null; reviewer_comments: string | null }[] }[];
   narrative: string;
   openActionItems: { description: string; due_date: string | null; created_at: string }[];
@@ -366,6 +441,14 @@ export interface VisitReportPdfData {
   logoUrl?: string | null;
   includeReviewerComments?: boolean;
   attachments?: { file_name: string; file_size: number | null; category: string | null; created_at: string }[];
+  docAvailability?: {
+    monitoringVisitLog: 'yes' | 'no' | null;
+    visitConfirmationLetter: 'yes' | 'no' | null;
+    visitFollowupLetter: 'yes' | 'no' | null;
+    monitoringVisitLogReason?: string | null;
+    visitConfirmationLetterReason?: string | null;
+    visitFollowupLetterReason?: string | null;
+  };
   reportSubmittedDate?: string | null;
   reportReviewedAt?: string | null;
   reportApprovedDate?: string | null;
@@ -504,18 +587,15 @@ export function VisitReportPdfDocument({
             {data.siteAttendees.length === 0 ? (
               <Text style={styles.emptyState}>No site attendees added.</Text>
             ) : (
-              <>
-                <View style={[styles.tableHeader, { width: '100%' }]}>
-                  <Text style={{ width: TABLE_COLUMNS.attendees[0] }}>Name</Text>
-                  <Text style={{ width: TABLE_COLUMNS.attendees[1] }}>Role</Text>
-                </View>
-                {data.siteAttendees.map((a, i) => (
-                  <View key={i} style={[styles.tableRow, { width: '100%' }]}>
-                    <Text style={{ width: TABLE_COLUMNS.attendees[0] }}>{a.first_name} {a.last_name}</Text>
-                    <Text style={{ width: TABLE_COLUMNS.attendees[1] }}>{a.role ?? '—'}</Text>
-                  </View>
-                ))}
-              </>
+              <View>
+                {data.siteAttendees.map((a, i) => {
+                  const fullName = `${a.first_name} ${a.last_name}`.trim();
+                  const line = a.role ? `${fullName} \u2014 ${a.role}` : fullName;
+                  return (
+                    <Text key={i} style={styles.attendeeRow}>{line}</Text>
+                  );
+                })}
+              </View>
             )}
             {includeReviewerComments && data.reviewer_comments_site_attendees?.trim() ? (
               <View style={{ marginTop: 10 }}>
@@ -536,18 +616,15 @@ export function VisitReportPdfDocument({
             {data.sponsorAttendees.length === 0 ? (
               <Text style={styles.emptyState}>No sponsor attendees added.</Text>
             ) : (
-              <>
-                <View style={[styles.tableHeader, { width: '100%' }]}>
-                  <Text style={{ width: TABLE_COLUMNS.attendees[0] }}>Name</Text>
-                  <Text style={{ width: TABLE_COLUMNS.attendees[1] }}>Role</Text>
-                </View>
-                {data.sponsorAttendees.map((a, i) => (
-                  <View key={i} style={[styles.tableRow, { width: '100%' }]}>
-                    <Text style={{ width: TABLE_COLUMNS.attendees[0] }}>{a.first_name} {a.last_name}</Text>
-                    <Text style={{ width: TABLE_COLUMNS.attendees[1] }}>{a.role ?? '—'}</Text>
-                  </View>
-                ))}
-              </>
+              <View>
+                {data.sponsorAttendees.map((a, i) => {
+                  const fullName = `${a.first_name} ${a.last_name}`.trim();
+                  const line = a.role ? `${fullName} \u2014 ${a.role}` : fullName;
+                  return (
+                    <Text key={i} style={styles.attendeeRow}>{line}</Text>
+                  );
+                })}
+              </View>
             )}
             {includeReviewerComments && data.reviewer_comments_sponsor_attendees?.trim() ? (
               <View style={{ marginTop: 10 }}>
@@ -560,39 +637,107 @@ export function VisitReportPdfDocument({
           </View>
         </View>
 
-        <View style={styles.section} wrap={false}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>5. Monitored CRF(s) ({data.crfEntries.length})</Text>
-          </View>
-          <View style={styles.sectionContent}>
-            {data.crfEntries.length === 0 ? (
-              <Text style={styles.emptyState}>No CRF entries.</Text>
-            ) : (
-              <>
-                <View style={[styles.tableHeader, { width: '100%' }]}>
-                  <Text style={{ width: TABLE_COLUMNS.crf[0] }}>Subject</Text>
-                  <Text style={{ width: TABLE_COLUMNS.crf[1] }}>CRF</Text>
-                  <Text style={{ width: TABLE_COLUMNS.crf[2] }}>SDV</Text>
-                </View>
-                {data.crfEntries.map((e, i) => (
-                  <View key={i} style={[styles.tableRow, { width: '100%' }]}>
-                    <Text style={{ width: TABLE_COLUMNS.crf[0] }}>{e.subject_number ?? '—'}</Text>
-                    <Text style={{ width: TABLE_COLUMNS.crf[1] }}>{e.crf_name ?? '—'}</Text>
-                    <Text style={{ width: TABLE_COLUMNS.crf[2] }}>{e.sdv_status ?? '—'}</Text>
-                  </View>
-                ))}
-              </>
-            )}
-            {includeReviewerComments && data.reviewer_comments_monitored_crfs?.trim() ? (
-              <View style={{ marginTop: 10 }}>
-                <Text style={styles.questionCommentLabel}>Reviewer notes</Text>
-                <Text style={styles.questionCommentBody} wrap>
-                  {data.reviewer_comments_monitored_crfs.trim()}
-                </Text>
+        {(() => {
+          /**
+           * Section 5 is now grouped by Subject + Visit (mirrors the on-screen
+           * Monitored CRF(s) cards). Falls back to the legacy flat table when
+           * the loader didn't enrich rows with `crfLinkedGroups` (e.g. older
+           * approved reports persisted before the eCRF link was added).
+           */
+          const linkedGroups = data.crfLinkedGroups ?? [];
+          const unlinkedRows = data.crfUnlinkedEntries ?? [];
+          const hasGrouped = linkedGroups.length > 0 || unlinkedRows.length > 0;
+          const totalCrfCount = hasGrouped
+            ? linkedGroups.reduce((acc, g) => acc + g.entries.length, 0) + unlinkedRows.length
+            : data.crfEntries.length;
+          const anyCapped = linkedGroups.some((g) => g.sdvCapped);
+          const queryShort = (q: 'none' | 'open' | 'answered'): string =>
+            q === 'open' ? 'Open' : q === 'answered' ? 'Answered' : '—';
+          return (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>5. Monitored CRF(s) ({totalCrfCount})</Text>
               </View>
-            ) : null}
-          </View>
-        </View>
+              <View style={styles.sectionContent}>
+                {totalCrfCount === 0 ? (
+                  <Text style={styles.emptyState}>No CRF entries.</Text>
+                ) : hasGrouped ? (
+                  <>
+                    <Text style={styles.crfLegend}>
+                      Legend: DE = Data Entry · SDR = Source Data Review · SDV = Source Data Verified · PI = PI Signed · LOCK = DM Lock · Query: No Query | Open | Answered
+                    </Text>
+                    {anyCapped ? (
+                      <Text style={styles.crfLegendNote}>
+                        * SDV capped at 99% — open/answered query in the visit.
+                      </Text>
+                    ) : null}
+                    {linkedGroups.map((group, gi) => (
+                      <View key={`g-${gi}`} style={styles.crfGroup} wrap={false}>
+                        <View style={styles.crfGroupHeader}>
+                          <Text style={styles.crfGroupTitle}>
+                            Subject {group.subject_number ?? '—'} · {group.visit_name ?? 'Unspecified visit'}
+                            <Text style={styles.crfGroupCount}>
+                              {`  (${group.entries.length} CRF${group.entries.length === 1 ? '' : 's'})`}
+                            </Text>
+                          </Text>
+                          <Text style={styles.crfGroupSdv}>
+                            SDV: {group.sdvPct == null ? '—' : `${group.sdvPct}%${group.sdvCapped ? '*' : ''}`}
+                          </Text>
+                        </View>
+                        {group.entries.map((e, ri) => (
+                          <View key={`g-${gi}-r-${ri}`} style={styles.crfRow}>
+                            <Text style={styles.crfName}>{e.crf_name ?? '—'}</Text>
+                            <Text style={styles.crfChips}>
+                              {SUBJECT_CRF_METRICS.map(
+                                (m) => `[${SUBJECT_CRF_METRIC_SHORT_LABELS[m]} ${e[m] ? 'x' : '·'}]`
+                              ).join(' ')}
+                              {`  Q: ${queryShort(e.query_status)}`}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    ))}
+                    {unlinkedRows.length > 0 && (
+                      <View style={styles.crfUnlinkedBlock} wrap={false}>
+                        <Text style={styles.crfUnlinkedHeader}>
+                          Unlinked entries ({unlinkedRows.length})
+                        </Text>
+                        {unlinkedRows.map((e, i) => (
+                          <Text key={`u-${i}`} style={styles.crfUnlinkedRow}>
+                            {(e.subject_number ?? '—') + ' · ' + (e.crf_name ?? '—') + (e.sdv_status ? ' · ' + e.sdv_status : '')}
+                          </Text>
+                        ))}
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <View style={[styles.tableHeader, { width: '100%' }]}>
+                      <Text style={{ width: TABLE_COLUMNS.crf[0] }}>Subject</Text>
+                      <Text style={{ width: TABLE_COLUMNS.crf[1] }}>CRF</Text>
+                      <Text style={{ width: TABLE_COLUMNS.crf[2] }}>SDV</Text>
+                    </View>
+                    {data.crfEntries.map((e, i) => (
+                      <View key={i} style={[styles.tableRow, { width: '100%' }]}>
+                        <Text style={{ width: TABLE_COLUMNS.crf[0] }}>{e.subject_number ?? '—'}</Text>
+                        <Text style={{ width: TABLE_COLUMNS.crf[1] }}>{e.crf_name ?? '—'}</Text>
+                        <Text style={{ width: TABLE_COLUMNS.crf[2] }}>{e.sdv_status ?? '—'}</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+                {includeReviewerComments && data.reviewer_comments_monitored_crfs?.trim() ? (
+                  <View style={{ marginTop: 6 }}>
+                    <Text style={styles.questionCommentLabel}>Reviewer notes</Text>
+                    <Text style={styles.questionCommentBody} wrap>
+                      {data.reviewer_comments_monitored_crfs.trim()}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          );
+        })()}
 
         <View>
         {data.sections.length === 0 ? (
@@ -723,22 +868,110 @@ export function VisitReportPdfDocument({
 
         <View style={styles.section} wrap={false}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{attachmentsNum}. Attachments & Supporting Documents ({(data.attachments ?? []).length})</Text>
+            <Text style={styles.sectionTitle}>{attachmentsNum}. Attachments & Supporting Documents</Text>
           </View>
           <View style={styles.sectionContent}>
-            {!data.attachments || data.attachments.length === 0 ? (
-              <Text style={styles.emptyState}>No attachments.</Text>
-            ) : (
-              data.attachments.map((a, i) => (
-                <View key={i} style={[styles.tableRow, { width: '100%', flexDirection: 'row' }]}>
-                  <Text style={{ flex: 1, fontSize: 10 }}>{a.file_name}</Text>
-                  <Text style={{ fontSize: 10, color: '#6b7280' }}>
-                    {a.file_size != null ? `${(a.file_size / 1024).toFixed(1)} KB` : '—'} · {formatDatePdf(a.created_at)}
-                    {a.category ? ` · ${a.category}` : ''}
-                  </Text>
+            {/* Document availability checklist */}
+            {([
+              {
+                label: 'Monitoring Visit Log',
+                category: 'Monitoring Visit Log',
+                answer: data.docAvailability?.monitoringVisitLog ?? null,
+                reason: data.docAvailability?.monitoringVisitLogReason ?? null,
+              },
+              {
+                label: 'Visit Confirmation Letter',
+                category: 'Visit Confirmation Letter',
+                answer: data.docAvailability?.visitConfirmationLetter ?? null,
+                reason: data.docAvailability?.visitConfirmationLetterReason ?? null,
+              },
+              {
+                label: 'Visit Follow-up Letter',
+                category: 'Visit Follow-up Letter',
+                answer: data.docAvailability?.visitFollowupLetter ?? null,
+                reason: data.docAvailability?.visitFollowupLetterReason ?? null,
+              },
+            ] as {
+              label: string;
+              category: string;
+              answer: 'yes' | 'no' | null;
+              reason: string | null;
+            }[]).map((q, qi) => {
+              const allAttachments = data.attachments ?? [];
+              const catFiles = allAttachments
+                .filter((a) => a.category === q.category)
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+              const file = catFiles[0] ?? null;
+              // Server-side status derivation (mirrors the web client):
+              // file present => Uploaded; answer === 'no' => Not available; else Pending.
+              const status: 'pending' | 'uploaded' | 'unavailable' = file
+                ? 'uploaded'
+                : q.answer === 'no'
+                  ? 'unavailable'
+                  : 'pending';
+              const statusLabel =
+                status === 'uploaded' ? 'Uploaded' : status === 'unavailable' ? 'Not available' : 'Pending';
+              const statusColor =
+                status === 'uploaded' ? '#166534' : status === 'unavailable' ? '#9f1239' : '#6b7280';
+              return (
+                <View
+                  key={qi}
+                  style={{
+                    marginBottom: 8,
+                    paddingBottom: 8,
+                    borderBottomWidth: qi < 2 ? 1 : 0,
+                    borderBottomColor: '#e5e7eb',
+                    borderBottomStyle: 'solid',
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Text style={{ fontSize: 10, fontWeight: 'semibold', flex: 1 }}>{q.label}</Text>
+                    <Text style={{ fontSize: 10, color: statusColor }}>{statusLabel}</Text>
+                  </View>
+                  {status === 'uploaded' && file && (
+                    <View style={{ marginTop: 4, paddingLeft: 12, flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 9, color: '#374151', flex: 1 }}>{file.file_name}</Text>
+                      <Text style={{ fontSize: 9, color: '#6b7280' }}>
+                        {file.file_size != null ? `${(file.file_size / 1024).toFixed(1)} KB` : ''}
+                        {file.file_size != null ? ' · ' : ''}
+                        {formatDatePdf(file.created_at)}
+                      </Text>
+                    </View>
+                  )}
+                  {status === 'unavailable' && (
+                    <View style={{ marginTop: 4, paddingLeft: 12 }}>
+                      {q.reason ? (
+                        <Text style={{ fontSize: 9, color: '#374151', fontStyle: 'italic' }}>
+                          &ldquo;{q.reason}&rdquo;
+                        </Text>
+                      ) : (
+                        <Text style={{ fontSize: 9, color: '#9ca3af' }}>No reason provided.</Text>
+                      )}
+                    </View>
+                  )}
                 </View>
-              ))
-            )}
+              );
+            })}
+            {/* Other (legacy/uncategorized) attachments */}
+            {(() => {
+              const checklist = new Set(['Monitoring Visit Log', 'Visit Confirmation Letter', 'Visit Follow-up Letter']);
+              const others = (data.attachments ?? []).filter((a) => !a.category || !checklist.has(a.category));
+              if (others.length === 0) return null;
+              return (
+                <View style={{ marginTop: 8 }}>
+                  <Text style={{ fontSize: 10, fontWeight: 'semibold', color: '#6b7280', marginBottom: 4 }}>Other attachments ({others.length})</Text>
+                  {others.map((a, i) => (
+                    <View key={i} style={[styles.tableRow, { width: '100%', flexDirection: 'row' }]}>
+                      <Text style={{ flex: 1, fontSize: 9 }}>{a.file_name}</Text>
+                      <Text style={{ fontSize: 9, color: '#6b7280' }}>
+                        {a.file_size != null ? `${(a.file_size / 1024).toFixed(1)} KB` : '—'} · {formatDatePdf(a.created_at)}
+                        {a.category ? ` · ${a.category}` : ''}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
             {includeReviewerComments && data.reviewer_comments_attachments?.trim() ? (
               <View style={{ marginTop: 10 }}>
                 <Text style={styles.questionCommentLabel}>Reviewer notes</Text>
