@@ -506,7 +506,7 @@ export function DirectoryContactDetailClient({
         setStudyRoleEditRow(row);
       },
     }),
-    [canEdit] // eslint-disable-line react-hooks/exhaustive-deps -- enterEdit/setters are stable
+    [canEdit, enterEdit]
   );
 
   const attention = useMemo(

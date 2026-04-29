@@ -214,7 +214,7 @@ export function SiteMonitoringOverviewColumn({
       return a.visitName.localeCompare(b.visitName);
     });
     return scored.slice(0, 8);
-  }, [visitExtras, visitSchedule.byVisit]);
+  }, [visitExtras, visitSchedule]);
 
   const goVisits = () => onTab('visit-window-compliance');
 

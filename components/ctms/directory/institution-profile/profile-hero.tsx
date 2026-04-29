@@ -1,5 +1,6 @@
 'use client';
 
+import { createElement } from 'react';
 import { MapPin, MoreHorizontal, Pencil, ShieldCheck } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -67,7 +68,7 @@ export function ProfileHero({
               aria-hidden
               className={`hidden h-16 w-16 shrink-0 items-center justify-center rounded-[10px] sm:flex ${tone}`}
             >
-              <Icon className="h-8 w-8" strokeWidth={1.75} />
+              {createElement(Icon, { className: 'h-8 w-8', strokeWidth: 1.75 })}
             </span>
             <div className="min-w-0 flex-1 space-y-2">
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
