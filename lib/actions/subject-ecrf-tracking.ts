@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 
+import { SUBJECT_DEACTIVATED_EDIT_TOOLTIP } from '@/lib/constants/subject-lifecycle';
 import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
 import { assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
@@ -17,6 +18,7 @@ import {
 interface ResolvedSubject {
   studyId: string;
   siteId: string | null;
+  isActive: boolean;
 }
 
 async function resolveSubjectContext(
@@ -25,13 +27,15 @@ async function resolveSubjectContext(
 ): Promise<ResolvedSubject | null> {
   const { data } = await supabase
     .from('subjects')
-    .select('study_id, site_id')
+    .select('study_id, site_id, is_active')
     .eq('id', subjectId)
     .maybeSingle();
   if (!data) return null;
+  const row = data as { study_id: string; site_id: string | null; is_active: boolean | null };
   return {
-    studyId: (data as { study_id: string }).study_id,
-    siteId: (data as { site_id: string | null }).site_id ?? null,
+    studyId: row.study_id,
+    siteId: row.site_id ?? null,
+    isActive: row.is_active !== false,
   };
 }
 
@@ -67,6 +71,7 @@ export async function snapshotSubjectEcrf(
 
   const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, ctx.studyId);
   if (writeGuard) return { error: writeGuard };
+  if (!ctx.isActive) return { error: SUBJECT_DEACTIVATED_EDIT_TOOLTIP };
 
   const { data, error } = await supabase.rpc('snapshot_ecrf_to_subject', {
     p_subject_id: subjectId,
@@ -94,6 +99,7 @@ export async function resyncSubjectEcrf(
 
   const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, ctx.studyId);
   if (writeGuard) return { error: writeGuard };
+  if (!ctx.isActive) return { error: SUBJECT_DEACTIVATED_EDIT_TOOLTIP };
 
   const { data, error } = await supabase.rpc('resync_ecrf_to_subject', {
     p_subject_id: subjectId,
@@ -133,6 +139,7 @@ async function applySubjectCrfPatch(
 
   const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, ctx.studyId);
   if (writeGuard) return { error: writeGuard, subjectId };
+  if (!ctx.isActive) return { error: SUBJECT_DEACTIVATED_EDIT_TOOLTIP, subjectId };
 
   const { error } = await supabase.rpc('apply_subject_crf_patch', {
     p_subject_crf_id: subjectCrfId,

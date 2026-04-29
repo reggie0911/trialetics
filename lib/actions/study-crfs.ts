@@ -262,6 +262,27 @@ function normalizeOptions(
   return rawOptions.map((o) => o.trim()).filter((o) => o.length > 0);
 }
 
+/**
+ * Returns a question count keyed by CRF id for the supplied list of CRF ids.
+ * Uses a single query so the rail health snapshot doesn't need lazy expansion.
+ */
+export async function listCrfQuestionCounts(
+  crfIds: string[]
+): Promise<Record<string, number>> {
+  if (crfIds.length === 0) return {};
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from('study_crf_questions')
+    .select('crf_id')
+    .in('crf_id', crfIds);
+  if (error) throw new Error(error.message);
+  const counts: Record<string, number> = Object.fromEntries(crfIds.map((id) => [id, 0]));
+  for (const row of data ?? []) {
+    counts[row.crf_id] = (counts[row.crf_id] ?? 0) + 1;
+  }
+  return counts;
+}
+
 export async function listCrfQuestions(crfId: string): Promise<StudyCrfQuestion[]> {
   const supabase = await createClient();
   const { data, error } = await supabase

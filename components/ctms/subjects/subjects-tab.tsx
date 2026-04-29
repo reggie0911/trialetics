@@ -15,6 +15,7 @@ import { TablePaginationFooter } from '@/components/ui/table-pagination-footer';
 import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
 import {
   createSubject,
+  deactivateSubject,
   deleteSubject,
   getEnrollmentFunnel,
   getEnrollmentFunnelForSite,
@@ -28,6 +29,7 @@ import { useClientPagination } from '@/lib/hooks/use-client-pagination';
 import { enrichSubjectRow } from '@/lib/subjects/derive';
 import type {
   EnrollmentFunnelData,
+  StudyCountryWithSubmissions,
   StudySite,
   SubjectStatus,
   SubjectWithSite,
@@ -36,13 +38,14 @@ import { SUBJECT_STATUS_OPTIONS } from '@/lib/types/ctms';
 import { triggerCsvDownload } from '@/lib/utils/csv-download';
 import { parseFlexibleDateToIso } from '@/lib/utils/parse-flexible-date';
 
-import { SubjectsFilterBar, type SubjectSiteFilter } from './subjects-filter-bar';
+import {
+  SubjectsFilterBar,
+  type SubjectCountryFilter,
+  type SubjectSiteFilter,
+  type SubjectStatusFilter,
+} from './subjects-filter-bar';
 import { SubjectsKpiStrip } from './subjects-kpi-strip';
 import { SubjectsPageHeader } from './subjects-page-header';
-import {
-  SubjectsStatusPills,
-  type SubjectStatusFilter,
-} from './subjects-status-pills';
 import { SubjectsTable } from './subjects-table';
 
 const SUBJECTS_BULK_UPLOAD_COLUMNS: BulkUploadColumn[] = [
@@ -59,7 +62,9 @@ interface SubjectsTabProps {
   studyId: string;
   initialSubjects: SubjectWithSite[];
   initialFunnel: EnrollmentFunnelData;
-  sites: Pick<StudySite, 'id' | 'site_number' | 'name'>[];
+  /** Study country rows; used to resolve `country_name` per site via `study_country_id`. */
+  countries: StudyCountryWithSubmissions[];
+  sites: Pick<StudySite, 'id' | 'site_number' | 'name' | 'study_country_id'>[];
   /** When set, list and funnel are scoped to this clinical site. */
   siteScopeId?: string;
   createOpen?: boolean;
@@ -70,6 +75,7 @@ export function SubjectsTab({
   studyId,
   initialSubjects,
   initialFunnel,
+  countries,
   sites,
   siteScopeId,
   createOpen,
@@ -83,6 +89,7 @@ export function SubjectsTab({
   const [funnel, setFunnel] = useState(initialFunnel);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<SubjectStatusFilter>('all');
+  const [countryFilter, setCountryFilter] = useState<SubjectCountryFilter>('all');
   const [siteFilter, setSiteFilter] = useState<SubjectSiteFilter>('all');
   const [, startTransition] = useTransition();
 
@@ -122,11 +129,43 @@ export function SubjectsTab({
     [sites],
   );
 
+  const countriesForSelect = useMemo(
+    () =>
+      [...countries].sort((a, b) =>
+        a.country_name.localeCompare(b.country_name, undefined, { sensitivity: 'base' }),
+      ),
+    [countries],
+  );
+
+  const countryNameBySiteId = useMemo(() => {
+    if (siteScopeId) {
+      return new Map<string, string>();
+    }
+    const nameByCountryId = new Map(countries.map((c) => [c.id, c.country_name] as const));
+    const m = new Map<string, string>();
+    for (const s of sites) {
+      m.set(
+        s.id,
+        s.study_country_id
+          ? (nameByCountryId.get(s.study_country_id) ?? '\u2014')
+          : '\u2014',
+      );
+    }
+    return m;
+  }, [siteScopeId, countries, sites]);
+
   const filteredSubjects = useMemo(() => {
     let result = enrichedSubjects;
 
     if (statusFilter !== 'all') {
       result = result.filter((s) => s.status === statusFilter);
+    }
+
+    if (!siteScopeId && countryFilter !== 'all') {
+      const siteIdsInCountry = new Set(
+        sites.filter((s) => s.study_country_id === countryFilter).map((s) => s.id),
+      );
+      result = result.filter((s) => siteIdsInCountry.has(s.site_id));
     }
 
     if (!siteScopeId && siteFilter !== 'all') {
@@ -144,11 +183,19 @@ export function SubjectsTab({
     }
 
     return result;
-  }, [enrichedSubjects, searchQuery, statusFilter, siteFilter, siteScopeId]);
+  }, [
+    enrichedSubjects,
+    searchQuery,
+    statusFilter,
+    countryFilter,
+    siteFilter,
+    siteScopeId,
+    sites,
+  ]);
 
   const pagination = useClientPagination({
     totalItems: filteredSubjects.length,
-    resetKey: [searchQuery, statusFilter, siteFilter, siteScopeId],
+    resetKey: [searchQuery, statusFilter, countryFilter, siteFilter, siteScopeId],
   });
   const paginatedSubjects = pagination.paginate(filteredSubjects);
 
@@ -159,15 +206,33 @@ export function SubjectsTab({
     }
   }, [sites, siteFilter]);
 
+  // Reset countryFilter if the id is no longer in the study (e.g. after refresh).
+  useEffect(() => {
+    if (countryFilter !== 'all' && !countries.some((c) => c.id === countryFilter)) {
+      setCountryFilter('all');
+    }
+  }, [countries, countryFilter]);
+
+  // If the site filter no longer matches the selected country, clear site to "all".
+  useEffect(() => {
+    if (siteScopeId || countryFilter === 'all' || siteFilter === 'all') return;
+    const site = sites.find((s) => s.id === siteFilter);
+    if (site?.study_country_id !== countryFilter) {
+      setSiteFilter('all');
+    }
+  }, [countryFilter, siteFilter, siteScopeId, sites]);
+
   const handleClearFilters = useCallback(() => {
     setSearchQuery('');
     setStatusFilter('all');
+    setCountryFilter('all');
     setSiteFilter('all');
   }, []);
 
   const hasActiveFilters =
     Boolean(searchQuery.trim()) ||
     statusFilter !== 'all' ||
+    (!siteScopeId && countryFilter !== 'all') ||
     (!siteScopeId && siteFilter !== 'all');
 
   const handleDownloadTemplate = useCallback(() => {
@@ -375,6 +440,19 @@ export function SubjectsTab({
     [applySubjectRows],
   );
 
+  const handleDeactivate = useCallback(
+    async (id: string, subjectSiteId: string | null) => {
+      const { error } = await deactivateSubject(id, studyId, null);
+      if (error) {
+        toast.error(error);
+        return;
+      }
+      toast.success('Subject deactivated');
+      refreshData();
+    },
+    [studyId, refreshData],
+  );
+
   const handleDelete = useCallback(
     async (id: string, subjectSiteId: string | null) => {
       const { error } = await deleteSubject(
@@ -396,7 +474,6 @@ export function SubjectsTab({
     <div className="space-y-4">
       <SubjectsPageHeader
         studyId={studyId}
-        funnel={funnel}
         sites={sites}
         siteScopeId={siteScopeId}
         createOpen={createOpen}
@@ -413,15 +490,12 @@ export function SubjectsTab({
 
       <SubjectsKpiStrip funnel={funnel} subjects={subjects} />
 
-      <SubjectsStatusPills
-        funnel={funnel}
-        value={statusFilter}
-        onValueChange={setStatusFilter}
-      />
-
       <SubjectsFilterBar
         search={searchQuery}
         onSearchChange={setSearchQuery}
+        countryFilter={countryFilter}
+        onCountryFilterChange={setCountryFilter}
+        countriesForSelect={countriesForSelect}
         siteFilter={siteFilter}
         onSiteFilterChange={setSiteFilter}
         statusFilter={statusFilter}
@@ -435,10 +509,12 @@ export function SubjectsTab({
       <SubjectsTable
         studyId={studyId}
         subjects={paginatedSubjects}
+        countryNameBySiteId={countryNameBySiteId}
         hideSiteColumn={Boolean(siteScopeId)}
         emptyTotalSubjects={subjects.length === 0}
         hasActiveFilters={hasActiveFilters}
         readOnly={readOnly}
+        onDeactivate={handleDeactivate}
         onDelete={handleDelete}
       />
 

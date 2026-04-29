@@ -1,13 +1,7 @@
 'use client';
 
 import { type ComponentType, type ReactNode, useMemo } from 'react';
-import {
-  CalendarDays,
-  ClipboardList,
-  ListChecks,
-  MoreVertical,
-  Target,
-} from 'lucide-react';
+import { CalendarDays, ClipboardList, ListChecks, Target } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -58,22 +52,18 @@ function KpiCard({
       <div className={cn('h-[3px] w-full shrink-0', topAccentClassName)} />
 
       <div className="flex h-full flex-col gap-4 px-5 pb-5 pt-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div
-              className={cn(
-                'flex h-11 w-11 shrink-0 items-center justify-center rounded-md',
-                iconBgClassName,
-              )}
-            >
-              <Icon className={cn('h-5 w-5', iconFgClassName)} />
-            </div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-3">
+          <div
+            className={cn(
+              'flex h-11 w-11 shrink-0 items-center justify-center rounded-md',
+              iconBgClassName,
+            )}
+          >
+            <Icon className={cn('h-5 w-5', iconFgClassName)} />
+          </div>
+            <p className="min-w-0 text-base font-semibold leading-tight text-foreground">
               {title}
             </p>
-          </div>
-
-          <MoreVertical className="h-4 w-4 shrink-0 text-muted-foreground/70" aria-hidden="true" />
         </div>
 
         {children}

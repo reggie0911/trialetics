@@ -291,6 +291,7 @@ export function StudyDetailTabs({
           <SitesTab
             studyId={study.id}
             initialSites={sites}
+            countries={countries}
             subjects={subjects}
             monitoringVisits={monitoringVisits}
           />
@@ -301,7 +302,13 @@ export function StudyDetailTabs({
             studyId={study.id}
             initialSubjects={subjects}
             initialFunnel={funnel}
-            sites={sites.map((s) => ({ id: s.id, site_number: s.site_number, name: s.name }))}
+            countries={countries}
+            sites={sites.map((s) => ({
+              id: s.id,
+              site_number: s.site_number,
+              name: s.name,
+              study_country_id: s.study_country_id,
+            }))}
             createOpen={activeTab === 'subjects' && actionParam === 'add-subject' ? true : undefined}
             onCreateOpenChange={
               actionParam === 'add-subject'

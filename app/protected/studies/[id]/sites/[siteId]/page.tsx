@@ -9,6 +9,7 @@ import {
   getEnrollmentFunnelForSite,
 } from '@/lib/actions/subjects';
 import { getTasksBySite } from '@/lib/actions/tasks';
+import { getStudyCountries } from '@/lib/actions/countries';
 import { getSiteEcrfRollup } from '@/lib/actions/ecrf-rollup';
 import {
   getSiteVisitScheduleRollup,
@@ -27,6 +28,17 @@ import {
 import { listFinanceInvoicesForSite } from '@/lib/actions/finance-invoices';
 import { listFinanceApprovalTemplateOptions } from '@/lib/actions/finance-approval-templates';
 import { getStudySchedules, getStudyBudgetMeta, listStudyBudgetOptions } from '@/lib/actions/financials';
+import { buildEnrollmentCumulativeSeries } from '@/lib/site-enrollment-forecast';
+import {
+  buildNeedsAttentionList,
+  computeSiteEnrollmentActivity,
+  computeSiteHealth,
+  computeSiteRankByEnrollment,
+  computeTaskRollup,
+  computeVisitCompliancePercent,
+  sumOpenQueries,
+} from '@/lib/site-page-metrics';
+import type { SiteOverviewServerMetrics } from '@/lib/site-page-metrics';
 
 interface PageProps {
   params: Promise<{ id: string; siteId: string }>;
@@ -60,6 +72,7 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
     initialSiteSubjects,
     siteFunnel,
     studySitesRaw,
+    studyCountries,
     directoryCatalogRes,
     institutionsRes,
     financeApprovalTemplateOptions,
@@ -78,6 +91,7 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
     getStudySubjects(site.study_id, { siteId: site.id }),
     getEnrollmentFunnelForSite(site.id),
     getStudySites(site.study_id),
+    getStudyCountries(site.study_id),
     getDirectoryRoleCatalog(),
     listInstitutions({ limit: 300, offset: 0 }),
     listFinanceApprovalTemplateOptions().catch(() => []),
@@ -94,9 +108,23 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
     id: s.id,
     site_number: s.site_number,
     name: s.name,
+    study_country_id: s.study_country_id,
   }));
   const sitePaymentSchedules = studySchedules.filter((s) => s.site_id === site.id);
   if (!study) notFound();
+
+  const enrolledBySite = await Promise.all(
+    studySitesRaw.map((s) => getSubjectCountBySite(s.id)),
+  );
+  const siteRankList = studySitesRaw.map((s, i) => ({
+    id: s.id,
+    target_enrollment: s.target_enrollment ?? 0,
+    enrolled: enrolledBySite[i] ?? 0,
+  }));
+  const { rank: healthRank, total: healthRankTotal } = computeSiteRankByEnrollment(
+    site.id,
+    siteRankList,
+  );
 
   const budgetAllocations = siteBudget
     ? await getBudgetAllocationsForSite(siteBudget.id).catch(() => new Map<string, number>())
@@ -117,11 +145,76 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
 
   const { data: siteInstitutionLink } = await supabase
     .from('institution_study_site')
-    .select('institution_id')
+    .select('institution_id, institutions(id,name,status,organization_type)')
     .eq('study_site_id', site.id)
     .limit(1)
     .maybeSingle();
   const siteInstitutionId = siteInstitutionLink?.institution_id ?? null;
+  const siteInstitutionRaw = siteInstitutionLink?.institutions;
+  const siteInstitution = (Array.isArray(siteInstitutionRaw) ? siteInstitutionRaw[0] : siteInstitutionRaw) ?? null;
+
+  const taskRollup = computeTaskRollup(siteTasks);
+  const enrollmentActivity = computeSiteEnrollmentActivity(initialSiteSubjects);
+  const hasPi = Boolean(site.pi_name || site.pi_email);
+  const openQueryCount = sumOpenQueries(ecrfRollup);
+  const visitCompliancePercent = computeVisitCompliancePercent(visitWindowCompliance.rollup.overall);
+  const enrollmentPct =
+    site.target_enrollment > 0
+      ? Math.min(100, Math.round((enrolledCount / site.target_enrollment) * 100))
+      : 0;
+  const noVisitsScheduled =
+    enrolledCount > 0 &&
+    (visitSchedule.overall.upcoming ?? 0) + (visitSchedule.overall.due_now ?? 0) === 0;
+  const enrollmentSeries = buildEnrollmentCumulativeSeries({
+    subjects: initialSiteSubjects,
+    targetEnrollment: site.target_enrollment,
+    activationDate: site.activation_date,
+    planEnd: study.end_date,
+  });
+  const health = computeSiteHealth(
+    enrollmentPct,
+    ecrfRollup,
+    visitWindowCompliance,
+    hasPi,
+    site.site_contacts?.length ?? 0,
+  );
+  const needsAttention = buildNeedsAttentionList({
+    hasPi,
+    activationDate: site.activation_date,
+    enrollmentPct,
+    enrolledCount,
+    targetEnrollment: site.target_enrollment,
+    taskRollup,
+    openQueryCount,
+    noVisitsScheduled,
+  });
+  const siteOverviewMetrics: SiteOverviewServerMetrics = {
+    taskRollup,
+    enrollmentActivity,
+    health,
+    needsAttention,
+    openQueryCount,
+    openQueryDeltaHint: null,
+    enrollmentPct,
+    generatedAtIso: new Date().toISOString(),
+    healthRank,
+    healthRankTotal,
+    visitCompliancePercent,
+    protocolDeviationCount: null,
+    enrollmentChart: {
+      points: enrollmentSeries.points,
+      targetEnrollment: enrollmentSeries.targetEnrollment,
+      expectedByNow: enrollmentSeries.expectedByNow,
+      planCompletionDateIso: enrollmentSeries.planCompletionDate
+        ? enrollmentSeries.planCompletionDate.toISOString()
+        : null,
+      projectedCompletionDateIso: enrollmentSeries.projectedCompletionDate
+        ? enrollmentSeries.projectedCompletionDate.toISOString()
+        : null,
+      monthsBehind: enrollmentSeries.monthsBehind,
+      behindPlan: enrollmentSeries.behindPlan,
+    },
+  };
 
   return (
     <div className="p-6">
@@ -140,8 +233,12 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
             title: study.title,
             protocol_number: study.protocol_number,
             company_id: study.company_id,
+            phase: study.phase,
+            status: study.status,
+            end_date: study.end_date,
           }}
           isAdmin={profile?.role === 'admin'}
+          siteOverviewMetrics={siteOverviewMetrics}
           enrolledCount={enrolledCount}
           siteTasks={siteTasks}
           directoryContactOptions={directoryContactOptions}
@@ -149,6 +246,7 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
           directoryCatalogError={directoryCatalogRes.error}
           institutionsForQuickContact={institutionsRes.data ?? []}
           siteInstitutionId={siteInstitutionId}
+          linkedSiteInstitution={siteInstitution}
           siteBudget={siteBudget}
           studyBudgetName={linkedStudyBudgetMeta?.name ?? null}
           budgetAllocations={budgetAllocationsObj}
@@ -161,6 +259,7 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
           visitSchedule={visitSchedule}
           visitWindowCompliance={visitWindowCompliance}
           studySitesForSubjects={studySitesForSubjects}
+          studyCountries={studyCountries}
           financeApprovalTemplateOptions={financeApprovalTemplateOptions}
           studyBudgetOptions={studyBudgetOptions}
           ctmsStudyRouteId={studyId}

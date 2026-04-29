@@ -103,8 +103,8 @@ function TrendsCard({ trends }: { trends: EcrfTrend[] }) {
   return (
     <Card className="px-4">
       <CardHeader className="px-0 pb-1">
-        <CardTitle className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <TrendingUp className="h-3.5 w-3.5" />
+        <CardTitle className="flex items-center gap-2.5 text-base font-semibold leading-tight text-foreground">
+          <TrendingUp className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
           Trends (Last 7 Days)
         </CardTitle>
       </CardHeader>
@@ -145,8 +145,8 @@ function DataEntryByStatusCard({ bundle }: { bundle: StudyEcrfRollupBundle }) {
   return (
     <Card className="px-4">
       <CardHeader className="px-0 pb-1">
-        <CardTitle className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <Database className="h-3.5 w-3.5" />
+        <CardTitle className="flex items-center gap-2.5 text-base font-semibold leading-tight text-foreground">
+          <Database className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
           Data Entry by Status
         </CardTitle>
       </CardHeader>
@@ -249,8 +249,8 @@ function VisitHealthCard({ bundle }: { bundle: StudyEcrfRollupBundle }) {
   return (
     <Card className="px-4">
       <CardHeader className="px-0 pb-1">
-        <CardTitle className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <Activity className="h-3.5 w-3.5" />
+        <CardTitle className="flex items-center gap-2.5 text-base font-semibold leading-tight text-foreground">
+          <Activity className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
           Visit Health Summary
         </CardTitle>
       </CardHeader>
@@ -320,8 +320,8 @@ function TopIssuesCard({ alerts }: { alerts: EcrfAlert[] }) {
   return (
     <Card className="px-4">
       <CardHeader className="px-0 pb-1">
-        <CardTitle className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <AlertTriangle className="h-3.5 w-3.5" />
+        <CardTitle className="flex items-center gap-2.5 text-base font-semibold leading-tight text-foreground">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
           Top Issues
         </CardTitle>
       </CardHeader>
@@ -387,8 +387,8 @@ function QuickActionsCard({ studyId }: { studyId: string }) {
   return (
     <Card className="px-4">
       <CardHeader className="px-0 pb-1">
-        <CardTitle className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          <ListChecks className="h-3.5 w-3.5" />
+        <CardTitle className="flex items-center gap-2.5 text-base font-semibold leading-tight text-foreground">
+          <ListChecks className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
           Quick Actions
         </CardTitle>
       </CardHeader>

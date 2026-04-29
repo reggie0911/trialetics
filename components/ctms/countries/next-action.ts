@@ -93,7 +93,7 @@ export function deriveCountryNextAction(country: CountryDashboardRow): NextActio
 
   return {
     kind: 'on_track',
-    label: 'On track',
+    label: 'On Track',
     detail: null,
     tone: 'muted',
   };

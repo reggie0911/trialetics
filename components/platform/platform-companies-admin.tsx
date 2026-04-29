@@ -323,7 +323,7 @@ export function PlatformCompaniesAdmin({
           asChild
         >
           <Link
-            href="/protected/studies"
+            href="/protected/studies/catalog"
             className="inline-flex items-center gap-1.5"
             aria-label="Go to Studies"
           >

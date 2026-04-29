@@ -26,9 +26,9 @@ export function directoryCatalogHasRoles(catalog: QuickContactCatalogCategory[])
 
 interface QuickContactFormFieldsProps {
   catalog: QuickContactCatalogCategory[];
+  /** Server error message when `getDirectoryRoleCatalog` failed (RLS, network, etc.). */
+  catalogError?: string | null;
   institutions: InstitutionRow[];
-  roleCategoryFilter: string;
-  onRoleCategoryFilterChange: (v: string) => void;
   primaryRoleId: string;
   onPrimaryRoleChange: (v: string) => void;
   contactCountryCode: string;
@@ -52,9 +52,8 @@ interface QuickContactFormFieldsProps {
 
 export function QuickContactFormFields({
   catalog,
+  catalogError = null,
   institutions,
-  roleCategoryFilter,
-  onRoleCategoryFilterChange,
   primaryRoleId,
   onPrimaryRoleChange,
   contactCountryCode,
@@ -73,6 +72,8 @@ export function QuickContactFormFields({
 }: QuickContactFormFieldsProps) {
   const roleLibraryReady = directoryCatalogHasRoles(catalog);
   const primaryInstitutionControlled = primaryInstitutionId !== undefined;
+  const rolePickerDisabled =
+    !!catalogError || !roleLibraryReady || primaryFieldsLocked;
 
   return (
     <>
@@ -118,26 +119,38 @@ export function QuickContactFormFields({
       </div>
       <div className="space-y-1">
         <p className="text-xs text-muted-foreground mb-1">Primary role (from library)</p>
-        {!roleLibraryReady && (
-          <Alert className="py-2 text-xs border-amber-500/40 bg-amber-500/5 [&_svg]:text-amber-600 dark:[&_svg]:text-amber-500">
-            <AlertTitle className="text-xs">Role library unavailable</AlertTitle>
+        <p className="text-[11px] text-muted-foreground mb-1">Pick a category, then a role.</p>
+        {catalogError ? (
+          <Alert variant="destructive" className="py-2 text-xs">
+            <AlertTitle className="text-xs">Role catalog failed to load</AlertTitle>
             <AlertDescription className="text-xs">
-              Refresh the page or open{' '}
+              {catalogError}. After signing in, see{' '}
               <Link href="/protected/directory" className="underline underline-offset-2 font-medium">
-                Directory
+                Directory &amp; role catalog setup
               </Link>{' '}
-              to verify. If it persists, check auth and that directory role seeds/RLS are applied.
+              or refresh and try again.
             </AlertDescription>
           </Alert>
-        )}
+        ) : null}
+        {!catalogError && !roleLibraryReady ? (
+          <Alert className="py-2 text-xs border-amber-500/40 bg-amber-500/5 [&_svg]:text-amber-600 dark:[&_svg]:text-amber-500">
+            <AlertTitle className="text-xs">Role catalog is empty</AlertTitle>
+            <AlertDescription className="text-xs">
+              Apply Supabase migrations (role seeds), e.g.{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-[10px]">supabase db push</code>, then refresh. Step-by-step paths and SQL files:{' '}
+              <Link href="/protected/directory" className="underline underline-offset-2 font-medium">
+                Directory &amp; role catalog setup
+              </Link>
+              .
+            </AlertDescription>
+          </Alert>
+        ) : null}
         <DirectoryPrimaryRoleFields
           catalog={catalog}
-          categoryFilter={roleCategoryFilter}
-          onCategoryFilterChange={onRoleCategoryFilterChange}
           roleId={primaryRoleId}
           onRoleChange={onPrimaryRoleChange}
           emptyRoleLabel="Optional"
-          disabled={!roleLibraryReady || primaryFieldsLocked}
+          disabled={rolePickerDisabled}
         />
       </div>
       <div className="space-y-1">

@@ -12,7 +12,6 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
-  ChevronRight,
   ChevronDown,
   Clock3,
   FileWarning,
@@ -21,14 +20,14 @@ import {
   Hourglass,
   Info,
   LocateFixed,
-  MoreVertical,
   Play,
+  MapPin,
+  AlertCircle,
   ShieldX,
   TrendingUp,
   UserPlus,
   Users,
 } from 'lucide-react';
-import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -117,13 +116,6 @@ interface OverviewAlert {
   onClick: () => void;
 }
 
-const PIE_SEGMENT_COLORS = [
-  'var(--primary)',
-  'var(--chart-2)',
-  'var(--chart-3)',
-  'var(--chart-4)',
-];
-
 function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, value));
 }
@@ -158,7 +150,9 @@ function OverviewTitleWithHint({
       <TooltipTrigger
         render={<div className={cn('inline w-fit min-w-0', className)} />}
       >
-        <CardTitle>{children}</CardTitle>
+        <CardTitle className="!text-[12px] font-semibold leading-tight text-foreground">
+          {children}
+        </CardTitle>
       </TooltipTrigger>
       <TooltipContent side="bottom" className="max-w-xs text-xs">
         {hint}
@@ -312,13 +306,6 @@ function getStudyDisplayName(study: Study): string {
   return study.study_name?.trim() || study.title || study.protocol_number;
 }
 
-function getStudySubtitle(study: Study): string {
-  if (study.description?.trim()) return study.description.trim();
-  return [study.phase, study.therapeutic_area, study.indication, study.sponsor]
-    .filter(Boolean)
-    .join(' · ');
-}
-
 function OverviewMetricRow({
   label,
   value,
@@ -396,7 +383,7 @@ function TimelineRing({ percentComplete }: { percentComplete: number }) {
         />
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-3xl font-bold leading-none tracking-tight text-foreground">
+        <span className="!text-[24px] font-semibold leading-none tracking-tight text-foreground">
           {Math.round(clamped)}%
         </span>
         <span className="mt-1 text-xs font-medium text-muted-foreground">
@@ -443,59 +430,94 @@ function SubjectDispositionChart({
   enrolled: number;
   screenedNotEnrolled: number;
 }) {
+  const { resolvedTheme } = useTheme();
+
   const segments: Array<{
     name: string;
     value: number;
-    color: string;
+    stroke: string;
+    trackColor: string;
     pillClassName: string;
   }> = [
     {
       name: 'Enrolled',
       value: enrolled,
-      color: '#0f172a',
+      stroke: resolvedTheme === 'dark' ? 'rgb(148 163 184)' : 'rgb(15 23 42)',
+      trackColor: resolvedTheme === 'dark' ? 'rgb(39 39 42)' : 'rgb(226 232 240)',
       pillClassName:
         'bg-slate-100 text-slate-700 dark:bg-slate-700/50 dark:text-slate-200',
     },
     {
       name: 'Screened',
       value: screenedNotEnrolled,
-      color: '#3b82f6',
+      stroke: 'rgb(59 130 246)',
+      trackColor: resolvedTheme === 'dark' ? 'rgb(30 58 138 / 0.4)' : 'rgb(219 234 254)',
       pillClassName:
         'bg-blue-100/70 text-blue-700 dark:bg-blue-500/20 dark:text-blue-300',
     },
   ];
 
   const total = segments.reduce((sum, s) => sum + s.value, 0);
-  const chartData = segments.filter((s) => s.value > 0);
+
+  const size = 144;
+  const strokeWidth = 13;
+  const gap = 2;
+  const rings = segments.map((seg, i) => {
+    const inset = i * (strokeWidth + gap);
+    const r = (size - strokeWidth) / 2 - inset;
+    const circ = 2 * Math.PI * r;
+    const pct = total > 0 ? seg.value / total : 0;
+    const offset = circ - pct * circ;
+    return { ...seg, r, circ, offset };
+  });
 
   return (
     <div className="grid items-center gap-4 sm:grid-cols-[minmax(0,auto)_1px_minmax(0,1fr)]">
-      <div className="relative mx-auto h-36 w-36">
+      <div
+        className="relative mx-auto"
+        style={{ width: size, height: size }}
+        role="img"
+        aria-label={`${formatNumber(enrolled)} enrolled of ${formatNumber(total)} total subjects`}
+      >
         {total === 0 ? (
           <div className="flex h-full w-full items-center justify-center rounded-full border border-dashed border-border text-xs text-muted-foreground">
             0
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={chartData}
-                dataKey="value"
-                innerRadius="62%"
-                outerRadius="100%"
-                paddingAngle={0}
-                stroke="none"
-                strokeWidth={0}
-              >
-                {chartData.map((entry) => (
-                  <Cell key={entry.name} fill={entry.color} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ResponsiveContainer>
+          <svg
+            width={size}
+            height={size}
+            viewBox={`0 0 ${size} ${size}`}
+            className="-rotate-90"
+            aria-hidden
+          >
+            {rings.map((ring) => (
+              <g key={ring.name}>
+                <circle
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={ring.r}
+                  fill="none"
+                  stroke={ring.trackColor}
+                  strokeWidth={strokeWidth}
+                />
+                <circle
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={ring.r}
+                  fill="none"
+                  stroke={ring.stroke}
+                  strokeWidth={strokeWidth}
+                  strokeLinecap="round"
+                  strokeDasharray={ring.circ}
+                  strokeDashoffset={ring.offset}
+                />
+              </g>
+            ))}
+          </svg>
         )}
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-4xl font-bold leading-none tracking-tight text-foreground">
+          <span className="!text-[24px] font-semibold leading-none tracking-tight text-foreground">
             {formatNumber(total)}
           </span>
           <span className="mt-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -517,7 +539,7 @@ function SubjectDispositionChart({
                 <span
                   aria-hidden
                   className="h-3 w-3 shrink-0 rounded-full"
-                  style={{ backgroundColor: seg.color }}
+                  style={{ backgroundColor: seg.stroke }}
                 />
                 <span className="truncate text-sm font-medium text-foreground">
                   {seg.name}
@@ -545,40 +567,26 @@ function SubjectDispositionChart({
   );
 }
 
-function AlertCard({
-  alert,
-  className,
-}: {
-  alert: OverviewAlert;
-  className?: string;
-}) {
-  const toneClassName =
-    alert.tone === 'critical'
-      ? 'text-rose-600'
-      : alert.tone === 'warning'
-        ? 'text-amber-600'
-        : 'text-sky-600';
+function overviewAlertStripIcon(alert: OverviewAlert) {
+  if (/site/i.test(alert.title)) return MapPin;
+  if (alert.tone === 'info') return Info;
+  return AlertCircle;
+}
 
+function OverviewAlertStripRule() {
   return (
-    <button
-      type="button"
-      onClick={alert.onClick}
-      className={cn(
-        'flex h-full w-full items-start gap-3 px-2 py-3 text-left transition-colors hover:bg-white/40 focus-visible:rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 sm:px-4',
-        toneClassName,
-        className,
-      )}
-    >
-      <div className="flex w-full items-start gap-3">
-        <AlertTriangle className={cn('mt-0.5 h-4 w-4 shrink-0', toneClassName)} />
-        <div className="min-w-0 flex-1 space-y-1">
-          <p className="text-sm font-semibold text-foreground">{alert.title}</p>
-          <p className="text-sm text-muted-foreground">{alert.description}</p>
-          <span className={cn('inline-flex text-xs font-medium', toneClassName)}>View details</span>
-        </div>
-        <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground/70" />
+    <>
+      <div
+        className="h-px w-full bg-[#FEB2B2] dark:bg-red-800/50 sm:hidden"
+        aria-hidden
+      />
+      <div
+        className="hidden w-px flex flex-col self-stretch py-3.5 sm:flex"
+        aria-hidden
+      >
+        <div className="min-h-0 w-px flex-1 bg-[#FEB2B2] dark:bg-red-800/50" />
       </div>
-    </button>
+    </>
   );
 }
 
@@ -600,7 +608,6 @@ export function StudyOverviewDashboard({
   const router = useRouter();
 
   const studyName = getStudyDisplayName(study);
-  const subtitle = getStudySubtitle(study);
   const timeline = buildTimelineSummary(study);
   const plannedEnrollment =
     study.overview?.estimated_enrollment ??
@@ -711,13 +718,13 @@ export function StudyOverviewDashboard({
   const criticalKris = kriValues.filter((item) => item.status === 'red').length;
   const atRiskKris = kriValues.filter((item) => item.status === 'yellow').length;
 
-  const alerts: OverviewAlert[] = [];
+  const baseAlerts: OverviewAlert[] = [];
   if (
     plannedEnrollment != null &&
     expectedEnrollmentToday != null &&
     enrolledCount < expectedEnrollmentToday
   ) {
-    alerts.push({
+    baseAlerts.push({
       title: 'Enrollment below plan',
       description: `Actual enrollment is ${formatNumber(enrolledCount)} vs ${formatNumber(expectedEnrollmentToday)} expected by this point.`,
       tone: 'critical',
@@ -725,7 +732,7 @@ export function StudyOverviewDashboard({
     });
   }
   if (activeSitesWithoutEnrollment > 0) {
-    alerts.push({
+    baseAlerts.push({
       title: 'Inactive sites',
       description: `${formatNumber(activeSitesWithoutEnrollment)} ${pluralize(activeSitesWithoutEnrollment, 'active site')} ${activeSitesWithoutEnrollment === 1 ? 'has' : 'have'} no enrolled subjects yet.`,
       tone: 'warning',
@@ -733,63 +740,46 @@ export function StudyOverviewDashboard({
     });
   }
   if (overdueVisitCount > 0) {
-    alerts.push({
+    baseAlerts.push({
       title: 'Overdue monitoring reports',
       description: `${formatNumber(overdueVisitCount)} ${pluralize(overdueVisitCount, 'visit window')} ${overdueVisitCount === 1 ? 'is' : 'are'} overdue.`,
       tone: 'critical',
       onClick: () => onNavigateTab('visits'),
     });
   }
-  if (alerts.length < 3 && criticalKris > 0) {
-    alerts.push({
+  if (baseAlerts.length < 3 && criticalKris > 0) {
+    baseAlerts.push({
       title: 'Critical KRIs detected',
       description: `${formatNumber(criticalKris)} key ${pluralize(criticalKris, 'risk indicator')} ${criticalKris === 1 ? 'is' : 'are'} in a critical state.`,
       tone: 'critical',
       onClick: () => onNavigateTab('ecrf-tracking'),
     });
   }
-  if (alerts.length < 3 && atRiskKris > 0) {
-    alerts.push({
+  if (baseAlerts.length < 3 && atRiskKris > 0) {
+    baseAlerts.push({
       title: 'At-risk KRIs',
       description: `${formatNumber(atRiskKris)} key ${pluralize(atRiskKris, 'risk indicator')} ${atRiskKris === 1 ? 'is' : 'are'} trending at risk.`,
       tone: 'warning',
       onClick: () => onNavigateTab('ecrf-tracking'),
     });
   }
-  while (alerts.length < 3) {
-    alerts.push({
-      title: 'Review reports and analytics',
-      description: 'Open reporting views to inspect trends, exports, and operational rollups.',
-      tone: 'info',
-      onClick: () => router.push(`/protected/studies/${study.id}/reports`),
-    });
-  }
+  const realAlertCount = Math.min(99, baseAlerts.length);
 
   return (
-      <div className="space-y-6">
+      <div
+        className="space-y-6 text-[10px] [&_.text-5xl]:!text-[10px] [&_.text-4xl]:!text-[10px] [&_.text-3xl]:!text-[10px] [&_.text-2xl]:!text-[10px] [&_.text-xl]:!text-[10px] [&_.text-lg]:!text-[10px] [&_.text-base]:!text-[12px] [&_.text-sm]:!text-[10px] [&_.text-xs]:!text-[10px] [&_.text-\[9px\]]:!text-[10px] [&_.text-\[10px\]]:!text-[10px] [&_.text-\[11px\]]:!text-[10px] [&_button]:!text-[10px] [&_a]:!text-[10px] [&_label]:!text-[10px] [&_td]:!text-[10px] [&_th]:!text-[10px] [&_input]:!text-[10px] [&_textarea]:!text-[10px] [&_select]:!text-[10px] [&_li]:!text-[10px] [&_dt]:!text-[10px] [&_dd]:!text-[10px] [&_code]:!text-[10px] [&_[data-slot=card-title]]:!text-[12px] [&_[data-slot=stat-card-title]]:!text-[12px]"
+      >
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div className="min-w-0 space-y-3">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-3xl font-semibold tracking-tight">{studyName}</h1>
+            <h1 className="!text-[32px] font-semibold leading-tight tracking-tight">
+              {studyName}
+            </h1>
             <StatusBadge status={study.status} className="text-[10px]" />
             <Badge variant="outline" className="text-[10px] uppercase tracking-[0.08em]">
               {study.phase}
             </Badge>
           </div>
-          {subtitle ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <p className="max-w-3xl truncate text-sm leading-6 text-muted-foreground" />
-                }
-              >
-                {subtitle}
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="max-w-xs text-xs">
-                {subtitle}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-2 xl:justify-end">
@@ -888,19 +878,9 @@ export function StudyOverviewDashboard({
               ? `${formatPercent(enrollmentPct, 0)} of target`
               : 'Enrollment target not set'
           }
-          detail={
-            plannedEnrollment ? 'Planned enrollment target' : 'Set an enrollment target'
-          }
-          detailHasInfo
-          detailValue={
-            plannedEnrollment
-              ? `${formatNumber(plannedEnrollment)} subjects`
-              : 'Add it from Study overview'
-          }
           icon={Users}
           accentClassName="bg-blue-100 text-blue-600 dark:bg-blue-500/15 dark:text-blue-300"
           topAccentClassName="bg-blue-500"
-          pillClassName="bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
           progressClassName="bg-blue-500"
           progressPct={enrollmentPct}
           progressCurrentLabel={`${formatNumber(enrolledCount)} enrolled`}
@@ -915,12 +895,9 @@ export function StudyOverviewDashboard({
           value={`${formatNumber(activeSiteCount)} / ${formatNumber(counts.sites)}`}
           meta={counts.sites > 0 ? `${formatPercent(activeSitePct, 0)} activated` : 'No sites added'}
           metaIcon={CheckCircle2}
-          detail="Sites configured"
-          detailValue={`${formatNumber(activeSiteCount)} of ${formatNumber(counts.sites)} sites active`}
           icon={Building2}
           accentClassName="bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300"
           topAccentClassName="bg-emerald-500"
-          pillClassName="bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
           progressClassName="bg-emerald-500"
           progressPct={activeSitePct}
           progressCurrentLabel={`${formatNumber(activeSiteCount)} active`}
@@ -938,12 +915,9 @@ export function StudyOverviewDashboard({
               ? `${formatNumber(inactiveCountryCount)} inactive ${pluralize(inactiveCountryCount, 'country', 'countries')}`
               : 'No countries added'
           }
-          detail="Active countries"
-          detailValue={countryDetail}
           icon={Globe}
           accentClassName="bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300"
           topAccentClassName="bg-violet-500"
-          pillClassName="bg-violet-50 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300"
           progressClassName="bg-violet-500"
           progressPct={counts.countries > 0 ? (activeCountryCount / counts.countries) * 100 : 0}
           progressCurrentLabel={`${formatNumber(activeCountryCount)} active`}
@@ -957,17 +931,9 @@ export function StudyOverviewDashboard({
           title="Study Progress"
           value={timeline ? formatPercent(timeline.percentComplete, 0) : '-'}
           meta={timeline ? 'Based on duration' : 'Start and end dates required'}
-          detail="Elapsed / Planned Duration"
-          detailHasInfo
-          detailValue={
-            timeline
-              ? `${formatNumber(timeline.elapsedDays)} / ${formatNumber(timeline.totalDays)} days`
-              : 'Add start and end dates'
-          }
           icon={Activity}
           accentClassName="bg-amber-100 text-amber-600 dark:bg-amber-500/15 dark:text-amber-300"
           topAccentClassName="bg-amber-500"
-          pillClassName="bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300"
           progressClassName="bg-amber-500"
           progressPct={timeline?.percentComplete}
           progressCurrentLabel={timeline ? `${formatNumber(timeline.elapsedDays)} days` : '-'}
@@ -977,15 +943,12 @@ export function StudyOverviewDashboard({
         />
 
         <StatCard
-          title="Avg Enrollment / MTH"
+          title="Avg Enrollment"
           value={avgEnrollmentPerMonth != null ? formatNumber(avgEnrollmentPerMonth, 1) : '-'}
           meta={timeline ? `Since ${formatDateLong(study.start_date)}` : 'Requires start date'}
-          detail="Average subjects enrolled"
-          detailValue="Per month"
           icon={TrendingUp}
           accentClassName="bg-cyan-100 text-cyan-600 dark:bg-cyan-500/15 dark:text-cyan-300"
           topAccentClassName="bg-cyan-500"
-          pillClassName="bg-cyan-50 text-cyan-700 dark:bg-cyan-500/15 dark:text-cyan-300"
           progressClassName="bg-cyan-500"
           sparkline={
             enrollmentSparklineData.length > 1 ? (
@@ -1004,13 +967,10 @@ export function StudyOverviewDashboard({
         <StatCard
           title="Overdue Reports"
           value={formatNumber(overdueVisitCount)}
-          meta={overdueVisitCount > 0 ? 'Needs attention' : 'No overdue items'}
-          detail="Monitoring windows past due"
-          detailValue={`${formatNumber(monitoringVisits.length)} site ${pluralize(monitoringVisits.length, 'visit')} currently tracked.`}
+          meta={overdueVisitCount > 0 ? 'Needs Attention' : 'No overdue items'}
           icon={FileWarning}
           accentClassName="bg-rose-100 text-rose-600 dark:bg-rose-500/15 dark:text-rose-300"
           topAccentClassName="bg-rose-500"
-          pillClassName="bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300"
           progressClassName="bg-rose-500"
           progressPct={
             visitSchedule.overall.total > 0
@@ -1027,6 +987,104 @@ export function StudyOverviewDashboard({
         />
       </div>
 
+      {realAlertCount === 0 ? (
+        <div
+          className="flex w-full items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/30 px-4 py-3 text-foreground shadow-sm sm:px-5 sm:py-4"
+          role="region"
+          aria-label="Study alerts and risks"
+        >
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span
+              aria-hidden
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300"
+            >
+              <CheckCircle2 className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="!text-[12px] font-semibold leading-tight text-foreground">
+                No items need attention
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Enrollment, sites, visits, and KRIs are all on track.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => router.push(`/protected/studies/${study.id}/reports`)}
+            className="shrink-0 text-sm font-medium text-sky-600 underline decoration-sky-300 underline-offset-2 transition-colors hover:text-sky-700 focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/50 dark:text-sky-300 dark:decoration-sky-700"
+          >
+            View reports
+          </button>
+        </div>
+      ) : (
+        <div
+          className="flex w-full flex-col overflow-hidden rounded-lg border border-[#FED7D7] bg-[#FFF5F5] text-red-900 shadow-sm dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-100"
+          role="region"
+          aria-label="Study alerts and risks"
+        >
+          <div className="flex min-h-0 w-full flex-col sm:flex-row sm:items-stretch">
+            <div className="flex shrink-0 items-center gap-2.5 px-4 py-4 sm:max-w-[12rem] sm:px-5 sm:py-5">
+              <AlertTriangle
+                className="h-5 w-5 shrink-0 text-red-700 dark:text-red-300"
+                aria-hidden
+              />
+              <span className="!text-[12px] font-semibold text-red-900 dark:text-red-100">Needs Attention</span>
+            </div>
+            <OverviewAlertStripRule />
+            {baseAlerts.slice(0, 3).map((alert, idx) => {
+              const Icon = overviewAlertStripIcon(alert);
+              const isSite = /site/i.test(alert.title);
+              return (
+                <Fragment key={`${alert.title}-${alert.description}-${String(idx)}`}>
+                  <button
+                    type="button"
+                    onClick={alert.onClick}
+                    className={cn(
+                      'flex min-w-0 flex-1 items-start gap-3 px-4 py-4 text-left transition-colors sm:px-5 sm:py-5',
+                      'hover:bg-red-100/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 dark:hover:bg-red-950/50',
+                    )}
+                  >
+                    {isSite ? (
+                      <MapPin
+                        className="mt-0.5 h-5 w-5 shrink-0 text-red-700 dark:text-red-300"
+                        aria-hidden
+                      />
+                    ) : (
+                      <span
+                        className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-200"
+                        aria-hidden
+                      >
+                        <Icon className="h-4 w-4" />
+                      </span>
+                    )}
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm font-bold leading-tight text-red-900 dark:text-red-100">
+                        {alert.title}
+                      </p>
+                      <p className="text-sm font-normal leading-snug text-red-600/90 dark:text-red-300/90">
+                        {alert.description}
+                      </p>
+                    </div>
+                  </button>
+                  <OverviewAlertStripRule key={`sep-${String(idx)}`} />
+                </Fragment>
+              );
+            })}
+
+            <div className="flex min-w-0 shrink-0 items-center justify-end px-4 py-4 sm:px-5 sm:py-5">
+              <button
+                type="button"
+                onClick={() => router.push(`/protected/studies/${study.id}/reports`)}
+                className="text-sm font-bold text-red-900 underline decoration-red-300 underline-offset-2 transition-colors hover:text-red-800 hover:decoration-red-500 focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 dark:text-red-200 dark:decoration-red-700"
+              >
+                View all alerts ({realAlertCount})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid gap-4 xl:grid-cols-[minmax(0,0.38fr)_minmax(0,0.62fr)]">
         <Card className="border-border/70 py-0">
           <CardHeader className="px-5 pb-0 pt-5">
@@ -1038,20 +1096,13 @@ export function StudyOverviewDashboard({
                 <CalendarDays className="h-5 w-5" strokeWidth={2.25} />
               </span>
               <div className="min-w-0 flex-1">
-                <h3 className="text-base font-semibold leading-tight text-foreground">
+                <h3 className="!text-[12px] font-semibold leading-tight text-foreground">
                   Timeline Progress
                 </h3>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   Study timeline and completion overview
                 </p>
               </div>
-              <button
-                type="button"
-                aria-label="More options"
-                className="-mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </button>
             </div>
           </CardHeader>
           <CardContent className="space-y-5 px-5 pb-5 pt-5">
@@ -1114,7 +1165,7 @@ export function StudyOverviewDashboard({
                   <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-700/80 dark:text-blue-200/85">
                     Days Elapsed
                   </p>
-                  <p className="mt-1 text-4xl font-bold tracking-tight text-foreground">
+                  <p className="mt-1 !text-[24px] font-semibold leading-none tracking-tight text-foreground">
                     {timeline ? formatNumber(timeline.elapsedDays) : '-'}
                   </p>
                   <p className="mt-1 text-xs font-medium text-blue-700/80 dark:text-blue-200/85">
@@ -1146,7 +1197,7 @@ export function StudyOverviewDashboard({
                   <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-blue-700/80 dark:text-blue-200/85">
                     Days Remaining
                   </p>
-                  <p className="mt-1 text-4xl font-bold tracking-tight text-foreground">
+                  <p className="mt-1 !text-[24px] font-semibold leading-none tracking-tight text-foreground">
                     {timeline ? formatNumber(timeline.remainingDays) : '-'}
                   </p>
                   <p className="mt-1 text-xs font-medium text-blue-700/80 dark:text-blue-200/85">
@@ -1249,21 +1300,12 @@ export function StudyOverviewDashboard({
                   hint="Breakdown of subjects across screening and enrollment, plus screen failure and discontinuation rates."
                   className="block"
                 >
-                  <span className="text-base font-semibold leading-tight text-foreground">
-                    Subject Disposition
-                  </span>
+                  Subject Disposition
                 </OverviewTitleWithHint>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   Overview of subject enrollment and screening
                 </p>
               </div>
-              <button
-                type="button"
-                aria-label="More options"
-                className="-mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-              >
-                <MoreVertical className="h-4 w-4" />
-              </button>
             </div>
           </CardHeader>
           <CardContent className="space-y-5 px-5 pb-5 pt-5">
@@ -1286,7 +1328,7 @@ export function StudyOverviewDashboard({
                   <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                     Screen Failure Rate
                   </p>
-                  <p className="mt-1 text-3xl font-bold leading-none tracking-tight text-foreground">
+                  <p className="mt-1 !text-[24px] font-semibold leading-none tracking-tight text-foreground">
                     {formatPercent(screenFailureRate)}
                   </p>
                   <p className="mt-1.5 text-xs text-muted-foreground">
@@ -1308,7 +1350,7 @@ export function StudyOverviewDashboard({
                   <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                     Discontinuation Rate
                   </p>
-                  <p className="mt-1 text-3xl font-bold leading-none tracking-tight text-foreground">
+                  <p className="mt-1 !text-[24px] font-semibold leading-none tracking-tight text-foreground">
                     {formatPercent(discontinuationRate)}
                   </p>
                   <p className="mt-1.5 text-xs text-muted-foreground">
@@ -1360,41 +1402,12 @@ export function StudyOverviewDashboard({
         </Card>
       </div>
 
-      <Card className="overflow-hidden border-rose-100 bg-rose-50/45 py-0">
-        <CardContent className="px-5 py-4">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-foreground" />
-                <CardTitle className="text-[15px]">Alerts & Risks ({alerts.length})</CardTitle>
-              </div>
-              <Button
-                variant="link"
-                size="sm"
-                className="h-auto px-0 text-xs font-medium text-primary"
-                onClick={() => router.push(`/protected/studies/${study.id}/reports`)}
-              >
-                View all alerts
-              </Button>
-            </div>
-
-            <div className="grid gap-2 md:grid-cols-3 md:gap-0">
-              {alerts.slice(0, 3).map((alert, index) => (
-                <AlertCard
-                  key={`${alert.title}-${alert.description}`}
-                  alert={alert}
-                  className={cn(index > 0 ? 'md:border-l md:border-rose-200/80' : undefined)}
-                />
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="border-border/70 py-0">
           <CardHeader className="border-b px-5 py-4">
-            <CardTitle>Protocol Summary</CardTitle>
+            <CardTitle className="!text-[12px] font-semibold leading-tight text-foreground">
+              Protocol Summary
+            </CardTitle>
           </CardHeader>
           <CardContent className="px-5 py-4">
             <dl className="divide-y">
@@ -1426,7 +1439,9 @@ export function StudyOverviewDashboard({
 
         <Card className="border-border/70 py-0">
           <CardHeader className="border-b px-5 py-4">
-            <CardTitle>Objectives</CardTitle>
+            <CardTitle className="!text-[12px] font-semibold leading-tight text-foreground">
+              Objectives
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 px-5 py-4 text-sm">
             <div>
@@ -1457,7 +1472,9 @@ export function StudyOverviewDashboard({
 
         <Card className="border-border/70 py-0">
           <CardHeader className="border-b px-5 py-4">
-            <CardTitle>Study Sites (Planned)</CardTitle>
+            <CardTitle className="!text-[12px] font-semibold leading-tight text-foreground">
+              Study Sites (Planned)
+            </CardTitle>
           </CardHeader>
           <CardContent className="px-5 py-4">
             <dl className="divide-y">
@@ -1482,7 +1499,9 @@ export function StudyOverviewDashboard({
 
         <Card className="border-border/70 py-0">
           <CardHeader className="border-b px-5 py-4">
-            <CardTitle>Monitoring Report Settings</CardTitle>
+            <CardTitle className="!text-[12px] font-semibold leading-tight text-foreground">
+              Monitoring Report Settings
+            </CardTitle>
           </CardHeader>
           <CardContent className="px-5 py-4">
             <dl className="divide-y">
@@ -1521,7 +1540,9 @@ export function StudyOverviewDashboard({
         {study.description ? (
           <Card className="border-border/70 py-0 xl:col-span-2">
             <CardHeader className="border-b px-5 py-4">
-              <CardTitle>Study Details</CardTitle>
+              <CardTitle className="!text-[12px] font-semibold leading-tight text-foreground">
+                Study Details
+              </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-6 px-5 py-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)]">
               <p className="text-sm leading-6 text-muted-foreground whitespace-pre-wrap">

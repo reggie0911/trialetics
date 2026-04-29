@@ -1,5 +1,10 @@
 'use client';
 
+/**
+ * Global CTMS chrome. Company admins see **System overview** (`/protected/studies`) in the CTMS menu.
+ * Study-scoped items resolve under `/protected/studies/<uuid>/...`; without a study they fall back to the catalog.
+ */
+
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -28,7 +33,7 @@ import {
   ContactRound,
   Package,
   FolderOpen,
-  ListOrdered,
+  Gauge,
 } from 'lucide-react';
 
 import Logo from '@/components/layout/logo';
@@ -60,7 +65,10 @@ import type { StudyTrackerNavItem } from '@/lib/nav/study-trackers';
 import { normalizeSubscriptionPlan, planMeetsTier, type SubscriptionPlan } from '@/lib/types/ctms';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { parseStudyIdFromPathname } from '@/lib/nav/ctms-study-paths';
+import {
+  CTMS_STUDIES_CATALOG_HREF,
+  parseStudyIdFromPathname,
+} from '@/lib/nav/ctms-study-paths';
 
 function isAccountHref(href: string): boolean {
   return href === '/protected/settings/billing' || href.startsWith('/protected/settings/');
@@ -110,8 +118,8 @@ const ctmsNavItems: CtmsNavItemDef[] = [
 function resolveCtmsNavHref(pathname: string, item: CtmsNavItemDef): string {
   if ('fixedHref' in item) return item.fixedHref;
   const studyId = parseStudyIdFromPathname(pathname);
-  /** No study in URL: unified CTMS dashboard to pick a study. */
-  if (!studyId) return '/protected/studies';
+  /** No study in URL: send users to the org-wide catalog to pick a study. */
+  if (!studyId) return CTMS_STUDIES_CATALOG_HREF;
   return `/protected/studies/${studyId}/${item.studySegment}`;
 }
 
@@ -122,15 +130,18 @@ function pathMatchesHref(pathname: string, href: string, exact?: boolean): boole
 
 /**
  * Whether a CTMS dropdown / mobile row should show as the current location.
- * Dashboard matches both `/protected` and `/protected/studies` (unified CTMS dashboard).
- * Study-scoped items do not all highlight on the dashboard hub (same href for every row when no study in URL).
+ * Dashboard is only active on `/protected`. Study-scoped items stay inactive on hub routes
+ * (catalog, admin overview without a study UUID) so rows do not all highlight at once.
  */
 function isCtmsNavItemActive(pathname: string, item: CtmsNavItemDef, href: string): boolean {
-  if ('fixedHref' in item && item.exact && item.fixedHref === '/protected') {
-    return pathname === '/protected' || pathname === '/protected/studies';
+  if ('fixedHref' in item && item.exact) {
+    return pathname === item.fixedHref;
   }
   if ('studySegment' in item) {
-    if (!parseStudyIdFromPathname(pathname) && (pathname === '/protected/studies' || pathname === '/protected/studies/catalog')) {
+    if (
+      !parseStudyIdFromPathname(pathname) &&
+      (pathname === '/protected/studies' || pathname === CTMS_STUDIES_CATALOG_HREF)
+    ) {
       return false;
     }
     return pathMatchesHref(pathname, href, false);
@@ -144,13 +155,13 @@ function isCtmsNavItemActive(pathname: string, item: CtmsNavItemDef, href: strin
 function buildCtmsNavItems(isCompanyAdmin: boolean): CtmsNavItemDef[] {
   const out: CtmsNavItemDef[] = [...ctmsNavItems];
   if (isCompanyAdmin) {
-    const idx = out.findIndex((x) => 'studySegment' in x && x.studySegment === 'financials');
-    if (idx >= 0) {
-      out.splice(idx + 1, 0, {
-        label: 'Approval templates',
-        icon: ListOrdered,
-        fixedHref: '/protected/financials/approval-templates',
-        minPlan: 'core',
+    const dashIdx = out.findIndex((x) => 'fixedHref' in x && x.fixedHref === '/protected');
+    if (dashIdx >= 0) {
+      out.splice(dashIdx + 1, 0, {
+        label: 'System overview',
+        icon: Gauge,
+        exact: true,
+        fixedHref: '/protected/studies',
       });
     }
   }
@@ -193,9 +204,9 @@ interface TopNavbarProps {
 }
 
 function getPageName(pathname: string, customNames: CustomTrackerNavItem[]): string {
-  if (pathname === '/protected/studies') return 'Studies';
+  if (pathname === '/protected/studies') return 'System overview';
+  if (pathname === CTMS_STUDIES_CATALOG_HREF) return 'Studies';
   if (pathname === '/protected/studies/new') return 'New study';
-  if (pathname.startsWith('/protected/financials/approval-templates')) return 'Approval templates';
   if (pathname.startsWith('/protected/brand-forge') || pathname.includes('/brand-forge')) return 'BrandForge';
   if (pathname.startsWith('/protected/eisf') || pathname.includes('/eisf')) return 'eISF';
   if (pathname.startsWith('/protected/etmf') || pathname.includes('/etmf')) return 'eTMF';
@@ -263,9 +274,11 @@ export function TopNavbar({
   const pageName = getPageName(pathname, customTrackerNavItems);
   const studyId = parseStudyIdFromPathname(pathname);
   const navGated = hasCtmsAccess && !studyId;
-  const brandforgeHref = studyId ? `/protected/studies/${studyId}/brand-forge` : '/protected/studies#studies';
+  const brandforgeHref = studyId
+    ? `/protected/studies/${studyId}/brand-forge`
+    : CTMS_STUDIES_CATALOG_HREF;
   const studyScopedHref = (segment: string): string =>
-    studyId ? `/protected/studies/${studyId}/${segment}` : '/protected/studies#studies';
+    studyId ? `/protected/studies/${studyId}/${segment}` : CTMS_STUDIES_CATALOG_HREF;
 
   /** Platform admins always see BrandForge in nav; tenants need the company flag. */
   const showBrandforgeInNav = hasBrandforgeAccess || isPlatformAdmin;
@@ -292,7 +305,7 @@ export function TopNavbar({
   };
 
   const guardedHref = (href: string): string =>
-    shouldGateHref(href) ? '/protected/studies#studies' : href;
+    shouldGateHref(href) ? CTMS_STUDIES_CATALOG_HREF : href;
 
   const navigate = (href: string) => router.push(guardedHref(href));
 
@@ -333,7 +346,7 @@ export function TopNavbar({
         {/* Left: Logo + Page Name */}
         <div className="flex items-center gap-3 shrink-0">
           <div className="[&_img]:w-[96px] [&_img]:h-auto">
-            <Logo onlyLogo href={navGated ? '/protected/studies#studies' : '/protected'} />
+            <Logo onlyLogo href={navGated ? CTMS_STUDIES_CATALOG_HREF : '/protected'} />
           </div>
           <Separator orientation="vertical" className="h-6" />
           <span className="text-base font-light text-[rgb(50,51,56)] dark:text-white hidden sm:inline">{companyName ?? pageName}</span>
@@ -348,7 +361,7 @@ export function TopNavbar({
                 <TooltipTrigger
                   render={
                     <Link
-                      href="/protected/studies#studies"
+                      href={CTMS_STUDIES_CATALOG_HREF}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal text-muted-foreground hover:text-foreground hover:bg-muted transition-colors whitespace-nowrap border border-border"
                     />
                   }
@@ -356,7 +369,7 @@ export function TopNavbar({
                   Switch study
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-xs text-xs">
-                  Return to the studies dashboard and open a different study context.
+                  Open the studies catalog to choose a different study context.
                 </TooltipContent>
               </Tooltip>
             )}
@@ -397,7 +410,12 @@ export function TopNavbar({
                           locked && 'opacity-50',
                           navActive && 'bg-primary/10 text-primary font-medium',
                         )}
-                        onClick={() => navigate(locked ? '/protected/settings/billing' : href)}
+                        render={
+                          <Link
+                            href={guardedHref(locked ? '/protected/settings/billing' : href)}
+                            prefetch={false}
+                          />
+                        }
                       >
                         <item.icon className="mr-2 h-4 w-4" />
                         {item.label}
@@ -783,7 +801,7 @@ export function TopNavbar({
               <>
                 <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Study</p>
                 <Link
-                  href="/protected/studies#studies"
+                  href={CTMS_STUDIES_CATALOG_HREF}
                   onClick={() => setMobileOpen(false)}
                   className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
                 >

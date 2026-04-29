@@ -1,44 +1,26 @@
 'use client';
 
-import { useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { Download, FileText, RefreshCw } from 'lucide-react';
+import { Download, FileText } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 
 interface EcrfTrackingPageHeaderProps {
   /** Server-generated timestamp the bundle was assembled. */
   generatedAt: string;
   csvHref: string;
   pdfHref: string;
-  /** Optional refresh server action; falls back to `router.refresh()`. */
-  onRefresh?: () => Promise<void> | void;
 }
 
 /**
  * Page-level header for the redesigned eCRF Tracking page. Replaces the
- * original `EcrfTrackingHeader` (which conflated the H2 title with the KPI
- * strip). Exports + Refresh live here; the KPI cards now have their own row.
+ * original `EcrfTrackingHeader` (which conflated the title with the KPI
+ * strip). Exports live here; the KPI cards have their own row.
  */
 export function EcrfTrackingPageHeader({
   generatedAt,
   csvHref,
   pdfHref,
-  onRefresh,
 }: EcrfTrackingPageHeaderProps) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-
-  function handleRefresh() {
-    startTransition(async () => {
-      if (onRefresh) {
-        await onRefresh();
-      }
-      router.refresh();
-    });
-  }
-
   const lastUpdated = new Date(generatedAt).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -49,9 +31,7 @@ export function EcrfTrackingPageHeader({
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="space-y-1">
-        <h2 className="text-base font-semibold leading-tight text-foreground">
-          eCRF Tracking
-        </h2>
+        <h1 className="text-3xl font-semibold tracking-tight">eCRF Tracking</h1>
         <p className="text-xs text-muted-foreground">
           Monitor data entry, verification, and lock readiness across sites and
           visits.
@@ -70,17 +50,6 @@ export function EcrfTrackingPageHeader({
               <FileText className="mr-1 h-3.5 w-3.5" />
               Export PDF
             </a>
-          </Button>
-          <Button
-            type="button"
-            variant="default"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={pending}
-            aria-label="Refresh data"
-          >
-            <RefreshCw className={cn('mr-1 h-3.5 w-3.5', pending && 'animate-spin')} />
-            {pending ? 'Refreshing…' : 'Refresh Data'}
           </Button>
         </div>
         <span className="text-[11px] text-muted-foreground">

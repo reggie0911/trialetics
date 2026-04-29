@@ -1,7 +1,7 @@
 'use client';
 
 import type { ComponentType, ReactNode } from 'react';
-import { Info, MoreHorizontal } from 'lucide-react';
+import { Info } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
 import {
@@ -16,14 +16,10 @@ export interface StatCardProps {
   value: string;
   meta: string;
   metaIcon?: ComponentType<{ className?: string }>;
-  detail?: string;
-  detailHasInfo?: boolean;
-  detailValue?: string;
   tooltip?: string;
   icon: ComponentType<{ className?: string }>;
   accentClassName: string;
   topAccentClassName?: string;
-  pillClassName?: string;
   progressClassName: string;
   progressPct?: number | null;
   progressCurrentLabel?: string;
@@ -42,14 +38,10 @@ export function StatCard({
   value,
   meta,
   metaIcon: MetaIcon,
-  detail,
-  detailHasInfo,
-  detailValue,
   tooltip,
   icon: Icon,
   accentClassName,
   topAccentClassName,
-  pillClassName,
   progressClassName,
   progressPct,
   progressCurrentLabel,
@@ -68,92 +60,83 @@ export function StatCard({
   );
 
   const inner = (
-    <div className="flex h-full w-full flex-col">
-      {topAccentClassName ? (
-        <div className={cn('h-[3px] w-full shrink-0', topAccentClassName)} />
+    <div className="relative flex h-full w-full flex-col">
+      {onClick || tooltip ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 origin-center scale-0 rounded-[5px] bg-primary/[0.07] opacity-0 transition-[transform,opacity] duration-300 ease-out group-hover:scale-100 group-hover:opacity-100"
+        />
       ) : null}
 
-      <div className="flex h-full flex-1 flex-col gap-3 px-4 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <span
-              className={cn(
-                'flex h-9 w-9 shrink-0 items-center justify-center rounded-md',
-                accentClassName,
-              )}
+      {topAccentClassName ? (
+        <div className={cn('relative z-10 h-[3px] w-full shrink-0', topAccentClassName)} />
+      ) : null}
+
+      <div className="relative z-10 flex h-full flex-1 flex-col gap-0 px-4 py-3.5">
+        {/* KPI header: label + value (left) · icon (right) */}
+        <div className="flex w-full min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-1.5 text-left">
+            <p
+              data-slot="stat-card-title"
+              className="!text-[12px] font-medium leading-tight text-muted-foreground"
             >
-              <Icon className="h-4 w-4" />
-            </span>
-            <p className="text-[11px] font-semibold uppercase leading-tight tracking-[0.08em] text-muted-foreground">
               {title}
+            </p>
+            <p className="min-w-0 break-words text-left !text-[30px] font-medium leading-[1.05] tracking-tight text-foreground tabular-nums">
+              {value}
             </p>
           </div>
           <span
-            className="text-muted-foreground/70"
-            aria-hidden="true"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </span>
-        </div>
-
-        <p className="text-3xl font-medium tracking-tight text-foreground">
-          {value}
-        </p>
-
-        <div>
-          <span
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
-              pillClassName ?? 'bg-muted text-muted-foreground',
+              'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/10',
+              accentClassName,
             )}
           >
-            <ResolvedMetaIcon className="h-3.5 w-3.5" />
-            {meta}
+            <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" />
           </span>
         </div>
 
-        {detail || detailValue ? (
-          <div className="space-y-0.5 border-t border-border/60 pt-3">
-            {detail ? (
-              <div className="flex items-center gap-1.5 text-xs text-foreground/85">
-                <span className="truncate">{detail}</span>
-                {detailHasInfo ? (
-                  <Info className="h-3 w-3 shrink-0 text-muted-foreground/80" />
-                ) : null}
-              </div>
-            ) : null}
-            {detailValue ? (
-              <p className="truncate text-xs text-muted-foreground">
-                {detailValue}
-              </p>
-            ) : null}
+        <div className="mt-3 flex w-full min-w-0 flex-col">
+          <div className="flex w-full justify-start">
+            <span
+              className={cn(
+                'inline-flex max-w-full items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-[#ffffff] px-2.5 py-1 text-[11px] font-medium text-[#000000] dark:border-neutral-200 dark:bg-[#ffffff] dark:text-[#000000]',
+              )}
+            >
+              <ResolvedMetaIcon className="h-3 w-3 shrink-0 text-[#000000] opacity-80" />
+              <span className="truncate">{meta}</span>
+            </span>
           </div>
-        ) : null}
+        </div>
 
-        <div className="mt-auto pt-2">
+        <div className="mt-auto min-h-0 pt-1">
           {sparkline ? (
             sparkline
           ) : (
-            <div className="space-y-2">
-              <div className="h-1.5 rounded-sm bg-muted">
+            <div className="space-y-1.5">
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/80">
                 <div
-                  className={cn('h-1.5 rounded-sm', progressClassName)}
+                  className={cn('h-1.5 min-w-0 rounded-full', progressClassName)}
                   style={{ width: `${clampPercent(progressPct ?? 100)}%` }}
                 />
               </div>
               {progressCurrentLabel || progressTotalLabel ? (
-                <div className="flex items-center justify-between text-[11px]">
-                  <span
-                    className={cn(
-                      'font-medium',
-                      progressLabelClassName ?? 'text-foreground',
-                    )}
-                  >
-                    {progressCurrentLabel}
-                  </span>
-                  <span className="font-medium text-muted-foreground">
-                    {progressTotalLabel}
-                  </span>
+                <div className="flex w-full flex-wrap items-baseline justify-start gap-x-2 gap-y-0.5 text-left text-[11px]">
+                  {progressCurrentLabel ? (
+                    <span
+                      className={cn(
+                        'font-medium',
+                        progressLabelClassName ?? 'text-foreground',
+                      )}
+                    >
+                      {progressCurrentLabel}
+                    </span>
+                  ) : null}
+                  {progressTotalLabel ? (
+                    <span className="font-medium text-muted-foreground">
+                      {progressTotalLabel}
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -167,7 +150,8 @@ export function StatCard({
     <Card
       className={cn(
         'h-full overflow-hidden border-border/70 py-0',
-        onClick ? 'transition-colors hover:bg-muted/20' : undefined,
+        (onClick || tooltip) && 'group',
+        onClick && 'cursor-pointer',
       )}
     >
       {tooltip ? (

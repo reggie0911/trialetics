@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { createClient } from '@/lib/server';
 import { assertStudyWritableForCurrentUser } from '@/lib/server/study-write-guard';
+import { SUBJECT_DEACTIVATED_EDIT_TOOLTIP } from '@/lib/constants/subject-lifecycle';
 import type {
   Subject,
   Study,
@@ -41,9 +42,23 @@ function summaryRowToType(row: TrackingSummaryRow): SubjectTrackingSummary {
   };
 }
 
-async function getStudyIdForSubject(supabase: Awaited<ReturnType<typeof createClient>>, subjectId: string) {
-  const { data: row } = await supabase.from('subjects').select('study_id').eq('id', subjectId).maybeSingle();
-  return (row as { study_id: string } | null)?.study_id ?? null;
+type SubjectGuardRow = { study_id: string; is_active: boolean | null };
+
+async function getSubjectGuardRow(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  subjectId: string,
+): Promise<SubjectGuardRow | null> {
+  const { data: row } = await supabase
+    .from('subjects')
+    .select('study_id, is_active')
+    .eq('id', subjectId)
+    .maybeSingle();
+  return row as SubjectGuardRow | null;
+}
+
+function subjectIsActive(row: SubjectGuardRow | null): boolean {
+  if (!row) return true;
+  return row.is_active !== false;
 }
 
 async function revalidateSubjectCachesForStudySubject(subjectId: string) {
@@ -66,6 +81,7 @@ export async function getSubjectCountBySite(siteId: string): Promise<number> {
     .from('subjects')
     .select('id', { count: 'exact', head: true })
     .eq('site_id', siteId)
+    .eq('is_active', true)
     .in('status', ['randomized', 'active', 'completed']);
   if (error) return 0;
   return count ?? 0;
@@ -77,6 +93,7 @@ export async function getAllSubjects(): Promise<SubjectWithStudySite[]> {
   const { data, error } = await supabase
     .from('subjects')
     .select('*, study_sites(site_number, name), studies(protocol_number, title)')
+    .eq('is_active', true)
     .order('updated_at', { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -87,6 +104,8 @@ export interface SubjectFilters {
   search?: string;
   status?: SubjectStatus;
   siteId?: string;
+  /** When true, include `is_active = false` rows (default: active only). */
+  includeInactive?: boolean;
 }
 
 export async function getStudySubjects(
@@ -100,6 +119,10 @@ export async function getStudySubjects(
     .select('*, study_sites(site_number, name)')
     .eq('study_id', studyId)
     .order('subject_number');
+
+  if (!filters?.includeInactive) {
+    query = query.eq('is_active', true);
+  }
 
   if (filters?.status) {
     query = query.eq('status', filters.status);
@@ -249,7 +272,8 @@ export async function getEnrollmentFunnel(studyId: string): Promise<EnrollmentFu
   const { data, error } = await supabase
     .from('subjects')
     .select('id, status')
-    .eq('study_id', studyId);
+    .eq('study_id', studyId)
+    .eq('is_active', true);
 
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as { id: string; status: string }[];
@@ -266,7 +290,8 @@ export async function getEnrollmentFunnelForSite(siteId: string): Promise<Enroll
   const { data, error } = await supabase
     .from('subjects')
     .select('id, status')
-    .eq('site_id', siteId);
+    .eq('site_id', siteId)
+    .eq('is_active', true);
 
   if (error) throw new Error(error.message);
   const rows = (data ?? []) as { id: string; status: string }[];
@@ -369,6 +394,14 @@ export async function updateSubject(
     const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, input.study_id);
     if (writeGuard) return { error: writeGuard };
 
+    const guard = await getSubjectGuardRow(supabase, input.id);
+    if (!guard || guard.study_id !== input.study_id) {
+      return { error: 'Subject not found.' };
+    }
+    if (!subjectIsActive(guard)) {
+      return { error: SUBJECT_DEACTIVATED_EDIT_TOOLTIP };
+    }
+
     const { id, study_id, revalidateSiteId, ...updates } = input;
     const cleanUpdates: Record<string, unknown> = {};
 
@@ -418,12 +451,116 @@ export async function deleteSubject(
     const { error } = await supabase
       .from('subjects')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('study_id', studyId);
 
     if (error) return { error: error.message };
 
     revalidateStudyCtmsLayout(studyId);
+    revalidatePath(`/protected/studies/${studyId}/subjects/${id}`);
     if (siteId) revalidatePath(`/protected/sites/${siteId}`);
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+async function getCurrentProfileId(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<string | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('user_id', user.id)
+    .maybeSingle();
+  return (profile as { id: string } | null)?.id ?? null;
+}
+
+function revalidateSubjectListAndDetail(studyId: string, subjectId: string) {
+  revalidateStudyCtmsLayout(studyId);
+  revalidatePath(`/protected/studies/${studyId}/subjects/${subjectId}`);
+  revalidatePath(`/protected/subjects/${subjectId}`);
+}
+
+/**
+ * Soft-deactivate a subject (hides it from default lists; blocks mutations until restored).
+ */
+export async function deactivateSubject(
+  subjectId: string,
+  studyId: string,
+  reason?: string | null,
+): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
+    const row = await getSubjectGuardRow(supabase, subjectId);
+    if (!row || row.study_id !== studyId) {
+      return { error: 'Subject not found.' };
+    }
+    if (!subjectIsActive(row)) {
+      return { error: 'This subject is already deactivated.' };
+    }
+
+    const deactivatedBy = await getCurrentProfileId(supabase);
+    const cleanReason = reason?.trim() || null;
+    const { error } = await supabase
+      .from('subjects')
+      .update({
+        is_active: false,
+        deactivated_at: new Date().toISOString(),
+        deactivated_by: deactivatedBy,
+        deactivation_reason: cleanReason,
+      })
+      .eq('id', subjectId)
+      .eq('study_id', studyId);
+
+    if (error) return { error: error.message };
+
+    revalidateSubjectListAndDetail(studyId, subjectId);
+    return { error: null };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+/** Restore a soft-deactivated subject. */
+export async function restoreSubject(
+  subjectId: string,
+  studyId: string,
+): Promise<{ error: string | null }> {
+  const supabase = await createClient();
+  try {
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
+    if (writeGuard) return { error: writeGuard };
+
+    const row = await getSubjectGuardRow(supabase, subjectId);
+    if (!row || row.study_id !== studyId) {
+      return { error: 'Subject not found.' };
+    }
+    if (subjectIsActive(row)) {
+      return { error: 'This subject is already active.' };
+    }
+
+    const { error } = await supabase
+      .from('subjects')
+      .update({
+        is_active: true,
+        deactivated_at: null,
+        deactivated_by: null,
+        deactivation_reason: null,
+      })
+      .eq('id', subjectId)
+      .eq('study_id', studyId);
+
+    if (error) return { error: error.message };
+
+    revalidateSubjectListAndDetail(studyId, subjectId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
@@ -451,11 +588,11 @@ export async function addSubjectVisit(
   const supabase = await createClient();
 
   try {
-    const studyId = await getStudyIdForSubject(supabase, subjectId);
-    if (studyId) {
-      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
-      if (writeGuard) return { data: null, error: writeGuard };
-    }
+    const row = await getSubjectGuardRow(supabase, subjectId);
+    if (!row) return { data: null, error: 'Subject not found.' };
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, row.study_id);
+    if (writeGuard) return { data: null, error: writeGuard };
+    if (!subjectIsActive(row)) return { data: null, error: SUBJECT_DEACTIVATED_EDIT_TOOLTIP };
 
     const { data, error } = await supabase
       .from('subject_visits')
@@ -490,11 +627,11 @@ export async function updateSubjectVisit(
   const supabase = await createClient();
 
   try {
-    const studyId = await getStudyIdForSubject(supabase, subjectId);
-    if (studyId) {
-      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
-      if (writeGuard) return { error: writeGuard };
-    }
+    const row = await getSubjectGuardRow(supabase, subjectId);
+    if (!row) return { error: 'Subject not found.' };
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, row.study_id);
+    if (writeGuard) return { error: writeGuard };
+    if (!subjectIsActive(row)) return { error: SUBJECT_DEACTIVATED_EDIT_TOOLTIP };
 
     const cleanUpdates: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(updates)) {
@@ -524,11 +661,11 @@ export async function deleteSubjectVisit(
   const supabase = await createClient();
 
   try {
-    const studyId = await getStudyIdForSubject(supabase, subjectId);
-    if (studyId) {
-      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
-      if (writeGuard) return { error: writeGuard };
-    }
+    const row = await getSubjectGuardRow(supabase, subjectId);
+    if (!row) return { error: 'Subject not found.' };
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, row.study_id);
+    if (writeGuard) return { error: writeGuard };
+    if (!subjectIsActive(row)) return { error: SUBJECT_DEACTIVATED_EDIT_TOOLTIP };
 
     const { error } = await supabase
       .from('subject_visits')
@@ -589,11 +726,11 @@ export async function updateSubjectVisitTiming(
   const supabase = await createClient();
 
   try {
-    const studyId = await getStudyIdForSubject(supabase, subjectId);
-    if (studyId) {
-      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
-      if (writeGuard) return { error: writeGuard, eventsWritten: 0 };
-    }
+    const row = await getSubjectGuardRow(supabase, subjectId);
+    if (!row) return { error: 'Subject not found.', eventsWritten: 0 };
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, row.study_id);
+    if (writeGuard) return { error: writeGuard, eventsWritten: 0 };
+    if (!subjectIsActive(row)) return { error: SUBJECT_DEACTIVATED_EDIT_TOOLTIP, eventsWritten: 0 };
 
     const cleanPatch: Record<string, unknown> = {};
     for (const key of ALLOWED_TIMING_FIELDS) {
@@ -641,11 +778,11 @@ export async function setSubjectVisitAnchor(
   const supabase = await createClient();
 
   try {
-    const studyId = await getStudyIdForSubject(supabase, subjectId);
-    if (studyId) {
-      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
-      if (writeGuard) return { error: writeGuard, updated: 0 };
-    }
+    const row = await getSubjectGuardRow(supabase, subjectId);
+    if (!row) return { error: 'Subject not found.', updated: 0 };
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, row.study_id);
+    if (writeGuard) return { error: writeGuard, updated: 0 };
+    if (!subjectIsActive(row)) return { error: SUBJECT_DEACTIVATED_EDIT_TOOLTIP, updated: 0 };
 
     const dateColumn = kind === 'screening' ? 'screening_date' : 'randomization_date';
     const cleanDate = anchorDate && anchorDate.trim().length > 0 ? anchorDate : null;
@@ -689,11 +826,11 @@ export async function recomputeSubjectVisitDates(
   const supabase = await createClient();
 
   try {
-    const studyId = await getStudyIdForSubject(supabase, subjectId);
-    if (studyId) {
-      const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, studyId);
-      if (writeGuard) return { error: writeGuard, updated: 0, anchorDate: null };
-    }
+    const row = await getSubjectGuardRow(supabase, subjectId);
+    if (!row) return { error: 'Subject not found.', updated: 0, anchorDate: null };
+    const { error: writeGuard } = await assertStudyWritableForCurrentUser(supabase, row.study_id);
+    if (writeGuard) return { error: writeGuard, updated: 0, anchorDate: null };
+    if (!subjectIsActive(row)) return { error: SUBJECT_DEACTIVATED_EDIT_TOOLTIP, updated: 0, anchorDate: null };
 
     const { data, error } = await supabase.rpc('recompute_subject_visit_dates', {
       p_subject_id: subjectId,

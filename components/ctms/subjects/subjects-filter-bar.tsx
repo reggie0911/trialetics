@@ -15,21 +15,25 @@ import {
 import {
   SUBJECT_STATUS_OPTIONS,
   type StudySite,
+  type SubjectStatus,
 } from '@/lib/types/ctms';
 
-import type { SubjectStatusFilter } from './subjects-status-pills';
-
+export type SubjectStatusFilter = SubjectStatus | 'all';
 export type SubjectSiteFilter = 'all' | string;
+export type SubjectCountryFilter = 'all' | string;
 
 interface SubjectsFilterBarProps {
   search: string;
   onSearchChange: (value: string) => void;
+  countryFilter: SubjectCountryFilter;
+  onCountryFilterChange: (value: SubjectCountryFilter) => void;
+  countriesForSelect: { id: string; country_name: string; country_code: string }[];
   siteFilter: SubjectSiteFilter;
   onSiteFilterChange: (value: SubjectSiteFilter) => void;
   statusFilter: SubjectStatusFilter;
   onStatusFilterChange: (value: SubjectStatusFilter) => void;
   sitesForSelect: Pick<StudySite, 'id' | 'name' | 'site_number'>[];
-  /** When true, the Site dropdown is hidden (we're scoped to a single site already). */
+  /** When true, Country and Site dropdowns are hidden (scoped to a single site already). */
   hideSiteFilter?: boolean;
   onClear: () => void;
   hasActiveFilters: boolean;
@@ -38,6 +42,9 @@ interface SubjectsFilterBarProps {
 export function SubjectsFilterBar({
   search,
   onSearchChange,
+  countryFilter,
+  onCountryFilterChange,
+  countriesForSelect,
   siteFilter,
   onSiteFilterChange,
   statusFilter,
@@ -70,6 +77,39 @@ export function SubjectsFilterBar({
             />
           </div>
         </div>
+
+        {!hideSiteFilter ? (
+          <div className={fieldGroupClass}>
+            <Label htmlFor="subjects-country-filter" className={fieldLabelClass}>
+              Country
+            </Label>
+            <Select
+              value={countryFilter}
+              onValueChange={(v) => onCountryFilterChange(v as SubjectCountryFilter)}
+            >
+              <SelectTrigger id="subjects-country-filter" className="h-9 w-full">
+                <SelectValue
+                  placeholder="All countries"
+                  getDisplayLabel={(value) => {
+                    if (value == null || value === 'all') return 'All countries';
+                    const c = countriesForSelect.find((x) => x.id === value);
+                    if (!c) return value;
+                    return `${c.country_name} (${c.country_code})`;
+                  }}
+                />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All countries</SelectItem>
+                {countriesForSelect.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.country_name}{' '}
+                    <span className="text-muted-foreground">({c.country_code})</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
 
         {!hideSiteFilter ? (
           <div className={fieldGroupClass}>

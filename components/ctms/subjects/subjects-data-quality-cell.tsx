@@ -25,7 +25,7 @@ function MiniPctBadge({
   const variant = value === null ? 'outline' : value >= 100 ? 'success' : value >= 50 ? 'info' : 'secondary';
   return (
     <Badge variant={variant} className="font-mono text-[10px]">
-      {label} {value === null ? '\u2014' : `${value}%`}
+      {label} {value === null ? '-' : `${value}%`}
     </Badge>
   );
 }
@@ -55,7 +55,7 @@ export function SubjectsDataQualityCell({
   lockState,
 }: SubjectsDataQualityCellProps) {
   if (!summary || summary.dataExpectedTotal === 0) {
-    return <span className="text-xs text-muted-foreground">\u2014</span>;
+    return <span className="text-xs text-muted-foreground">-</span>;
   }
 
   const totals = summaryToPercentages(summary);
@@ -64,13 +64,18 @@ export function SubjectsDataQualityCell({
   const tooltip = (
     <div className="space-y-0.5 text-xs">
       <div>
-        Data Entry: <span className="font-mono">{totals.dataEntryPct ?? '\u2014'}%</span>
+        Data Entry:{' '}
+        <span className="font-mono">
+          {totals.dataEntryPct != null ? `${totals.dataEntryPct}%` : '-'}
+        </span>
       </div>
       <div>
-        SDV: <span className="font-mono">{totals.sdvPct ?? '\u2014'}%</span>
+        SDV:{' '}
+        <span className="font-mono">{totals.sdvPct != null ? `${totals.sdvPct}%` : '-'}</span>
       </div>
       <div>
-        Lock: <span className="font-mono">{totals.lockPct ?? '\u2014'}%</span>
+        Lock:{' '}
+        <span className="font-mono">{totals.lockPct != null ? `${totals.lockPct}%` : '-'}</span>
       </div>
       <div className="pt-0.5 text-[11px] text-muted-foreground">
         Open queries: {summary.openQueryCount} \u00B7 Answered: {summary.answeredQueryCount}

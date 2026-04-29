@@ -1,10 +1,11 @@
 'use client';
 
 import { useMemo } from 'react';
-import { CalendarDays, MoreVertical, ShieldCheck } from 'lucide-react';
-import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts';
+import { CalendarDays, ShieldCheck } from 'lucide-react';
+import { useTheme } from 'next-themes';
 
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 import type { CountryDashboardRow } from '@/lib/actions/countries';
 
@@ -18,25 +19,21 @@ const SEGMENTS: Array<{
   key: SegmentKey;
   label: string;
   color: string;
-  rowClassName: string;
 }> = [
   {
     key: 'approved',
     label: 'Approved',
     color: '#10b981',
-    rowClassName: 'bg-emerald-50/80 dark:bg-emerald-500/10',
   },
   {
     key: 'in_progress',
     label: 'In Progress',
     color: '#f59e0b',
-    rowClassName: 'bg-amber-50/80 dark:bg-amber-500/10',
   },
   {
     key: 'not_started',
     label: 'Not Started',
     color: '#94a3b8',
-    rowClassName: 'bg-slate-100/80 dark:bg-slate-500/10',
   },
 ];
 
@@ -57,6 +54,8 @@ function formatLastUpdated(iso: string | null): string {
 }
 
 export function RegulatoryProgressDonut({ countries }: RegulatoryProgressDonutProps) {
+  const { resolvedTheme } = useTheme();
+
   const { total, segments, lastUpdated } = useMemo(() => {
     const t = countries.length;
     const counts = SEGMENTS.map((seg) => ({
@@ -84,118 +83,148 @@ export function RegulatoryProgressDonut({ countries }: RegulatoryProgressDonutPr
     return { total: t, segments: counts, lastUpdated: latest };
   }, [countries]);
 
-  const chartData = segments
-    .filter((s) => s.count > 0)
-    .map((s) => ({ name: s.label, value: s.count, color: s.color }));
-
   return (
-    <Card className="border-border/70 py-0">
-      <CardHeader className="px-4 pb-0 pt-4">
-        <div className="flex items-start gap-3">
-          <span
-            aria-hidden
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400"
-          >
-            <ShieldCheck className="h-5 w-5" strokeWidth={2.25} />
-          </span>
-          <div className="min-w-0 flex-1">
+    <Card className="h-full min-h-0 overflow-hidden border-border/70 py-0 shadow-none">
+      <div className="flex flex-col gap-0 px-4 py-3.5">
+        {/* Match study overview StatCard: title + caption (left) · icon (right) */}
+        <div className="flex w-full min-w-0 items-start justify-between gap-3">
+          <div className="min-w-0 flex-1 space-y-1 text-left">
             <h3
-              className="text-base font-semibold leading-tight text-foreground"
+              className="!text-[12px] font-medium leading-tight text-muted-foreground"
               title="Distribution of countries across the three regulatory milestones."
             >
               Regulatory Progress
             </h3>
-            <p className="mt-0.5 text-xs text-muted-foreground">
+            <p className="text-[11px] leading-snug text-muted-foreground">
               Overview of regulatory submissions
             </p>
           </div>
-          <button
-            type="button"
-            aria-label="More options"
-            className="-mr-1 -mt-1 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+          <span
+            aria-hidden
+            className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 shadow-sm ring-1 ring-inset ring-black/5 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-white/10"
           >
-            <MoreVertical className="h-4 w-4" />
-          </button>
+            <ShieldCheck className="h-3.5 w-3.5 opacity-90" strokeWidth={2.25} />
+          </span>
         </div>
-      </CardHeader>
 
-      <CardContent className="px-4 pb-4 pt-0">
-        <div className="my-3 h-px bg-border/70" aria-hidden />
+        <div className="mt-3 flex w-full flex-col items-center gap-3">
+          {(() => {
+            const size = 144;
+            const strokeWidth = 12;
+            const gap = 3;
+            const trackColor = resolvedTheme === 'dark' ? 'rgb(39 39 42)' : 'rgb(226 232 240)';
+            const rings = segments.map((seg, i) => {
+              const inset = i * (strokeWidth + gap);
+              const r = (size - strokeWidth) / 2 - inset;
+              const circ = 2 * Math.PI * r;
+              const pctVal = total > 0 ? seg.count / total : 0;
+              const offset = circ - pctVal * circ;
+              return { ...seg, r, circ, offset };
+            });
 
-        <div className="flex flex-col items-center gap-4">
-          <div className="relative h-36 w-36">
-            {total === 0 ? (
-              <div className="flex h-full w-full items-center justify-center rounded-full border border-dashed border-border text-xs text-muted-foreground">
-                0
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={chartData}
-                    dataKey="value"
-                    innerRadius="62%"
-                    outerRadius="100%"
-                    paddingAngle={0}
-                    stroke="none"
-                    strokeWidth={0}
+            return (
+              <div
+                className="relative"
+                style={{ width: size, height: size }}
+                role="img"
+                aria-label={`Regulatory status: ${segments.map((s) => `${s.count} ${s.label}`).join(', ')}`}
+              >
+                {total === 0 ? (
+                  <div className="flex h-full w-full items-center justify-center rounded-full border border-dashed border-border text-xs text-muted-foreground">
+                    0
+                  </div>
+                ) : (
+                  <svg
+                    width={size}
+                    height={size}
+                    viewBox={`0 0 ${size} ${size}`}
+                    className="-rotate-90"
+                    aria-hidden
                   >
-                    {chartData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
+                    {rings.map((ring) => (
+                      <g key={ring.key}>
+                        <circle
+                          cx={size / 2}
+                          cy={size / 2}
+                          r={ring.r}
+                          fill="none"
+                          stroke={trackColor}
+                          strokeWidth={strokeWidth}
+                        />
+                        <circle
+                          cx={size / 2}
+                          cy={size / 2}
+                          r={ring.r}
+                          fill="none"
+                          stroke={ring.color}
+                          strokeWidth={strokeWidth}
+                          strokeLinecap="round"
+                          strokeDasharray={ring.circ}
+                          strokeDashoffset={ring.offset}
+                        />
+                      </g>
                     ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-            )}
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-4xl font-semibold leading-none tracking-tight text-foreground">
-                {total}
-              </span>
-              <span className="mt-1.5 text-[10px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                Total
+                  </svg>
+                )}
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="!text-[30px] font-medium leading-none tabular-nums tracking-tight text-foreground">
+                    {total}
+                  </span>
+                  <span className="mt-1.5 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                    Total
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {total > 0 ? (
+            <div className="flex w-full justify-start">
+              <span
+                className={cn(
+                  'inline-flex max-w-full items-center rounded-full border border-[#e5e5e5] bg-[#ffffff] px-2.5 py-1 text-[11px] font-medium text-[#000000] dark:border-neutral-200 dark:bg-[#ffffff] dark:text-[#000000]',
+                )}
+              >
+                {total} {total === 1 ? 'country' : 'countries'} in scope
               </span>
             </div>
-          </div>
+          ) : null}
 
-          <ul className="w-full space-y-1.5">
+          <ul className="w-full space-y-2 border-t border-border/50 pt-2.5">
             {segments.map((segment) => (
               <li
                 key={segment.key}
-                className={`flex items-center justify-between gap-2 rounded-md px-2.5 py-1.5 ${segment.rowClassName}`}
+                className="flex w-full min-w-0 items-center justify-between gap-2 text-left text-[11px] leading-snug"
               >
-                <div className="flex min-w-0 items-center gap-2">
+                <div className="flex min-w-0 flex-1 items-center gap-1.5">
                   <span
                     aria-hidden
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    className="h-2 w-2 shrink-0 rounded-full"
                     style={{ backgroundColor: segment.color }}
                   />
-                  <span className="truncate text-xs font-medium text-foreground">
+                  <span className="min-w-0 font-medium text-muted-foreground">
                     {segment.label}
                   </span>
                 </div>
-                <span className="flex items-baseline gap-1 text-xs font-semibold text-foreground">
+                <span className="shrink-0 tabular-nums text-foreground">
                   {segment.count}
-                  <span className="font-normal text-muted-foreground">
-                    ({pct(segment.count, total)}%)
-                  </span>
+                  <span className="ml-1 text-muted-foreground">({pct(segment.count, total)}%)</span>
                 </span>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="my-3 h-px bg-border/70" aria-hidden />
-
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+        <div className="mt-3 flex items-center gap-2 border-t border-border/50 pt-2.5 text-[11px] text-muted-foreground">
           <span
             aria-hidden
-            className="flex h-6 w-6 items-center justify-center rounded-md bg-muted/60"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted/60"
           >
             <CalendarDays className="h-3.5 w-3.5" />
           </span>
           <span>Last updated: {formatLastUpdated(lastUpdated)}</span>
         </div>
-      </CardContent>
+      </div>
     </Card>
   );
 }

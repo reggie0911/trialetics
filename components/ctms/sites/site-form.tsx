@@ -273,7 +273,7 @@ export function SiteForm({
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">Not assigned</SelectItem>
+                        <SelectItem value="">Not Assigned</SelectItem>
                         {countries.map((c) => (
                           <SelectItem key={c.id} value={c.id}>
                             {c.country_name} ({c.country_code})

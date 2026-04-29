@@ -109,6 +109,9 @@ interface VisitsPanelProps {
    * version yet), all rows fall back to visible to avoid a blank panel.
    */
   liveTemplateVersionId: string | null;
+  /** When true, schedule edits, timing patches, and anchor changes are disabled. */
+  readOnly?: boolean;
+  readOnlyTooltip?: string;
 }
 
 interface PendingDeviation {
@@ -126,6 +129,8 @@ export function VisitsPanel({
   screeningDate: initialScreeningDate,
   randomizationDate: initialRandomizationDate,
   liveTemplateVersionId,
+  readOnly = false,
+  readOnlyTooltip = 'This subject is deactivated. Restore the subject to make changes.',
 }: VisitsPanelProps) {
   const [visits, setVisits] = useState(initialVisits);
   const [anchorKind, setAnchorKind] = useState<VisitAnchorKind>(initialAnchorKind);
@@ -189,6 +194,10 @@ export function VisitsPanel({
 
   const persistPatch = useCallback(
     async (visit: SubjectVisit, patch: SubjectVisitTimingPatch) => {
+      if (readOnly) {
+        toast.error(readOnlyTooltip);
+        return false;
+      }
       const previous = visits;
       setVisits((rows) =>
         rows.map((r) => (r.id === visit.id ? { ...r, ...patch } as SubjectVisit : r)),
@@ -203,11 +212,15 @@ export function VisitsPanel({
       refreshVisits();
       return true;
     },
-    [visits, subjectId, refreshVisits],
+    [visits, subjectId, refreshVisits, readOnly, readOnlyTooltip],
   );
 
   const handleActualSave = useCallback(
     async (visit: SubjectVisit, nextActual: string | null) => {
+      if (readOnly) {
+        toast.error(readOnlyTooltip);
+        return false;
+      }
       const candidate = { ...visit, actual_date: nextActual } as SubjectVisit;
       const meta = computeVisitWindowStatus(candidate, today);
       if (meta.kind === 'out_of_window') {
@@ -226,7 +239,7 @@ export function VisitsPanel({
       }
       return persistPatch(visit, { actual_date: nextActual });
     },
-    [persistPatch, today],
+    [persistPatch, today, readOnly, readOnlyTooltip],
   );
 
   const confirmDeviationWithNote = useCallback(async () => {
@@ -256,6 +269,10 @@ export function VisitsPanel({
   const [anchorEditorOpen, setAnchorEditorOpen] = useState(false);
 
   const handleRecompute = useCallback(async () => {
+    if (readOnly) {
+      toast.error(readOnlyTooltip);
+      return;
+    }
     if (!anchorDate) {
       toast.error('Set the anchor date before recomputing.');
       return;
@@ -271,7 +288,7 @@ export function VisitsPanel({
         : 'No scheduled visits to recompute.',
     );
     refreshVisits();
-  }, [anchorDate, subjectId, refreshVisits]);
+  }, [anchorDate, subjectId, refreshVisits, readOnly, readOnlyTooltip]);
 
   return (
     <div className="space-y-4">
@@ -326,6 +343,8 @@ export function VisitsPanel({
                     type="button"
                     ref={scheduleActionsTriggerRef}
                     aria-label="Schedule actions"
+                    disabled={readOnly}
+                    title={readOnly ? readOnlyTooltip : undefined}
                   >
                     <span>Actions</span>
                     <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -334,6 +353,7 @@ export function VisitsPanel({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[220px]">
                 <DropdownMenuItem
+                  disabled={readOnly}
                   onSelect={() => {
                     setTimeout(() => setAnchorEditorOpen(true), 0);
                   }}
@@ -342,7 +362,7 @@ export function VisitsPanel({
                   Change anchor
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  disabled={!anchorDate}
+                  disabled={readOnly || !anchorDate}
                   onSelect={() => {
                     void handleRecompute();
                   }}
@@ -380,15 +400,17 @@ export function VisitsPanel({
             </DropdownMenu>
           </div>
         </div>
-        <AnchorEditorPopover
-          open={anchorEditorOpen}
-          onOpenChange={setAnchorEditorOpen}
-          positionAnchor={scheduleActionsTriggerRef}
-          subjectId={subjectId}
-          anchorKind={anchorKind}
-          anchorDate={anchorDate}
-          onSaved={refreshVisits}
-        />
+        {!readOnly && (
+          <AnchorEditorPopover
+            open={anchorEditorOpen}
+            onOpenChange={setAnchorEditorOpen}
+            positionAnchor={scheduleActionsTriggerRef}
+            subjectId={subjectId}
+            anchorKind={anchorKind}
+            anchorDate={anchorDate}
+            onSaved={refreshVisits}
+          />
+        )}
 
         {!anchorDate && (
           <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/60 dark:bg-amber-500/10 dark:text-amber-200">
@@ -491,6 +513,7 @@ export function VisitsPanel({
                   visit={visit}
                   today={today}
                   showTimepointColumn={showTimepointColumn}
+                  readOnly={readOnly}
                   onPersist={persistPatch}
                   onActualSave={handleActualSave}
                 />
@@ -600,6 +623,7 @@ interface VisitRowProps {
   visit: SubjectVisit;
   today: string;
   showTimepointColumn: boolean;
+  readOnly: boolean;
   onPersist: (
     visit: SubjectVisit,
     patch: SubjectVisitTimingPatch,
@@ -614,6 +638,7 @@ function VisitRow({
   visit,
   today,
   showTimepointColumn,
+  readOnly,
   onPersist,
   onActualSave,
 }: VisitRowProps) {
@@ -656,6 +681,7 @@ function VisitRow({
           label="Planned date"
           value={visit.planned_date}
           onSave={(next) => onPersist(visit, { planned_date: next })}
+          readOnly={readOnly}
         />
       </TableCell>
       <TableCell className="text-xs text-muted-foreground">
@@ -665,6 +691,7 @@ function VisitRow({
           onSave={(next) => onActualSave(visit, next)}
           open={actualOpen}
           onOpenChange={setActualOpen}
+          readOnly={readOnly}
         />
       </TableCell>
       <TableCell className="text-xs text-muted-foreground">
@@ -711,6 +738,7 @@ function VisitRow({
           onSave={(next) => onPersist(visit, { notes: next })}
           open={notesOpen}
           onOpenChange={setNotesOpen}
+          readOnly={readOnly}
         />
       </TableCell>
       <TableCell className="text-right">
@@ -722,44 +750,54 @@ function VisitRow({
                 size="sm"
                 className="h-7 w-7 p-0"
                 aria-label="Row actions"
+                disabled={readOnly}
               />
             }
           >
             <MoreHorizontal className="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[180px]">
-            <DropdownMenuItem onClick={() => setActualOpen(true)}>
+            <DropdownMenuItem
+              onClick={() => setActualOpen(true)}
+              disabled={readOnly}
+            >
               Enter actual date…
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => setStatus('completed')}
-              disabled={visit.status === 'completed'}
+              disabled={readOnly || visit.status === 'completed'}
             >
               Mark completed
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => setStatus('missed')}
-              disabled={visit.status === 'missed'}
+              disabled={readOnly || visit.status === 'missed'}
             >
               Mark missed
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => setStatus('skipped')}
-              disabled={visit.status === 'skipped'}
+              disabled={readOnly || visit.status === 'skipped'}
             >
               Skip visit
             </DropdownMenuItem>
             {visit.status !== 'scheduled' && (
-              <DropdownMenuItem onClick={() => setStatus('scheduled')}>
+              <DropdownMenuItem
+                onClick={() => setStatus('scheduled')}
+                disabled={readOnly}
+              >
                 Reset to scheduled
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setWindowOffsetsOpen(true)}>
+            <DropdownMenuItem
+              onClick={() => setWindowOffsetsOpen(true)}
+              disabled={readOnly}
+            >
               Edit window ±…
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setNotesOpen(true)}>
+            <DropdownMenuItem onClick={() => setNotesOpen(true)} disabled={readOnly}>
               Edit notes…
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -769,6 +807,7 @@ function VisitRow({
           after={after}
           open={windowOffsetsOpen}
           onOpenChange={setWindowOffsetsOpen}
+          readOnly={readOnly}
           onSave={(nextBefore, nextAfter) =>
             onPersist(visit, {
               window_before_days: nextBefore,
@@ -787,6 +826,7 @@ interface DateEditorPopoverProps {
   onSave: (next: string | null) => Promise<boolean | void>;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  readOnly?: boolean;
 }
 
 function DateEditorPopover({
@@ -795,6 +835,7 @@ function DateEditorPopover({
   onSave,
   open: controlledOpen,
   onOpenChange,
+  readOnly = false,
 }: DateEditorPopoverProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
@@ -810,6 +851,17 @@ function DateEditorPopover({
     if (next) setDraft(value ?? '');
     setOpen(next);
   };
+
+  if (readOnly) {
+    return (
+      <span
+        className={cn('inline-flex items-center gap-1 text-xs', !value && 'text-muted-foreground italic')}
+        title="Read-only"
+      >
+        {value ? formatPlanDate(value) : '--'}
+      </span>
+    );
+  }
 
   const handleSave = async () => {
     setSaving(true);
@@ -866,6 +918,7 @@ interface NotesEditorPopoverProps {
   onSave: (next: string | null) => Promise<boolean | void>;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  readOnly?: boolean;
 }
 
 function NotesEditorPopover({
@@ -873,6 +926,7 @@ function NotesEditorPopover({
   onSave,
   open: controlledOpen,
   onOpenChange,
+  readOnly = false,
 }: NotesEditorPopoverProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
@@ -883,6 +937,14 @@ function NotesEditorPopover({
   };
   const [draft, setDraft] = useState(value ?? '');
   const [saving, setSaving] = useState(false);
+
+  if (readOnly) {
+    return (
+      <span className="line-clamp-2 max-w-[12rem] text-xs text-muted-foreground" title={value ?? undefined}>
+        {value?.trim() ? value : '—'}
+      </span>
+    );
+  }
 
   const handleSave = async () => {
     setSaving(true);
@@ -950,6 +1012,7 @@ interface WindowOffsetsEditorPopoverProps {
     nextBefore: number,
     nextAfter: number,
   ) => Promise<boolean | void>;
+  readOnly?: boolean;
 }
 
 function WindowOffsetsEditorPopover({
@@ -958,10 +1021,15 @@ function WindowOffsetsEditorPopover({
   open,
   onOpenChange,
   onSave,
+  readOnly = false,
 }: WindowOffsetsEditorPopoverProps) {
   const [draftBefore, setDraftBefore] = useState(String(before));
   const [draftAfter, setDraftAfter] = useState(String(after));
   const [saving, setSaving] = useState(false);
+
+  if (readOnly) {
+    return null;
+  }
 
   const handleOpenChange = (next: boolean) => {
     if (next) {

@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { Menu as MenuPrimitive } from "@base-ui/react/menu"
-import { Slot } from "@radix-ui/react-slot"
 
 import { cn } from "@/lib/utils"
 import { CaretRightIcon, CheckIcon } from "@phosphor-icons/react"
@@ -15,18 +14,33 @@ function DropdownMenuPortal({ ...props }: MenuPrimitive.Portal.Props) {
   return <MenuPrimitive.Portal data-slot="dropdown-menu-portal" {...props} />
 }
 
-function DropdownMenuTrigger({ asChild, className, ...props }: MenuPrimitive.Trigger.Props & { asChild?: boolean; className?: string }) {
-  if (asChild) {
-    const triggerProps = {
-      asChild: <Slot />,
-      "data-slot": "dropdown-menu-trigger",
-      suppressHydrationWarning: true,
-      className,
-      ...props,
-    } as unknown as React.ComponentProps<typeof MenuPrimitive.Trigger>;
-    return <MenuPrimitive.Trigger {...triggerProps} />
+function DropdownMenuTrigger({
+  asChild,
+  className,
+  children,
+  ...props
+}: MenuPrimitive.Trigger.Props & { asChild?: boolean; className?: string }) {
+  if (asChild && React.isValidElement(children)) {
+    return (
+      <MenuPrimitive.Trigger
+        data-slot="dropdown-menu-trigger"
+        className={className}
+        render={children}
+        suppressHydrationWarning
+        {...props}
+      />
+    )
   }
-  return <MenuPrimitive.Trigger data-slot="dropdown-menu-trigger" suppressHydrationWarning className={className} {...props} />
+  return (
+    <MenuPrimitive.Trigger
+      data-slot="dropdown-menu-trigger"
+      suppressHydrationWarning
+      className={className}
+      {...props}
+    >
+      {children}
+    </MenuPrimitive.Trigger>
+  )
 }
 
 function DropdownMenuContent({

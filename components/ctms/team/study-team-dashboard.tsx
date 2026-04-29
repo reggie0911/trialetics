@@ -78,6 +78,17 @@ import { StudyTeamAssignmentMatrix } from '@/components/ctms/team/study-team-ass
 type AssignmentStatusFilter = 'all' | 'has_assignments' | 'no_assignments';
 type AppRoleFilter = 'all' | 'admin' | 'user';
 
+const STUDY_TEAM_DASHBOARD_TAB_TOOLTIPS = {
+  members:
+    'People with access to this study. Search, filter, and manage assignments and study roles for each member.',
+  pending:
+    'Invites that are still open—resend or revoke them, or see who is waiting to join the organization and this study.',
+  roles:
+    'What each team role can access in the product. Review standard roles and any custom study roles your company has defined.',
+  matrix:
+    'A grid of members and their study and site assignments so you can spot unassigned work or role gaps quickly.',
+} as const;
+
 interface StudyTeamDashboardProps {
   studyId: string;
   teamDirectoryMembers: TeamMemberWithStudies[];
@@ -307,7 +318,7 @@ export function StudyTeamDashboard({
   return (
     <div className="space-y-6" suppressHydrationWarning>
       <header className="space-y-1">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Team</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">Team</h1>
         <p className="text-sm text-muted-foreground">{subtitle}</p>
       </header>
 
@@ -321,17 +332,43 @@ export function StudyTeamDashboard({
       >
         <div className="flex flex-col gap-3 border-b border-border md:flex-row md:items-center md:justify-between">
           <TabsList className="h-auto border-0 p-0">
-            <TabsTrigger value="members">Team Members</TabsTrigger>
-            <TabsTrigger value="pending">
-              Pending Invitations
-              {pendingInvitations.length > 0 && (
-                <span className="ml-1.5 inline-flex h-4 min-w-[18px] items-center justify-center rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
-                  {pendingInvitations.length}
-                </span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="roles">Roles &amp; Permissions</TabsTrigger>
-            <TabsTrigger value="matrix">Assignment Matrix</TabsTrigger>
+            <Tooltip>
+              <TooltipTrigger render={<TabsTrigger value="members" />}>
+                Team Members
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                {STUDY_TEAM_DASHBOARD_TAB_TOOLTIPS.members}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger render={<TabsTrigger value="pending" />}>
+                Pending Invitations
+                {pendingInvitations.length > 0 && (
+                  <span className="ml-1.5 inline-flex h-4 min-w-[18px] items-center justify-center rounded-full bg-muted px-1.5 text-[10px] font-medium text-muted-foreground">
+                    {pendingInvitations.length}
+                  </span>
+                )}
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                {STUDY_TEAM_DASHBOARD_TAB_TOOLTIPS.pending}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger render={<TabsTrigger value="roles" />}>
+                Roles &amp; Permissions
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                {STUDY_TEAM_DASHBOARD_TAB_TOOLTIPS.roles}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger render={<TabsTrigger value="matrix" />}>
+                Assignment Matrix
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                {STUDY_TEAM_DASHBOARD_TAB_TOOLTIPS.matrix}
+              </TooltipContent>
+            </Tooltip>
           </TabsList>
 
           <div className="flex items-center gap-2 pb-2 md:pb-0">
@@ -349,10 +386,21 @@ export function StudyTeamDashboard({
                   </TooltipContent>
                 </Tooltip>
               ) : (
-                <Button size="sm" onClick={() => setInviteOpen(true)}>
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Invite User
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger render={<span className="inline-flex" />}>
+                    <Button
+                      size="sm"
+                      onClick={() => setInviteOpen(true)}
+                      aria-label="Invite user to this study"
+                    >
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Invite User
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-xs text-xs">
+                    Send an email invite to join your organization, then assign this study. Available to company administrators.
+                  </TooltipContent>
+                </Tooltip>
               ))}
             {readOnly ? (
               <Tooltip>
@@ -367,43 +415,62 @@ export function StudyTeamDashboard({
                 </TooltipContent>
               </Tooltip>
             ) : (
-              <Button size="sm" variant="outline" onClick={exportCsv}>
-                <Download className="mr-2 h-4 w-4" />
-                Export CSV
-              </Button>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
                   <Button
-                    variant="outline"
                     size="sm"
-                    className="h-8 w-8 p-0"
-                    aria-label="More actions"
+                    variant="outline"
+                    onClick={exportCsv}
+                    aria-label="Export team to CSV"
                   >
-                    <MoreHorizontal className="h-4 w-4" />
+                    <Download className="mr-2 h-4 w-4" />
+                    Export CSV
                   </Button>
-                }
-              />
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  disabled
-                  onClick={() => toast.info('Bulk invite via CSV coming soon')}
-                >
-                  Bulk invite via CSV
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setActiveTab('roles')}>
-                  Manage roles
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    if (typeof window !== 'undefined') window.print();
-                  }}
-                >
-                  Print directory
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  Download a CSV of team members, assignments, and pending invitations for this study.
+                </TooltipContent>
+              </Tooltip>
+            )}
+            <Tooltip>
+              <TooltipTrigger render={<span className="inline-flex" />}>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        aria-label="More team actions"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      disabled
+                      onClick={() => toast.info('Bulk invite via CSV coming soon')}
+                    >
+                      Bulk invite via CSV
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setActiveTab('roles')}>
+                      Manage roles
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        if (typeof window !== 'undefined') window.print();
+                      }}
+                    >
+                      Print directory
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs text-xs">
+                More actions: bulk invite (coming soon), jump to roles, and print the directory.
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
 

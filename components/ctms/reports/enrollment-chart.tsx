@@ -184,7 +184,7 @@ export function EnrollmentChart({ data, title = 'Enrollment Curve' }: Enrollment
     return (
       <Card className="border-border/70 py-0">
         <CardHeader className="px-5 pb-2 pt-5">
-          <CardTitle>{title}</CardTitle>
+          <CardTitle className="!text-[12px] font-semibold leading-tight text-foreground">{title}</CardTitle>
         </CardHeader>
         <CardContent className="px-5 pb-5 pt-0">
           <div className="flex items-center justify-center py-12">
@@ -201,7 +201,7 @@ export function EnrollmentChart({ data, title = 'Enrollment Curve' }: Enrollment
         <CardHeader className="space-y-3 px-5 pb-0 pt-5">
           <UiTooltip>
             <TooltipTrigger render={<span className="inline-flex" />}>
-              <CardTitle>{title}</CardTitle>
+              <CardTitle className="!text-[12px] font-semibold leading-tight text-foreground">{title}</CardTitle>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-xs text-xs">
               Enrollment trend versus plan, forecast, and target across the study timeline.

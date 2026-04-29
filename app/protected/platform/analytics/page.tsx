@@ -21,7 +21,7 @@ export default async function PlatformAnalyticsPage() {
           <p className="text-sm text-muted-foreground max-w-xl">
             Product and tenant metrics (plans, seats, modules, trackers, configuration audit).
             Clinical trial KPIs live in each study&apos;s Reports area — open a{' '}
-            <Link href="/protected/studies" className="text-primary underline-offset-4 hover:underline">
+            <Link href="/protected/studies/catalog" className="text-primary underline-offset-4 hover:underline">
               study
             </Link>
             {' '}first.

@@ -50,7 +50,6 @@ import {
 } from './countries-filter-bar';
 import { CountriesTable } from './countries-table';
 import { CountriesInsightsSheet } from './countries-insights-sheet';
-import { MilestoneLegendBar } from './milestone-legend-bar';
 import type { CountriesViewMode } from './countries-page-header';
 
 interface CountriesTabProps {
@@ -326,8 +325,6 @@ export function CountriesTab({
           />
         </div>
       </div>
-
-      <MilestoneLegendBar />
 
       <CountriesInsightsSheet
         open={insightsOpen}

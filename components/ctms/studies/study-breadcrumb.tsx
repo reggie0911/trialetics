@@ -90,7 +90,7 @@ export function StudyBreadcrumb({
     const studiesCrumb: Crumb = {
       key: 'studies',
       label: 'Studies',
-      href: '/protected/studies',
+      href: '/protected/studies/catalog',
     };
     const studyRoot = `/protected/studies/${studyId}`;
     const studyCrumb: Crumb = {

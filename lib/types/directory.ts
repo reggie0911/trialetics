@@ -89,9 +89,53 @@ export interface DirectoryContactRow {
   updated_at: string;
 }
 
+export type DirectoryContactHealth = 'healthy' | 'needs_update' | 'at_risk';
+
+/** Enrichments when listing contacts in a study Directory context (see listDirectoryContacts + studyId). */
+export interface DirectoryContactStudyListEnrichment {
+  study_involvement_active: boolean | null;
+  /** First site (alphabetical by label) for grouping / display. */
+  primary_study_site_id: string | null;
+  primary_study_site_label: string | null;
+  contact_health: DirectoryContactHealth;
+}
+
 export interface DirectoryContactListItem extends DirectoryContactRow {
   primary_role?: Pick<DirectoryRole, 'id' | 'name'> | null;
   primary_institution?: Pick<InstitutionRow, 'id' | 'name'> | null;
+  study_enrichment?: DirectoryContactStudyListEnrichment | null;
+}
+
+/** KPI + right-rail data for the study-scoped Directory Contacts view. */
+export interface DirectoryContactsSnapshot {
+  totalContacts: number;
+  totalContactsDeltaWeek: number | null;
+  sitesCovered: { covered: number; total: number; percent: number };
+  missingRoles: number;
+  unassignedToSite: number;
+  recentlyActive7d: number;
+  needsAttention: {
+    missingRoleCount: number;
+    sitesMissingKeyRoles: number;
+  };
+  roleCoverageBySite: {
+    siteId: string;
+    siteName: string;
+    siteNumber: string | null;
+    hasPi: boolean;
+    hasCrc: boolean;
+    hasPharm: boolean;
+    hasSubI?: boolean;
+    hasRn?: boolean;
+  }[];
+  smartSuggestionFilters: {
+    id: string;
+    label: string;
+    subtitle?: string;
+    health?: DirectoryContactHealth;
+    unassigned?: boolean;
+    missingRole?: boolean;
+  }[];
 }
 
 export interface DirectoryContactWithRelations extends DirectoryContactRow {

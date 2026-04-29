@@ -527,7 +527,7 @@ export function VisitRollupTable<TRow extends VisitRollupCounters>({
   );
 
   const tableNode = (
-    <div className="overflow-x-auto">
+    <div className="overflow-hidden rounded-[5px] border border-border/70">
       <Table>
         {headerNode}
         <TableBody>
@@ -541,8 +541,10 @@ export function VisitRollupTable<TRow extends VisitRollupCounters>({
               </TableCell>
             </TableRow>
           ) : (
-            rows.map((row) => {
-              const key = rowKey(row);
+            rows.map((row, rowIdx) => {
+              // `rowKey` can be a non-unique label (e.g. "Screening"), so add
+              // the row position to guarantee a unique React key per render.
+              const key = `${rowKey(row)}::${rowIdx}`;
               const expanded = expandedKeys.has(key);
               const accent = rowAccent?.(row) ?? null;
               return (

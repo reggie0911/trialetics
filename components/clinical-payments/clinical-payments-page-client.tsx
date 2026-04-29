@@ -26,7 +26,7 @@ export function ClinicalPaymentsPageClient({
         <p className="text-xs text-muted-foreground rounded-md border border-dashed border-muted-foreground/25 bg-muted/30 p-3">
           <span className="font-medium text-foreground">Budgets and invoices:</span> manage study budgets, vendor and
           site invoices, and approvals in{' '}
-          <Link href="/protected/studies" className="text-primary underline font-medium hover:text-primary/90">
+          <Link href="/protected/studies/catalog" className="text-primary underline font-medium hover:text-primary/90">
             Studies (Financials per study)
           </Link>
           . Data is not shared automatically between Clinical Payments and Financials.

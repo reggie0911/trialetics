@@ -11,10 +11,16 @@ import { DirectoryCommitteeDetailClient } from '@/components/ctms/directory/dire
 
 interface PageProps {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ from?: string }>;
 }
 
-export default async function DirectoryCommitteePage({ params }: PageProps) {
+const STUDY_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export default async function DirectoryCommitteePage({ params, searchParams }: PageProps) {
   const { id } = await params;
+  const sp = (await searchParams) ?? {};
+  const fromStudy = sp.from && STUDY_UUID.test(sp.from) ? sp.from : null;
+  const backHref = fromStudy ? `/protected/studies/${fromStudy}/directory` : '/protected/studies#studies';
   const access = await getDirectoryAccess();
   if (!access.ok) notFound();
 
@@ -38,9 +44,9 @@ export default async function DirectoryCommitteePage({ params }: PageProps) {
   return (
     <div className="p-6 space-y-4">
       <Button variant="ghost" size="sm" className="text-xs -ml-2 h-8" asChild>
-        <Link href="/protected/directory">
+        <Link href={backHref}>
           <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-          Contacts & Organizations
+          {fromStudy ? 'Back to Directory' : 'Contacts & Organizations'}
         </Link>
       </Button>
       <DirectoryCommitteeDetailClient
@@ -49,6 +55,7 @@ export default async function DirectoryCommitteePage({ params }: PageProps) {
         studies={studies}
         contacts={contacts}
         flatRoles={flatRoles}
+        catalogError={catalog.error}
       />
     </div>
   );

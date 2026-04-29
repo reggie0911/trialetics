@@ -48,7 +48,7 @@ export async function listInstitutions(
   params?: ListInstitutionsParams
 ): Promise<{ data: InstitutionRow[]; count: number; error: string | null }> {
   const { supabase, companyId } = await requireReader();
-  const limit = Math.min(params?.limit ?? 25, 100);
+  const limit = Math.min(params?.limit ?? 25, 500);
   const offset = params?.offset ?? 0;
 
   let query = supabase
@@ -113,7 +113,7 @@ export async function getInstitutionById(id: string): Promise<{
     .from('directory_contact_institution')
     .select(
       `id, directory_contact_id, is_primary,
-       directory_contacts(id,first_name,last_name,email,title,primary_directory_role_id,directory_roles(id,name))`
+       directory_contacts(id,first_name,last_name,email,phone,title,primary_directory_role_id,directory_roles(id,name))`
     )
     .eq('institution_id', id);
 
@@ -139,12 +139,29 @@ export async function getInstitutionById(id: string): Promise<{
   };
 }
 
+export async function checkDuplicateInstitutionName(
+  name: string | null | undefined,
+  excludeInstitutionId?: string
+): Promise<{ duplicate: boolean }> {
+  if (!name?.trim()) return { duplicate: false };
+  const { supabase, companyId } = await requireReader();
+  let q = supabase
+    .from('institutions')
+    .select('id')
+    .eq('company_id', companyId)
+    .ilike('name', name.trim());
+  if (excludeInstitutionId) q = q.neq('id', excludeInstitutionId);
+  const { data } = await q.limit(1);
+  return { duplicate: (data?.length ?? 0) > 0 };
+}
+
 export async function createInstitution(
   input: SaveInstitutionInput
-): Promise<{ data: { id: string } | null; error: string | null }> {
+): Promise<{ data: { id: string } | null; error: string | null; duplicateNameWarning?: boolean }> {
   const { supabase, companyId } = await requireEditor();
   const result = await insertInstitutionRecord(supabase, companyId, input);
   if ('error' in result) return { data: null, error: result.error };
+  const dup = (await checkDuplicateInstitutionName(input.name, result.id)).duplicate;
   await appendDirectoryAuditLog({
     companyId,
     entityType: 'institution',
@@ -154,13 +171,13 @@ export async function createInstitution(
     newPayload: input as unknown as Record<string, unknown>,
   });
   revalidatePath('/protected/directory');
-  return { data: { id: result.id }, error: null };
+  return { data: { id: result.id }, error: null, duplicateNameWarning: dup };
 }
 
 export async function updateInstitution(
   id: string,
   input: SaveInstitutionInput
-): Promise<{ error: string | null }> {
+): Promise<{ error: string | null; duplicateNameWarning?: boolean }> {
   const { supabase, companyId } = await requireEditor();
   const { data: existing } = await supabase
     .from('institutions')
@@ -172,6 +189,7 @@ export async function updateInstitution(
 
   const upd = await updateInstitutionRecord(supabase, companyId, id, input);
   if (upd.error) return { error: upd.error };
+  const dup = (await checkDuplicateInstitutionName(input.name, id)).duplicate;
   await appendDirectoryAuditLog({
     companyId,
     entityType: 'institution',
@@ -182,7 +200,7 @@ export async function updateInstitution(
   });
   revalidatePath('/protected/directory');
   revalidatePath(`/protected/directory/institutions/${id}`);
-  return { error: null };
+  return { error: null, duplicateNameWarning: dup };
 }
 
 export type InstitutionNearbyPlacesUpdate =

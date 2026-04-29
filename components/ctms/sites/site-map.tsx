@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, useTransition } from 'react';
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { Wrapper, Status } from '@googlemaps/react-wrapper';
 import { MapPin, Plane, Hotel, Loader2, ExternalLink, Copy, Check } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,6 +51,11 @@ export interface SiteMapProps {
   onSelectHotel?: (place: NearbyPlace) => void;
   showAirports?: boolean;
   showHotels?: boolean;
+  /**
+   * When true, render only the map (no nearby airports/hotels and no quick-action sidebar)
+   * and use a simpler "Location" card title. Used by surfaces that only need a location preview.
+   */
+  mapOnly?: boolean;
 }
 
 function buildAddressQuery(
@@ -237,12 +242,14 @@ export function SiteMap({
   onSelectHotel,
   showAirports = true,
   showHotels = true,
+  mapOnly = false,
 }: SiteMapProps) {
   const addressQuery = buildAddressQuery(address, city, state, postalCode);
   const [airports, setAirports] = useState<NearbyPlace[]>([]);
   const [hotels, setHotels] = useState<NearbyPlace[]>([]);
   const [loadingPlaces, setLoadingPlaces] = useState(false);
   const [savingType, setSavingType] = useState<'airport' | 'hotel' | null>(null);
+  const [siteAddressCopied, setSiteAddressCopied] = useState(false);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
   const markersRef = useRef<google.maps.Marker[]>([]);
@@ -418,6 +425,14 @@ export function SiteMap({
     [persistence, router]
   );
 
+  const copySiteAddress = useCallback(() => {
+    if (!addressQuery) return;
+    void navigator.clipboard.writeText(addressQuery);
+    toast.success('Address copied to clipboard');
+    setSiteAddressCopied(true);
+    setTimeout(() => setSiteAddressCopied(false), 2000);
+  }, [addressQuery]);
+
   if (!addressQuery) {
     return (
       <Card>
@@ -451,11 +466,18 @@ export function SiteMap({
   const currentHotelId = selectedHotelId ?? savedHotel?.placeId;
   const selectedAirport = airports.find((a) => a.place_id === currentAirportId) ?? null;
   const selectedHotel = hotels.find((h) => h.place_id === currentHotelId) ?? null;
+  const mapsSearchUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(addressQuery)}`;
 
   return (
     <Card>
       <CardHeader className="px-4 pt-4 pb-0">
-        <CardTitle>Location & Nearby Places</CardTitle>
+        {mapOnly ? (
+          <h2 id="directory-location-heading" className="leading-none font-medium text-sm">
+            Location
+          </h2>
+        ) : (
+          <CardTitle>Location & Nearby Places</CardTitle>
+        )}
       </CardHeader>
       <CardContent className="p-3">
         <div className="flex flex-col lg:flex-row gap-3">
@@ -472,7 +494,8 @@ export function SiteMap({
             </Wrapper>
           </div>
 
-          {/* Side panel */}
+          {/* Side panel — hidden when `mapOnly` is set (e.g. directory profile) */}
+          {!mapOnly && (
           <div className="w-full lg:w-72 shrink-0 space-y-4">
             {loadingPlaces && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -555,7 +578,30 @@ export function SiteMap({
                 Saving selection...
               </div>
             )}
+
+            <div className="pt-2 border-t border-border/60 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Quick actions</p>
+              <div className="flex flex-col gap-2 min-[400px]:flex-row">
+                <Button variant="outline" size="sm" className="w-full min-[400px]:flex-1" asChild>
+                  <a href={mapsSearchUrl} target="_blank" rel="noopener noreferrer" className="inline-flex">
+                    <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                    Open in Google Maps
+                  </a>
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full min-[400px]:flex-1"
+                  onClick={copySiteAddress}
+                >
+                  {siteAddressCopied ? <Check className="h-3.5 w-3.5 mr-1.5 text-green-600" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
+                  Copy address
+                </Button>
+              </div>
+            </div>
           </div>
+          )}
         </div>
       </CardContent>
     </Card>

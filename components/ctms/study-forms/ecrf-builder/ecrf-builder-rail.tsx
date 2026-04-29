@@ -11,16 +11,19 @@ import {
   Clock,
   GitCompare,
   History,
+  LayoutDashboard,
   Pencil,
   Plus,
+  Sparkles,
   Trash2,
   Upload,
+  Zap,
 } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 import type {
@@ -128,12 +131,29 @@ export function EcrfBuilderRail({
   return (
     <div className="space-y-3">
       {isEmptyDraft && (
-        <Card className="border-dashed">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Get started</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-xs text-muted-foreground">
-            <p>This draft is empty. Pick the path that suits you best:</p>
+        <Card className="flex flex-col border-dashed border-border/70 py-0 shadow-none">
+          <div className="px-4 pb-2 pt-4 sm:px-5 sm:pt-5">
+            <div className="flex items-start gap-3">
+              <span
+                aria-hidden
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300"
+              >
+                <Sparkles className="h-5 w-5" strokeWidth={2.25} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <h3
+                  data-slot="card-title"
+                  className="!text-[12px] font-medium leading-tight text-foreground"
+                >
+                  Get started
+                </h3>
+                <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                  This draft is empty — add a visit or import your structure to begin.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="px-4 pb-4 pt-0 sm:px-5 sm:pb-5">
             <div className="flex flex-col gap-1.5">
               <Button size="sm" className="justify-start" onClick={onAddVisit}>
                 <Plus className="mr-1 h-3.5 w-3.5" />
@@ -149,129 +169,194 @@ export function EcrfBuilderRail({
                 Bulk import a CSV
               </Button>
             </div>
-          </CardContent>
+          </div>
         </Card>
       )}
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex items-center justify-between text-sm">
-            <span>Health snapshot</span>
-            {activeVersion && (
-              <Badge variant="outline" className="text-[10px] uppercase">
-                {activeVersion.status}
-              </Badge>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2.5">
-          <HealthRow
-            icon={CalendarRange}
-            label="Visits"
-            value={health.totalVisits}
-            tone={health.totalVisits === 0 ? 'warn' : 'ok'}
-          />
-          <HealthRow
-            icon={CheckCircle2}
-            label="CRFs"
-            value={health.totalCrfs}
-            tone={health.totalCrfs === 0 ? 'warn' : 'ok'}
-            sub={
-              health.visitsMissingCrfs > 0
-                ? `${health.visitsMissingCrfs} visit${
-                    health.visitsMissingCrfs === 1 ? '' : 's'
-                  } without a CRF`
-                : undefined
-            }
-            subTone={health.visitsMissingCrfs > 0 ? 'warn' : 'ok'}
-          />
-          <HealthRow
-            icon={Activity}
-            label="Questions"
-            value={health.totalQuestions}
-            tone={health.totalQuestions === 0 ? 'warn' : 'ok'}
-            sub={
-              health.crfsMissingQuestions > 0
-                ? `${health.crfsMissingQuestions} CRF${
-                    health.crfsMissingQuestions === 1 ? '' : 's'
-                  } empty`
-                : undefined
-            }
-            subTone={health.crfsMissingQuestions > 0 ? 'warn' : 'ok'}
-          />
-          {(health.visitsMissingCrfs > 0 || health.crfsMissingQuestions > 0) && (
-            <div className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
-              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-              <span>
-                Resolve empty rows before publishing this version so subjects don&apos;t see
-                gaps.
-              </span>
+      <Card className="flex flex-col border-border/70 py-0 shadow-none">
+        <div className="px-4 pb-2 pt-4 sm:px-5 sm:pt-5">
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300"
+            >
+              <LayoutDashboard className="h-5 w-5" strokeWidth={2.25} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3
+                  data-slot="card-title"
+                  className="!text-[12px] font-medium leading-tight text-foreground"
+                >
+                  Health snapshot
+                </h3>
+                {activeVersion ? (
+                  <Badge
+                    variant="outline"
+                    className="h-5 shrink-0 text-[10px] font-medium uppercase"
+                  >
+                    {activeVersion.status}
+                  </Badge>
+                ) : null}
+              </div>
+              <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                Visits, CRFs, and questions for the version you are editing
+              </p>
             </div>
-          )}
-        </CardContent>
+          </div>
+        </div>
+        <div className="px-4 pb-4 pt-0 sm:px-5 sm:pb-5">
+          <div className="space-y-2.5">
+            <HealthRow
+              icon={CalendarRange}
+              label="Visits"
+              value={health.totalVisits}
+              tone={health.totalVisits === 0 ? 'warn' : 'ok'}
+            />
+            <HealthRow
+              icon={CheckCircle2}
+              label="CRFs"
+              value={health.totalCrfs}
+              tone={health.totalCrfs === 0 ? 'warn' : 'ok'}
+              sub={
+                health.visitsMissingCrfs > 0
+                  ? `${health.visitsMissingCrfs} visit${
+                      health.visitsMissingCrfs === 1 ? '' : 's'
+                    } without a CRF`
+                  : undefined
+              }
+              subTone={health.visitsMissingCrfs > 0 ? 'warn' : 'ok'}
+            />
+            <HealthRow
+              icon={Activity}
+              label="Questions"
+              value={health.totalQuestions}
+              tone={health.totalQuestions === 0 ? 'warn' : 'ok'}
+              sub={
+                health.crfsMissingQuestions > 0
+                  ? `${health.crfsMissingQuestions} CRF${
+                      health.crfsMissingQuestions === 1 ? '' : 's'
+                    } empty`
+                  : undefined
+              }
+              subTone={health.crfsMissingQuestions > 0 ? 'warn' : 'ok'}
+            />
+            {(health.visitsMissingCrfs > 0 || health.crfsMissingQuestions > 0) && (
+              <div className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                <span>
+                  Resolve empty rows before publishing this version so subjects don&apos;t
+                  see gaps.
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
       </Card>
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm">Recent activity</CardTitle>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-[11px]"
-            onClick={onOpenChangeLog}
-          >
-            View all
-          </Button>
-        </CardHeader>
-        <CardContent>
+      <Card className="flex flex-col border-border/70 py-0 shadow-none">
+        <div className="px-4 pb-2 pt-4 sm:px-5 sm:pt-5">
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-sky-50 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300"
+            >
+              <History className="h-5 w-5" strokeWidth={2.25} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3
+                  data-slot="card-title"
+                  className="!text-[12px] font-medium leading-tight text-foreground"
+                >
+                  Recent activity
+                </h3>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 shrink-0 text-[11px] font-medium"
+                  onClick={onOpenChangeLog}
+                >
+                  <History className="mr-1.5 h-3.5 w-3.5" />
+                  View all
+                </Button>
+              </div>
+              <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                Edits in this eCRF version, newest first
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="px-4 pb-4 pt-0 sm:px-5 sm:pb-5">
           {recentEvents.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="py-6 text-center text-[11px] leading-relaxed text-muted-foreground sm:py-8">
               No edits yet for this version.
             </p>
           ) : (
-            <ul className="space-y-3">
+            <ul className="space-y-2.5">
               {recentEvents.slice(0, 6).map((event) => (
                 <RecentEventRow key={event.id} event={event} />
               ))}
             </ul>
           )}
-        </CardContent>
+        </div>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Quick actions</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-1.5">
-          <Button
-            size="sm"
-            variant="outline"
-            className="justify-start"
-            onClick={onOpenCompare}
-          >
-            <GitCompare className="mr-2 h-3.5 w-3.5" />
-            Compare versions
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="justify-start"
-            onClick={onOpenChangeLog}
-          >
-            <History className="mr-2 h-3.5 w-3.5" />
-            Open change log
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="justify-start"
-            onClick={onOpenBulkImport}
-            disabled={!canEdit}
-          >
-            <Upload className="mr-2 h-3.5 w-3.5" />
-            Bulk import CSV
-          </Button>
-        </CardContent>
+      <Card className="flex flex-col border-border/70 py-0 shadow-none">
+        <div className="px-4 pb-2 pt-4 sm:px-5 sm:pt-5">
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-violet-50 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300"
+            >
+              <Zap className="h-5 w-5" strokeWidth={2.25} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3
+                data-slot="card-title"
+                className="!text-[12px] font-medium leading-tight text-foreground"
+              >
+                Quick actions
+              </h3>
+              <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+                Compare versions, read the log, or bring in a CSV
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="px-4 pb-4 pt-0 sm:px-5 sm:pb-5">
+          <div className="flex flex-col gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="justify-start"
+              onClick={onOpenCompare}
+            >
+              <GitCompare className="mr-2 h-3.5 w-3.5" />
+              Compare versions
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="justify-start"
+              onClick={onOpenChangeLog}
+            >
+              <History className="mr-2 h-3.5 w-3.5" />
+              Open change log
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="justify-start"
+              onClick={onOpenBulkImport}
+              disabled={!canEdit}
+            >
+              <Upload className="mr-2 h-3.5 w-3.5" />
+              Bulk import CSV
+            </Button>
+          </div>
+        </div>
       </Card>
     </div>
   );
@@ -308,11 +393,11 @@ function HealthRow({
           <Icon className="h-3 w-3" />
         </span>
         <div className="min-w-0">
-          <p className="text-xs font-medium leading-none">{label}</p>
+          <p className="text-[11px] font-medium leading-snug">{label}</p>
           {sub && (
             <p
               className={cn(
-                'mt-1 text-[10px] leading-none',
+                'mt-1 text-[10px] leading-tight',
                 subTone === 'warn'
                   ? 'text-amber-600 dark:text-amber-300'
                   : 'text-muted-foreground'
@@ -323,7 +408,7 @@ function HealthRow({
           )}
         </div>
       </div>
-      <span className="text-sm font-semibold tabular-nums">{value}</span>
+      <span className="text-[12px] font-semibold tabular-nums text-foreground">{value}</span>
     </div>
   );
 }
@@ -375,8 +460,8 @@ function RecentEventRow({ event }: { event: EcrfTemplateChangeEvent }) {
         <Icon className="h-3 w-3" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-xs leading-snug text-foreground">{summary}</p>
-        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        <p className="text-[11px] leading-snug text-foreground">{summary}</p>
+        <div className="mt-0.5 flex items-center gap-1.5 text-[10px] leading-tight text-muted-foreground">
           <Avatar className="h-3.5 w-3.5">
             {event.actor_avatar_url ? <AvatarImage src={event.actor_avatar_url} /> : null}
             <AvatarFallback className="text-[7px]">{initials}</AvatarFallback>

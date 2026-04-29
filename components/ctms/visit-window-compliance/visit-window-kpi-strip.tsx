@@ -11,12 +11,12 @@ import {
   CalendarPlus,
   CheckCircle2,
   CircleDashed,
-  MoreVertical,
+  Info,
   type LucideIcon,
 } from 'lucide-react';
 
-import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Sparkline } from '@/components/ctms/ecrf-tracking/_pieces/sparkline';
 import type {
   VisitScheduleBucketCounts,
@@ -70,13 +70,41 @@ const LABEL: Record<KpiBucketId, string> = {
   pending: 'Pending',
 };
 
+/** One-line context for the StatCard-style white chip (below the donut) */
+const META: Record<KpiBucketId, string> = {
+  overall: 'Done % · visits complete vs all scheduled',
+  in_window: 'In window as a share of all visits',
+  out_of_window: 'Out of window, not yet overdue or due',
+  overdue: 'Overdue (past the allowed target window)',
+  due_now: 'In the “due now” monitoring window',
+  upcoming: 'Upcoming in schedule (before window open)',
+  pending: 'Not yet in a specific window bucket',
+};
+
+/** Longer copy for the Info chip tooltip (same idea as the meta line) */
+const META_TOOLTIP: Record<KpiBucketId, string> = {
+  overall:
+    'Rolled-up visit-window completion: “done” visits with compliance work complete, as a share of all scheduled visits. The value under the card repeats done/total, plus how many subjects and visits are in this rollup. The spark is completion % over time.',
+  in_window:
+    'Count of visits currently inside their target window and treated as in compliance (in window). The ring is this count as a share of all scheduled visits. “vs last 7 days” compares the latest bucket count to the 7-day spark.',
+  out_of_window:
+    'Visits with an open window that are not yet in their in-window, due, or overdue state, per the status engine. Share is of all visits. Use the table to inspect which visits are bucketed here.',
+  overdue:
+    'Visits past the end of the allowed target window. High share often drives monitoring follow-up. Sparkline shows the trend; the line under the value is the raw count vs a 7-day context.',
+  due_now:
+    'Visits in the “due now” band—typically when the window is open and an action is expected imminently (definition follows your site/study visit rules).',
+  upcoming:
+    'Visits whose target window has not opened yet (scheduled future window). Share is of all scheduled visits; trend reflects movement into other buckets as dates advance.',
+  pending:
+    'Visits not yet placed into a concrete window state from the current calculation (e.g. missing dates or not yet processed). Re-sync or expand filters if counts look unexpected.',
+};
+
 interface BucketAccent {
   topAccent: string;
   iconBg: string;
   iconFg: string;
   donutStroke: string;
   sparklineTone: string;
-  newPillClass: string;
 }
 
 const ACCENT: Record<KpiBucketId, BucketAccent> = {
@@ -86,8 +114,6 @@ const ACCENT: Record<KpiBucketId, BucketAccent> = {
     iconFg: 'text-emerald-600 dark:text-emerald-300',
     donutStroke: 'stroke-emerald-500',
     sparklineTone: 'text-emerald-500',
-    newPillClass:
-      'bg-muted/70 text-muted-foreground dark:bg-muted dark:text-muted-foreground',
   },
   in_window: {
     topAccent: 'bg-emerald-500',
@@ -95,8 +121,6 @@ const ACCENT: Record<KpiBucketId, BucketAccent> = {
     iconFg: 'text-emerald-600 dark:text-emerald-300',
     donutStroke: 'stroke-emerald-500',
     sparklineTone: 'text-emerald-500',
-    newPillClass:
-      'bg-muted/70 text-muted-foreground dark:bg-muted dark:text-muted-foreground',
   },
   out_of_window: {
     topAccent: 'bg-amber-500',
@@ -104,8 +128,6 @@ const ACCENT: Record<KpiBucketId, BucketAccent> = {
     iconFg: 'text-amber-600 dark:text-amber-300',
     donutStroke: 'stroke-amber-500',
     sparklineTone: 'text-amber-500',
-    newPillClass:
-      'bg-amber-100/70 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
   },
   overdue: {
     topAccent: 'bg-rose-500',
@@ -113,8 +135,6 @@ const ACCENT: Record<KpiBucketId, BucketAccent> = {
     iconFg: 'text-rose-600 dark:text-rose-300',
     donutStroke: 'stroke-rose-500',
     sparklineTone: 'text-rose-500',
-    newPillClass:
-      'bg-rose-100/70 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
   },
   due_now: {
     topAccent: 'bg-blue-500',
@@ -122,8 +142,6 @@ const ACCENT: Record<KpiBucketId, BucketAccent> = {
     iconFg: 'text-blue-600 dark:text-blue-300',
     donutStroke: 'stroke-blue-500',
     sparklineTone: 'text-blue-500',
-    newPillClass:
-      'bg-blue-100/70 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
   },
   upcoming: {
     topAccent: 'bg-violet-500',
@@ -131,8 +149,6 @@ const ACCENT: Record<KpiBucketId, BucketAccent> = {
     iconFg: 'text-violet-600 dark:text-violet-300',
     donutStroke: 'stroke-violet-500',
     sparklineTone: 'text-violet-500',
-    newPillClass:
-      'bg-violet-100/70 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300',
   },
   pending: {
     topAccent: 'bg-slate-400 dark:bg-slate-500',
@@ -140,8 +156,6 @@ const ACCENT: Record<KpiBucketId, BucketAccent> = {
     iconFg: 'text-slate-500 dark:text-slate-300',
     donutStroke: 'stroke-slate-400 dark:stroke-slate-500',
     sparklineTone: 'text-slate-400 dark:text-slate-500',
-    newPillClass:
-      'bg-muted/70 text-muted-foreground dark:bg-muted dark:text-muted-foreground',
   },
 };
 
@@ -157,41 +171,15 @@ function trendByKind(
   return trends?.find((t) => t.kind === kind);
 }
 
-/** Header trend pill. Renders as a stylized "New" badge when no delta is
- *  available yet, otherwise mirrors the arrow + delta% used in
- *  `kpi-strip-pro.tsx` so both strips read the same. */
-function TrendPill({
-  trend,
-  newPillClass,
-}: {
-  trend?: VisitWindowTrend;
-  newPillClass: string;
-}) {
+/** Header trend: 7d delta% with arrow when data exists; empty when not. */
+function TrendPill({ trend }: { trend?: VisitWindowTrend }) {
   if (!trend) {
-    return (
-      <Badge
-        className={cn(
-          'rounded-full px-2 py-0.5 text-[10px] font-medium border-transparent',
-          newPillClass,
-        )}
-      >
-        New
-      </Badge>
-    );
+    return null;
   }
 
   const delta = trend.deltaPct7d;
   if (delta === null) {
-    return (
-      <Badge
-        className={cn(
-          'rounded-full px-2 py-0.5 text-[10px] font-medium border-transparent',
-          newPillClass,
-        )}
-      >
-        New
-      </Badge>
-    );
+    return null;
   }
   if (delta === 0) {
     return (
@@ -267,8 +255,8 @@ function DonutChart({
           />
         ) : null}
       </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-2xl font-medium leading-none tracking-tight text-foreground">
+      <div className="absolute inset-0 flex items-center justify-center px-1 text-center">
+        <span className="max-w-full min-w-0 !text-[30px] font-medium leading-tight tabular-nums tracking-tight text-foreground text-balance">
           {centerLabel}
         </span>
       </div>
@@ -316,7 +304,7 @@ function VisitKpiCard({
         }
       }}
       className={cn(
-        'flex h-full flex-col gap-0 overflow-hidden border-border/70 p-0 shadow-none',
+        'flex h-full min-h-0 w-full flex-col gap-0 overflow-hidden border-border/70 p-0 py-0 shadow-none',
         onClick &&
           'cursor-pointer transition-colors hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
         active && 'border-primary/60 ring-1 ring-primary/30',
@@ -324,44 +312,87 @@ function VisitKpiCard({
     >
       <div className={cn('h-[3px] w-full shrink-0', accent.topAccent)} />
 
-      <div className="flex h-full flex-col gap-3 px-4 pb-3 pt-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <span
-              aria-hidden="true"
-              className={cn(
-                'flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
-                accent.iconBg,
-              )}
-            >
-              <Icon className={cn('h-3.5 w-3.5', accent.iconFg)} />
-            </span>
-            <p
-              id={labelId}
-              className="text-[11px] font-semibold uppercase leading-tight tracking-[0.06em] text-muted-foreground"
-            >
-              {LABEL[id]}
-            </p>
+      <div className="flex min-h-0 flex-1 flex-col gap-0 px-4 py-3.5">
+        <div className="flex w-full min-w-0 items-start justify-between gap-2">
+          <p
+            id={labelId}
+            data-slot="stat-card-title"
+            className="min-w-0 flex-1 !text-[12px] font-medium leading-tight text-muted-foreground"
+          >
+            {LABEL[id]}
+          </p>
+          <span
+            aria-hidden
+            className={cn(
+              'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/10',
+              accent.iconBg,
+            )}
+          >
+            <Icon className={cn('h-3.5 w-3.5 opacity-90', accent.iconFg)} />
+          </span>
+        </div>
+
+        {trend ? (
+          <div className="mt-1.5 flex min-h-4 w-full min-w-0">
+            <TrendPill trend={trend} />
           </div>
-          <div className="flex shrink-0 items-center gap-1">
-            <TrendPill trend={trend} newPillClass={accent.newPillClass} />
+        ) : null}
+
+        <div className="mt-3 flex w-full justify-center">
+          <DonutChart
+            percentage={donutPercentage}
+            fillStrokeClassName={accent.donutStroke}
+            centerLabel={donutCenterLabel}
+          />
+        </div>
+
+        <div
+          className="mt-3 w-full"
+          onClick={onClick ? (e) => e.stopPropagation() : undefined}
+        >
+          <div className="flex w-full justify-start">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-[#ffffff] px-2.5 py-1 text-left text-[11px] font-medium text-[#000000] outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-ring/50 dark:border-neutral-200 dark:bg-[#ffffff] dark:text-[#000000]"
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    aria-label={`${LABEL[id]} — more detail`}
+                  >
+                    <Info
+                      className="h-3 w-3 shrink-0 text-[#000000] opacity-80"
+                      aria-hidden
+                    />
+                    <span className="min-w-0 flex-1 truncate text-left leading-snug">
+                      {META[id]}
+                    </span>
+                  </button>
+                }
+              />
+              <TooltipContent
+                side="top"
+                className="max-w-xs text-left text-xs text-balance"
+              >
+                {META_TOOLTIP[id]}
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
-        <DonutChart
-          percentage={donutPercentage}
-          fillStrokeClassName={accent.donutStroke}
-          centerLabel={donutCenterLabel}
-        />
-
-        <div className="space-y-0.5 text-center">
-          <p className="text-xl font-medium leading-none tracking-tight text-foreground">
+        <div className="mt-3 border-t border-border/50 pt-2.5 text-left">
+          <p className="text-[11px] font-medium leading-snug tabular-nums text-foreground">
             {primaryValue}
           </p>
-          <p className="text-[11px] text-muted-foreground">{subtext}</p>
+          {subtext ? (
+            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+              {subtext}
+            </p>
+          ) : null}
         </div>
 
-        <div className="mt-auto pt-1">
+        <div className="mt-auto w-full pt-1">
           {trend ? (
             <Sparkline
               points={trend.points}
@@ -370,7 +401,13 @@ function VisitKpiCard({
               heightClassName="h-6"
             />
           ) : (
-            <div className={cn('h-px w-full', accent.topAccent, 'opacity-60')} />
+            <div
+              className={cn(
+                'h-px w-full',
+                active ? 'opacity-40' : 'opacity-60',
+                accent.topAccent,
+              )}
+            />
           )}
         </div>
       </div>
@@ -388,7 +425,7 @@ function VisitKpiCard({
  * Each card forwards a click event with its `KpiBucketId` so the parent can
  * pre-filter the table by `dueStatus`. The strip stays clickable even when
  * the trend bundle hasn't loaded yet — the sparkline degrades to a thin
- * accent line and the trend pill renders as "New".
+ * accent line.
  */
 export function VisitWindowKpiStrip({
   overall,

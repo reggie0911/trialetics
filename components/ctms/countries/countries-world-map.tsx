@@ -171,21 +171,21 @@ const LEGEND_ENTRIES: LegendKey[] = [
 export function CountriesWorldMapLegend({ className }: { className?: string }) {
   return (
     <ul
-      className={cn(
-        'grid grid-cols-2 gap-x-3 gap-y-1.5',
-        className,
-      )}
+      className={cn('grid w-full grid-cols-2 gap-x-3 gap-y-2 text-left', className)}
     >
       {LEGEND_ENTRIES.map((key) => (
         <li
           key={key}
-          className="flex items-center gap-2 text-xs text-muted-foreground"
+          className="flex min-w-0 items-center gap-1.5 text-[11px] leading-snug"
         >
           <span
-            className="h-2.5 w-2.5 shrink-0 rounded-full"
+            className="h-2 w-2 shrink-0 rounded-full"
             style={{ backgroundColor: STATUS_COLOR[key] }}
+            aria-hidden
           />
-          {STATUS_LABEL[key]}
+          <span className="min-w-0 font-medium text-muted-foreground">
+            {STATUS_LABEL[key]}
+          </span>
         </li>
       ))}
     </ul>
