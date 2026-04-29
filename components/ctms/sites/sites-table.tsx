@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowDown, ArrowUp, ArrowUpDown, Building2, ExternalLink, MoreHorizontal } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Building2, ExternalLink } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,6 +33,7 @@ interface SitesTableProps {
   studyId: string;
   sites: EnrichedSiteRow[];
   emptyTotalSites: boolean;
+  countryNameByStudyCountryId: ReadonlyMap<string, string>;
 }
 
 function compareSiteNumbers(a: string, b: string, dir: SortDirection): number {
@@ -47,7 +48,12 @@ function compareSiteNumbers(a: string, b: string, dir: SortDirection): number {
   return dir === 'asc' ? cmp : -cmp;
 }
 
-export function SitesTable({ studyId, sites, emptyTotalSites }: SitesTableProps) {
+export function SitesTable({
+  studyId,
+  sites,
+  emptyTotalSites,
+  countryNameByStudyCountryId,
+}: SitesTableProps) {
   const router = useRouter();
   const [sortDir, setSortDir] = useState<SortDirection | null>(null);
 
@@ -81,7 +87,7 @@ export function SitesTable({ studyId, sites, emptyTotalSites }: SitesTableProps)
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="text-xs font-medium text-muted-foreground">
+            <TableHead className="text-xs font-medium text-[#000000]">
               <button
                 type="button"
                 onClick={toggleSort}
@@ -92,7 +98,7 @@ export function SitesTable({ studyId, sites, emptyTotalSites }: SitesTableProps)
                       ? 'descending'
                       : 'none'
                 }
-                className="-ml-1 inline-flex items-center gap-1 rounded px-1 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                className="-ml-1 inline-flex items-center gap-1 rounded px-1 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em] text-[#000000] hover:bg-muted/60"
               >
                 Site #
                 {sortDir === 'asc' ? (
@@ -104,19 +110,19 @@ export function SitesTable({ studyId, sites, emptyTotalSites }: SitesTableProps)
                 )}
               </button>
             </TableHead>
-            <TableHead className="text-xs font-medium text-muted-foreground">
+            <TableHead className="text-xs font-medium text-[#000000]">
               Site Name
             </TableHead>
-            <TableHead className="text-xs font-medium text-muted-foreground">Location</TableHead>
-            <TableHead className="text-xs font-medium text-muted-foreground">PI</TableHead>
-            <TableHead className="text-xs font-medium text-muted-foreground">Status</TableHead>
-            <TableHead className="text-xs font-medium text-muted-foreground">
+            <TableHead className="text-xs font-medium text-[#000000]">Location</TableHead>
+            <TableHead className="text-xs font-medium text-[#000000]">Country</TableHead>
+            <TableHead className="text-xs font-medium text-[#000000]">Status</TableHead>
+            <TableHead className="text-xs font-medium text-[#000000]">
               Enrollment progress
             </TableHead>
-            <TableHead className="text-xs font-medium text-muted-foreground">
+            <TableHead className="text-xs font-medium text-[#000000]">
               Last Activity
             </TableHead>
-            <TableHead className="w-[110px] text-right text-xs font-medium text-muted-foreground">
+            <TableHead className="w-[110px] text-right text-xs font-medium text-[#000000]">
               Actions
             </TableHead>
           </TableRow>
@@ -133,7 +139,13 @@ export function SitesTable({ studyId, sites, emptyTotalSites }: SitesTableProps)
             </TableRow>
           ) : (
             sortedSites.map((site) => (
-              <SitesTableRow key={site.id} studyId={studyId} site={site} onNavigate={router.push} />
+              <SitesTableRow
+                key={site.id}
+                studyId={studyId}
+                site={site}
+                countryNameByStudyCountryId={countryNameByStudyCountryId}
+                onNavigate={router.push}
+              />
             ))
           )}
         </TableBody>
@@ -145,12 +157,21 @@ export function SitesTable({ studyId, sites, emptyTotalSites }: SitesTableProps)
 interface SitesTableRowProps {
   studyId: string;
   site: EnrichedSiteRow;
+  countryNameByStudyCountryId: ReadonlyMap<string, string>;
   onNavigate: (href: string) => void;
 }
 
-function SitesTableRow({ studyId, site, onNavigate }: SitesTableRowProps) {
+function SitesTableRow({
+  studyId,
+  site,
+  countryNameByStudyCountryId,
+  onNavigate,
+}: SitesTableRowProps) {
   const href = `/protected/studies/${studyId}/sites/${site.id}`;
   const location = [site.city, site.state].filter(Boolean).join(', ');
+  const countryLabel = site.study_country_id
+    ? countryNameByStudyCountryId.get(site.study_country_id) ?? '—'
+    : '—';
   const target = site.target_enrollment || 0;
   const progressPct = target > 0 ? Math.min(100, Math.round((site.enrolled / target) * 100)) : 0;
 
@@ -182,7 +203,7 @@ function SitesTableRow({ studyId, site, onNavigate }: SitesTableRowProps) {
         </Link>
       </TableCell>
       <TableCell className="text-xs text-muted-foreground">{location || '—'}</TableCell>
-      <TableCell className="text-xs text-muted-foreground">{site.pi_name || '—'}</TableCell>
+      <TableCell className="text-xs text-muted-foreground">{countryLabel}</TableCell>
       <TableCell>
         <div className="flex items-center gap-1.5">
           <StatusBadge status={site.status} className="text-xs" />
@@ -237,7 +258,7 @@ function SitesTableRow({ studyId, site, onNavigate }: SitesTableRowProps) {
         {formatRelativeUpdated(site.lastActivityAt)}
       </TableCell>
       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-end gap-1">
+        <div className="flex items-center justify-end">
           <Button
             variant="outline"
             size="sm"
@@ -246,16 +267,6 @@ function SitesTableRow({ studyId, site, onNavigate }: SitesTableRowProps) {
             nativeButton={false}
           >
             View
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-7 p-0"
-            aria-label="More actions"
-            disabled
-            title="More actions coming soon"
-          >
-            <MoreHorizontal className="h-4 w-4" />
           </Button>
         </div>
       </TableCell>

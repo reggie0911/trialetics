@@ -58,7 +58,7 @@ const PRIORITY_VARIANT: Record<VisitPriority, 'destructive' | 'warning' | 'succe
 const PRIORITY_LABEL: Record<VisitPriority, string> = {
   critical: 'Critical',
   at_risk: 'At risk',
-  on_track: 'On track',
+  on_track: 'On Track',
 };
 
 function PriorityBadge({ priority }: { priority: VisitPriority }) {

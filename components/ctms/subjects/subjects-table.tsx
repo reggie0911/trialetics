@@ -1,8 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ExternalLink, Trash2, Users } from 'lucide-react';
+import { ExternalLink, MoreHorizontal, UserX, Users } from 'lucide-react';
 
 import {
   AlertDialog,
@@ -27,22 +28,33 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { EnrichedSubjectRow } from '@/lib/subjects/derive';
 import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-message';
-import { formatRelativeUpdated } from '@/lib/utils/relative-time';
 
 import { SubjectsDataQualityCell } from './subjects-data-quality-cell';
 
 interface SubjectsTableProps {
   studyId: string;
   subjects: EnrichedSubjectRow[];
-  /** Hide the Site column when the tab is scoped to a single site already. */
+  /**
+   * Resolved from study countries; maps site id → `country_name`.
+   * Empty when the tab is site-scoped (the Site / Country columns are hidden).
+   */
+  countryNameBySiteId: ReadonlyMap<string, string>;
+  /** Hide Country and Site name columns when the tab is scoped to a single site already. */
   hideSiteColumn?: boolean;
   /** When true, total roster is empty (no rows at all — show empty state). */
   emptyTotalSubjects: boolean;
   /** True when the user has at least one filter applied. */
   hasActiveFilters: boolean;
   readOnly: boolean;
+  onDeactivate: (id: string, siteId: string | null) => void;
   onDelete: (id: string, siteId: string | null) => void;
 }
 
@@ -62,14 +74,16 @@ function formatDate(value: string | null) {
 export function SubjectsTable({
   studyId,
   subjects,
+  countryNameBySiteId,
   hideSiteColumn = false,
   emptyTotalSubjects,
   hasActiveFilters,
   readOnly,
+  onDeactivate,
   onDelete,
 }: SubjectsTableProps) {
   const router = useRouter();
-  const columnCount = hideSiteColumn ? 9 : 10;
+  const columnCount = hideSiteColumn ? 8 : 10;
 
   if (emptyTotalSubjects) {
     return (
@@ -90,36 +104,38 @@ export function SubjectsTable({
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-[#000000]">
               Subject ID
             </TableHead>
-            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-[#000000]">
               Screening #
             </TableHead>
-            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-[#000000]">
               Randomization #
             </TableHead>
             {!hideSiteColumn ? (
-              <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
-                Site
-              </TableHead>
+              <>
+                <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-[#000000]">
+                  Country
+                </TableHead>
+                <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-[#000000]">
+                  Site name
+                </TableHead>
+              </>
             ) : null}
-            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-[#000000]">
               Status
             </TableHead>
-            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-[#000000]">
               Screening Date
             </TableHead>
-            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-[#000000]">
               Randomized Date
             </TableHead>
-            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-[#000000]">
               Data Quality
             </TableHead>
-            <TableHead className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
-              Last Activity
-            </TableHead>
-            <TableHead className="w-[110px] text-right text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground">
+            <TableHead className="w-[110px] text-right text-[11px] font-medium uppercase tracking-[0.04em] text-[#000000]">
               Actions
             </TableHead>
           </TableRow>
@@ -142,8 +158,10 @@ export function SubjectsTable({
                 key={subject.id}
                 studyId={studyId}
                 subject={subject}
+                countryNameBySiteId={countryNameBySiteId}
                 hideSiteColumn={hideSiteColumn}
                 readOnly={readOnly}
+                onDeactivate={onDeactivate}
                 onDelete={onDelete}
                 onNavigate={router.push}
               />
@@ -158,8 +176,10 @@ export function SubjectsTable({
 interface SubjectsTableRowProps {
   studyId: string;
   subject: EnrichedSubjectRow;
+  countryNameBySiteId: ReadonlyMap<string, string>;
   hideSiteColumn: boolean;
   readOnly: boolean;
+  onDeactivate: (id: string, siteId: string | null) => void;
   onDelete: (id: string, siteId: string | null) => void;
   onNavigate: (href: string) => void;
 }
@@ -167,11 +187,14 @@ interface SubjectsTableRowProps {
 function SubjectsTableRow({
   studyId,
   subject,
+  countryNameBySiteId,
   hideSiteColumn,
   readOnly,
+  onDeactivate,
   onDelete,
   onNavigate,
 }: SubjectsTableRowProps) {
+  const [permanentDeleteOpen, setPermanentDeleteOpen] = useState(false);
   const href = `/protected/studies/${studyId}/subjects/${subject.id}`;
   const navigate = () => onNavigate(href);
   const onKeyDown = (event: React.KeyboardEvent<HTMLTableRowElement>) => {
@@ -206,9 +229,14 @@ function SubjectsTableRow({
         {subject.randomization_number || '\u2014'}
       </TableCell>
       {!hideSiteColumn ? (
-        <TableCell className="text-xs text-muted-foreground">
-          {subject.study_sites?.site_number ?? '\u2014'}
-        </TableCell>
+        <>
+          <TableCell className="text-xs text-muted-foreground">
+            {countryNameBySiteId.get(subject.site_id) ?? '\u2014'}
+          </TableCell>
+          <TableCell className="text-xs text-muted-foreground">
+            {subject.study_sites?.name?.trim() || '\u2014'}
+          </TableCell>
+        </>
       ) : null}
       <TableCell>
         <StatusBadge status={subject.status} className="text-xs" />
@@ -224,9 +252,6 @@ function SubjectsTableRow({
           summary={subject.tracking_summary}
           lockState={subject.lockState}
         />
-      </TableCell>
-      <TableCell className="text-xs text-muted-foreground">
-        {formatRelativeUpdated(subject.lastActivityAt)}
       </TableCell>
       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-1">
@@ -249,9 +274,9 @@ function SubjectsTableRow({
                   size="sm"
                   className="h-7 w-7 p-0"
                   disabled
-                  aria-label="Delete subject"
+                  aria-label="Subject actions"
                 >
-                  <Trash2 className="h-3 w-3 text-destructive" />
+                  <UserX className="h-3.5 w-3.5 text-muted-foreground" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="max-w-xs text-xs">
@@ -259,35 +284,88 @@ function SubjectsTableRow({
               </TooltipContent>
             </Tooltip>
           ) : (
-            <AlertDialog>
-              <AlertDialogTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 p-0"
-                    aria-label="Delete subject"
-                  />
-                }
-              >
-                <Trash2 className="h-3 w-3 text-destructive" />
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Subject</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete subject {subject.subject_number} and
-                    all associated visits and milestones.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => onDelete(subject.id, subject.site_id)}>
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <>
+              <AlertDialog>
+                <AlertDialogTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      aria-label="Deactivate subject"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  }
+                >
+                  <UserX className="h-3.5 w-3.5 text-muted-foreground" />
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Deactivate subject</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      {subject.subject_number} will be removed from the study roster. Visits and eCRF data
+                      are kept. Restore anytime from the subject page.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => onDeactivate(subject.id, subject.site_id)}
+                    >
+                      Deactivate
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              <AlertDialog open={permanentDeleteOpen} onOpenChange={setPermanentDeleteOpen}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete subject permanently</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete subject {subject.subject_number} and all associated
+                      visits and milestones. This cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() => onDelete(subject.id, subject.site_id)}
+                    >
+                      Delete permanently
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      aria-label="More subject actions"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  }
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[200px]">
+                  <DropdownMenuItem
+                    onSelect={() => {
+                      setTimeout(() => setPermanentDeleteOpen(true), 0);
+                    }}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    Delete permanently…
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           )}
         </div>
       </TableCell>

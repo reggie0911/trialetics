@@ -76,6 +76,12 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/protected/settings/')
   const isPlatformExempt =
     request.nextUrl.pathname.startsWith('/protected/platform/')
+  // Global directory routes (setup hub, contacts, institutions, committees) are
+  // company-scoped, not study-scoped. Exempt them from the study gate so links
+  // from a study Directory tab (or hub CTAs) can open `/protected/directory` and subpaths.
+  const isDirectoryDetailExempt =
+    request.nextUrl.pathname === '/protected/directory' ||
+    request.nextUrl.pathname.startsWith('/protected/directory/')
   const isStudyScopedPath = studyPathRegex.test(request.nextUrl.pathname)
 
   if (user && isProtectedRoute && !isDeactivatedPage) {
@@ -91,7 +97,8 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    const gateCandidate = !isGateLanding && !isStudyScopedPath && !isAccountExempt
+    const gateCandidate =
+      !isGateLanding && !isStudyScopedPath && !isAccountExempt && !isDirectoryDetailExempt
     const platformAllowed = isPlatformExempt && profile?.is_platform_admin === true
 
     if (gateCandidate && !platformAllowed && profile?.company_id) {

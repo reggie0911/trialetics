@@ -223,61 +223,64 @@ export function EcrfActionToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs"
-          onClick={onBulkImport}
-          disabled={!isDraft}
-        >
-          <Upload className="mr-1 h-3.5 w-3.5" />
-          Bulk import
-        </Button>
+        {isDraft && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={onBulkImport}
+            >
+              <Upload className="mr-1 h-3.5 w-3.5" />
+              Bulk import
+            </Button>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs"
-                disabled={!isDraft || hasAnyVisits}
-                title={
-                  hasAnyVisits
-                    ? 'Auto-generate is only available on empty draft versions.'
-                    : undefined
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    disabled={hasAnyVisits}
+                    title={
+                      hasAnyVisits
+                        ? 'Auto-generate is only available on empty draft versions.'
+                        : undefined
+                    }
+                  >
+                    <Sparkles className="mr-1 h-3.5 w-3.5" />
+                    Auto-generate
+                    <ChevronDown className="ml-1 h-3 w-3 opacity-70" />
+                  </Button>
                 }
-              >
-                <Sparkles className="mr-1 h-3.5 w-3.5" />
-                Auto-generate
-                <ChevronDown className="ml-1 h-3 w-3 opacity-70" />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end" className="w-[280px]">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Choose a starting schedule</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {ECRF_SCHEDULE_PRESET_OPTIONS.map((preset) => (
-                <DropdownMenuItem
-                  key={preset.id}
-                  onClick={() => onAutoGenerate(preset.id)}
-                  className="flex flex-col items-start gap-0.5"
-                >
-                  <span className="text-xs font-medium">{preset.label}</span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {preset.description}
-                  </span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
+              />
+              <DropdownMenuContent align="end" className="w-[280px]">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Choose a starting schedule</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {ECRF_SCHEDULE_PRESET_OPTIONS.map((preset) => (
+                    <DropdownMenuItem
+                      key={preset.id}
+                      onClick={() => onAutoGenerate(preset.id)}
+                      className="flex flex-col items-start gap-0.5"
+                    >
+                      <span className="text-xs font-medium">{preset.label}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {preset.description}
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-        <Button size="sm" className="h-8 text-xs" onClick={onAddVisit} disabled={!isDraft}>
-          <Plus className="mr-1 h-3.5 w-3.5" />
-          Add visit
-        </Button>
+            <Button size="sm" className="h-8 text-xs" onClick={onAddVisit}>
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              Add visit
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );

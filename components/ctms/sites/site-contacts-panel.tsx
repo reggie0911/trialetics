@@ -66,7 +66,6 @@ import {
   directoryCatalogHasRoles,
   type QuickContactCatalogCategory,
 } from '@/components/ctms/directory/quick-contact-form-fields';
-import { getCategoryIdForRoleId } from '@/components/ctms/directory/directory-primary-role-fields';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { formatPhoneNumber } from '@/lib/utils';
 import { useClientPagination } from '@/lib/hooks/use-client-pagination';
@@ -161,6 +160,7 @@ export function SiteContactsPanel({
 
   useEffect(() => {
     if (openAddContactIntent !== 'pi') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- open add dialog when parent signals PI intent
     setAddOpen(true);
   }, [openAddContactIntent]);
 
@@ -182,11 +182,11 @@ export function SiteContactsPanel({
         <Alert variant="destructive" className="text-sm">
           <AlertTitle>Role catalog failed to load</AlertTitle>
           <AlertDescription className="text-xs">
-            {directoryCatalogError}. Refresh, or open{' '}
+            {directoryCatalogError}. See{' '}
             <Link href="/protected/directory" className="underline underline-offset-2 font-medium">
-              Directory
+              Directory &amp; role catalog setup
             </Link>{' '}
-            after signing in.
+            or refresh after signing in.
           </AlertDescription>
         </Alert>
       )}
@@ -194,11 +194,12 @@ export function SiteContactsPanel({
         <Alert className="text-sm border-amber-500/40 bg-amber-500/5">
           <AlertTitle>Role catalog is empty</AlertTitle>
           <AlertDescription className="text-xs">
-            Apply directory migrations and role seeds, then refresh. Confirm on the{' '}
+            Apply Supabase migrations (role seeds), run{' '}
+            <code className="rounded bg-muted px-1 py-0.5 text-[10px]">supabase db push</code>, then refresh.{' '}
             <Link href="/protected/directory" className="underline underline-offset-2 font-medium">
-              Directory
-            </Link>{' '}
-            page.
+              Directory &amp; role catalog setup
+            </Link>
+            .
           </AlertDescription>
         </Alert>
       )}
@@ -241,6 +242,7 @@ export function SiteContactsPanel({
         onSuccess={refreshContacts}
         directoryContactOptions={directoryContactOptions}
         directoryCatalog={directoryCatalog}
+        directoryCatalogError={directoryCatalogError}
         institutions={institutions}
         siteInstitutionId={siteInstitutionId}
         openAddContactIntent={openAddContactIntent ?? localAddIntent}
@@ -261,6 +263,7 @@ export function SiteContactsPanel({
         onSuccess={refreshContacts}
         directoryContactOptions={directoryContactOptions}
         directoryCatalog={directoryCatalog}
+        directoryCatalogError={directoryCatalogError}
         institutions={institutions}
         siteInstitutionId={siteInstitutionId}
       />
@@ -415,6 +418,7 @@ export function ContactFormDialog({
   onSuccess,
   directoryContactOptions,
   directoryCatalog,
+  directoryCatalogError = null,
   institutions,
   siteInstitutionId = null,
   openAddContactIntent = null,
@@ -429,6 +433,7 @@ export function ContactFormDialog({
   onSuccess: () => void;
   directoryContactOptions: { id: string; label: string }[];
   directoryCatalog: QuickContactCatalogCategory[];
+  directoryCatalogError?: string | null;
   institutions: InstitutionRow[];
   siteInstitutionId?: string | null;
   openAddContactIntent?: 'pi' | null;
@@ -442,7 +447,11 @@ export function ContactFormDialog({
     defaultValues: getDefaultValues(contact),
   });
 
-  const [addRoleCategoryFilter, setAddRoleCategoryFilter] = useState('');
+  /* eslint-disable react-hooks/incompatible-library -- react-hook-form watch() for controlled edit-dialog fields */
+  const watchedEditPhone = form.watch('phone');
+  const watchedDirectoryContactId = form.watch('directory_contact_id');
+  /* eslint-enable react-hooks/incompatible-library */
+
   const [addPrimaryRoleId, setAddPrimaryRoleId] = useState('');
   const [addPrimaryInstitutionId, setAddPrimaryInstitutionId] = useState('');
   const [addContactCountryCode, setAddContactCountryCode] = useState('');
@@ -471,7 +480,6 @@ export function ContactFormDialog({
       setAddAvatarUrl('');
       setAddPrimaryInstitutionId(siteInstitutionId ?? '');
       setAddPrimaryRoleId(rid ?? '');
-      setAddRoleCategoryFilter(rid ? getCategoryIdForRoleId(directoryCatalog, rid) : '');
       setAddIsPrimary(true);
       setAddPrimaryFieldsLocked(true);
       addOpenedWithPiIntentRef.current = true;
@@ -480,7 +488,6 @@ export function ContactFormDialog({
     }
 
     if (!addOpenedWithPiIntentRef.current) {
-      setAddRoleCategoryFilter('');
       setAddContactCountryCode('');
       setAddContactRegion('');
       setAddPhone('');
@@ -600,7 +607,11 @@ export function ContactFormDialog({
       toast.error(siteErr);
       return;
     }
-    toast.success('Contact added');
+    if (res.data.linkWarnings.length > 0) {
+      toast.warning(`Contact added, but ${res.data.linkWarnings.join('; ')}`);
+    } else {
+      toast.success('Contact added');
+    }
     onOpenChange(false);
     onSuccess();
   };
@@ -608,16 +619,15 @@ export function ContactFormDialog({
   if (!isEdit) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto [&_[data-slot=dialog-close]]:text-sky-500 [&_[data-slot=dialog-close]]:hover:text-sky-600">
           <DialogHeader>
-            <DialogTitle className="text-base">New contact</DialogTitle>
+            <DialogTitle className="text-sky-500">New contact</DialogTitle>
           </DialogHeader>
           <form className="space-y-3" onSubmit={onSubmitAdd}>
             <QuickContactFormFields
               catalog={directoryCatalog}
+              catalogError={directoryCatalogError}
               institutions={institutions}
-              roleCategoryFilter={addRoleCategoryFilter}
-              onRoleCategoryFilterChange={setAddRoleCategoryFilter}
               primaryRoleId={addPrimaryRoleId}
               onPrimaryRoleChange={setAddPrimaryRoleId}
               contactCountryCode={addContactCountryCode}
@@ -712,7 +722,7 @@ export function ContactFormDialog({
                 className="text-xs"
                 inputMode="tel"
                 autoComplete="tel"
-                value={form.watch('phone') ?? ''}
+                value={watchedEditPhone ?? ''}
                 onChange={(e) =>
                   form.setValue('phone', formatPhoneNumber(e.target.value), { shouldDirty: true })
                 }
@@ -722,7 +732,7 @@ export function ContactFormDialog({
           <div className="space-y-2">
             <Label>Link to directory contact</Label>
             <Select
-              value={form.watch('directory_contact_id') ?? DIRECTORY_LINK_NONE}
+              value={watchedDirectoryContactId ?? DIRECTORY_LINK_NONE}
               onValueChange={(v) => form.setValue('directory_contact_id', v)}
             >
               <SelectTrigger className="text-xs w-full">

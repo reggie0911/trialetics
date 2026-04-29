@@ -173,9 +173,9 @@ const TabsTrigger = React.forwardRef<HTMLButtonElement, ScopedProps<TabsTriggerP
             // Smooth, scoped transitions (no transition-all -> no width animation)
             'transition-[color,background-color,border-color] duration-200 ease-out',
             // Default + hover state for inactive tabs
-            'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
+            'text-muted-foreground hover:bg-sky-500/10 hover:text-sky-500 dark:hover:bg-sky-500/10 dark:hover:text-sky-400',
             // Active state
-            'data-[state=active]:border-primary data-[state=active]:text-foreground',
+            'data-[state=active]:border-sky-500 data-[state=active]:text-sky-500 dark:data-[state=active]:border-sky-400 dark:data-[state=active]:text-sky-400',
             // Focus ring
             'focus-visible:ring-ring/50 focus-visible:outline-ring focus-visible:ring-[3px] focus-visible:outline-1',
             // Disabled

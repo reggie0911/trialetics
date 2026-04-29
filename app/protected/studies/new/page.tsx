@@ -8,7 +8,7 @@ export default async function NewStudyPage() {
   return (
     <div className="p-6 space-y-6 max-w-4xl">
       <div className="space-y-1">
-        <Button variant="ghost" size="sm" render={<Link href="/protected/studies" />} nativeButton={false} className="-ml-2">
+        <Button variant="ghost" size="sm" render={<Link href="/protected/studies/catalog" />} nativeButton={false} className="-ml-2">
           <ArrowLeft className="mr-1 h-4 w-4" />
           Studies
         </Button>

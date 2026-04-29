@@ -220,6 +220,15 @@ export interface Subject {
   completion_date: string | null;
   withdrawal_date: string | null;
   withdrawal_reason: string | null;
+  /**
+   * When false, the subject is soft-deactivated (hidden from default lists;
+   * mutations blocked until `restoreSubject`).
+   */
+  is_active: boolean;
+  deactivated_at: string | null;
+  /** `profiles.id` of the user who deactivated the subject. */
+  deactivated_by: string | null;
+  deactivation_reason: string | null;
   /** eCRF template version this subject is currently snapshotted from. */
   template_version_id: string | null;
   template_synced_at: string | null;

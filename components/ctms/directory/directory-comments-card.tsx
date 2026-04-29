@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   AlertDialog,
@@ -158,7 +158,9 @@ export function DirectoryComments({
     <>
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Notes</CardTitle>
+          <h2 id="directory-notes-heading" className="text-base font-medium leading-none">
+            Notes
+          </h2>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-3 max-h-[min(24rem,50vh)] overflow-y-auto pr-1">

@@ -38,7 +38,7 @@ export function CountriesPageHeader({
   return (
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
-        <h2 className="text-xl font-semibold tracking-tight text-foreground">Countries</h2>
+        <h1 className="text-3xl font-semibold tracking-tight">Countries</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Manage country participation, regulatory progress, submissions, and activation status.
         </p>

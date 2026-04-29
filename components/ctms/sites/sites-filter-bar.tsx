@@ -16,6 +16,8 @@ import { SITE_STATUS_OPTIONS, type SiteStatus, type StudySite } from '@/lib/type
 
 export type SiteIdFilter = 'all' | string;
 export type SiteStatusFilter = 'all' | SiteStatus;
+/** `string` = `study_countries.id` (UUID) */
+export type SiteCountryFilter = 'all' | string;
 
 interface SitesFilterBarProps {
   search: string;
@@ -24,6 +26,9 @@ interface SitesFilterBarProps {
   onSiteFilterChange: (value: SiteIdFilter) => void;
   statusFilter: SiteStatusFilter;
   onStatusFilterChange: (value: SiteStatusFilter) => void;
+  countryFilter: SiteCountryFilter;
+  onCountryFilterChange: (value: SiteCountryFilter) => void;
+  countriesForSelect: { id: string; country_name: string; country_code: string }[];
   sitesForSelect: Pick<StudySite, 'id' | 'name' | 'site_number'>[];
   onClear: () => void;
   hasActiveFilters: boolean;
@@ -38,6 +43,9 @@ export function SitesFilterBar({
   onSiteFilterChange,
   statusFilter,
   onStatusFilterChange,
+  countryFilter,
+  onCountryFilterChange,
+  countriesForSelect,
   sitesForSelect,
   onClear,
   hasActiveFilters,
@@ -59,7 +67,7 @@ export function SitesFilterBar({
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               id="sites-search"
-              placeholder="Number, name, location, PI..."
+              placeholder="Number, name, location, country, PI…"
               value={search}
               onChange={(event) => onSearchChange(event.target.value)}
               className="h-9 pl-9"
@@ -117,6 +125,37 @@ export function SitesFilterBar({
               {SITE_STATUS_OPTIONS.map((o) => (
                 <SelectItem key={o.value} value={o.value}>
                   {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className={fieldGroupClass}>
+          <Label htmlFor="sites-country-filter" className={fieldLabelClass}>
+            Country
+          </Label>
+          <Select
+            value={countryFilter}
+            onValueChange={(v) => onCountryFilterChange(v as SiteCountryFilter)}
+          >
+            <SelectTrigger id="sites-country-filter" className="h-9 w-full">
+              <SelectValue
+                placeholder="All countries"
+                getDisplayLabel={(value) => {
+                  if (value == null || value === 'all') return 'All countries';
+                  const c = countriesForSelect.find((x) => x.id === value);
+                  if (!c) return value;
+                  return `${c.country_name} (${c.country_code})`;
+                }}
+              />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All countries</SelectItem>
+              {countriesForSelect.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.country_name}{' '}
+                  <span className="text-muted-foreground">({c.country_code})</span>
                 </SelectItem>
               ))}
             </SelectContent>

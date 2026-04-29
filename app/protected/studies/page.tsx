@@ -1,13 +1,19 @@
 import { redirect } from 'next/navigation';
 
 import { createClient } from '@/lib/server';
-import { getCtmsDashboardProps } from '@/lib/dashboard/get-ctms-dashboard-props';
-import { DashboardContent } from '@/components/ctms/dashboard-content';
+import { getDashboardStats } from '@/lib/actions/dashboard';
+import { getAdminOverviewProps } from '@/lib/dashboard/get-admin-overview-props';
+import { AdminOverviewShell } from '@/components/ctms/admin-overview/admin-overview-shell';
 
 interface StudiesPageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
+/**
+ * Admin-only **System overview** (`AdminOverviewShell`): org KPIs, templates, users.
+ * Non-admins are redirected to the org-wide studies catalog (`/protected/studies/catalog`).
+ * Legacy `?view=user` bookmarks redirect to the catalog so deep links survive older IA.
+ */
 export default async function StudiesPage({ searchParams }: StudiesPageProps) {
   const supabase = await createClient();
 
@@ -36,9 +42,26 @@ export default async function StudiesPage({ searchParams }: StudiesPageProps) {
     redirect('/protected');
   }
 
-  await searchParams;
+  const params = await searchParams;
+  const requestedView = typeof params.view === 'string' ? params.view : undefined;
+  if (requestedView === 'user') {
+    redirect('/protected/studies/catalog');
+  }
 
-  const dashboardProps = await getCtmsDashboardProps(supabase, profile);
+  if (profile.role !== 'admin') {
+    redirect('/protected/studies/catalog');
+  }
 
-  return <DashboardContent {...dashboardProps} />;
+  const [stats, overview] = await Promise.all([
+    getDashboardStats(),
+    getAdminOverviewProps(supabase, profile),
+  ]);
+
+  return (
+    <AdminOverviewShell
+      firstName={profile.first_name}
+      stats={stats}
+      overview={overview}
+    />
+  );
 }

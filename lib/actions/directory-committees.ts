@@ -202,6 +202,8 @@ export async function upsertCommitteeMember(input: {
     });
   }
   revalidatePath('/protected/directory');
+  revalidatePath(`/protected/directory/contacts/${input.directory_contact_id}`);
+  revalidatePath(`/protected/directory/committees/${input.committee_id}`);
   return { error: null };
 }
 

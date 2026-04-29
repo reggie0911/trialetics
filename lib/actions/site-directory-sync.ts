@@ -57,6 +57,26 @@ function institutionInputFromStudySite(site: StudySite, countryCode: string | nu
   };
 }
 
+async function findExistingClinicalSiteInstitution(
+  supabase: SupabaseClient,
+  companyId: string,
+  input: SaveInstitutionInput
+): Promise<Record<string, unknown> | null> {
+  const name = input.name.trim();
+  if (!name) return null;
+
+  const { data } = await supabase
+    .from('institutions')
+    .select('*')
+    .eq('company_id', companyId)
+    .eq('organization_type', 'clinical_site')
+    .ilike('name', name)
+    .limit(1)
+    .maybeSingle();
+
+  return (data as Record<string, unknown> | null) ?? null;
+}
+
 export async function syncInstitutionForStudySite(
   supabase: SupabaseClient,
   companyId: string,
@@ -93,20 +113,42 @@ export async function syncInstitutionForStudySite(
         });
       }
     } else {
-      const ins = await insertInstitutionRecord(supabase, companyId, instInput);
-      if ('error' in ins) {
-        console.error('syncInstitutionForStudySite insert', ins.error);
-        return;
+      const matchingInstitution = await findExistingClinicalSiteInstitution(supabase, companyId, instInput);
+      if (matchingInstitution?.id) {
+        institutionId = String(matchingInstitution.id);
+        const upd = await updateInstitutionRecord(supabase, companyId, institutionId, instInput);
+        if (upd.error) {
+          console.error('syncInstitutionForStudySite reuse update', upd.error);
+        } else {
+          await appendDirectoryAuditLog({
+            companyId,
+            entityType: 'institution',
+            entityId: institutionId,
+            action: 'update',
+            oldPayload: matchingInstitution,
+            newPayload: {
+              ...instInput,
+              duplicate_review_note:
+                'Reused existing clinical-site organization by exact name instead of creating a duplicate.',
+            } as unknown as Record<string, unknown>,
+          });
+        }
+      } else {
+        const ins = await insertInstitutionRecord(supabase, companyId, instInput);
+        if ('error' in ins) {
+          console.error('syncInstitutionForStudySite insert', ins.error);
+          return;
+        }
+        institutionId = ins.id;
+        await appendDirectoryAuditLog({
+          companyId,
+          entityType: 'institution',
+          entityId: institutionId,
+          action: 'insert',
+          oldPayload: {},
+          newPayload: instInput as unknown as Record<string, unknown>,
+        });
       }
-      institutionId = ins.id;
-      await appendDirectoryAuditLog({
-        companyId,
-        entityType: 'institution',
-        entityId: institutionId,
-        action: 'insert',
-        oldPayload: {},
-        newPayload: instInput as unknown as Record<string, unknown>,
-      });
     }
 
     await ensureInstitutionStudySiteLink(supabase, companyId, institutionId, site.id);

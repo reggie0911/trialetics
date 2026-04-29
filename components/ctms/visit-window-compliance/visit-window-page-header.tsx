@@ -24,6 +24,8 @@ interface VisitWindowPageHeaderProps {
    *  isn't lost mid-investigation. */
   csvHref: string;
   pdfHref: string;
+  /** Hide right-side action buttons when controls are rendered elsewhere. */
+  showActions?: boolean;
 }
 
 /** Minimal absolute -> "Apr 23, 2026 11:21 AM" formatter that lives next to
@@ -61,6 +63,7 @@ export function VisitWindowPageHeader({
   lastUpdatedAt,
   csvHref,
   pdfHref,
+  showActions = true,
 }: VisitWindowPageHeaderProps) {
   const router = useRouter();
   const [isRefreshing, startRefresh] = useTransition();
@@ -75,59 +78,61 @@ export function VisitWindowPageHeader({
     <div className="flex flex-col gap-2">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
           <p className="text-sm text-muted-foreground">{subtitle}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button asChild variant="outline" size="sm">
-                  <a href={csvHref} download>
-                    <Download className="mr-1 h-3.5 w-3.5" />
-                    Export CSV
-                  </a>
-                </Button>
-              }
-            />
-            <TooltipContent>Download the rollup as CSV.</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button asChild variant="outline" size="sm">
-                  <a href={pdfHref} target="_blank" rel="noreferrer">
-                    <FileText className="mr-1 h-3.5 w-3.5" />
-                    Export PDF
-                  </a>
-                </Button>
-              }
-            />
-            <TooltipContent>Open a printable PDF in a new tab.</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  type="button"
-                  variant="default"
-                  size="sm"
-                  onClick={handleRefresh}
-                  disabled={isRefreshing}
-                  aria-label="Refresh data"
-                >
-                  <RefreshCw
-                    className={`mr-1 h-3.5 w-3.5 ${
-                      isRefreshing ? 'animate-spin' : ''
-                    }`}
-                  />
-                  Refresh Data
-                </Button>
-              }
-            />
-            <TooltipContent>Re-fetch the latest server-side rollup.</TooltipContent>
-          </Tooltip>
-        </div>
+        {showActions ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button asChild variant="outline" size="sm">
+                    <a href={csvHref} download>
+                      <Download className="mr-1 h-3.5 w-3.5" />
+                      Export CSV
+                    </a>
+                  </Button>
+                }
+              />
+              <TooltipContent>Download the rollup as CSV.</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button asChild variant="outline" size="sm">
+                    <a href={pdfHref} target="_blank" rel="noreferrer">
+                      <FileText className="mr-1 h-3.5 w-3.5" />
+                      Export PDF
+                    </a>
+                  </Button>
+                }
+              />
+              <TooltipContent>Open a printable PDF in a new tab.</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    aria-label="Refresh data"
+                  >
+                    <RefreshCw
+                      className={`mr-1 h-3.5 w-3.5 ${
+                        isRefreshing ? 'animate-spin' : ''
+                      }`}
+                    />
+                    Refresh Data
+                  </Button>
+                }
+              />
+              <TooltipContent>Re-fetch the latest server-side rollup.</TooltipContent>
+            </Tooltip>
+          </div>
+        ) : null}
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         {scopeLabel ? <span>{scopeLabel}</span> : null}

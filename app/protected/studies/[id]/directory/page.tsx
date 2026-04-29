@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation';
 import { getDirectoryAccess } from '@/lib/actions/directory-context';
 import { getDirectoryRoleCatalog } from '@/lib/actions/directory-catalog';
-import { listDirectoryContacts } from '@/lib/actions/directory-contacts';
+import { getDirectoryContactsSnapshot, listDirectoryContacts } from '@/lib/actions/directory-contacts';
 import { listInstitutions } from '@/lib/actions/directory-institutions';
-import { listCommittees } from '@/lib/actions/directory-committees';
 import { getDirectoryAuditLog, getDirectoryAssignmentHistory } from '@/lib/actions/directory-audit';
+import { getDirectoryActivitySnapshot, getDirectoryOrganizationSnapshot } from '@/lib/actions/directory-dashboard';
 import { DirectoryHomeClient } from '@/components/ctms/directory/directory-home-client';
 
 interface StudyDirectoryPageProps {
@@ -12,7 +12,7 @@ interface StudyDirectoryPageProps {
 }
 
 export default async function StudyDirectoryPage({ params }: StudyDirectoryPageProps) {
-  await params;
+  const { id: studyId } = await params;
 
   const access = await getDirectoryAccess();
   if (!access.ok) {
@@ -20,13 +20,30 @@ export default async function StudyDirectoryPage({ params }: StudyDirectoryPageP
     redirect('/protected/studies#studies');
   }
 
-  const [catalog, contacts, institutions, committees, audit, history] = await Promise.all([
+  const PAGE = 25;
+
+  const [
+    catalog,
+    contacts,
+    institutions,
+    institutionFormOptions,
+    audit,
+    history,
+    snapshot,
+    studyContacts,
+    organizationSnapshot,
+    activitySnapshot,
+  ] = await Promise.all([
     getDirectoryRoleCatalog(),
-    listDirectoryContacts({ limit: 50, offset: 0 }),
-    listInstitutions({ limit: 50, offset: 0 }),
-    listCommittees(),
-    getDirectoryAuditLog({ limit: 80 }),
-    getDirectoryAssignmentHistory({ limit: 80 }),
+    listDirectoryContacts({ limit: PAGE, offset: 0 }),
+    listInstitutions({ limit: PAGE, offset: 0 }),
+    listInstitutions({ limit: 500, offset: 0 }),
+    getDirectoryAuditLog({ limit: PAGE, offset: 0 }),
+    getDirectoryAssignmentHistory({ limit: PAGE, offset: 0 }),
+    getDirectoryContactsSnapshot(studyId),
+    listDirectoryContacts({ studyId, limit: 200, offset: 0 }),
+    getDirectoryOrganizationSnapshot(studyId),
+    getDirectoryActivitySnapshot({ limit: PAGE, offset: 0, fromQuery: `?from=${studyId}` }),
   ]);
 
   return (
@@ -36,13 +53,21 @@ export default async function StudyDirectoryPage({ params }: StudyDirectoryPageP
         canEdit={access.canEdit}
         canImportCsv={access.canImportCsv}
         catalog={catalog.categories}
+        catalogError={catalog.error}
         initialContacts={contacts.data}
         contactTotal={contacts.count}
         initialInstitutions={institutions.data}
         institutionTotal={institutions.count}
-        committees={committees.data}
+        initialInstitutionOptions={institutionFormOptions.data}
         auditLog={audit.data}
+        auditLogTotal={audit.count}
         assignmentHistory={history.data}
+        assignmentHistoryTotal={history.count}
+        studyId={studyId}
+        initialSnapshot={snapshot.data}
+        studyContactsEnriched={studyContacts.data}
+        initialOrganizationSnapshot={organizationSnapshot.data}
+        initialActivitySnapshot={activitySnapshot.data}
       />
     </div>
   );

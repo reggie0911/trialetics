@@ -9,6 +9,7 @@ import { STUDY_DEACTIVATED_TOOLTIP } from '@/lib/constants/study-deactivated-mes
 import type {
   MonitoringVisitWithRelations,
   SiteStatus,
+  StudyCountryWithSubmissions,
   StudySite,
   SubjectWithSite,
 } from '@/lib/types/ctms';
@@ -37,7 +38,12 @@ import {
 import { enrichSitesWithMetrics } from '@/lib/sites/derive';
 import { SitesPageHeader } from './sites-page-header';
 import { SitesKpiStrip } from './sites-kpi-strip';
-import { SitesFilterBar, type SiteIdFilter, type SiteStatusFilter } from './sites-filter-bar';
+import {
+  SitesFilterBar,
+  type SiteCountryFilter,
+  type SiteIdFilter,
+  type SiteStatusFilter,
+} from './sites-filter-bar';
 import { SitesTable } from './sites-table';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -58,6 +64,8 @@ const SITES_BULK_UPLOAD_COLUMNS: BulkUploadColumn[] = [
 interface SitesTabProps {
   studyId: string;
   initialSites: StudySite[];
+  /** Study countries — used to resolve each site's country label in the table. */
+  countries: StudyCountryWithSubmissions[];
   /** Live subject roster — drives the Enrolled / Target KPI and the at-risk staleness check. */
   subjects: SubjectWithSite[];
   /** Monitoring visits for this study — drives the at-risk overdue + staleness checks. */
@@ -67,6 +75,7 @@ interface SitesTabProps {
 export function SitesTab({
   studyId,
   initialSites,
+  countries: studyCountries,
   subjects,
   monitoringVisits,
 }: SitesTabProps) {
@@ -75,6 +84,7 @@ export function SitesTab({
   const [searchQuery, setSearchQuery] = useState('');
   const [siteFilter, setSiteFilter] = useState<SiteIdFilter>('all');
   const [statusFilter, setStatusFilter] = useState<SiteStatusFilter>('all');
+  const [countryFilter, setCountryFilter] = useState<SiteCountryFilter>('all');
   const [, startTransition] = useTransition();
 
   // Controlled-open state for the import dialogs so the page-header dropdown
@@ -85,6 +95,26 @@ export function SitesTab({
   const enrichedSites = useMemo(
     () => enrichSitesWithMetrics(sites, subjects, monitoringVisits),
     [sites, subjects, monitoringVisits],
+  );
+
+  const countryNameByStudyCountryId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of studyCountries) {
+      m.set(c.id, c.country_name);
+    }
+    return m;
+  }, [studyCountries]);
+
+  const countriesSortedForSelect = useMemo(
+    () =>
+      [...studyCountries]
+        .sort((a, b) => a.country_name.localeCompare(b.country_name))
+        .map((c) => ({
+          id: c.id,
+          country_name: c.country_name,
+          country_code: c.country_code,
+        })),
+    [studyCountries],
   );
 
   const sitesSortedForSelect = useMemo(
@@ -98,22 +128,36 @@ export function SitesTab({
     if (statusFilter !== 'all') {
       list = list.filter((s) => s.status === statusFilter);
     }
+    if (countryFilter !== 'all') {
+      list = list.filter((s) => s.study_country_id === countryFilter);
+    }
     const q = searchQuery.trim().toLowerCase();
     if (!q) return list;
     return list.filter((s) => {
       const location = [s.city, s.state].filter(Boolean).join(', ');
+      const countryName = s.study_country_id
+        ? countryNameByStudyCountryId.get(s.study_country_id)
+        : null;
       return (
         s.site_number.toLowerCase().includes(q) ||
         s.name.toLowerCase().includes(q) ||
         (s.pi_name?.toLowerCase().includes(q) ?? false) ||
-        location.toLowerCase().includes(q)
+        location.toLowerCase().includes(q) ||
+        (countryName?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [enrichedSites, siteFilter, statusFilter, searchQuery]);
+  }, [
+    enrichedSites,
+    siteFilter,
+    statusFilter,
+    countryFilter,
+    searchQuery,
+    countryNameByStudyCountryId,
+  ]);
 
   const pagination = useClientPagination({
     totalItems: filteredSites.length,
-    resetKey: [searchQuery, siteFilter, statusFilter],
+    resetKey: [searchQuery, siteFilter, statusFilter, countryFilter],
   });
   const paginatedSites = pagination.paginate(filteredSites);
 
@@ -134,29 +178,31 @@ export function SitesTab({
     }
   }, [sites, siteFilter]);
 
+  useEffect(() => {
+    if (
+      countryFilter !== 'all' &&
+      !studyCountries.some((c) => c.id === countryFilter)
+    ) {
+      setCountryFilter('all');
+    }
+  }, [studyCountries, countryFilter]);
+
   const handleClearFilters = useCallback(() => {
     setSearchQuery('');
     setSiteFilter('all');
     setStatusFilter('all');
+    setCountryFilter('all');
   }, []);
 
   const hasActiveFilters =
-    Boolean(searchQuery.trim()) || siteFilter !== 'all' || statusFilter !== 'all';
+    Boolean(searchQuery.trim()) ||
+    siteFilter !== 'all' ||
+    statusFilter !== 'all' ||
+    countryFilter !== 'all';
 
   const handleDownloadTemplate = useCallback(() => {
     triggerCsvDownload(SITES_IMPORT_TEMPLATE_FILENAME, getSitesImportCsvTemplate());
   }, []);
-
-  // KPI subtitle counts — derived from the same enriched list so the page
-  // header and the strip can never disagree.
-  const headerCounts = useMemo(() => {
-    const activated = enrichedSites.filter(
-      (s) => s.status === 'activated' || s.status === 'enrolling',
-    ).length;
-    const enrolled = enrichedSites.reduce((sum, s) => sum + s.enrolled, 0);
-    const target = enrichedSites.reduce((sum, s) => sum + (s.target_enrollment || 0), 0);
-    return { activated, enrolled, target };
-  }, [enrichedSites]);
 
   // Bulk-write sites from a list of normalized row payloads (used by both
   // the Copilot import path AND the standard CSV uploader).
@@ -416,9 +462,6 @@ export function SitesTab({
     <div className="space-y-4">
       <SitesPageHeader
         studyId={studyId}
-        activatedCount={headerCounts.activated}
-        enrolled={headerCounts.enrolled}
-        target={headerCounts.target}
         onOpenCopilotImport={() => setCopilotImportOpen(true)}
         onOpenCsvImport={() => setCsvImportOpen(true)}
         onDownloadTemplate={handleDownloadTemplate}
@@ -435,6 +478,9 @@ export function SitesTab({
         onSiteFilterChange={setSiteFilter}
         statusFilter={statusFilter}
         onStatusFilterChange={setStatusFilter}
+        countryFilter={countryFilter}
+        onCountryFilterChange={setCountryFilter}
+        countriesForSelect={countriesSortedForSelect}
         sitesForSelect={sitesSortedForSelect}
         onClear={handleClearFilters}
         hasActiveFilters={hasActiveFilters}
@@ -444,6 +490,7 @@ export function SitesTab({
         studyId={studyId}
         sites={paginatedSites}
         emptyTotalSites={sites.length === 0}
+        countryNameByStudyCountryId={countryNameByStudyCountryId}
       />
 
       {sites.length > 0 ? (

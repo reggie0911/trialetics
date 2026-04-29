@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import type { MouseEvent } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Building2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Building2, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -75,6 +76,40 @@ const assignmentSchema = z.object({
 
 type AssignmentValues = z.infer<typeof assignmentSchema>;
 
+function getStudyLabelForSelect(studies: Study[], value: string | null) {
+  if (value == null || value === '') return null;
+  const s = studies.find((st) => st.id === value);
+  if (!s) return 'Unknown study';
+  return s.study_name?.trim() || s.protocol_number || 'Study';
+}
+
+function getTeamRoleLabelForSelect(value: string | null) {
+  if (value == null || value === '') return null;
+  const opt = TEAM_ROLE_OPTIONS.find((o) => o.value === value);
+  if (opt) return opt.label;
+  if (Object.prototype.hasOwnProperty.call(TEAM_ROLE_LABEL, value)) {
+    return TEAM_ROLE_LABEL[value as TeamMemberRole];
+  }
+  return null;
+}
+
+function getCustomRoleLabelForSelect(teamRoles: TeamRole[], value: string | null) {
+  if (value == null || value === '') return null;
+  return teamRoles.find((r) => r.id === value)?.role_name ?? null;
+}
+
+/** Studies this member does not yet have a row in `study_team_members` for. */
+function studiesWithoutExistingAssignment(
+  allStudies: Study[],
+  m: TeamMemberWithStudies,
+  /** Treat as assigned (e.g. row just inserted before props refresh) */
+  extraAssignedStudyId?: string
+) {
+  const taken = new Set(m.assignments.map((a) => a.study_id));
+  if (extraAssignedStudyId) taken.add(extraAssignedStudyId);
+  return allStudies.filter((s) => !taken.has(s.id));
+}
+
 interface ManageMemberDrawerProps {
   member: TeamMemberWithStudies;
   open: boolean;
@@ -101,6 +136,19 @@ export function ManageMemberDrawer({
   const [editingAssignmentId, setEditingAssignmentId] = useState<string | null>(null);
   const [showAddAssignment, setShowAddAssignment] = useState(false);
 
+  const assignableStudies = useMemo(
+    () => studiesWithoutExistingAssignment(studies, member),
+    [studies, member]
+  );
+
+  const defaultNewAssignmentStudyId = useMemo(
+    () =>
+      assignableStudies.find((s) => s.id === studyContextId)?.id ??
+      assignableStudies[0]?.id ??
+      '',
+    [assignableStudies, studyContextId]
+  );
+
   const profileForm = useForm<ProfileValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
@@ -113,13 +161,54 @@ export function ManageMemberDrawer({
   const assignmentForm = useForm<AssignmentValues>({
     resolver: zodResolver(assignmentSchema),
     defaultValues: {
-      study_id: studyContextId,
+      study_id: defaultNewAssignmentStudyId,
       role: 'clinical_research_associate',
       custom_role_id: '',
     },
   });
 
   const watchedRole = assignmentForm.watch('role');
+
+  useEffect(() => {
+    setShowAddAssignment(false);
+    setEditingAssignmentId(null);
+    profileForm.reset({
+      first_name: member.first_name ?? '',
+      last_name: member.last_name ?? '',
+      app_role: member.app_role,
+    });
+    const list = studiesWithoutExistingAssignment(studies, member);
+    const nextStudy =
+      list.find((s) => s.id === studyContextId)?.id ?? list[0]?.id ?? '';
+    assignmentForm.reset({
+      study_id: nextStudy,
+      role: 'clinical_research_associate',
+      custom_role_id: '',
+    });
+    // Re-run only when switching members; `member`/`studies`/`studyContextId` are read from the render that produced the new `profile_id`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [member.profile_id]);
+
+  const openAddAssignmentForm = useCallback(() => {
+    const available = studiesWithoutExistingAssignment(studies, member);
+    if (available.length === 0) {
+      toast.info('This person is already assigned to every available study.');
+      return;
+    }
+    const pick =
+      available.find((s) => s.id === studyContextId) ?? available[0]!;
+    assignmentForm.reset({
+      study_id: pick.id,
+      role: 'clinical_research_associate',
+      custom_role_id: '',
+    });
+    setShowAddAssignment(true);
+  }, [studies, member, studyContextId, assignmentForm]);
+
+  const closeAddAssignmentForm = useCallback((e?: MouseEvent) => {
+    e?.stopPropagation();
+    setShowAddAssignment(false);
+  }, []);
 
   const handleProfileSave = profileForm.handleSubmit(async (values) => {
     const { error } = await updateProfile({
@@ -149,8 +238,13 @@ export function ManageMemberDrawer({
       return;
     }
     toast.success('Assignment added');
+    const nextAvailable = studiesWithoutExistingAssignment(
+      studies,
+      member,
+      values.study_id
+    );
     assignmentForm.reset({
-      study_id: studyContextId,
+      study_id: nextAvailable[0]?.id ?? '',
       role: 'clinical_research_associate',
       custom_role_id: '',
     });
@@ -343,10 +437,26 @@ export function ManageMemberDrawer({
               ) : (
                 <Button
                   size="sm"
-                  variant="outline"
-                  onClick={() => setShowAddAssignment((s) => !s)}
+                  type="button"
+                  variant={showAddAssignment ? 'destructive' : 'outline'}
+                  className={
+                    showAddAssignment
+                      ? 'border-transparent bg-destructive text-white shadow-xs hover:bg-destructive/90 [&_svg]:text-white'
+                      : undefined
+                  }
+                  onClick={(e) =>
+                    showAddAssignment ? closeAddAssignmentForm(e) : openAddAssignmentForm()
+                  }
+                  aria-expanded={showAddAssignment}
+                  aria-label={
+                    showAddAssignment ? 'Close add assignment' : 'Add study assignment'
+                  }
                 >
-                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  {showAddAssignment ? (
+                    <X className="mr-1 h-3.5 w-3.5" />
+                  ) : (
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                  )}
                   {showAddAssignment ? 'Cancel' : 'Add'}
                 </Button>
               )}
@@ -358,16 +468,21 @@ export function ManageMemberDrawer({
                 className="space-y-3 rounded-md border bg-muted/30 p-3"
               >
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Study</Label>
+                  <Label className="text-xs" htmlFor="add-assignment-study">
+                    Study
+                  </Label>
                   <Select
                     value={assignmentForm.watch('study_id')}
                     onValueChange={(val) => assignmentForm.setValue('study_id', val)}
                   >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select study" />
+                    <SelectTrigger id="add-assignment-study" className="w-full">
+                      <SelectValue
+                        placeholder="Select study"
+                        getDisplayLabel={(v) => getStudyLabelForSelect(studies, v)}
+                      />
                     </SelectTrigger>
                     <SelectContent>
-                      {studies.map((s) => (
+                      {assignableStudies.map((s) => (
                         <SelectItem key={s.id} value={s.id}>
                           {s.study_name?.trim() || s.protocol_number}
                         </SelectItem>
@@ -376,13 +491,18 @@ export function ManageMemberDrawer({
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Role</Label>
+                  <Label className="text-xs" htmlFor="add-assignment-role">
+                    Study role
+                  </Label>
                   <Select
                     value={watchedRole}
                     onValueChange={(val) => assignmentForm.setValue('role', val)}
                   >
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select role" />
+                    <SelectTrigger id="add-assignment-role" className="w-full">
+                      <SelectValue
+                        placeholder="Select study role"
+                        getDisplayLabel={getTeamRoleLabelForSelect}
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       {TEAM_ROLE_OPTIONS.map((opt) => (
@@ -395,15 +515,20 @@ export function ManageMemberDrawer({
                 </div>
                 {watchedRole === 'custom' && teamRoles.length > 0 && (
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Custom Role</Label>
+                    <Label className="text-xs" htmlFor="add-assignment-custom-role">
+                      Custom role
+                    </Label>
                     <Select
                       value={assignmentForm.watch('custom_role_id') ?? ''}
                       onValueChange={(val) =>
                         assignmentForm.setValue('custom_role_id', val)
                       }
                     >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select custom role" />
+                      <SelectTrigger id="add-assignment-custom-role" className="w-full">
+                        <SelectValue
+                          placeholder="Select custom role"
+                          getDisplayLabel={(v) => getCustomRoleLabelForSelect(teamRoles, v)}
+                        />
                       </SelectTrigger>
                       <SelectContent>
                         {teamRoles.map((r) => (
@@ -460,8 +585,8 @@ export function ManageMemberDrawer({
                             handleAssignmentRoleChange(assignment, val as TeamMemberRole)
                           }
                         >
-                          <SelectTrigger className="h-7 w-[180px] text-xs">
-                            <SelectValue />
+                          <SelectTrigger className="h-7 w-[180px] text-xs" aria-label="Study role">
+                            <SelectValue getDisplayLabel={getTeamRoleLabelForSelect} />
                           </SelectTrigger>
                           <SelectContent>
                             {TEAM_ROLE_OPTIONS.map((opt) => (

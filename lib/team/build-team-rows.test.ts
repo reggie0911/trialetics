@@ -30,6 +30,7 @@ function makeInvitation(partial: Partial<PendingInvitation> & { id: string }): P
     id: partial.id,
     email: partial.email ?? 'invitee@example.com',
     role: partial.role ?? 'user',
+    study_role: partial.study_role ?? 'clinical_research_associate',
     first_name: partial.first_name ?? null,
     last_name: partial.last_name ?? null,
     invited_at: partial.invited_at ?? new Date().toISOString(),

@@ -178,14 +178,14 @@ export async function ensureDirectoryContactStudyLink(
   companyId: string,
   directoryContactId: string,
   studyId: string
-): Promise<void> {
+): Promise<{ error: string | null }> {
   const { data: existing } = await supabase
     .from('directory_contact_study')
     .select('id')
     .eq('directory_contact_id', directoryContactId)
     .eq('study_id', studyId)
     .maybeSingle();
-  if (existing?.id) return;
+  if (existing?.id) return { error: null };
 
   const payload = {
     directory_contact_id: directoryContactId,
@@ -200,7 +200,7 @@ export async function ensureDirectoryContactStudyLink(
   const { data, error } = await supabase.from('directory_contact_study').insert(payload).select('id').single();
   if (error) {
     console.error('ensureDirectoryContactStudyLink', error.message);
-    return;
+    return { error: error.message };
   }
   await appendDirectoryAssignmentHistory({
     companyId,
@@ -209,6 +209,7 @@ export async function ensureDirectoryContactStudyLink(
     action: 'insert',
     snapshot: payload,
   });
+  return { error: null };
 }
 
 export async function ensureDirectoryContactStudySiteLink(
@@ -326,7 +327,7 @@ export async function ensureDirectoryContactPrimaryInstitution(
   companyId: string,
   directoryContactId: string,
   institutionId: string
-): Promise<void> {
+): Promise<{ error: string | null }> {
   const { data: existingRow } = await supabase
     .from('directory_contact_institution')
     .select('id')
@@ -334,17 +335,17 @@ export async function ensureDirectoryContactPrimaryInstitution(
     .eq('institution_id', institutionId)
     .maybeSingle();
 
-  await supabase
-    .from('directory_contact_institution')
-    .update({ is_primary: false })
-    .eq('directory_contact_id', directoryContactId);
+  let primaryLinkId = existingRow?.id ?? null;
 
   if (existingRow?.id) {
     const { error } = await supabase
       .from('directory_contact_institution')
       .update({ is_primary: true })
       .eq('id', existingRow.id);
-    if (error) console.error('ensureDirectoryContactPrimaryInstitution', error.message);
+    if (error) {
+      console.error('ensureDirectoryContactPrimaryInstitution', error.message);
+      return { error: error.message };
+    }
   } else {
     const payload = {
       directory_contact_id: directoryContactId,
@@ -354,8 +355,9 @@ export async function ensureDirectoryContactPrimaryInstitution(
     const { data, error } = await supabase.from('directory_contact_institution').insert(payload).select('id').single();
     if (error) {
       console.error('ensureDirectoryContactPrimaryInstitution insert', error.message);
-      return;
+      return { error: error.message };
     }
+    primaryLinkId = data!.id;
     await appendDirectoryAssignmentHistory({
       companyId,
       assignmentType: 'contact_institution',
@@ -365,10 +367,27 @@ export async function ensureDirectoryContactPrimaryInstitution(
     });
   }
 
+  let clearQuery = supabase
+    .from('directory_contact_institution')
+    .update({ is_primary: false })
+    .eq('directory_contact_id', directoryContactId);
+  if (primaryLinkId) {
+    clearQuery = clearQuery.neq('id', primaryLinkId);
+  }
+  const { error: clearErr } = await clearQuery;
+  if (clearErr) {
+    console.error('ensureDirectoryContactPrimaryInstitution clear primary', clearErr.message);
+    return { error: clearErr.message };
+  }
+
   const { error: primErr } = await supabase
     .from('directory_contacts')
     .update({ primary_institution_id: institutionId })
     .eq('id', directoryContactId)
     .eq('company_id', companyId);
-  if (primErr) console.error('ensureDirectoryContactPrimaryInstitution primary_institution_id', primErr.message);
+  if (primErr) {
+    console.error('ensureDirectoryContactPrimaryInstitution primary_institution_id', primErr.message);
+    return { error: primErr.message };
+  }
+  return { error: null };
 }

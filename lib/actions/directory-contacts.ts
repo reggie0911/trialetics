@@ -7,9 +7,17 @@ import { appendDirectoryAssignmentHistory, appendDirectoryAuditLog } from '@/lib
 import type {
   DirectoryContactListItem,
   DirectoryContactWithRelations,
+  DirectoryContactsSnapshot,
   SaveDirectoryContactInput,
 } from '@/lib/types/directory';
-import { insertDirectoryContactRecord, updateDirectoryContactRecord } from '@/lib/actions/directory-writers-internal';
+import {
+  ensureDirectoryContactPrimaryInstitution,
+  ensureDirectoryContactStudyLink,
+  insertDirectoryContactRecord,
+  updateDirectoryContactRecord,
+} from '@/lib/actions/directory-writers-internal';
+import { computeContactHealth, siteRoleCoverageFromRoleNames } from '@/lib/directory/contact-health';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 async function requireReader() {
   const supabase = await createClient();
@@ -37,8 +45,115 @@ export interface ListDirectoryContactsParams {
   primaryRoleId?: string;
   primaryInstitutionId?: string;
   studyId?: string;
+  /** When set, only contacts with a `directory_contact_study_site` row for this site. */
+  studySiteId?: string;
+  /** In study: contacts linked to the study but with no site assignment in this study. */
+  unassignedToStudySite?: boolean;
+  /** Only contacts with `updated_at` in the last 7 days. */
+  recent7d?: boolean;
+  /** Filter by derived directory profile completeness / status. */
+  health?: 'healthy' | 'needs_update' | 'at_risk';
   limit?: number;
   offset?: number;
+}
+
+export interface CreateDirectoryContactOptions {
+  studyId?: string | null;
+}
+
+export interface CreateDirectoryContactResult {
+  data: {
+    id: string;
+    linkedInstitution: boolean;
+    linkedStudy: boolean;
+    linkWarnings: string[];
+  } | null;
+  error: string | null;
+  duplicateEmailWarning?: boolean;
+}
+
+async function buildContactIdSetsForStudyFilters(
+  supabase: SupabaseClient,
+  studyId: string,
+  studySiteId?: string,
+  unassignedToStudySite?: boolean
+): Promise<string[] | null> {
+  const { data: links, error: e1 } = await supabase
+    .from('directory_contact_study')
+    .select('directory_contact_id')
+    .eq('study_id', studyId);
+  if (e1) return null;
+  let allowed = [...new Set((links ?? []).map((l) => l.directory_contact_id))];
+  if (allowed.length === 0) return [];
+  if (unassignedToStudySite) {
+    const { data: withSite, error: e3 } = await supabase
+      .from('directory_contact_study_site')
+      .select('directory_contact_id, study_sites!inner(study_id)')
+      .in('directory_contact_id', allowed)
+      .eq('study_sites.study_id', studyId);
+    if (e3) return null;
+    const withSet = new Set((withSite ?? []).map((w) => w.directory_contact_id));
+    allowed = allowed.filter((id) => !withSet.has(id));
+  }
+  if (allowed.length === 0) return [];
+  if (studySiteId) {
+    const { data: siteLinks, error: e2 } = await supabase
+      .from('directory_contact_study_site')
+      .select('directory_contact_id')
+      .eq('study_site_id', studySiteId);
+    if (e2) return null;
+    const set = new Set((siteLinks ?? []).map((l) => l.directory_contact_id));
+    allowed = allowed.filter((id) => set.has(id));
+  }
+  return allowed;
+}
+
+async function mergeStudyEnrichment(
+  supabase: SupabaseClient,
+  studyId: string,
+  rows: DirectoryContactListItem[]
+): Promise<void> {
+  if (rows.length === 0) return;
+  const ids = rows.map((r) => r.id);
+  const { data: dcsRows } = await supabase
+    .from('directory_contact_study')
+    .select('directory_contact_id, is_active')
+    .in('directory_contact_id', ids)
+    .eq('study_id', studyId);
+  const dcsMap = new Map((dcsRows ?? []).map((r) => [r.directory_contact_id, r.is_active as boolean]));
+  const { data: dcssRows } = await supabase
+    .from('directory_contact_study_site')
+    .select('directory_contact_id, study_site_id, is_active, study_sites(id,name,site_number,study_id), directory_roles(name)')
+    .in('directory_contact_id', ids);
+  for (const row of rows) {
+    const studyActive = dcsMap.get(row.id) ?? null;
+    const siteLinks = (dcssRows ?? []).filter((x) => x.directory_contact_id === row.id);
+    const withMeta = siteLinks
+      .map((l) => {
+        const ss = l.study_sites;
+        const site = Array.isArray(ss) ? ss[0] : ss;
+        const s = site as { id: string; name: string; site_number: string | null; study_id: string } | null;
+        if (!s || s.study_id !== studyId) return null;
+        const dr = l.directory_roles;
+        const drOne = (Array.isArray(dr) ? dr[0] : dr) as { name?: string } | null;
+        return {
+          site: s,
+          siteRoleName: drOne?.name ?? row.primary_role?.name ?? null,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+    withMeta.sort((a, b) => (a.site.name || '').localeCompare(b.site.name || ''));
+    const first = withMeta[0];
+    const label = first
+      ? `${first.site.name}${first.site.site_number ? ` · ${first.site.site_number}` : ''}`
+      : null;
+    row.study_enrichment = {
+      study_involvement_active: studyActive,
+      primary_study_site_id: first?.site.id ?? null,
+      primary_study_site_label: label,
+      contact_health: computeContactHealth(row),
+    };
+  }
 }
 
 export async function listDirectoryContacts(
@@ -47,6 +162,19 @@ export async function listDirectoryContacts(
   const { supabase, companyId } = await requireReader();
   const limit = Math.min(params?.limit ?? 25, 100);
   const offset = params?.offset ?? 0;
+
+  let allowedIds: string[] | null = null;
+  if (params?.studyId) {
+    const built = await buildContactIdSetsForStudyFilters(
+      supabase,
+      params.studyId,
+      params.studySiteId,
+      params.unassignedToStudySite
+    );
+    if (built === null) return { data: [], count: 0, error: 'Failed to load study contacts' };
+    if (built.length === 0) return { data: [], count: 0, error: null };
+    allowedIds = built;
+  }
 
   let query = supabase
     .from('directory_contacts')
@@ -60,34 +188,207 @@ export async function listDirectoryContacts(
     )
     .eq('company_id', companyId)
     .order('last_name')
-    .order('first_name')
-    .range(offset, offset + limit - 1);
+    .order('first_name');
 
+  if (allowedIds) query = query.in('id', allowedIds);
   if (params?.status) query = query.eq('status', params.status);
   if (params?.primaryRoleId) query = query.eq('primary_directory_role_id', params.primaryRoleId);
   if (params?.primaryInstitutionId) query = query.eq('primary_institution_id', params.primaryInstitutionId);
 
+  if (params?.recent7d) {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    query = query.gte('updated_at', d.toISOString());
+  }
+
+  if (params?.health === 'at_risk') {
+    query = query.eq('status', 'inactive');
+  } else if (params?.health === 'healthy') {
+    query = query
+      .eq('status', 'active')
+      .not('primary_directory_role_id', 'is', null)
+      .not('email', 'is', null)
+      .neq('email', '');
+  } else if (params?.health === 'needs_update') {
+    query = query.eq('status', 'active');
+    query = query.or('primary_directory_role_id.is.null,email.is.null,email.eq.');
+  }
+
   if (params?.search?.trim()) {
-    const raw = params.search.trim().replace(/%/g, '\\%').replace(/_/g, '\\_');
-    const t = `%${raw}%`;
-    query = query.or(`first_name.ilike.${t},last_name.ilike.${t},email.ilike.${t}`);
+    const raw = params.search.trim();
+    const esc = raw.replace(/%/g, '\\%').replace(/_/g, '\\_');
+    const t = `%${esc}%`;
+    const { data: roleRows } = await supabase.from('directory_roles').select('id').ilike('name', t);
+    const roleIds = (roleRows ?? []).map((r) => r.id);
+    if (roleIds.length) {
+      query = query.or(`first_name.ilike.${t},last_name.ilike.${t},email.ilike.${t},primary_directory_role_id.in.(${roleIds.join(',')})`);
+    } else {
+      query = query.or(`first_name.ilike.${t},last_name.ilike.${t},email.ilike.${t}`);
+    }
   }
 
-  if (params?.studyId) {
-    const { data: links } = await supabase
-      .from('directory_contact_study')
-      .select('directory_contact_id')
-      .eq('study_id', params.studyId);
-    const ids = [...new Set((links ?? []).map((l) => l.directory_contact_id))];
-    if (ids.length === 0) return { data: [], count: 0, error: null };
-    query = query.in('id', ids);
-  }
-
-  const { data, error, count } = await query;
+  const { data, error, count } = await query.range(offset, offset + limit - 1);
 
   if (error) return { data: [], count: 0, error: error.message };
 
-  return { data: (data ?? []) as DirectoryContactListItem[], count: count ?? 0, error: null };
+  const rows = (data ?? []) as DirectoryContactListItem[];
+  if (params?.studyId) {
+    await mergeStudyEnrichment(supabase, params.studyId, rows);
+  }
+
+  return { data: rows, count: count ?? 0, error: null };
+}
+
+export async function listStudySitesForDirectoryFilter(
+  studyId: string
+): Promise<{ data: { id: string; name: string; site_number: string | null }[]; error: string | null }> {
+  const { supabase, companyId } = await requireReader();
+  const { data: study, error: se } = await supabase.from('studies').select('id, company_id').eq('id', studyId).maybeSingle();
+  if (se) return { data: [], error: se.message };
+  if (!study || study.company_id !== companyId) return { data: [], error: 'Study not found' };
+  const { data, error } = await supabase
+    .from('study_sites')
+    .select('id, name, site_number')
+    .eq('study_id', studyId)
+    .order('name');
+  if (error) return { data: [], error: error.message };
+  return { data: data ?? [], error: null };
+}
+
+export async function getDirectoryContactsSnapshot(
+  studyId: string
+): Promise<{ data: DirectoryContactsSnapshot | null; error: string | null }> {
+  const { supabase, companyId } = await requireReader();
+  const { data: study, error: se } = await supabase.from('studies').select('id, company_id').eq('id', studyId).maybeSingle();
+  if (se) return { data: null, error: se.message };
+  if (!study || study.company_id !== companyId) return { data: null, error: 'Study not found' };
+
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  const { data: studyContactLinks } = await supabase
+    .from('directory_contact_study')
+    .select('directory_contact_id')
+    .eq('study_id', studyId);
+  const studyContactIds = [...new Set((studyContactLinks ?? []).map((l) => l.directory_contact_id))];
+
+  const { data: allSites, error: siteErr } = await supabase
+    .from('study_sites')
+    .select('id')
+    .eq('study_id', studyId);
+  if (siteErr) return { data: null, error: siteErr.message };
+  const siteIds = (allSites ?? []).map((s) => s.id);
+  const totalStudySites = siteIds.length;
+
+  const { data: dcssSimple } = siteIds.length
+    ? await supabase.from('directory_contact_study_site').select('study_site_id').in('study_site_id', siteIds)
+    : { data: [] };
+  const coveredSet = new Set((dcssSimple ?? []).map((r) => r.study_site_id));
+  const sitesCoveredCount = siteIds.filter((id) => coveredSet.has(id)).length;
+
+  let missingRoles = 0;
+  if (studyContactIds.length) {
+    const { count: mr } = await supabase
+      .from('directory_contacts')
+      .select('id', { count: 'exact', head: true })
+      .in('id', studyContactIds)
+      .is('primary_directory_role_id', null);
+    missingRoles = mr ?? 0;
+  }
+
+  let unassignedToSite = 0;
+  if (studyContactIds.length) {
+    const { data: withSite } = await supabase
+      .from('directory_contact_study_site')
+      .select('directory_contact_id, study_sites!inner(study_id)')
+      .in('directory_contact_id', studyContactIds)
+      .eq('study_sites.study_id', studyId);
+    const withSet = new Set((withSite ?? []).map((w) => w.directory_contact_id));
+    unassignedToSite = studyContactIds.filter((id) => !withSet.has(id)).length;
+  }
+
+  let recentlyActive7d = 0;
+  if (studyContactIds.length) {
+    const { count: ra } = await supabase
+      .from('directory_contacts')
+      .select('id', { count: 'exact', head: true })
+      .in('id', studyContactIds)
+      .gte('updated_at', weekAgo.toISOString());
+    recentlyActive7d = ra ?? 0;
+  }
+
+  const { data: dcssForCoverage, error: covErr } = await supabase
+    .from('directory_contact_study_site')
+    .select('study_site_id, directory_roles(name), study_sites!inner(id,name,site_number,study_id)')
+    .eq('study_sites.study_id', studyId);
+  if (covErr) return { data: null, error: covErr.message }
+
+  const bySite = new Map<string, { name: string; siteNumber: string | null; roleNames: string[] }>();
+  for (const row of dcssForCoverage ?? []) {
+    const r = row as { study_site_id: string; directory_roles: unknown; study_sites: unknown };
+    const sid = r.study_site_id;
+    if (!sid) continue;
+    const ss = r.study_sites;
+    const site = (Array.isArray(ss) ? ss[0] : ss) as { id: string; name: string; site_number: string | null } | null;
+    if (!site) continue;
+    const dr = r.directory_roles;
+    const roleName = ((Array.isArray(dr) ? dr[0] : dr) as { name?: string } | null)?.name ?? null;
+    const g = bySite.get(sid) ?? { name: site.name, siteNumber: site.site_number, roleNames: [] as string[] };
+    if (roleName) g.roleNames.push(roleName);
+    if (!g.name) g.name = site.name;
+    bySite.set(sid, g);
+  }
+  const roleCoverageBySite: DirectoryContactsSnapshot['roleCoverageBySite'] = [];
+  let sitesMissingKeyRoles = 0;
+  for (const [siteId, g] of bySite) {
+    const cov = siteRoleCoverageFromRoleNames(g.roleNames);
+    if (!cov.hasPi || !cov.hasCrc) sitesMissingKeyRoles += 1;
+    roleCoverageBySite.push({
+      siteId,
+      siteName: g.name,
+      siteNumber: g.siteNumber,
+      hasPi: cov.hasPi,
+      hasCrc: cov.hasCrc,
+      hasPharm: cov.hasPharm,
+    });
+  }
+  roleCoverageBySite.sort((a, b) => a.siteName.localeCompare(b.siteName));
+  if (roleCoverageBySite.length > 20) roleCoverageBySite.length = 20;
+
+  const totalContactsDeltaWeek: null = null;
+
+  const percent = totalStudySites === 0 ? 0 : Math.round((sitesCoveredCount / totalStudySites) * 100);
+
+  const smartSuggestionFilters: DirectoryContactsSnapshot['smartSuggestionFilters'] = [
+    { id: 'missing-roles', label: `Assign a primary role to ${missingRoles} contact(s)`, missingRole: true, health: 'needs_update' },
+    { id: 'unassigned', label: `Link ${unassignedToSite} contact(s) to a site`, unassigned: true },
+  ];
+
+  let totalContacts = 0;
+  if (studyContactIds.length > 0) {
+    const { count: tc } = await supabase
+      .from('directory_contacts')
+      .select('id', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .in('id', studyContactIds);
+    totalContacts = tc ?? 0;
+  }
+
+  const out: DirectoryContactsSnapshot = {
+    totalContacts,
+    totalContactsDeltaWeek,
+    sitesCovered: { covered: sitesCoveredCount, total: totalStudySites, percent },
+    missingRoles,
+    unassignedToSite,
+    recentlyActive7d,
+    needsAttention: {
+      missingRoleCount: missingRoles,
+      sitesMissingKeyRoles,
+    },
+    roleCoverageBySite,
+    smartSuggestionFilters,
+  };
+  return { data: out, error: null };
 }
 
 export async function getDirectoryContactById(
@@ -200,12 +501,40 @@ export async function checkDuplicateDirectoryEmail(
 }
 
 export async function createDirectoryContact(
-  input: SaveDirectoryContactInput
-): Promise<{ data: { id: string } | null; error: string | null; duplicateEmailWarning?: boolean }> {
+  input: SaveDirectoryContactInput,
+  options: CreateDirectoryContactOptions = {}
+): Promise<CreateDirectoryContactResult> {
   const { supabase, companyId } = await requireEditor();
 
   const inserted = await insertDirectoryContactRecord(supabase, companyId, input);
   if ('error' in inserted) return { data: null, error: inserted.error };
+
+  let linkedInstitution = false;
+  let linkedStudy = false;
+  const linkWarnings: string[] = [];
+
+  if (input.primary_institution_id) {
+    const instLink = await ensureDirectoryContactPrimaryInstitution(
+      supabase,
+      companyId,
+      inserted.id,
+      input.primary_institution_id
+    );
+    if (instLink.error) {
+      linkWarnings.push(`Primary organization link failed: ${instLink.error}`);
+    } else {
+      linkedInstitution = true;
+    }
+  }
+
+  if (options.studyId) {
+    const studyLink = await ensureDirectoryContactStudyLink(supabase, companyId, inserted.id, options.studyId);
+    if (studyLink.error) {
+      linkWarnings.push(`Study link failed: ${studyLink.error}`);
+    } else {
+      linkedStudy = true;
+    }
+  }
 
   const dup =
     input.email?.trim() &&
@@ -230,8 +559,12 @@ export async function createDirectoryContact(
   });
 
   revalidatePath('/protected/directory');
+  revalidatePath(`/protected/directory/contacts/${inserted.id}`);
+  if (options.studyId) {
+    revalidatePath(`/protected/studies/${options.studyId}/directory`);
+  }
   return {
-    data: { id: inserted.id },
+    data: { id: inserted.id, linkedInstitution, linkedStudy, linkWarnings },
     error: null,
     duplicateEmailWarning: !!dup,
   };

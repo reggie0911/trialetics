@@ -110,10 +110,10 @@ function AlertChip({ alert, href }: AlertChipProps) {
 }
 
 /**
- * Red-tinted "Needs attention" banner shown above the tabs whenever the
+ * Red-tinted "Needs Attention" banner shown above the tabs whenever the
  * compliance bundle has at least one alert. The first three alerts render
  * as horizontal chips with vertical separators between them; everything
- * else lives behind a `View all alerts (N)` Sheet so the page rhythm
+ * else lives behind a `View All Alerts (N)` Sheet so the page rhythm
  * doesn't grow unbounded with site count.
  *
  * The component renders nothing when `alerts.length === 0` so callers can
@@ -135,12 +135,12 @@ export function VisitWindowAlertsBanner({
       aria-label="Visit window alerts"
       className="flex w-full flex-wrap items-stretch gap-y-2 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 dark:border-red-900/60 dark:bg-red-950/30"
     >
-      {/* Leading "Needs attention" cell — divider lives on the right edge so
+      {/* Leading "Needs Attention" cell — divider lives on the right edge so
           it lines up with the chips that follow. */}
       <div className="flex shrink-0 items-center gap-2 px-3 py-1.5 sm:border-r sm:border-red-200/70 dark:sm:border-red-900/50">
         <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
         <span className="text-sm font-semibold text-red-700 dark:text-red-300">
-          Needs attention
+          Needs Attention
         </span>
       </div>
 
@@ -167,13 +167,13 @@ export function VisitWindowAlertsBanner({
                 type="button"
                 className="rounded-sm text-sm font-medium text-red-600 underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 dark:text-red-400"
               >
-                View all alerts ({alerts.length})
+                View All Alerts ({alerts.length})
               </button>
             }
           />
           <SheetContent side="right" className="w-[420px] sm:max-w-[420px]">
             <SheetHeader>
-              <SheetTitle>Visit window alerts</SheetTitle>
+              <SheetTitle>Visit Window Alerts</SheetTitle>
               <SheetDescription>
                 {alerts.length} active alert
                 {alerts.length === 1 ? '' : 's'}, ordered by severity.

@@ -35,6 +35,8 @@ import {
   removeCommitteeMember,
 } from '@/lib/actions/directory-committees';
 import { committeeFormSchema } from '@/lib/validation/directory';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import Link from 'next/link';
 import type { CommitteeWithMembers } from '@/lib/types/directory';
 import type { Study } from '@/lib/types/ctms';
 import { COMMITTEE_TYPE_OPTIONS } from '@/lib/types/directory';
@@ -52,6 +54,7 @@ interface Props {
   studies: Study[];
   contacts: ContactOption[];
   flatRoles: { id: string; name: string }[];
+  catalogError?: string | null;
 }
 
 export function DirectoryCommitteeDetailClient({
@@ -60,6 +63,7 @@ export function DirectoryCommitteeDetailClient({
   studies,
   contacts,
   flatRoles,
+  catalogError = null,
 }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -99,6 +103,7 @@ export function DirectoryCommitteeDetailClient({
   });
 
   const existingContactIds = new Set(initial.members.map((m) => m.directory_contact_id));
+  const rolesReady = flatRoles.length > 0 && !catalogError;
 
   return (
     <div className="space-y-6">
@@ -116,7 +121,7 @@ export function DirectoryCommitteeDetailClient({
                 if (error) toast.error(error);
                 else {
                   toast.success('Committee removed');
-                  router.push('/protected/directory');
+                  router.push('/protected/studies');
                 }
               });
             }}
@@ -260,6 +265,31 @@ export function DirectoryCommitteeDetailClient({
           <DialogHeader>
             <DialogTitle className="text-base">Add member</DialogTitle>
           </DialogHeader>
+          {catalogError ? (
+            <Alert variant="destructive" className="text-xs">
+              <AlertTitle>Role catalog failed to load</AlertTitle>
+              <AlertDescription className="text-xs">
+                {catalogError}. See{' '}
+                <Link href="/protected/directory" className="underline underline-offset-2 font-medium">
+                  Directory &amp; role catalog setup
+                </Link>{' '}
+                or refresh after signing in.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          {!catalogError && flatRoles.length === 0 ? (
+            <Alert className="text-xs border-amber-500/40 bg-amber-500/5">
+              <AlertTitle>Role catalog is empty</AlertTitle>
+              <AlertDescription className="text-xs">
+                Apply Supabase migrations (role seeds), run{' '}
+                <code className="rounded bg-muted px-1 py-0.5 text-[10px]">supabase db push</code>, then refresh.{' '}
+                <Link href="/protected/directory" className="underline underline-offset-2 font-medium">
+                  Directory &amp; role catalog setup
+                </Link>
+                .
+              </AlertDescription>
+            </Alert>
+          ) : null}
           <form
             action={async (fd) => {
               const directory_contact_id = String(fd.get('directory_contact_id'));
@@ -299,7 +329,11 @@ export function DirectoryCommitteeDetailClient({
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Role in committee</Label>
-              <select name="directory_role_id" className="flex h-9 w-full rounded-md border border-input px-2 text-xs">
+              <select
+                name="directory_role_id"
+                disabled={!rolesReady}
+                className="flex h-9 w-full rounded-md border border-input px-2 text-xs disabled:opacity-50"
+              >
                 <option value="">None</option>
                 {flatRoles.map((r) => (
                   <option key={r.id} value={r.id}>

@@ -451,6 +451,8 @@ export interface PendingInvitation {
   id: string;
   email: string;
   role: string;
+  /** Platform role on invite (`admin` | `user`); not the per-study role. */
+  study_role: string | null;
   first_name: string | null;
   last_name: string | null;
   invited_at: string;
@@ -464,7 +466,7 @@ export async function getPendingInvitations(): Promise<PendingInvitation[]> {
 
     const { data, error } = await supabase
       .from('invitations')
-      .select('id, email, role, first_name, last_name, invited_at, invited_by')
+      .select('id, email, role, first_name, last_name, invited_at, invited_by, study_role')
       .eq('company_id', companyId)
       .eq('status', 'pending')
       .gt('invited_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
@@ -488,6 +490,7 @@ export async function getPendingInvitations(): Promise<PendingInvitation[]> {
         id: row.id as string,
         email: row.email as string,
         role: row.role as string,
+        study_role: (row.study_role as string | null) ?? null,
         first_name: row.first_name as string | null,
         last_name: row.last_name as string | null,
         invited_at: row.invited_at as string,
@@ -511,6 +514,7 @@ export async function getPendingInvitations(): Promise<PendingInvitation[]> {
       id: row.id as string,
       email: row.email as string,
       role: row.role as string,
+      study_role: (row.study_role as string | null) ?? null,
       first_name: row.first_name as string | null,
       last_name: row.last_name as string | null,
       invited_at: row.invited_at as string,

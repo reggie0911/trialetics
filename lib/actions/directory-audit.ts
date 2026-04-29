@@ -1,6 +1,18 @@
 'use server';
 
 import { createClient } from '@/lib/server';
+import { getDirectoryPermissionContext } from '@/lib/directory-permissions';
+
+async function requireReader() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const ctx = await getDirectoryPermissionContext(supabase, user.id);
+  if (!ctx) throw new Error('No company');
+  return { supabase, companyId: ctx.companyId };
+}
 
 export async function appendDirectoryAuditLog(input: {
   companyId: string;
@@ -62,28 +74,58 @@ export async function appendDirectoryAssignmentHistory(input: {
 
 export async function getDirectoryAuditLog(opts?: {
   limit?: number;
-}): Promise<{ data: Record<string, unknown>[]; error: string | null }> {
-  const supabase = await createClient();
-  const lim = opts?.limit ?? 100;
-  const { data, error } = await supabase
-    .from('directory_audit_log')
-    .select('*')
-    .order('changed_at', { ascending: false })
-    .limit(lim);
-  if (error) return { data: [], error: error.message };
-  return { data: (data ?? []) as Record<string, unknown>[], error: null };
+  offset?: number;
+}): Promise<{ data: Record<string, unknown>[]; count: number; error: string | null }> {
+  try {
+    const { supabase, companyId } = await requireReader();
+    const lim = Math.min(opts?.limit ?? 100, 500);
+    const offset = opts?.offset ?? 0;
+    const { data, error, count } = await supabase
+      .from('directory_audit_log')
+      .select('*', { count: 'exact' })
+      .eq('company_id', companyId)
+      .order('changed_at', { ascending: false })
+      .range(offset, offset + lim - 1);
+    if (error) return { data: [], count: 0, error: error.message };
+    return {
+      data: (data ?? []) as Record<string, unknown>[],
+      count: count ?? 0,
+      error: null,
+    };
+  } catch (e) {
+    return {
+      data: [],
+      count: 0,
+      error: e instanceof Error ? e.message : 'Failed to load audit log',
+    };
+  }
 }
 
 export async function getDirectoryAssignmentHistory(opts?: {
   limit?: number;
-}): Promise<{ data: Record<string, unknown>[]; error: string | null }> {
-  const supabase = await createClient();
-  const lim = opts?.limit ?? 100;
-  const { data, error } = await supabase
-    .from('directory_assignment_history')
-    .select('*')
-    .order('changed_at', { ascending: false })
-    .limit(lim);
-  if (error) return { data: [], error: error.message };
-  return { data: (data ?? []) as Record<string, unknown>[], error: null };
+  offset?: number;
+}): Promise<{ data: Record<string, unknown>[]; count: number; error: string | null }> {
+  try {
+    const { supabase, companyId } = await requireReader();
+    const lim = Math.min(opts?.limit ?? 100, 500);
+    const offset = opts?.offset ?? 0;
+    const { data, error, count } = await supabase
+      .from('directory_assignment_history')
+      .select('*', { count: 'exact' })
+      .eq('company_id', companyId)
+      .order('changed_at', { ascending: false })
+      .range(offset, offset + lim - 1);
+    if (error) return { data: [], count: 0, error: error.message };
+    return {
+      data: (data ?? []) as Record<string, unknown>[],
+      count: count ?? 0,
+      error: null,
+    };
+  } catch (e) {
+    return {
+      data: [],
+      count: 0,
+      error: e instanceof Error ? e.message : 'Failed to load assignment history',
+    };
+  }
 }

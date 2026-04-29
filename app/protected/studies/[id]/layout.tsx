@@ -1,11 +1,17 @@
 import { notFound } from 'next/navigation';
+import dynamic from 'next/dynamic';
 
 import { StudyBreadcrumbProvider } from '@/components/ctms/studies/study-breadcrumb-context';
 import { StudyCompactHeader } from '@/components/ctms/studies/study-compact-header';
 import { StudyHubShell } from '@/components/ctms/study-hub-shell';
-import { StudyContextBridge } from '@/components/copilot/study-context-bridge';
 import { getStudyByIdCached } from '@/lib/actions/studies';
 import { createClient } from '@/lib/server';
+
+const StudyContextBridge = dynamic(
+  () =>
+    import('@/components/copilot/study-context-bridge').then((m) => m.StudyContextBridge),
+  { ssr: true },
+);
 
 export default async function StudyScopedLayout({
   children,

@@ -1,14 +1,10 @@
 'use client';
 
 import { useMemo } from 'react';
+import { Activity } from 'lucide-react';
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import {
   type ChartConfig,
   ChartContainer,
@@ -24,7 +20,7 @@ interface VisitComplianceTrendChartProps {
 }
 
 const SERIES = {
-  in_window_pct: { label: 'In window %', color: 'hsl(142 71% 45%)' },
+  in_window_pct: { label: 'In Window %', color: 'hsl(142 71% 45%)' },
   overdue_pct: { label: 'Overdue %', color: 'hsl(0 84% 60%)' },
 } as const;
 
@@ -40,10 +36,10 @@ function formatDayLabel(iso: string): string {
  *  chart body stays free of legend chrome. */
 function LegendSwatch({ label, color }: { label: string; color: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+    <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
       <span
         aria-hidden="true"
-        className="block h-0.5 w-3 rounded"
+        className="block h-0.5 w-3.5 rounded"
         style={{ backgroundColor: color }}
       />
       {label}
@@ -71,25 +67,46 @@ export function VisitComplianceTrendChart({
   );
 
   return (
-    <Card className={cn('h-full w-full', className)}>
-      <CardHeader className="flex flex-row items-center justify-between gap-3 pb-2">
-        <CardTitle className="text-sm font-medium">
-          Visit Compliance Trend (Last 7 Days)
-        </CardTitle>
-        <div className="flex items-center gap-3">
-          <LegendSwatch
-            label={SERIES.in_window_pct.label}
-            color={SERIES.in_window_pct.color}
-          />
-          <LegendSwatch
-            label={SERIES.overdue_pct.label}
-            color={SERIES.overdue_pct.color}
-          />
+    <Card
+      className={cn(
+        'flex h-full w-full flex-col border-border/70 py-0 shadow-none',
+        className,
+      )}
+    >
+      <div className="px-4 pb-2 pt-4 sm:px-5 sm:pt-5">
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300"
+          >
+            <Activity className="h-5 w-5" strokeWidth={2.25} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3
+              data-slot="card-title"
+              className="!text-[12px] font-medium leading-tight text-foreground"
+            >
+              Visit Compliance Trend
+            </h3>
+            <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
+              Last 7 days — in-window % vs overdue % of visits in this view
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+              <LegendSwatch
+                label={SERIES.in_window_pct.label}
+                color={SERIES.in_window_pct.color}
+              />
+              <LegendSwatch
+                label={SERIES.overdue_pct.label}
+                color={SERIES.overdue_pct.color}
+              />
+            </div>
+          </div>
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+      <div className="min-w-0 px-4 pb-4 pt-0 sm:px-5 sm:pb-5">
         {chartData.length === 0 ? (
-          <p className="py-8 text-center text-xs text-muted-foreground">
+          <p className="py-8 text-center text-[11px] text-muted-foreground">
             No visit activity in the last 7 days.
           </p>
         ) : (
@@ -103,14 +120,14 @@ export function VisitComplianceTrendChart({
                 dataKey="day"
                 tickLine={false}
                 axisLine={false}
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 11 }}
               />
               <YAxis
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => `${v}%`}
-                tick={{ fontSize: 10 }}
-                width={36}
+                tick={{ fontSize: 11 }}
+                width={38}
                 domain={[0, 100]}
               />
               <ChartTooltip
@@ -136,7 +153,7 @@ export function VisitComplianceTrendChart({
             </LineChart>
           </ChartContainer>
         )}
-      </CardContent>
+      </div>
     </Card>
   );
 }

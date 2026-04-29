@@ -87,6 +87,20 @@ const DUE_STATUS_OPTIONS: { value: DueStatus; label: string }[] = [
   { value: 'pending', label: 'Pending' },
 ];
 
+function labelForDueStatusTrigger(value: string | null) {
+  if (value == null || value === '') return null;
+  return DUE_STATUS_OPTIONS.find((o) => o.value === value)?.label ?? null;
+}
+
+function labelFromToolbarOptions(
+  value: string | null,
+  options: ToolbarSelectOption[],
+  allLabel: string
+) {
+  if (value == null || value === '' || value === 'all') return allLabel;
+  return options.find((o) => o.value === value)?.label ?? null;
+}
+
 function isDirty(value: VisitWindowToolbarValue): boolean {
   return (
     value.search.trim().length > 0 ||
@@ -150,7 +164,12 @@ export function VisitWindowToolbar({
         {countryOptions.length > 0 && (
           <Select value={value.country} onValueChange={(v) => update({ country: v })}>
             <SelectTrigger className="h-9 w-[160px] text-xs" aria-label="Filter by country">
-              <SelectValue placeholder="All countries" />
+              <SelectValue
+                placeholder="All countries"
+                getDisplayLabel={(v) =>
+                  labelFromToolbarOptions(v, countryOptions, 'All countries')
+                }
+              />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All countries</SelectItem>
@@ -166,7 +185,10 @@ export function VisitWindowToolbar({
         {statusOptions.length > 0 && (
           <Select value={value.status} onValueChange={(v) => update({ status: v })}>
             <SelectTrigger className="h-9 w-[170px] text-xs" aria-label="Filter by status">
-              <SelectValue placeholder="All statuses" />
+              <SelectValue
+                placeholder="All statuses"
+                getDisplayLabel={(v) => labelFromToolbarOptions(v, statusOptions, 'All statuses')}
+              />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All statuses</SelectItem>
@@ -184,7 +206,10 @@ export function VisitWindowToolbar({
           onValueChange={(v) => update({ dueStatus: v as DueStatus })}
         >
           <SelectTrigger className="h-9 w-[170px] text-xs" aria-label="Filter by due status">
-            <SelectValue placeholder="All due statuses" />
+            <SelectValue
+              placeholder="All due statuses"
+              getDisplayLabel={labelForDueStatusTrigger}
+            />
           </SelectTrigger>
           <SelectContent>
             {DUE_STATUS_OPTIONS.map((o) => (

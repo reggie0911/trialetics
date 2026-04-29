@@ -25,7 +25,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TablePaginationFooter } from '@/components/ui/table-pagination-footer';
 import { useClientPagination } from '@/lib/hooks/use-client-pagination';
-import { refreshStudyEcrfRollup } from '@/lib/actions/ecrf-rollup';
 import { alertsForTab } from '@/lib/parsers/ecrf-alerts';
 import {
   deriveDataStatus,
@@ -388,6 +387,17 @@ export function StudyEcrfTrackingTab({
       value: (row) => row.site_number ?? '—',
     },
     {
+      key: 'site_name',
+      header: 'Site Name',
+      className: 'min-w-[160px] max-w-[220px] truncate',
+      value: (row) => row.site_name,
+      render: (row) => (
+        <span className="block max-w-full truncate" title={row.site_name?.trim() || undefined}>
+          {row.site_name?.trim() || '—'}
+        </span>
+      ),
+    },
+    {
       key: 'status',
       header: 'Clinical Status',
       className: 'w-[120px]',
@@ -748,10 +758,6 @@ export function StudyEcrfTrackingTab({
     ];
   }, [bundle.byVisit]);
 
-  const handleRefresh = useCallback(async () => {
-    await refreshStudyEcrfRollup(studyId);
-  }, [studyId]);
-
   // ─── Toolbar pieces ────────────────────────────────────────────────────
 
   const toolbarRight = (
@@ -821,7 +827,6 @@ export function StudyEcrfTrackingTab({
         generatedAt={bundle.generatedAt}
         csvHref={`/api/studies/${studyId}/ecrf-tracking/export`}
         pdfHref={`/api/studies/${studyId}/ecrf-tracking/print`}
-        onRefresh={handleRefresh}
       />
 
       <KpiStripPro bundle={bundle} onCardClick={handleKpiClick} />
@@ -946,7 +951,6 @@ export function StudyEcrfTrackingTab({
             />
             <EcrfRightRail bundle={bundle} tab="by-subject" studyId={studyId} />
           </TableRailLayout>
-          <FooterStrip tip="Click a subject's Actions menu to drill into queries or activity history." />
         </TabsContent>
 
         {/* ─── By Site ────────────────────────────────────────────────── */}

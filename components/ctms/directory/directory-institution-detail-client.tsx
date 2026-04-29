@@ -1,26 +1,11 @@
 'use client';
 
-import { useTransition } from 'react';
-import { z } from 'zod';
+import { useMemo, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useForm, Controller, useWatch } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Trash2, Plus } from 'lucide-react';
-import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -28,24 +13,34 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import {
-  updateInstitution,
   removeInstitutionStudyLink,
-  upsertInstitutionStudyLink,
   setInstitutionStatus,
+  upsertInstitutionStudyLink,
 } from '@/lib/actions/directory-institutions';
-import { institutionFormSchema } from '@/lib/validation/directory';
-import type { InstitutionRow } from '@/lib/types/directory';
 import { DirectoryComments } from '@/components/ctms/directory/directory-comments-card';
 import type { DirectoryCommentRow } from '@/lib/actions/directory-comments';
 import type { Study } from '@/lib/types/ctms';
-import { INSTITUTION_STUDY_RELATIONSHIP_OPTIONS, INSTITUTION_TYPE_OPTIONS } from '@/lib/types/directory';
-import { DirectoryCountryRegionFields } from '@/components/ctms/directory/directory-country-region-fields';
 import {
-  PlacesAddressAutocomplete,
-  type ParsedPlace,
-} from '@/components/ui/places-address-autocomplete';
-import { SiteMap } from '@/components/ctms/sites/site-map';
+  INSTITUTION_STUDY_RELATIONSHIP_OPTIONS,
+  type InstitutionRow,
+} from '@/lib/types/directory';
+
+import { EditOrganizationDialog } from './institution-profile/edit-organization-dialog';
+import { InstitutionLinkedStudiesTable } from './institution-profile/institution-linked-studies-table';
+import { InstitutionPeopleTable } from './institution-profile/institution-people-table';
+import { LocationCard } from './institution-profile/location-card';
+import { ProfileHero } from './institution-profile/profile-hero';
+import { SiteInformationCard } from './institution-profile/site-information-card';
+import {
+  buildAddressLine,
+  detectRole,
+  getProfileCopy,
+  type ContactRole,
+  type NormalizedContact,
+  type NormalizedLinkedStudy,
+} from './institution-profile/utils';
 
 type InstitutionDetail = InstitutionRow & {
   institution_study: {
@@ -85,340 +80,168 @@ export function DirectoryInstitutionDetailClient({
 }: Props) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const [statusPending, startStatusTransition] = useTransition();
   const [studyOpen, setStudyOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editFocus, setEditFocus] = useState<'name' | 'address_line1' | null>(null);
 
-  const form = useForm<
-    z.input<typeof institutionFormSchema>,
-    unknown,
-    z.infer<typeof institutionFormSchema>
-  >({
-    resolver: zodResolver(institutionFormSchema),
-    defaultValues: {
-      name: initial.name,
-      organization_type: initial.organization_type,
-      address_line1: initial.address_line1 ?? '',
-      address_line2: initial.address_line2 ?? '',
-      city: initial.city ?? '',
-      state_region: initial.state_region ?? '',
-      postal_code: initial.postal_code ?? '',
-      country_code: initial.country_code ?? '',
-      region: initial.region ?? '',
-      status: initial.status,
-      notes: initial.notes ?? '',
-      // Not shown in UI; preserved on save from server record.
-      parent_institution_id: initial.parent_institution_id ?? '',
-    },
-  });
+  const copy = getProfileCopy(initial.organization_type);
 
-  const watchedCountryCode = useWatch({ control: form.control, name: 'country_code' });
-  const mapAddressLine1 = useWatch({ control: form.control, name: 'address_line1' });
-  const mapCity = useWatch({ control: form.control, name: 'city' });
-  const mapStateRegion = useWatch({ control: form.control, name: 'state_region' });
-  const mapPostal = useWatch({ control: form.control, name: 'postal_code' });
-  const mapLocationKey = [mapAddressLine1, mapCity, mapStateRegion, mapPostal].join('|');
+  const normalizedStudies: NormalizedLinkedStudy[] = useMemo(() => {
+    const studyIndex = new Map(studies.map((s) => [s.id, s] as const));
+    return initial.institution_study.map((row) => {
+      const linked = studyIndex.get(row.study_id) ?? null;
+      const studyRel = normalizeStudy(row.studies);
+      const label =
+        studyRel?.study_name?.trim() ||
+        studyRel?.protocol_number?.trim() ||
+        studyRel?.title?.trim() ||
+        linked?.protocol_number ||
+        linked?.title ||
+        'Study';
+      return {
+        linkId: row.id,
+        studyId: row.study_id,
+        label,
+        protocolNumber: studyRel?.protocol_number ?? linked?.protocol_number ?? null,
+        relationshipType: row.relationship_type,
+        phase: linked?.phase ?? null,
+        status: linked?.status ?? null,
+        fullTitle: studyRel?.title ?? linked?.title ?? null,
+      } satisfies NormalizedLinkedStudy;
+    });
+  }, [initial.institution_study, studies]);
 
-  const onInstitutionAddressPlaceSelected = (parsed: ParsedPlace) => {
-    form.setValue('city', parsed.city ?? '', {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
+  const normalizedContacts: NormalizedContact[] = useMemo(() => {
+    return initial.directory_contact_institution.map((row) => {
+      const c = normalizeContact(row.directory_contacts);
+      const roleName = c?.directory_roles?.name ?? null;
+      return {
+        linkId: row.id,
+        contactId: c?.id ?? row.directory_contact_id ?? null,
+        firstName: c?.first_name ?? null,
+        lastName: c?.last_name ?? null,
+        email: c?.email ?? null,
+        phone: c?.phone ?? null,
+        title: c?.title ?? null,
+        roleName,
+        detectedRole: detectRole(roleName, c?.title) as ContactRole,
+        isPrimary: row.is_primary,
+      } satisfies NormalizedContact;
     });
-    const regionLabel = parsed.stateLong ?? parsed.state ?? '';
-    form.setValue('state_region', regionLabel, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
+  }, [initial.directory_contact_institution]);
+
+  const mapKey = [
+    initial.address_line1,
+    initial.city,
+    initial.state_region,
+    initial.postal_code,
+    initial.id,
+  ].join('|');
+
+  const handleToggleStatus = () => {
+    if (!canEdit) return;
+    startStatusTransition(async () => {
+      const next = initial.status === 'active' ? 'inactive' : 'active';
+      const { error } = await setInstitutionStatus(initial.id, next);
+      if (error) {
+        toast.error(error);
+        return;
+      }
+      toast.success(next === 'active' ? `${copy.entityNoun} activated` : `${copy.entityNoun} deactivated`);
+      router.refresh();
     });
-    form.setValue('region', regionLabel, {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
-    form.setValue('postal_code', parsed.postalCode ?? '', {
-      shouldDirty: true,
-      shouldTouch: true,
-      shouldValidate: true,
-    });
-    const cc = form.getValues('country_code');
-    if (parsed.countryCode && (!cc || cc === parsed.countryCode)) {
-      form.setValue('country_code', parsed.countryCode, {
-        shouldDirty: true,
-        shouldTouch: true,
-        shouldValidate: true,
-      });
-    }
   };
 
-  const normStudy = (s: unknown) => (Array.isArray(s) ? s[0] : s) as { title?: string; protocol_number?: string; study_name?: string | null } | null;
-  const normContact = (c: unknown) =>
-    (Array.isArray(c) ? c[0] : c) as {
-      first_name?: string;
-      last_name?: string;
-      email?: string;
-      directory_roles?: { id?: string; name?: string } | null;
-    } | null;
-
-  const onSave = form.handleSubmit(async (values) => {
+  const handleRemoveStudyLink = (linkId: string) => {
+    if (!canEdit) return;
     startTransition(async () => {
-      const { error } = await updateInstitution(initial.id, {
-        ...values,
-        parent_institution_id: initial.parent_institution_id ?? null,
-        address_line1: values.address_line1 || undefined,
-        address_line2: values.address_line2 || undefined,
-        city: values.city || undefined,
-        state_region: values.state_region || undefined,
-        postal_code: values.postal_code || undefined,
-        country_code: values.country_code || undefined,
-        region: values.region || undefined,
-        notes: values.notes || undefined,
-      });
-      if (error) toast.error(error);
-      else {
-        toast.success('Organization updated');
-        router.refresh();
-      }
+      await removeInstitutionStudyLink(linkId);
+      toast.success('Study link removed');
+      router.refresh();
     });
-  });
+  };
+
+  const handleViewMap = () => {
+    if (typeof document === 'undefined') return;
+    const el = document.getElementById('location-card');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const openEditDialog = (focus: 'name' | 'address_line1' | null = null) => {
+    setEditFocus(focus);
+    setEditOpen(true);
+  };
+
+  const addressLine = buildAddressLine(initial);
+  const isAddressVerified = Boolean(initial.address_line1 && initial.country_code);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">{initial.name}</h1>
-        <div className="flex gap-2">
-          {canEdit && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="text-xs"
-              onClick={() => {
-                startTransition(async () => {
-                  const next = initial.status === 'active' ? 'inactive' : 'active';
-                  const { error } = await setInstitutionStatus(initial.id, next);
-                  if (error) toast.error(error);
-                  else {
-                    toast.success(next === 'active' ? 'Activated' : 'Deactivated');
-                    router.refresh();
-                  }
-                });
-              }}
-            >
-              {initial.status === 'active' ? 'Deactivate' : 'Activate'}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Organization profile</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={onSave} className="space-y-3 max-w-xl">
-            <div className="space-y-1">
-              <Label className="text-xs">Name</Label>
-              <Input className="text-xs h-9" {...form.register('name')} disabled={!canEdit} />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Organization type</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input px-2 text-xs disabled:opacity-50"
-                disabled={!canEdit}
-                {...form.register('organization_type')}
-              >
-                {INSTITUTION_TYPE_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Controller
-              name="address_line1"
-              control={form.control}
-              render={({ field, fieldState }) => (
-                <div className="space-y-1">
-                  <Label className="text-xs">Address line 1</Label>
-                  <PlacesAddressAutocomplete
-                    value={field.value ?? ''}
-                    onChange={field.onChange}
-                    onPlaceSelected={onInstitutionAddressPlaceSelected}
-                    countryBias={watchedCountryCode || null}
-                    disabled={!canEdit}
-                    aria-invalid={fieldState.invalid}
-                    className="text-xs h-9"
-                  />
-                </div>
-              )}
-            />
-            <DirectoryCountryRegionFields
-              variant="institutionAddress"
-              countryCode={form.watch('country_code') ?? ''}
-              region={form.watch('region') ?? ''}
-              onCountryChange={(c) => {
-                form.setValue('country_code', c, { shouldDirty: true });
-              }}
-              onRegionChange={(r) => form.setValue('region', r, { shouldDirty: true })}
-              disabled={!canEdit}
-              citySlot={
-                <div className="space-y-1">
-                  <Label className="text-xs">City</Label>
-                  <Input className="text-xs h-9" {...form.register('city')} disabled={!canEdit} />
-                </div>
-              }
-            />
-            <div className="space-y-1">
-              <Label className="text-xs">Status</Label>
-              <select
-                className="flex h-9 w-full rounded-md border border-input px-2 text-xs disabled:opacity-50"
-                disabled={!canEdit}
-                {...form.register('status')}
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
-            {canEdit && (
-              <Button type="submit" size="sm" className="text-xs" disabled={form.formState.isSubmitting}>
-                Save
-              </Button>
-            )}
-          </form>
-        </CardContent>
-      </Card>
-
-      <SiteMap
-        key={mapLocationKey}
-        siteName={initial.name}
-        address={mapAddressLine1 || null}
-        city={mapCity || null}
-        state={mapStateRegion || null}
-        postalCode={mapPostal || null}
-        persistence={{ kind: 'institution', institutionId: initial.id }}
-        savedAirport={{
-          placeId: initial.nearest_airport_place_id ?? null,
-          name: initial.nearest_airport_name ?? null,
-          address: initial.nearest_airport_address ?? null,
-        }}
-        savedHotel={{
-          placeId: initial.nearest_hotel_place_id ?? null,
-          name: initial.nearest_hotel_name ?? null,
-          address: initial.nearest_hotel_address ?? null,
-        }}
-      />
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="text-base">Linked studies</CardTitle>
-          {canEdit && (
-            <Button type="button" variant="outline" size="sm" className="text-xs h-8" onClick={() => setStudyOpen(true)}>
-              <Plus className="h-3 w-3 mr-1" />
-              Add
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Study</TableHead>
-                <TableHead className="text-xs">Relationship</TableHead>
-                <TableHead className="text-xs w-16" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {initial.institution_study.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-xs text-muted-foreground">
-                    No study links.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                initial.institution_study.map((row) => {
-                  const st = normStudy(row.studies);
-                  return (
-                    <TableRow key={row.id}>
-                      <TableCell className="text-xs">
-                        {st ? (st.study_name || st.protocol_number) : '—'}
-                      </TableCell>
-                      <TableCell className="text-xs capitalize">{row.relationship_type.replace(/_/g, ' ')}</TableCell>
-                      <TableCell className="text-xs">
-                        {canEdit && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => {
-                              startTransition(async () => {
-                                await removeInstitutionStudyLink(row.id);
-                                toast.success('Removed');
-                                router.refresh();
-                              });
-                            }}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">People</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Contact</TableHead>
-                <TableHead className="text-xs">Email</TableHead>
-                <TableHead className="text-xs">Role</TableHead>
-                <TableHead className="text-xs">Primary</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {initial.directory_contact_institution.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-xs text-muted-foreground">
-                    No linked contacts — link from each contact profile.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                initial.directory_contact_institution.map((row) => {
-                  const dc = normContact(row.directory_contacts);
-                  const role = dc?.directory_roles;
-                  return (
-                    <TableRow key={row.id}>
-                      <TableCell className="text-xs">
-                        {dc ? `${dc.first_name} ${dc.last_name}` : '—'}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{dc?.email ?? '—'}</TableCell>
-                      <TableCell className="text-xs">{role?.name ?? '—'}</TableCell>
-                      <TableCell className="text-xs">{row.is_primary ? 'Yes' : 'No'}</TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <DirectoryComments
-        entityType="institution"
-        entityId={initial.id}
+    <div className="mx-auto max-w-5xl space-y-6">
+      <ProfileHero
+        institutionId={initial.id}
+        name={initial.name}
+        organizationType={initial.organization_type}
+        status={initial.status}
+        addressLine={addressLine}
+        isAddressVerified={isAddressVerified}
+        linkedStudyCount={normalizedStudies.length}
+        copy={copy}
         canEdit={canEdit}
-        currentUserId={currentUserId}
-        initialComments={initialComments}
+        isStatusPending={statusPending}
+        onEdit={() => openEditDialog(null)}
+        onViewMap={handleViewMap}
+        onToggleStatus={handleToggleStatus}
       />
+
+      <section aria-labelledby="institution-information-heading">
+        <SiteInformationCard
+          institution={initial}
+          copy={copy}
+          timeZoneLabel={null}
+          qualifiedAt={initial.created_at}
+          activatedAt={initial.status === 'active' ? initial.updated_at : null}
+          deactivatedAt={initial.status === 'inactive' ? initial.updated_at : null}
+          canEdit={canEdit}
+          onEdit={() => openEditDialog(null)}
+        />
+      </section>
+
+      <section aria-labelledby="directory-location-heading">
+        <LocationCard
+          institution={initial}
+          mapKey={mapKey}
+          address={initial.address_line1}
+          city={initial.city}
+          state={initial.state_region}
+          postalCode={initial.postal_code}
+        />
+      </section>
+
+      <section aria-labelledby="directory-people-heading" className="space-y-2">
+        <InstitutionPeopleTable copy={copy} institutionId={initial.id} contacts={normalizedContacts} />
+      </section>
+
+      <InstitutionLinkedStudiesTable
+        copy={copy}
+        studies={normalizedStudies}
+        canEdit={canEdit}
+        canLinkStudy={studies.length > 0}
+        onLinkStudy={() => setStudyOpen(true)}
+        onRemoveLink={handleRemoveStudyLink}
+      />
+
+      <section aria-labelledby="directory-notes-heading">
+        <DirectoryComments
+          entityType="institution"
+          entityId={initial.id}
+          canEdit={canEdit}
+          currentUserId={currentUserId}
+          initialComments={initialComments}
+        />
+      </section>
+
+      <FooterHelpStrip entityNoun={copy.entityNoun} />
 
       <InstStudyDialog
         open={studyOpen}
@@ -431,8 +254,54 @@ export function DirectoryInstitutionDetailClient({
           router.refresh();
         }}
       />
+
+      <EditOrganizationDialog
+        institution={initial}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        copy={copy}
+        initialFocus={editFocus}
+      />
     </div>
   );
+}
+
+function FooterHelpStrip({ entityNoun }: { entityNoun: string }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-[6px] border border-border/70 bg-muted/30 px-4 py-3 text-[11px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+      <p>
+        Keep this {entityNoun.toLowerCase()} profile accurate so colleagues see the right contacts and links.
+      </p>
+      <Link
+        href="https://help.trialetics.com"
+        className="font-medium text-sky-600 hover:underline dark:text-sky-400"
+      >
+        Learn more in the help center →
+      </Link>
+    </div>
+  );
+}
+
+function normalizeStudy(s: unknown):
+  | { title?: string; protocol_number?: string; study_name?: string | null }
+  | null {
+  if (!s) return null;
+  return Array.isArray(s) ? (s[0] as { title?: string; protocol_number?: string; study_name?: string | null }) : (s as { title?: string; protocol_number?: string; study_name?: string | null });
+}
+
+function normalizeContact(c: unknown):
+  | {
+      id?: string;
+      first_name?: string;
+      last_name?: string;
+      email?: string;
+      phone?: string | null;
+      title?: string;
+      directory_roles?: { id?: string; name?: string } | null;
+    }
+  | null {
+  if (!c) return null;
+  return Array.isArray(c) ? (c[0] as never) : (c as never);
 }
 
 function InstStudyDialog({
@@ -454,7 +323,12 @@ function InstStudyDialog({
 
   const submit = async (fd: FormData) => {
     const study_id = String(fd.get('study_id'));
-    const relationship_type = String(fd.get('relationship_type')) as 'sponsor' | 'cro' | 'central_lab' | 'imaging_vendor' | 'other';
+    const relationship_type = String(fd.get('relationship_type')) as
+      | 'sponsor'
+      | 'cro'
+      | 'central_lab'
+      | 'imaging_vendor'
+      | 'other';
     const key = `${study_id}-${relationship_type}`;
     if (existing.has(key)) {
       toast.error('This relationship already exists');
@@ -478,12 +352,18 @@ function InstStudyDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="text-base">Link study</DialogTitle>
+          <DialogTitle>Link study</DialogTitle>
         </DialogHeader>
         <form action={submit} className="space-y-3">
           <div className="space-y-1">
             <Label className="text-xs">Study</Label>
-            <select name="study_id" required className="flex h-9 w-full rounded-md border border-input px-2 text-xs">
+            <select
+              name="study_id"
+              required
+              className="flex h-9 w-full rounded-md border border-input px-2 text-xs"
+              disabled={studies.length === 0}
+              aria-label="Study to link"
+            >
               {studies.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.study_name || s.protocol_number}
@@ -497,6 +377,7 @@ function InstStudyDialog({
               name="relationship_type"
               required
               className="flex h-9 w-full rounded-md border border-input px-2 text-xs"
+              aria-label="Relationship type"
             >
               {INSTITUTION_STUDY_RELATIONSHIP_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -506,7 +387,7 @@ function InstStudyDialog({
             </select>
           </div>
           <DialogFooter>
-            <Button type="submit" className="text-xs" disabled={pending}>
+            <Button type="submit" className="text-xs" disabled={pending || studies.length === 0}>
               {pending ? 'Saving…' : 'Link'}
             </Button>
           </DialogFooter>

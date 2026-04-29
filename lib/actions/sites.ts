@@ -380,6 +380,9 @@ export async function updateSite(
     const shouldRegeocode = (
       ['address', 'city', 'state', 'postal_code'] as const
     ).some((key) => updates[key] !== undefined);
+    const shouldSyncDirectoryInstitution = (
+      ['name', 'address', 'city', 'state', 'postal_code', 'study_country_id'] as const
+    ).some((key) => updates[key] !== undefined);
     const cleanUpdates: Record<string, unknown> = {};
 
     for (const [key, value] of Object.entries(updates)) {
@@ -403,6 +406,10 @@ export async function updateSite(
     }
 
     const row = data as unknown as StudySite;
+    if (shouldSyncDirectoryInstitution) {
+      const companyId = await getCompanyId();
+      await syncInstitutionForStudySite(supabase, companyId, row, study_id);
+    }
     await syncPrincipalInvestigatorContact({
       siteId: id,
       studyId: study_id,
@@ -431,6 +438,45 @@ export async function updateSite(
     return { data: row, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'An unexpected error occurred.' };
+  }
+}
+
+export async function repairSiteDirectoryInstitution(
+  siteId: string,
+  studyId: string
+): Promise<{ institutionId: string | null; error: string | null }> {
+  const supabase = await createClient();
+  try {
+    const companyId = await getCompanyId();
+    const { error: writeGuard } = await assertStudyWritable(supabase, studyId, companyId);
+    if (writeGuard) return { institutionId: null, error: writeGuard };
+
+    const { data: site, error: siteError } = await supabase
+      .from('study_sites')
+      .select('*')
+      .eq('id', siteId)
+      .eq('study_id', studyId)
+      .single();
+    if (siteError || !site) return { institutionId: null, error: siteError?.message ?? 'Site not found' };
+
+    await syncInstitutionForStudySite(supabase, companyId, site as unknown as StudySite, studyId);
+
+    const { data: link } = await supabase
+      .from('institution_study_site')
+      .select('institution_id')
+      .eq('study_site_id', siteId)
+      .limit(1)
+      .maybeSingle();
+
+    revalidatePath('/protected/directory');
+    revalidatePath(`/protected/studies/${studyId}/sites/${siteId}`);
+    revalidateStudyCtmsLayout(studyId);
+    return { institutionId: link?.institution_id ?? null, error: null };
+  } catch (err) {
+    return {
+      institutionId: null,
+      error: err instanceof Error ? err.message : 'An unexpected error occurred.',
+    };
   }
 }
 

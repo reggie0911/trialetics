@@ -9,8 +9,8 @@ import {
   Bell,
   CheckCircle2,
   ClipboardList,
+  Info,
   Lock,
-  MoreVertical,
   ShieldCheck,
   Users,
   type LucideIcon,
@@ -18,6 +18,7 @@ import {
 
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { summaryToPercentages } from '@/components/ctms/subjects/subject-tracking-summary-cell';
 import { computeSubjectCrfPercentages } from '@/lib/parsers/subject-ecrf-metrics';
 import type {
@@ -130,7 +131,7 @@ function trendByKind(trends: EcrfTrend[], kind: EcrfTrendKind): EcrfTrend {
 function DeltaIndicator({ delta }: { delta: number | null }) {
   if (delta === null) {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
         <ArrowRight className="h-3 w-3" />
         New
       </span>
@@ -138,7 +139,7 @@ function DeltaIndicator({ delta }: { delta: number | null }) {
   }
   if (delta === 0) {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
         <ArrowRight className="h-3 w-3" />
         0%
       </span>
@@ -148,7 +149,7 @@ function DeltaIndicator({ delta }: { delta: number | null }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 text-xs font-medium',
+        'inline-flex items-center gap-1 text-[11px] font-medium',
         positive
           ? 'text-green-600 dark:text-green-400'
           : 'text-red-600 dark:text-red-400',
@@ -213,11 +214,13 @@ function DonutChart({
           />
         ) : null}
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
-        <span className="text-2xl font-medium leading-none tracking-tight text-foreground">
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 px-1 text-center">
+        <span className="max-w-full min-w-0 !text-[30px] font-medium leading-tight tabular-nums tracking-tight text-foreground text-balance">
           {centerValue}
         </span>
-        {subValue ? <div className="leading-none">{subValue}</div> : null}
+        {subValue ? (
+          <div className="text-[11px] leading-tight">{subValue}</div>
+        ) : null}
       </div>
     </div>
   );
@@ -229,6 +232,10 @@ interface KpiCardData {
   icon: LucideIcon;
   value: string;
   subtext: string;
+  /** Short line in StatCard-style white chip (below donut) */
+  meta: string;
+  /** Longer explanation; shown in tooltip on the chip */
+  metaTooltip: string;
   chip?: StatusChip;
   trend?: EcrfTrend;
   donutPercentage: number;
@@ -250,7 +257,7 @@ function KpiCard({
     subValueNode = <DeltaIndicator delta={card.trend.deltaPct7d} />;
   } else if (card.staticSubValue) {
     subValueNode = (
-      <span className="text-xs font-medium text-muted-foreground">
+      <span className="text-[11px] font-medium text-muted-foreground">
         {card.staticSubValue}
       </span>
     );
@@ -269,60 +276,90 @@ function KpiCard({
         }
       }}
       className={cn(
-        'flex h-full flex-col gap-0 overflow-hidden border-border/70 p-0 shadow-none',
+        'flex h-full min-h-0 w-full flex-col gap-0 overflow-hidden border-border/70 p-0 py-0 shadow-none',
         onClick &&
           'cursor-pointer transition-colors hover:bg-accent/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
       )}
     >
       <div className={cn('h-[3px] w-full shrink-0', accent.topAccent)} />
 
-      <div className="flex h-full flex-col gap-3 px-4 pb-4 pt-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <span
-              aria-hidden="true"
-              className={cn(
-                'flex h-9 w-9 shrink-0 items-center justify-center rounded-md',
-                accent.iconBg,
-              )}
-            >
-              <Icon className={cn('h-4 w-4', accent.iconFg)} />
-            </span>
-            <p className="text-[11px] font-semibold uppercase leading-tight tracking-[0.08em] text-muted-foreground">
-              {card.label}
-            </p>
-          </div>
-          <span aria-hidden="true" className="text-muted-foreground/70">
-            <MoreVertical className="h-4 w-4" />
+      <div className="flex min-h-0 flex-1 flex-col gap-0 px-4 py-3.5">
+        <div className="flex w-full min-w-0 items-start justify-between gap-3">
+          <p
+            data-slot="stat-card-title"
+            className="min-w-0 flex-1 !text-[12px] font-medium leading-tight text-muted-foreground"
+          >
+            {card.label}
+          </p>
+          <span
+            className={cn(
+              'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/10',
+              accent.iconBg,
+            )}
+            aria-hidden
+          >
+            <Icon className={cn('h-3.5 w-3.5 opacity-90', accent.iconFg)} />
           </span>
         </div>
 
-        <div className="min-h-[20px]">
-          {card.chip ? (
+        {card.chip ? (
+          <div className="mt-2">
             <Badge
               className={cn(
-                'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                'rounded-full px-2 py-0.5 text-[11px] font-medium',
                 STATUS_CHIP_CLASS[card.chip.tone],
               )}
             >
               {card.chip.label}
             </Badge>
-          ) : null}
+          </div>
+        ) : null}
+
+        <div className="mt-3 flex w-full justify-center">
+          <DonutChart
+            percentage={card.donutPercentage}
+            fillStrokeClassName={accent.donutStroke}
+            centerValue={card.value}
+            subValue={subValueNode}
+          />
         </div>
 
-        <DonutChart
-          percentage={card.donutPercentage}
-          fillStrokeClassName={accent.donutStroke}
-          centerValue={card.value}
-          subValue={subValueNode}
-        />
+        <div className="mt-3 w-full" onClick={(e) => e.stopPropagation()}>
+          <div className="flex w-full justify-start">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-[#ffffff] px-2.5 py-1 text-left text-[11px] font-medium text-[#000000] outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-ring/50 dark:border-neutral-200 dark:bg-[#ffffff] dark:text-[#000000]"
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    aria-label={`${card.label} — more detail`}
+                  >
+                    <Info
+                      className="h-3 w-3 shrink-0 text-[#000000] opacity-80"
+                      aria-hidden
+                    />
+                    <span className="min-w-0 flex-1 truncate text-left">
+                      {card.meta}
+                    </span>
+                  </button>
+                }
+              />
+              <TooltipContent
+                side="top"
+                className="max-w-xs text-left text-xs text-balance"
+              >
+                {card.metaTooltip}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
 
-        <p className="mt-auto text-center text-[11px] leading-snug text-muted-foreground">
+        <p className="mt-3 border-t border-border/50 pt-2.5 text-left text-[11px] leading-snug text-muted-foreground">
           {card.subtext}
         </p>
       </div>
-
-      <div className={cn('h-[2px] w-full shrink-0 opacity-70', accent.topAccent)} />
     </Card>
   );
 }
@@ -366,6 +403,9 @@ export function KpiStripPro({ bundle, onCardClick }: KpiStripProProps) {
         icon: ClipboardList,
         value: pcts.dataEntryPct === null ? '—' : `${pcts.dataEntryPct}%`,
         subtext: denom,
+        meta: 'Expected CRFs vs data entered %',
+        metaTooltip:
+          'Data entry % is CRFs with data entered over expected CRFs across the study. The value under the ring is the 7-day change in completion.',
         chip: statusChipForCompletion(pcts.dataEntryPct, totals.dataExpectedTotal),
         trend: trendByKind(bundle.trends, 'data_entry'),
         donutPercentage: pcts.dataEntryPct ?? 0,
@@ -376,6 +416,9 @@ export function KpiStripPro({ bundle, onCardClick }: KpiStripProProps) {
         icon: ShieldCheck,
         value: pcts.sdvPct === null ? '—' : `${pcts.sdvPct}%`,
         subtext: sdvDenom,
+        meta: 'SDV vs data entered (query cap)',
+        metaTooltip:
+          'Source Data Verification (SDV) % is SDV-complete CRFs over data-entered CRFs. The % can be capped when there are open or answered queries, per eCRF tracking rules.',
         chip: statusChipForCompletion(pcts.sdvPct, totals.dataExpectedTotal),
         trend: trendByKind(bundle.trends, 'sdv'),
         donutPercentage: pcts.sdvPct ?? 0,
@@ -386,6 +429,9 @@ export function KpiStripPro({ bundle, onCardClick }: KpiStripProProps) {
         icon: Lock,
         value: pcts.lockPct === null ? '—' : `${pcts.lockPct}%`,
         subtext: lockDenom,
+        meta: 'Lock vs data entered (query cap)',
+        metaTooltip:
+          'Data management (DM) lock % is locked CRFs over data-entered CRFs, with the same kind of query-based cap as SDV.',
         chip: statusChipForCompletion(pcts.lockPct, totals.dataExpectedTotal),
         trend: trendByKind(bundle.trends, 'lock'),
         donutPercentage: pcts.lockPct ?? 0,
@@ -396,6 +442,9 @@ export function KpiStripPro({ bundle, onCardClick }: KpiStripProProps) {
         icon: AlertTriangle,
         value: String(totals.openQueryCount),
         subtext: `${totals.openQueryCount} pending • ${totals.answeredQueryCount} answered`,
+        meta: 'Open vs resolved query pipeline',
+        metaTooltip:
+          'Open query count vs answered. The ring is open as a share of all queries. The line under the value reflects query resolution trend (7d).',
         chip:
           totals.openQueryCount > 0
             ? { label: 'Action needed', tone: 'critical' }
@@ -409,6 +458,9 @@ export function KpiStripPro({ bundle, onCardClick }: KpiStripProProps) {
         icon: Users,
         value: String(subjectCount),
         subtext: `${inScopePct}% in scope • Last sync: ${lastSync}`,
+        meta: 'Roster with expected eCRF activity',
+        metaTooltip:
+          'Count of subject records. “In scope” is the share of subjects with at least one expected CRF. Last sync is when the template/rollup was last updated.',
         chip: { label: `${inScopePct}%`, tone: 'info' },
         donutPercentage: inScopePct,
         staticSubValue: `${inScopePct}%`,
@@ -422,6 +474,9 @@ export function KpiStripPro({ bundle, onCardClick }: KpiStripProProps) {
           bundle.alerts.length > 0
             ? `Needs attention — view all alerts (${bundle.alerts.length})`
             : 'All clear',
+        meta: 'Study- and eCRF-level follow-ups',
+        metaTooltip:
+          'Alerts raised from eCRF monitoring and study rules (e.g. missing data, stale activity). Click the card to jump to the suggested view on this page when available.',
         chip:
           bundle.alerts.length > 0
             ? { label: 'Review', tone: 'warn' }

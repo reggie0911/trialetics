@@ -6,7 +6,7 @@ import {
   Building2,
   CheckCircle2,
   Hourglass,
-  MoreVertical,
+  Info,
   TrendingUp,
   Users,
 } from 'lucide-react';
@@ -28,14 +28,12 @@ function pct(part: number, whole: number): number {
 interface DonutChartProps {
   percentage: number;
   centerValue: string | number;
-  centerLabel: string;
   fillStrokeClassName: string;
 }
 
 function DonutChart({
   percentage,
   centerValue,
-  centerLabel,
   fillStrokeClassName,
 }: DonutChartProps) {
   const size = 96;
@@ -74,12 +72,9 @@ function DonutChart({
           />
         ) : null}
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-medium leading-none tracking-tight text-foreground">
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-1 text-center">
+        <span className="max-w-full min-w-0 !text-[30px] font-medium leading-tight tabular-nums tracking-tight text-foreground text-balance">
           {centerValue}
-        </span>
-        <span className="mt-1 text-[10px] font-medium text-muted-foreground">
-          {centerLabel}
         </span>
       </div>
     </div>
@@ -95,12 +90,12 @@ interface LegendSegment {
 
 function LegendRow({ label, value, percentage, dotClassName }: LegendSegment) {
   return (
-    <div className="flex items-center justify-between gap-2 text-xs">
-      <div className="flex min-w-0 items-center gap-2">
+    <div className="flex w-full min-w-0 items-center justify-between gap-2 text-left text-[11px] leading-snug">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <span className={cn('h-2 w-2 shrink-0 rounded-full', dotClassName)} />
-        <span className="truncate text-muted-foreground">{label}</span>
+        <span className="min-w-0 font-medium text-muted-foreground">{label}</span>
       </div>
-      <span className="font-medium text-foreground/90">
+      <span className="shrink-0 tabular-nums text-foreground">
         {value}
         <span className="ml-1 text-muted-foreground">({percentage}%)</span>
       </span>
@@ -115,11 +110,12 @@ interface KpiCardProps {
   iconFgClassName: string;
   topAccentClassName: string;
   donutCenterValue: string | number;
-  donutLabel: string;
   donutPercentage: number;
   donutStrokeClassName: string;
   primarySegment: LegendSegment;
   secondarySegment: LegendSegment;
+  /** One-line context (StatCard-style meta chip) */
+  meta?: string;
   tooltip?: string;
 }
 
@@ -130,48 +126,60 @@ function KpiCard({
   iconFgClassName,
   topAccentClassName,
   donutCenterValue,
-  donutLabel,
   donutPercentage,
   donutStrokeClassName,
   primarySegment,
   secondarySegment,
+  meta,
   tooltip,
 }: KpiCardProps) {
   return (
     <Card
-      className="flex h-full flex-col gap-4 overflow-hidden border-border/70 p-0 shadow-none"
+      className="flex h-full min-h-0 w-full flex-col overflow-hidden border-border/70 p-0 py-0 shadow-none"
       title={tooltip}
     >
       <div className={cn('h-[3px] w-full shrink-0', topAccentClassName)} />
 
-      <div className="flex h-full flex-col gap-4 px-4 pb-4 pt-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <span
-              className={cn(
-                'flex h-9 w-9 shrink-0 items-center justify-center rounded-md',
-                iconBgClassName,
-              )}
-            >
-              <Icon className={cn('h-4 w-4', iconFgClassName)} />
-            </span>
-            <p className="text-[11px] font-semibold uppercase leading-tight tracking-[0.08em] text-muted-foreground">
-              {title}
-            </p>
-          </div>
-          <span className="text-muted-foreground/70" aria-hidden="true">
-            <MoreVertical className="h-4 w-4" />
+      <div className="flex min-h-0 flex-1 flex-col gap-0 px-4 py-3.5">
+        <div className="flex w-full min-w-0 items-start justify-between gap-3">
+          <p
+            data-slot="stat-card-title"
+            className="min-w-0 flex-1 !text-[12px] font-medium leading-tight text-muted-foreground"
+          >
+            {title}
+          </p>
+          <span
+            className={cn(
+              'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/10',
+              iconBgClassName,
+            )}
+          >
+            <Icon
+              className={cn('h-3.5 w-3.5 shrink-0 opacity-90', iconFgClassName)}
+            />
           </span>
         </div>
 
-        <DonutChart
-          percentage={donutPercentage}
-          centerValue={donutCenterValue}
-          centerLabel={donutLabel}
-          fillStrokeClassName={donutStrokeClassName}
-        />
+        <div className="mt-3 flex w-full justify-center">
+          <DonutChart
+            percentage={donutPercentage}
+            centerValue={donutCenterValue}
+            fillStrokeClassName={donutStrokeClassName}
+          />
+        </div>
 
-        <div className="mt-auto space-y-2 border-t border-border/60 pt-3">
+        {meta ? (
+          <div className="mt-3 w-full">
+            <div className="flex w-full justify-start">
+              <span className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-[#ffffff] px-2.5 py-1 text-[11px] font-medium text-[#000000] dark:border-neutral-200 dark:bg-[#ffffff] dark:text-[#000000]">
+                <Info className="h-3 w-3 shrink-0 text-[#000000] opacity-80" />
+                <span className="truncate">{meta}</span>
+              </span>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-3 w-full min-w-0 space-y-2 border-t border-border/50 pt-2.5">
           <LegendRow {...primarySegment} />
           <LegendRow {...secondarySegment} />
         </div>
@@ -243,11 +251,10 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
         iconFgClassName="text-sky-600 dark:text-sky-300"
         topAccentClassName="bg-blue-500"
         donutCenterValue={metrics.total}
-        donutLabel="Total"
         donutPercentage={metrics.total > 0 ? 100 : 0}
         donutStrokeClassName="stroke-blue-500"
         primarySegment={{
-          label: 'Total Sites',
+          label: 'In study',
           value: metrics.total,
           percentage: metrics.total > 0 ? 100 : 0,
           dotClassName: 'bg-blue-500',
@@ -258,6 +265,7 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
           percentage: 0,
           dotClassName: remainingDot,
         }}
+        meta="All sites linked to this study"
         tooltip="All sites linked to this study, regardless of activation state."
       />
 
@@ -268,7 +276,6 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
         iconFgClassName="text-emerald-600 dark:text-emerald-300"
         topAccentClassName="bg-emerald-500"
         donutCenterValue={metrics.activated}
-        donutLabel="Activated"
         donutPercentage={pct(metrics.activated, metrics.total)}
         donutStrokeClassName="stroke-emerald-500"
         primarySegment={{
@@ -283,6 +290,7 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
           percentage: pct(remaining(metrics.activated), metrics.total),
           dotClassName: remainingDot,
         }}
+        meta="Activated or currently enrolling"
         tooltip="Sites with status Activated or Enrolling."
       />
 
@@ -293,7 +301,6 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
         iconFgClassName="text-violet-600 dark:text-violet-300"
         topAccentClassName="bg-violet-500"
         donutCenterValue={metrics.enrolling}
-        donutLabel="Enrolling"
         donutPercentage={pct(metrics.enrolling, metrics.total)}
         donutStrokeClassName="stroke-violet-500"
         primarySegment={{
@@ -308,6 +315,7 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
           percentage: pct(remaining(metrics.enrolling), metrics.total),
           dotClassName: remainingDot,
         }}
+        meta="Recruiting vs rest of footprint"
         tooltip="Sites whose status is Enrolling."
       />
 
@@ -318,7 +326,6 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
         iconFgClassName="text-amber-600 dark:text-amber-300"
         topAccentClassName="bg-amber-500"
         donutCenterValue={metrics.startup}
-        donutLabel="Startup"
         donutPercentage={pct(metrics.startup, metrics.total)}
         donutStrokeClassName="stroke-amber-500"
         primarySegment={{
@@ -333,6 +340,7 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
           percentage: pct(remaining(metrics.startup), metrics.total),
           dotClassName: remainingDot,
         }}
+        meta="ID · selected · initiated"
         tooltip="Sites in Identified, Selected, or Initiated status."
       />
 
@@ -343,7 +351,6 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
         iconFgClassName="text-emerald-600 dark:text-emerald-300"
         topAccentClassName="bg-teal-500"
         donutCenterValue={`${metrics.enrolled} / ${metrics.target}`}
-        donutLabel="Enrolled"
         donutPercentage={enrolledPercent}
         donutStrokeClassName="stroke-emerald-500"
         primarySegment={{
@@ -358,6 +365,7 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
           percentage: enrolledRemainingPercent,
           dotClassName: remainingDot,
         }}
+        meta="Roster over combined targets"
         tooltip="Live count of subjects (randomized, active, completed) over the sum of site enrollment targets."
       />
 
@@ -368,7 +376,6 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
         iconFgClassName="text-rose-600 dark:text-rose-300"
         topAccentClassName="bg-rose-500"
         donutCenterValue={atRiskCount}
-        donutLabel="At-Risk"
         donutPercentage={pct(atRiskCount, metrics.total)}
         donutStrokeClassName="stroke-rose-500"
         primarySegment={{
@@ -383,6 +390,7 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
           percentage: pct(remaining(atRiskCount), metrics.total),
           dotClassName: remainingDot,
         }}
+        meta="Of total linked sites"
         tooltip={atRiskTooltip}
       />
     </div>

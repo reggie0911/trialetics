@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { format } from 'date-fns';
 import { toast } from 'sonner';
 
 import type {
@@ -16,7 +17,7 @@ import {
   listStudyVisitDefinitions,
 } from '@/lib/actions/study-visit-definitions';
 import type { EcrfSchedulePresetId } from '@/lib/ecrf-schedule-presets';
-import { listStudyCrfs, listCrfQuestions } from '@/lib/actions/study-crfs';
+import { listStudyCrfs, listCrfQuestions, listCrfQuestionCounts } from '@/lib/actions/study-crfs';
 import {
   getOrCreateActiveVersion,
   listTemplateVersions,
@@ -31,7 +32,6 @@ import { EcrfVersionManagerDialog } from '@/components/ctms/study-forms/ecrf-bul
 import { VisitFormDialog } from '@/components/ctms/study-forms/ecrf-dialogs';
 
 import { EcrfHeaderBar } from './ecrf-builder/ecrf-header-bar';
-import { EcrfBuilderKpis } from './ecrf-builder/ecrf-builder-kpis';
 import {
   EcrfActionToolbar,
   type EcrfBuilderRowFilter,
@@ -58,6 +58,7 @@ export function EcrfBuilderTab({ studyId, initialVisits, initialCrfs }: EcrfBuil
   const [questionsByCrfId, setQuestionsByCrfId] = useState<
     Record<string, StudyCrfQuestion[]>
   >({});
+  const [questionCountByCrfId, setQuestionCountByCrfId] = useState<Record<string, number>>({});
   const [loadingCrfIds, setLoadingCrfIds] = useState<Set<string>>(new Set());
   const [versions, setVersions] = useState<EcrfTemplateVersionWithCounts[]>([]);
   const [activeVersion, setActiveVersion] = useState<EcrfTemplateVersion | null>(null);
@@ -107,6 +108,8 @@ export function EcrfBuilderTab({ studyId, initialVisits, initialCrfs }: EcrfBuil
           setCrfs(c);
           setQuestionsByCrfId({});
         }
+        const counts = await listCrfQuestionCounts(c.map((row) => row.id));
+        if (!cancelled) setQuestionCountByCrfId(counts);
       }
       if (!cancelled) setBootstrapped(true);
     })();
@@ -175,6 +178,9 @@ export function EcrfBuilderTab({ studyId, initialVisits, initialCrfs }: EcrfBuil
         setCrfs(c);
         setVersions(list);
 
+        const counts = await listCrfQuestionCounts(c.map((row) => row.id));
+        setQuestionCountByCrfId(counts);
+
         const validCrfIds = new Set(c.map((row) => row.id));
         const previouslyLoaded = Object.keys(questionsByCrfId).filter((id) =>
           validCrfIds.has(id)
@@ -208,6 +214,8 @@ export function EcrfBuilderTab({ studyId, initialVisits, initialCrfs }: EcrfBuil
       ]);
       setVisits(v);
       setCrfs(c);
+      const counts = await listCrfQuestionCounts(c.map((row) => row.id));
+      setQuestionCountByCrfId(counts);
     },
     [versions, studyId]
   );
@@ -224,6 +232,7 @@ export function EcrfBuilderTab({ studyId, initialVisits, initialCrfs }: EcrfBuil
         try {
           const qs = await listCrfQuestions(crfId);
           setQuestionsByCrfId((prev) => ({ ...prev, [crfId]: qs }));
+          setQuestionCountByCrfId((prev) => ({ ...prev, [crfId]: qs.length }));
         } finally {
           setLoadingCrfIds((prev) => {
             const next = new Set(prev);
@@ -328,8 +337,6 @@ export function EcrfBuilderTab({ studyId, initialVisits, initialCrfs }: EcrfBuil
         canCompare={versions.length >= 2}
       />
 
-      <EcrfBuilderKpis visits={visits} crfs={crfs} questionsByCrfId={questionsByCrfId} />
-
       {!bootstrapped && (
         <p className="text-[11px] text-muted-foreground">Loading template versions…</p>
       )}
@@ -349,17 +356,45 @@ export function EcrfBuilderTab({ studyId, initialVisits, initialCrfs }: EcrfBuil
             onAddVisit={() => setAddVisitOpen(true)}
             onBulkImport={() => setBulkOpen(true)}
             onAutoGenerate={handleAutoGenerate}
-            onExportCsv={() => {
+            onExportCsv={async () => {
               if (!activeVersion || typeof window === 'undefined') return;
-              window.location.href = `/api/studies/${studyId}/ecrf/template?versionId=${activeVersion.id}`;
+              try {
+                const res = await fetch(
+                  `/api/studies/${studyId}/ecrf/template?versionId=${activeVersion.id}`
+                );
+                if (!res.ok) throw new Error('Export failed');
+                const blob = await res.blob();
+                const dateStr = format(new Date(), 'yyyy-MM-dd');
+                const filename = `ecrf-template-${activeVersion.status}-${dateStr}.csv`;
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch {
+                toast.error('CSV export failed. Please try again.');
+              }
             }}
-            onExportPdf={() => {
+            onExportPdf={async () => {
               if (!activeVersion || typeof window === 'undefined') return;
-              window.open(
-                `/api/studies/${studyId}/ecrf/print?versionId=${activeVersion.id}`,
-                '_blank',
-                'noopener,noreferrer'
-              );
+              try {
+                const res = await fetch(
+                  `/api/studies/${studyId}/ecrf/print?versionId=${activeVersion.id}`
+                );
+                if (!res.ok) throw new Error('Export failed');
+                const blob = await res.blob();
+                const dateStr = format(new Date(), 'yyyy-MM-dd');
+                const filename = `ecrf-template-${activeVersion.status}-${dateStr}.pdf`;
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+              } catch {
+                toast.error('PDF export failed. Please try again.');
+              }
             }}
             hasAnyVisits={visits.length > 0}
           />
@@ -387,6 +422,7 @@ export function EcrfBuilderTab({ studyId, initialVisits, initialCrfs }: EcrfBuil
             visits={visits}
             crfs={crfs}
             questionsByCrfId={questionsByCrfId}
+            questionCountByCrfId={questionCountByCrfId}
             onOpenChangeLog={() => setChangeLogOpen(true)}
             onOpenCompare={() => setCompareOpen(true)}
             onOpenBulkImport={() => setBulkOpen(true)}

@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Copy, Download, ExternalLink, MoreVertical } from 'lucide-react';
+import { Copy, Download, ExternalLink, FileText, MoreVertical } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,7 @@ import type {
 } from '@/lib/types/ctms';
 import { formatPlanDate } from '@/lib/utils/visit-window';
 
+import { SiteVisitScheduleGrid } from './site-visit-schedule-grid';
 import { TopOverdueVisitTypesList } from './top-overdue-visit-types-list';
 import { VisitComplianceTrendChart } from './visit-compliance-trend-chart';
 import { VisitWindowAlertsBanner } from './visit-window-alerts-banner';
@@ -37,7 +38,6 @@ import {
   type KpiBucketId,
 } from './visit-window-kpi-strip';
 import { VisitWindowPageHeader } from './visit-window-page-header';
-import { VisitWindowTipBanner } from './visit-window-tip-banner';
 import {
   type DueStatus,
   type ToolbarSelectOption,
@@ -68,7 +68,7 @@ const PRIORITY_VARIANT: Record<VisitPriority, 'destructive' | 'warning' | 'succe
 const PRIORITY_LABEL: Record<VisitPriority, string> = {
   critical: 'Critical',
   at_risk: 'At risk',
-  on_track: 'On track',
+  on_track: 'On Track',
 };
 
 /** 2px row-stripe border colors for the By Site row accent. Mirrors the
@@ -715,6 +715,7 @@ export function StudyVisitScheduleTab({
         lastUpdatedAt={complianceBundle?.generatedAt ?? null}
         csvHref={`/api/studies/${studyId}/visit-window-compliance/export`}
         pdfHref={`/api/studies/${studyId}/visit-window-compliance/print`}
+        showActions={false}
       />
 
       <VisitWindowKpiStrip
@@ -746,58 +747,126 @@ export function StudyVisitScheduleTab({
         </TabsList>
 
         <TabsContent value="by-site" className="space-y-3 pt-3">
-          <VisitRollupTable
-            variant="panel"
-            description="One row per site, summed across that site's subjects."
-            toolbar={
-              <VisitWindowToolbar
-                searchPlaceholder="Search sites..."
-                value={siteToolbar}
-                onChange={setSiteToolbar}
-                countryOptions={countryOptions}
-              />
-            }
-            rows={sitePage}
-            columns={siteColumns}
-            rowKey={(row) => row.site_id}
-            emptyState={siteEmpty}
-            showTotalsRow
-            totalsLabel={`Total (${filteredSites.length} site${filteredSites.length === 1 ? '' : 's'})`}
-            rowAccent={(row) => {
-              const p = extras?.sites[row.site_id]?.priority;
-              return p
-                ? {
-                    color: PRIORITY_STRIPE[p],
-                    tooltip: `Priority: ${PRIORITY_LABEL[p]}`,
-                  }
-                : null;
-            }}
-            expandable
-            renderExpanded={(row) => (
-              <SiteOverdueVisitsPanel
-                studyId={studyId}
-                site={row}
-                alerts={alerts}
-                priority={extras?.sites[row.site_id]?.priority ?? null}
-              />
-            )}
-            footer={
-              <TablePaginationFooter
-                pagination={sitePagination}
-                totalItems={filteredSites.length}
-                itemNoun="site"
-              />
-            }
-          />
           {complianceBundle ? (
             <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
-              <VisitWindowTipBanner scope="by-site" />
               <VisitComplianceTrendChart data={complianceBundle.complianceTrend} />
               <TopOverdueVisitTypesList data={complianceBundle.topOverdueVisitTypes} />
             </div>
-          ) : (
-            <VisitWindowTipBanner scope="by-site" />
-          )}
+          ) : null}
+          <div className="space-y-3">
+            <div className="space-y-2 px-1">
+              <div className="flex flex-col gap-2 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0 flex-1">
+                  <VisitWindowToolbar
+                    searchPlaceholder="Search sites..."
+                    value={siteToolbar}
+                    onChange={setSiteToolbar}
+                    countryOptions={countryOptions}
+                  />
+                </div>
+                <div className="flex w-full flex-wrap items-center justify-start gap-2 xl:w-auto xl:justify-end">
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="h-9 min-w-[106px] text-xs"
+                  >
+                    <a
+                      href={`/api/studies/${studyId}/visit-window-compliance/export`}
+                      download
+                    >
+                      <Download className="mr-1 h-3.5 w-3.5" />
+                      Export CSV
+                    </a>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="h-9 min-w-[106px] text-xs"
+                  >
+                    <a
+                      href={`/api/studies/${studyId}/visit-window-compliance/print`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <FileText className="mr-1 h-3.5 w-3.5" />
+                      Export PDF
+                    </a>
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                One row per site, summed across that site&apos;s subjects.
+              </p>
+            </div>
+            {siteToolbar.view === 'list' ? (
+              <VisitRollupTable
+                variant="panel"
+                rows={sitePage}
+                columns={siteColumns}
+                rowKey={(row) => row.site_id}
+                emptyState={siteEmpty}
+                showTotalsRow
+                totalsLabel={`Total (${filteredSites.length} site${filteredSites.length === 1 ? '' : 's'})`}
+                rowAccent={(row) => {
+                  const p = extras?.sites[row.site_id]?.priority;
+                  return p
+                    ? {
+                        color: PRIORITY_STRIPE[p],
+                        tooltip: `Priority: ${PRIORITY_LABEL[p]}`,
+                      }
+                    : null;
+                }}
+                expandable
+                renderExpanded={(row) => (
+                  <SiteOverdueVisitsPanel
+                    studyId={studyId}
+                    site={row}
+                    alerts={alerts}
+                    priority={extras?.sites[row.site_id]?.priority ?? null}
+                  />
+                )}
+                footer={
+                  <TablePaginationFooter
+                    pagination={sitePagination}
+                    totalItems={filteredSites.length}
+                    itemNoun="site"
+                  />
+                }
+              />
+            ) : (
+              <SiteVisitScheduleGrid
+                rows={sitePage}
+                totalFiltered={filteredSites.length}
+                emptyMessage={siteEmpty}
+                extras={extras}
+                hrefForSite={hrefForSite}
+                onCopySiteLink={handleCopySiteLink}
+                onExportSiteCsv={handleExportSiteCsv}
+                rowAccent={(row) => {
+                  const p = extras?.sites[row.site_id]?.priority;
+                  return p
+                    ? {
+                        color: PRIORITY_STRIPE[p],
+                        tooltip: `Priority: ${PRIORITY_LABEL[p]}`,
+                      }
+                    : null;
+                }}
+                renderDetails={(row) => (
+                  <SiteOverdueVisitsPanel
+                    studyId={studyId}
+                    site={row}
+                    alerts={alerts}
+                    priority={extras?.sites[row.site_id]?.priority ?? null}
+                  />
+                )}
+                pagination={sitePagination}
+                itemNoun="site"
+                summaryLabel={`Total (${filteredSites.length} site${filteredSites.length === 1 ? '' : 's'})`}
+              />
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="by-visit" className="space-y-3 pt-3">
@@ -826,7 +895,6 @@ export function StudyVisitScheduleTab({
               />
             }
           />
-          <VisitWindowTipBanner scope="by-visit" />
         </TabsContent>
 
         <TabsContent value="by-subject" className="space-y-3 pt-3">
@@ -864,7 +932,6 @@ export function StudyVisitScheduleTab({
               />
             }
           />
-          <VisitWindowTipBanner scope="by-subject" />
         </TabsContent>
       </Tabs>
     </div>

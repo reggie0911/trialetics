@@ -37,7 +37,7 @@ export default async function ClinicalPaymentsPage() {
               Operational payment tools and demos. For <strong className="font-medium text-foreground">trial budgets</strong>,{' '}
               <strong className="font-medium text-foreground">invoices</strong>, and{' '}
               <strong className="font-medium text-foreground">approval-to-payment</strong> traceability, use CTMS{' '}
-              <Link href="/protected/studies" className="underline font-medium text-primary hover:text-primary/90">
+              <Link href="/protected/studies/catalog" className="underline font-medium text-primary hover:text-primary/90">
                 Studies
               </Link>{' '}
               (open a study, then Financials — no automatic sync between these modules).

@@ -92,25 +92,25 @@ export function StudyTeamTable({
               <button
                 type="button"
                 onClick={() => setSortAsc((v) => !v)}
-                className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+                className="inline-flex items-center gap-1 text-xs font-medium text-[#000000]"
               >
                 Name
                 <ArrowUpDown className="h-3 w-3 opacity-60" />
               </button>
             </TableHead>
-            <TableHead className="text-xs font-medium text-muted-foreground">Email</TableHead>
+            <TableHead className="text-xs font-medium text-[#000000]">Email</TableHead>
             <TableHead>
               <HeaderWithTooltip label="Platform Role" tooltip={COL_TOOLTIPS.platformRole} />
             </TableHead>
             <TableHead>
               <HeaderWithTooltip label="Study Role" tooltip={COL_TOOLTIPS.studyRole} />
             </TableHead>
-            <TableHead className="text-xs font-medium text-muted-foreground">Assignments</TableHead>
+            <TableHead className="text-xs font-medium text-[#000000]">Assignments</TableHead>
             <TableHead>
               <HeaderWithTooltip label="Access Status" tooltip={COL_TOOLTIPS.accessStatus} />
             </TableHead>
-            <TableHead className="text-xs font-medium text-muted-foreground">Last Active</TableHead>
-            <TableHead className="text-right text-xs font-medium text-muted-foreground">
+            <TableHead className="text-xs font-medium text-[#000000]">Last Active</TableHead>
+            <TableHead className="text-right text-xs font-medium text-[#000000]">
               Actions
             </TableHead>
           </TableRow>
@@ -172,7 +172,7 @@ export function StudyTeamTable({
 
 function HeaderWithTooltip({ label, tooltip }: { label: string; tooltip: string }) {
   return (
-    <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-[#000000]">
       {label}
       <Tooltip>
         <TooltipTrigger

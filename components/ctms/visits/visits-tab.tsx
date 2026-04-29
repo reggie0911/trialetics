@@ -31,10 +31,12 @@ import {
   FileSearch,
   ArrowRightCircle,
   Info,
+  type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card, CardContent } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -87,6 +89,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { VisitCalendar } from './visit-calendar';
+import { VisitsPageHeader } from './visits-page-header';
 
 import type {
   MonitoringVisitWithRelations,
@@ -155,15 +158,15 @@ function VisitKpiDonut({
   fillStrokeClassName: string;
   centerLabel: string;
 }) {
-  const size = 120;
-  const strokeWidth = 10;
+  const size = 96;
+  const strokeWidth = 9;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const safePct = Math.max(0, Math.min(100, percentage));
   const offset = circumference * (1 - safePct / 100);
 
   return (
-    <div className="relative mx-auto h-[112px] w-[112px]">
+    <div className="relative mx-auto h-24 w-24">
       <svg
         viewBox={`0 0 ${size} ${size}`}
         className="h-full w-full -rotate-90"
@@ -191,8 +194,8 @@ function VisitKpiDonut({
           />
         ) : null}
       </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-3xl font-medium leading-none tracking-tight text-foreground">
+      <div className="absolute inset-0 flex items-center justify-center px-0.5 text-center">
+        <span className="max-w-full min-w-0 !text-[30px] font-medium leading-tight tabular-nums tracking-tight text-foreground text-balance">
           {centerLabel}
         </span>
       </div>
@@ -698,7 +701,9 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
     label: string;
     value: number;
     sublabel: string;
-    icon: React.ReactNode;
+    meta: string;
+    metaTooltip: string;
+    icon: LucideIcon;
     topAccent: string;
     iconBg: string;
     iconFg: string;
@@ -712,7 +717,10 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
       label: 'Total Visits',
       value: metrics.total,
       sublabel: 'All scheduled visits',
-      icon: <CalendarDays className="h-4 w-4" />,
+      meta: 'Full visit roster in this study',
+      metaTooltip:
+        'All monitoring visits loaded for this study. The large number is the visit count. The ring is not a completion share for this card—use other cards for status mix. Click to show the full list and reset the quick filter to “all”.',
+      icon: CalendarDays,
       topAccent: 'bg-slate-700 dark:bg-slate-500',
       iconBg: 'bg-slate-100 dark:bg-slate-500/20',
       iconFg: 'text-slate-700 dark:text-slate-300',
@@ -726,7 +734,10 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
       label: 'Upcoming 7 Days',
       value: metrics.upcoming,
       sublabel: 'Next 7 days',
-      icon: <CalendarClock className="h-4 w-4" />,
+      meta: 'Planned or confirmed in the next week',
+      metaTooltip:
+        'Planned or confirmed visits with a planned date in the next seven calendar days. The ring is this count as a share of all visits. “Next 7 days” in the footer matches that window. Click to filter the table to upcoming visits only.',
+      icon: CalendarClock,
       topAccent: 'bg-orange-500',
       iconBg: 'bg-orange-50 dark:bg-orange-500/15',
       iconFg: 'text-orange-600 dark:text-orange-300',
@@ -741,7 +752,10 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
       value: metrics.confirmed,
       sublabel:
         metrics.total === 0 ? 'No visits yet' : `${metrics.confirmedPct}% of total`,
-      icon: <CheckCircle2 className="h-4 w-4" />,
+      meta: 'Share of all visits with status confirmed',
+      metaTooltip:
+        'Count and share of visits in “confirmed” status. The ring fills to the same percentage as the “% of total” line below, relative to the full visit pool. Click to filter the grid to confirmed visits.',
+      icon: CheckCircle2,
       topAccent: 'bg-blue-500',
       iconBg: 'bg-blue-50 dark:bg-blue-500/15',
       iconFg: 'text-blue-600 dark:text-blue-300',
@@ -756,7 +770,10 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
       value: metrics.completed,
       sublabel:
         metrics.total === 0 ? 'No visits yet' : `${metrics.completedPct}% of total`,
-      icon: <CalendarCheck2 className="h-4 w-4" />,
+      meta: 'Visits with completed monitoring',
+      metaTooltip:
+        'Count and share of visits marked completed. The ring matches completed as a percent of all visits, consistent with the footer. Click to filter the table to completed rows.',
+      icon: CalendarCheck2,
       topAccent: 'bg-emerald-500',
       iconBg: 'bg-emerald-50 dark:bg-emerald-500/15',
       iconFg: 'text-emerald-600 dark:text-emerald-300',
@@ -770,7 +787,10 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
       label: 'Missing Reports',
       value: metrics.missingReports,
       sublabel: metrics.missingReports > 0 ? 'Requires action' : 'All reports up to date',
-      icon: <FileWarning className="h-4 w-4" />,
+      meta: 'Completed visit without a linked trip report',
+      metaTooltip:
+        'Completed visits that still need a trip report (or your org’s “missing report” rule). The ring is this count as a share of all visits. The footer calls out when action is required. Click to show only those visits.',
+      icon: FileWarning,
       topAccent: 'bg-rose-500',
       iconBg: 'bg-rose-50 dark:bg-rose-500/15',
       iconFg: 'text-rose-600 dark:text-rose-300',
@@ -824,48 +844,101 @@ export function VisitsTab({ studyId, initialVisits, sites }: VisitsTabProps) {
 
   return (
     <div className="space-y-4">
+      <VisitsPageHeader />
+
       {/* 1. KPI summary row */}
       <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-        {kpiCards.map((card) => (
-          <button
-            key={card.key}
-            type="button"
-            onClick={card.onClick}
-            aria-pressed={card.isActive}
-            className={cn(
-              'group flex h-full flex-col overflow-hidden rounded-md border bg-card text-left shadow-xs transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-              card.isActive
-                ? 'border-primary ring-1 ring-primary/30'
-                : 'border-border/70',
-            )}
-          >
-            <div className={cn('h-[3px] w-full shrink-0', card.topAccent)} />
-            <div className="flex h-full flex-col gap-3 px-4 pb-4 pt-3">
-              <div className="flex items-center gap-2.5">
-                <span
-                  aria-hidden
-                  className={cn(
-                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-md',
-                    card.iconBg,
-                  )}
+        {kpiCards.map((card) => {
+          const KpiIcon = card.icon;
+          return (
+            <div
+              key={card.key}
+              role="button"
+              tabIndex={0}
+              onClick={card.onClick}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  card.onClick();
+                }
+              }}
+              aria-pressed={card.isActive}
+              className={cn(
+                'group flex h-full min-h-0 w-full cursor-pointer flex-col overflow-hidden rounded-[5px] border bg-card py-0 text-left shadow-xs transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                card.isActive
+                  ? 'border-primary ring-1 ring-primary/30'
+                  : 'border-border/70',
+              )}
+            >
+              <div className={cn('h-[3px] w-full shrink-0', card.topAccent)} />
+              <div className="flex h-full min-h-0 w-full flex-1 flex-col gap-0 px-4 py-3.5">
+                <div className="flex w-full min-w-0 items-start justify-between gap-3">
+                  <p
+                    data-slot="stat-card-title"
+                    className="min-w-0 flex-1 !text-[12px] font-medium leading-tight text-muted-foreground"
+                  >
+                    {card.label}
+                  </p>
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/10',
+                      card.iconBg,
+                    )}
+                  >
+                    <KpiIcon
+                      className={cn('h-3.5 w-3.5 opacity-90', card.iconFg)}
+                    />
+                  </span>
+                </div>
+                <div className="mt-3 flex w-full justify-center">
+                  <VisitKpiDonut
+                    percentage={card.donutPercentage}
+                    fillStrokeClassName={card.donutStroke}
+                    centerLabel={String(card.value)}
+                  />
+                </div>
+                <div
+                  className="mt-3 w-full"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <span className={card.iconFg}>{card.icon}</span>
-                </span>
-                <span className="text-[11px] font-semibold uppercase leading-tight tracking-[0.06em] text-muted-foreground">
-                  {card.label}
-                </span>
+                  <div className="flex w-full justify-start">
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <button
+                            type="button"
+                            className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-[#ffffff] px-2.5 py-1 text-left text-[11px] font-medium text-[#000000] outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-ring/50 dark:border-neutral-200 dark:bg-[#ffffff] dark:text-[#000000]"
+                            onClick={(e) => e.stopPropagation()}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            aria-label={`${card.label} — more detail`}
+                          >
+                            <Info
+                              className="h-3 w-3 shrink-0 text-[#000000] opacity-80"
+                              aria-hidden
+                            />
+                            <span className="min-w-0 flex-1 truncate text-left leading-snug">
+                              {card.meta}
+                            </span>
+                          </button>
+                        }
+                      />
+                      <TooltipContent
+                        side="top"
+                        className="max-w-xs text-left text-xs text-balance"
+                      >
+                        {card.metaTooltip}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </div>
+                <p className="mt-3 border-t border-border/50 pt-2.5 text-left text-[11px] leading-snug text-muted-foreground">
+                  {card.sublabel}
+                </p>
               </div>
-              <VisitKpiDonut
-                percentage={card.donutPercentage}
-                fillStrokeClassName={card.donutStroke}
-                centerLabel={String(card.value)}
-              />
-              <p className="mt-auto text-center text-[11px] text-muted-foreground">
-                {card.sublabel}
-              </p>
             </div>
-          </button>
-        ))}
+          );
+        })}
       </div>
 
       {/* 2. Quick filter chip row */}

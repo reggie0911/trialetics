@@ -89,6 +89,13 @@ import type { IpPermissions } from '@/lib/types/ip-access';
 import { buildIpPermissions } from '@/lib/types/ip-access';
 import { getIpPermissionsForStudy } from '@/lib/server/ip-access';
 
+/** Study picker: optional short `study_name`, else full `title` (no protocol prefix). */
+function ipStudyPickerLabel(s: Study): string {
+  const name = s.study_name?.trim();
+  if (name) return name;
+  return s.title?.trim() || s.protocol_number;
+}
+
 /** Fallback permissions used before a study is selected (no access). */
 const NO_PERMISSIONS: IpPermissions = buildIpPermissions('site', []);
 
@@ -833,14 +840,14 @@ export function IpManagementPageClient({
                   getDisplayLabel={(v) => {
                     if (v == null || v === '') return null;
                     const s = studies.find((x) => x.id === v);
-                    return s ? `${s.protocol_number} — ${s.title}` : null;
+                    return s ? ipStudyPickerLabel(s) : null;
                   }}
                 />
               </SelectTrigger>
               <SelectContent>
                 {studies.map((s) => (
                   <SelectItem key={s.id} value={s.id} className="text-[12px]">
-                    {s.protocol_number} — {s.title}
+                    {ipStudyPickerLabel(s)}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -7,7 +7,6 @@ import {
   Clock,
   Flag,
   Globe,
-  MoreVertical,
 } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
@@ -27,14 +26,12 @@ function pct(part: number, whole: number): number {
 interface DonutChartProps {
   percentage: number;
   centerValue: number;
-  centerLabel: string;
   fillStrokeClassName: string;
 }
 
 function DonutChart({
   percentage,
   centerValue,
-  centerLabel,
   fillStrokeClassName,
 }: DonutChartProps) {
   const size = 96;
@@ -74,11 +71,8 @@ function DonutChart({
         ) : null}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-2xl font-medium leading-none tracking-tight text-foreground">
+        <span className="!text-[30px] font-medium leading-none tabular-nums tracking-tight text-foreground">
           {centerValue}
-        </span>
-        <span className="mt-1 text-[10px] font-medium text-muted-foreground">
-          {centerLabel}
         </span>
       </div>
     </div>
@@ -94,12 +88,12 @@ interface LegendSegment {
 
 function LegendRow({ label, value, percentage, dotClassName }: LegendSegment) {
   return (
-    <div className="flex items-center justify-between gap-2 text-xs">
-      <div className="flex min-w-0 items-center gap-2">
+    <div className="flex w-full min-w-0 items-center justify-between gap-2 text-left text-[11px] leading-snug">
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
         <span className={cn('h-2 w-2 shrink-0 rounded-full', dotClassName)} />
-        <span className="truncate text-muted-foreground">{label}</span>
+        <span className="min-w-0 font-medium text-muted-foreground">{label}</span>
       </div>
-      <span className="font-medium text-foreground/90">
+      <span className="shrink-0 tabular-nums text-foreground">
         {value}
         <span className="ml-1 text-muted-foreground">({percentage}%)</span>
       </span>
@@ -114,11 +108,12 @@ interface KpiCardProps {
   iconBgClassName: string;
   iconFgClassName: string;
   topAccentClassName: string;
-  donutLabel: string;
   donutPercentage: number;
   donutStrokeClassName: string;
   primarySegment: LegendSegment;
   secondarySegment: LegendSegment;
+  /** Short summary line, styled like overview StatCard meta chip */
+  meta?: string;
   tooltip?: string;
 }
 
@@ -129,48 +124,60 @@ function KpiCard({
   iconBgClassName,
   iconFgClassName,
   topAccentClassName,
-  donutLabel,
   donutPercentage,
   donutStrokeClassName,
   primarySegment,
   secondarySegment,
+  meta,
   tooltip,
 }: KpiCardProps) {
   return (
     <Card
-      className="flex h-full flex-col gap-4 overflow-hidden border-border/70 p-0 shadow-none"
+      className="flex h-full min-h-0 flex-col gap-0 overflow-hidden border-border/70 p-0 py-0 shadow-none"
       title={tooltip}
     >
       <div className={cn('h-[3px] w-full shrink-0', topAccentClassName)} />
 
-      <div className="flex h-full flex-col gap-4 px-4 pb-4 pt-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
-            <span
-              className={cn(
-                'flex h-9 w-9 shrink-0 items-center justify-center rounded-md',
-                iconBgClassName,
-              )}
-            >
-              <Icon className={cn('h-4 w-4', iconFgClassName)} />
-            </span>
-            <p className="text-[11px] font-semibold uppercase leading-tight tracking-[0.08em] text-muted-foreground">
-              {title}
-            </p>
-          </div>
-          <span className="text-muted-foreground/70" aria-hidden="true">
-            <MoreVertical className="h-4 w-4" />
+      <div className="flex min-h-0 flex-1 flex-col gap-0 px-4 py-3.5">
+        {/* Match study overview StatCard: title (left) + icon (right) */}
+        <div className="flex w-full min-w-0 items-start justify-between gap-3">
+          <p
+            className="min-w-0 flex-1 !text-[12px] font-medium leading-tight text-muted-foreground"
+            data-slot="kpi-card-title"
+          >
+            {title}
+          </p>
+          <span
+            className={cn(
+              'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/10',
+              iconBgClassName,
+            )}
+          >
+            <Icon className={cn('h-3.5 w-3.5 shrink-0 opacity-90', iconFgClassName)} />
           </span>
         </div>
 
-        <DonutChart
-          percentage={donutPercentage}
-          centerValue={value}
-          centerLabel={donutLabel}
-          fillStrokeClassName={donutStrokeClassName}
-        />
+        <div className="mt-3 flex w-full justify-center">
+          <DonutChart
+            percentage={donutPercentage}
+            centerValue={value}
+            fillStrokeClassName={donutStrokeClassName}
+          />
+        </div>
 
-        <div className="mt-auto space-y-2 border-t border-border/60 pt-3">
+        {meta ? (
+          <div className="mt-3 w-full">
+            <span
+              className={cn(
+                'inline-flex max-w-full items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-[#ffffff] px-2.5 py-1 text-[11px] font-medium text-[#000000] dark:border-neutral-200 dark:bg-[#ffffff] dark:text-[#000000]',
+              )}
+            >
+              <span className="truncate">{meta}</span>
+            </span>
+          </div>
+        ) : null}
+
+        <div className="mt-3 w-full min-w-0 space-y-2 border-t border-border/50 pt-2.5">
           <LegendRow {...primarySegment} />
           <LegendRow {...secondarySegment} />
         </div>
@@ -225,7 +232,6 @@ export function CountriesKpiStrip({ countries }: CountriesKpiStripProps) {
         iconBgClassName="bg-sky-50 dark:bg-sky-500/15"
         iconFgClassName="text-sky-600 dark:text-sky-300"
         topAccentClassName="bg-blue-500"
-        donutLabel="Total"
         donutPercentage={metrics.total > 0 ? 100 : 0}
         donutStrokeClassName="stroke-blue-500"
         primarySegment={{
@@ -240,6 +246,11 @@ export function CountriesKpiStrip({ countries }: CountriesKpiStripProps) {
           percentage: pct(metrics.active, metrics.total),
           dotClassName: remainingDot,
         }}
+        meta={
+          metrics.total > 0
+            ? `${metrics.planned} planned · ${metrics.active} active`
+            : 'No countries yet'
+        }
         tooltip="All countries currently linked to this study, regardless of regulatory progress."
       />
 
@@ -250,7 +261,6 @@ export function CountriesKpiStrip({ countries }: CountriesKpiStripProps) {
         iconBgClassName="bg-emerald-50 dark:bg-emerald-500/15"
         iconFgClassName="text-emerald-600 dark:text-emerald-300"
         topAccentClassName="bg-emerald-500"
-        donutLabel="Approved"
         donutPercentage={pct(metrics.regApproved, metrics.total)}
         donutStrokeClassName="stroke-emerald-500"
         primarySegment={{
@@ -265,6 +275,11 @@ export function CountriesKpiStrip({ countries }: CountriesKpiStripProps) {
           percentage: pct(remaining(metrics.regApproved), metrics.total),
           dotClassName: remainingDot,
         }}
+        meta={
+          metrics.total > 0
+            ? `${pct(metrics.regApproved, metrics.total)}% of countries`
+            : '—'
+        }
         tooltip="Countries whose computed regulatory status is Approved (every required submission cleared)."
       />
 
@@ -275,7 +290,6 @@ export function CountriesKpiStrip({ countries }: CountriesKpiStripProps) {
         iconBgClassName="bg-sky-50 dark:bg-sky-500/15"
         iconFgClassName="text-sky-600 dark:text-sky-300"
         topAccentClassName="bg-sky-500"
-        donutLabel="In Progress"
         donutPercentage={pct(metrics.regInProgress, metrics.total)}
         donutStrokeClassName="stroke-sky-500"
         primarySegment={{
@@ -290,6 +304,11 @@ export function CountriesKpiStrip({ countries }: CountriesKpiStripProps) {
           percentage: pct(remaining(metrics.regInProgress), metrics.total),
           dotClassName: remainingDot,
         }}
+        meta={
+          metrics.total > 0
+            ? `${pct(metrics.regInProgress, metrics.total)}% in review`
+            : '—'
+        }
         tooltip="Countries with at least one submitted package not yet approved."
       />
 
@@ -300,7 +319,6 @@ export function CountriesKpiStrip({ countries }: CountriesKpiStripProps) {
         iconBgClassName="bg-slate-100 dark:bg-slate-500/15"
         iconFgClassName="text-slate-500 dark:text-slate-300"
         topAccentClassName="bg-slate-500"
-        donutLabel="Not Started"
         donutPercentage={pct(metrics.regNotStarted, metrics.total)}
         donutStrokeClassName="stroke-slate-500"
         primarySegment={{
@@ -315,6 +333,11 @@ export function CountriesKpiStrip({ countries }: CountriesKpiStripProps) {
           percentage: pct(remaining(metrics.regNotStarted), metrics.total),
           dotClassName: remainingDot,
         }}
+        meta={
+          metrics.total > 0
+            ? `${pct(metrics.regNotStarted, metrics.total)}% not started`
+            : '—'
+        }
         tooltip="Countries that have no recorded regulatory submission."
       />
 
@@ -325,7 +348,6 @@ export function CountriesKpiStrip({ countries }: CountriesKpiStripProps) {
         iconBgClassName="bg-violet-50 dark:bg-violet-500/15"
         iconFgClassName="text-violet-600 dark:text-violet-300"
         topAccentClassName="bg-violet-500"
-        donutLabel="Activated"
         donutPercentage={pct(metrics.activated, metrics.total)}
         donutStrokeClassName="stroke-violet-500"
         primarySegment={{
@@ -340,6 +362,11 @@ export function CountriesKpiStrip({ countries }: CountriesKpiStripProps) {
           percentage: pct(remaining(metrics.activated), metrics.total),
           dotClassName: remainingDot,
         }}
+        meta={
+          metrics.total > 0
+            ? `${pct(metrics.activated, metrics.total)}% with site activity`
+            : '—'
+        }
         tooltip="Countries with at least one site in initiated/activated/enrolling state, or country status set to Enrolling."
       />
     </div>
