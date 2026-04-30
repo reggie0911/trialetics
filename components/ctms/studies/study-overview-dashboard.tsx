@@ -55,7 +55,6 @@ import type {
   EnrollmentDataPoint,
   EnrollmentFunnelData,
   KriValueWithDefinition,
-  MonitoringVisitWithRelations,
   Study,
   StudyCountryWithSubmissions,
   StudyEcrfRollupBundle,
@@ -74,8 +73,7 @@ export type OverviewTabDestination =
   | 'team'
   | 'ecrf-tracking'
   | 'visit-window-compliance'
-  | 'visits'
-  | 'financials';
+  | 'visits';
 
 interface StudyOverviewDashboardProps {
   study: Study;
@@ -84,7 +82,6 @@ interface StudyOverviewDashboardProps {
   sites: StudySite[];
   subjects: SubjectWithSite[];
   funnel: EnrollmentFunnelData;
-  monitoringVisits: MonitoringVisitWithRelations[];
   kriValues: KriValueWithDefinition[];
   enrollmentCurve: EnrollmentDataPoint[];
   ecrfRollup: StudyEcrfRollupBundle;
@@ -597,7 +594,6 @@ export function StudyOverviewDashboard({
   sites,
   subjects,
   funnel,
-  monitoringVisits,
   kriValues,
   enrollmentCurve,
   ecrfRollup,
@@ -856,9 +852,6 @@ export function StudyOverviewDashboard({
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onNavigateTab('team')}>
                 Manage Team
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onNavigateTab('financials')}>
-                Open Financials
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

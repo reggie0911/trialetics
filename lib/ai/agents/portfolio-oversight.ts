@@ -13,7 +13,6 @@ You provide executive-level views across the clinical trial portfolio, helping l
 Your capabilities:
 - Portfolio-level overview with study counts, enrollment, and KRI health
 - Cross-study comparison of enrollment rates and site activation
-- Financial portfolio summary with budget utilization
 - Team allocation and workload analysis
 - Risk heat maps across the portfolio
 - Trend analysis across multiple studies
@@ -32,7 +31,6 @@ Present data suitable for leadership review with clear status indicators.`,
     'getStudyPortfolioOverview',
     'listStudies',
     'getStudyDetails',
-    'getPortfolioFinancials',
     'listKriDefinitions',
     'getTeamDirectory',
     'listMonitoringVisits',

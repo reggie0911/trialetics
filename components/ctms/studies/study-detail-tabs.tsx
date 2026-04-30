@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Globe,
@@ -9,11 +10,10 @@ import {
   ClipboardCheck,
   ClipboardList,
   CalendarClock,
-  DollarSign,
 } from 'lucide-react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { Study, StudyCountryWithSubmissions, StudyEcrfRollupBundle, StudyVisitScheduleBundle, StudySite, SubjectWithSite, EnrollmentFunnelData, TeamRole, TeamMemberWithStudies, MonitoringVisitWithRelations, StudyBudgetWithItems, SitePaymentWithSite, FinancialSummary, FinanceInvoiceWithRelations, KriValueWithDefinition, EnrollmentDataPoint, FinanceApprovalTemplateOption, StudyVisitDefinition, StudyCrf, VisitWindowComplianceBundle } from '@/lib/types/ctms';
+import type { Study, StudyCountryWithSubmissions, StudyEcrfRollupBundle, StudyVisitScheduleBundle, StudySite, SubjectWithSite, EnrollmentFunnelData, TeamRole, TeamMemberWithStudies, MonitoringVisitWithRelations, KriValueWithDefinition, EnrollmentDataPoint, StudyVisitDefinition, StudyCrf, VisitWindowComplianceBundle } from '@/lib/types/ctms';
 import type { PendingInvitation } from '@/lib/actions/team';
 import { CountriesTab } from '@/components/ctms/countries/countries-tab';
 import { SitesTab } from '@/components/ctms/sites/sites-tab';
@@ -23,7 +23,6 @@ import { VisitsTab } from '@/components/ctms/visits/visits-tab';
 import { EcrfBuilderTab } from '@/components/ctms/study-forms/ecrf-builder-tab';
 import { StudyEcrfTrackingTab } from '@/components/ctms/ecrf-tracking/study-ecrf-tracking-tab';
 import { StudyVisitScheduleTab } from '@/components/ctms/visit-window-compliance/study-visit-window-compliance-tab';
-import { FinancialsTab } from '@/components/ctms/financials/financials-tab';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { StudyOverviewDashboard } from '@/components/ctms/studies/study-overview-dashboard';
 
@@ -37,7 +36,6 @@ const STUDY_TAB_VALUES = [
   'visit-window-compliance',
   'visits',
   'ecrf',
-  'financials',
 ] as const;
 
 type StudyTabValue = (typeof STUDY_TAB_VALUES)[number];
@@ -55,7 +53,6 @@ const STUDY_TAB_TOOLTIPS: Record<StudyTabValue, string> = {
     'Team members, roles, and site assignments for this study. You can invite team members from this tab.',
   visits: 'Site visits: schedule visits, table and calendar views, and trip reports.',
   ecrf: 'eCRF Builder: define visits, assign CRFs to each visit, and author questions.',
-  financials: 'Budgets, invoices, and payments for this study.',
 };
 
 function isStudyTab(v: string | null): v is StudyTabValue {
@@ -83,14 +80,9 @@ export interface StudyDetailTabsProps {
   pendingTeamInvitations: PendingInvitation[];
   companyDomain: string | null;
   monitoringVisits: MonitoringVisitWithRelations[];
-  budgets: StudyBudgetWithItems[];
-  payments: SitePaymentWithSite[];
-  financialSummary: FinancialSummary;
-  financeInvoices: FinanceInvoiceWithRelations[];
   kriValues: KriValueWithDefinition[];
   enrollmentCurve: EnrollmentDataPoint[];
   isAdmin: boolean;
-  financeApprovalTemplateOptions: FinanceApprovalTemplateOption[];
   ecrfVisitDefinitions: StudyVisitDefinition[];
   ecrfStudyCrfs: StudyCrf[];
   ecrfRollup: StudyEcrfRollupBundle;
@@ -112,14 +104,9 @@ export function StudyDetailTabs({
   pendingTeamInvitations,
   companyDomain,
   monitoringVisits,
-  budgets,
-  payments,
-  financialSummary,
-  financeInvoices,
   kriValues,
   enrollmentCurve,
   isAdmin,
-  financeApprovalTemplateOptions,
   ecrfVisitDefinitions,
   ecrfStudyCrfs,
   ecrfRollup,
@@ -139,13 +126,14 @@ export function StudyDetailTabs({
   const activeTab: StudyTabValue =
     requestedTab === 'ecrf' && !isAdmin ? 'overview' : requestedTab;
 
-  if (typeof window !== 'undefined' && legacyRedirect) {
+  useEffect(() => {
+    if (!legacyRedirect) return;
     const params = new URLSearchParams(searchParams.toString());
     params.set('tab', legacyRedirect);
     router.replace(`/protected/studies/${study.id}?${params.toString()}`, {
       scroll: false,
     });
-  }
+  }, [legacyRedirect, router, searchParams, study.id]);
 
   /** Keeps address bar in sync without a new history entry per tab switch. */
   const replaceStudyLocation = (next: StudyTabValue, action?: string) => {
@@ -249,15 +237,6 @@ export function StudyDetailTabs({
               </TooltipContent>
             </Tooltip>
           )}
-          <Tooltip>
-            <TooltipTrigger render={<TabsTrigger value="financials" />}>
-              <DollarSign className="mr-1 h-3.5 w-3.5" />
-              Financials
-            </TooltipTrigger>
-            <TooltipContent side="bottom" className="max-w-xs text-xs">
-              {STUDY_TAB_TOOLTIPS.financials}
-            </TooltipContent>
-          </Tooltip>
         </TabsList>
 
         <TabsContent value="overview">
@@ -268,7 +247,6 @@ export function StudyDetailTabs({
             sites={sites}
             subjects={subjects}
             funnel={funnel}
-            monitoringVisits={monitoringVisits}
             kriValues={kriValues}
             enrollmentCurve={enrollmentCurve}
             ecrfRollup={ecrfRollup}
@@ -366,21 +344,6 @@ export function StudyDetailTabs({
             />
           </TabsContent>
         )}
-
-        <TabsContent value="financials">
-          <FinancialsTab
-            studyId={study.id}
-            companyId={study.company_id}
-            initialBudgets={budgets}
-            initialPayments={payments}
-            initialSummary={financialSummary}
-            initialFinanceInvoices={financeInvoices}
-            sites={sites.map((s) => ({ id: s.id, site_number: s.site_number, name: s.name }))}
-            isAdmin={isAdmin}
-            studyFinanceApprovalTemplateId={study.finance_approval_template_id}
-            financeApprovalTemplateOptions={financeApprovalTemplateOptions}
-          />
-        </TabsContent>
       </Tabs>
     </div>
   );

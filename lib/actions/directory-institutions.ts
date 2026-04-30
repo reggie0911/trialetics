@@ -72,6 +72,27 @@ export async function listInstitutions(
   return { data: (data ?? []) as InstitutionRow[], count: count ?? 0, error: null };
 }
 
+const INSTITUTIONS_EXPORT_PAGE = 500;
+const INSTITUTIONS_EXPORT_MAX_ROWS = 50_000;
+
+/** Pages through all company institutions (no search filter) for CSV export. */
+export async function listAllInstitutionsForExport(): Promise<{ data: InstitutionRow[]; error: string | null }> {
+  const first = await listInstitutions({ limit: INSTITUTIONS_EXPORT_PAGE, offset: 0 });
+  if (first.error) return { data: [], error: first.error };
+  const total = first.count ?? 0;
+  const out = [...first.data];
+  let offset = first.data.length;
+  while (offset < total && out.length < INSTITUTIONS_EXPORT_MAX_ROWS) {
+    const page = await listInstitutions({ limit: INSTITUTIONS_EXPORT_PAGE, offset });
+    if (page.error) return { data: [], error: page.error };
+    out.push(...page.data);
+    offset += page.data.length;
+    if (page.data.length === 0) break;
+    if (page.data.length < INSTITUTIONS_EXPORT_PAGE) break;
+  }
+  return { data: out.slice(0, INSTITUTIONS_EXPORT_MAX_ROWS), error: null };
+}
+
 export async function getInstitutionById(id: string): Promise<{
   data: (InstitutionRow & {
     institution_study: unknown[];

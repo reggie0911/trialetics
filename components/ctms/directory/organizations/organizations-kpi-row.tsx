@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { Building2, Info, TrendingUp } from 'lucide-react';
+import { Building2, CheckCircle2, Info, MapPin } from 'lucide-react';
 
 import { Card } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -11,8 +11,9 @@ import type { OrgKpiSnapshot } from '@/lib/directory/live-directory-types';
 
 export type OrgKpiPreset =
   | { kind: 'total' }
-  | { kind: 'activeSites' }
-  | { kind: 'sitesAtRisk' };
+  | { kind: 'complete' }
+  | { kind: 'missingAddress' }
+  | { kind: 'missingLocation' };
 
 interface OrgKpiCardProps {
   icon: LucideIcon;
@@ -131,10 +132,12 @@ export function OrganizationsKpiRow({
     onPreset({ kind } as OrgKpiPreset);
   };
 
+  const completeness = snapshot.formCompleteness;
+
   return (
     <TooltipProvider delay={200}>
       <div
-        className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3"
+        className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
         aria-label="Organizations summary"
       >
         <OrgKpiCard
@@ -147,22 +150,31 @@ export function OrganizationsKpiRow({
           onClick={() => handle('total')}
         />
         <OrgKpiCard
-          icon={Building2}
+          icon={CheckCircle2}
           iconBg="bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300"
-          value={snapshot.activeSites.active}
-          label="Active Sites"
-          footer={`of ${snapshot.activeSites.total} sites`}
-          footerTooltip="How many study sites are marked active, out of the study site total. Click the card to filter the table to active clinical sites."
-          onClick={() => handle('activeSites')}
+          value={`${completeness.percent}%`}
+          label="Complete Records"
+          footer={`${completeness.complete} of ${completeness.total} complete`}
+          footerTooltip="A complete organization record has name, type, status, address, country, and region."
+          onClick={() => handle('complete')}
         />
         <OrgKpiCard
-          icon={TrendingUp}
+          icon={Building2}
           iconBg="bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-300"
-          value={snapshot.sitesAtRisk}
-          label="Sites At Risk"
-          footer="Low enrollment / no visit"
-          footerTooltip="Clinical sites where Directory data suggests risk (for example, enrollment behind target or no recent visit), when enrichment is available. Click the card to filter to at-risk sites."
-          onClick={() => handle('sitesAtRisk')}
+          value={completeness.missingAddress}
+          label="Missing Address"
+          footer="Address gaps"
+          footerTooltip="Organization records without core address details. Click the card to filter to records that need address updates."
+          onClick={() => handle('missingAddress')}
+        />
+        <OrgKpiCard
+          icon={MapPin}
+          iconBg="bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300"
+          value={completeness.missingLocation}
+          label="Missing Country/Region"
+          footer="Location gaps"
+          footerTooltip="Organization records missing country or region. Click the card to filter to records that need location updates."
+          onClick={() => handle('missingLocation')}
         />
       </div>
     </TooltipProvider>

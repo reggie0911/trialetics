@@ -17,6 +17,7 @@ import {
   updateDirectoryContactRecord,
 } from '@/lib/actions/directory-writers-internal';
 import { computeContactHealth, siteRoleCoverageFromRoleNames } from '@/lib/directory/contact-health';
+import { summarizeContactCompleteness } from '@/lib/directory/record-completeness';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 async function requireReader() {
@@ -239,6 +240,37 @@ export async function listDirectoryContacts(
   return { data: rows, count: count ?? 0, error: null };
 }
 
+const DIRECTORY_CONTACTS_EXPORT_PAGE = 100;
+const DIRECTORY_CONTACTS_EXPORT_MAX_ROWS = 10_000;
+
+/** Pages through study-scoped contacts until all rows are loaded (for CSV export). */
+export async function listAllDirectoryContactsForStudy(
+  studyId: string
+): Promise<{ data: DirectoryContactListItem[]; error: string | null }> {
+  const first = await listDirectoryContacts({
+    studyId,
+    limit: DIRECTORY_CONTACTS_EXPORT_PAGE,
+    offset: 0,
+  });
+  if (first.error) return { data: [], error: first.error };
+  const total = first.count ?? 0;
+  const out = [...first.data];
+  let offset = first.data.length;
+  while (offset < total && out.length < DIRECTORY_CONTACTS_EXPORT_MAX_ROWS) {
+    const page = await listDirectoryContacts({
+      studyId,
+      limit: DIRECTORY_CONTACTS_EXPORT_PAGE,
+      offset,
+    });
+    if (page.error) return { data: [], error: page.error };
+    out.push(...page.data);
+    offset += page.data.length;
+    if (page.data.length === 0) break;
+    if (page.data.length < DIRECTORY_CONTACTS_EXPORT_PAGE) break;
+  }
+  return { data: out.slice(0, DIRECTORY_CONTACTS_EXPORT_MAX_ROWS), error: null };
+}
+
 export async function listStudySitesForDirectoryFilter(
   studyId: string
 ): Promise<{ data: { id: string; name: string; site_number: string | null }[]; error: string | null }> {
@@ -271,6 +303,23 @@ export async function getDirectoryContactsSnapshot(
     .select('directory_contact_id')
     .eq('study_id', studyId);
   const studyContactIds = [...new Set((studyContactLinks ?? []).map((l) => l.directory_contact_id))];
+  let studyContactRows: DirectoryContactListItem[] = [];
+  if (studyContactIds.length) {
+    const { data: contactRows, error: contactErr } = await supabase
+      .from('directory_contacts')
+      .select(
+        `
+        *,
+        primary_role:directory_roles!directory_contacts_primary_directory_role_id_fkey(id,name),
+        primary_institution:institutions!directory_contacts_primary_institution_id_fkey(id,name)
+      `
+      )
+      .eq('company_id', companyId)
+      .in('id', studyContactIds);
+    if (contactErr) return { data: null, error: contactErr.message };
+    studyContactRows = (contactRows ?? []) as DirectoryContactListItem[];
+  }
+  const formCompleteness = summarizeContactCompleteness(studyContactRows);
 
   const { data: allSites, error: siteErr } = await supabase
     .from('study_sites')
@@ -286,15 +335,7 @@ export async function getDirectoryContactsSnapshot(
   const coveredSet = new Set((dcssSimple ?? []).map((r) => r.study_site_id));
   const sitesCoveredCount = siteIds.filter((id) => coveredSet.has(id)).length;
 
-  let missingRoles = 0;
-  if (studyContactIds.length) {
-    const { count: mr } = await supabase
-      .from('directory_contacts')
-      .select('id', { count: 'exact', head: true })
-      .in('id', studyContactIds)
-      .is('primary_directory_role_id', null);
-    missingRoles = mr ?? 0;
-  }
+  const missingRoles = formCompleteness.missingRole;
 
   let unassignedToSite = 0;
   if (studyContactIds.length) {
@@ -307,15 +348,9 @@ export async function getDirectoryContactsSnapshot(
     unassignedToSite = studyContactIds.filter((id) => !withSet.has(id)).length;
   }
 
-  let recentlyActive7d = 0;
-  if (studyContactIds.length) {
-    const { count: ra } = await supabase
-      .from('directory_contacts')
-      .select('id', { count: 'exact', head: true })
-      .in('id', studyContactIds)
-      .gte('updated_at', weekAgo.toISOString());
-    recentlyActive7d = ra ?? 0;
-  }
+  const recentlyActive7d = studyContactRows.filter(
+    (contact) => contact.updated_at && new Date(contact.updated_at).getTime() >= weekAgo.getTime()
+  ).length;
 
   const { data: dcssForCoverage, error: covErr } = await supabase
     .from('directory_contact_study_site')
@@ -364,19 +399,12 @@ export async function getDirectoryContactsSnapshot(
     { id: 'unassigned', label: `Link ${unassignedToSite} contact(s) to a site`, unassigned: true },
   ];
 
-  let totalContacts = 0;
-  if (studyContactIds.length > 0) {
-    const { count: tc } = await supabase
-      .from('directory_contacts')
-      .select('id', { count: 'exact', head: true })
-      .eq('company_id', companyId)
-      .in('id', studyContactIds);
-    totalContacts = tc ?? 0;
-  }
+  const totalContacts = studyContactRows.length;
 
   const out: DirectoryContactsSnapshot = {
     totalContacts,
     totalContactsDeltaWeek,
+    formCompleteness,
     sitesCovered: { covered: sitesCoveredCount, total: totalStudySites, percent },
     missingRoles,
     unassignedToSite,

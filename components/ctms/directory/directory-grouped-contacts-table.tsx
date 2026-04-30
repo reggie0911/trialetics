@@ -2,57 +2,21 @@
 
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Calendar,
-  ChevronDown,
-  Mail,
-  MoreHorizontal,
-  Phone,
-  User,
-} from 'lucide-react';
+import { ChevronDown, Eye, Mail, Phone, User } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { computeContactHealth, siteRoleCoverageFromRoleNames } from '@/lib/directory/contact-health';
-import type { ContactLastActivity } from '@/lib/directory/live-directory-types';
+import { siteRoleCoverageFromRoleNames } from '@/lib/directory/contact-health';
 import type { DirectoryContactListItem } from '@/lib/types/directory';
 import { cn } from '@/lib/utils';
 import { DirectoryEmptyState } from '@/components/ctms/directory/directory-empty-state';
+import { getContactCompleteness } from '@/lib/directory/record-completeness';
+import { getCountryName } from '@/lib/data/countries';
 
 const UNASS = '__unassigned__';
-
-type HealthKind = 'healthy' | 'needs_update' | 'at_risk';
-
-function healthBadge(health: HealthKind | string | undefined) {
-  if (health === 'healthy') {
-    return {
-      label: 'Healthy',
-      className: 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20',
-      dot: 'bg-emerald-500',
-    };
-  }
-  if (health === 'at_risk') {
-    return {
-      label: 'At risk',
-      className: 'bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20',
-      dot: 'bg-red-500',
-    };
-  }
-  return {
-    label: 'Needs update',
-    className: 'bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-200 dark:border-amber-500/20',
-    dot: 'bg-amber-500',
-  };
-}
 
 type Group = { key: string; label: string; rows: DirectoryContactListItem[] };
 
@@ -91,13 +55,11 @@ export function DirectoryGroupedContactsTable({
   fromQuery,
   emptyMessage = 'No contacts in this list.',
   emptyDescription = 'Add contacts or adjust the current filters to populate this view.',
-  lastActivityByContactId = {},
 }: {
   contacts: DirectoryContactListItem[];
   fromQuery: string;
   emptyMessage?: string;
   emptyDescription?: string;
-  lastActivityByContactId?: Record<string, ContactLastActivity>;
 }) {
   const router = useRouter();
   const groups = useMemo(() => buildGroups(contacts), [contacts]);
@@ -146,15 +108,15 @@ export function DirectoryGroupedContactsTable({
             </div>
             <CollapsibleContent>
               <div className="overflow-x-auto">
-                <Table className="w-full min-w-[800px] text-xs">
+                <Table className="w-full min-w-[1040px] text-xs">
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
                       <TableHead className="text-[10px] w-[14rem]">Contact</TableHead>
+                      <TableHead className="text-[10px] w-36 min-w-0">Title</TableHead>
                       <TableHead className="text-[10px] w-36 min-w-0">Role</TableHead>
-                      <TableHead className="text-[10px] min-w-[9rem]">Site / Organization</TableHead>
-                      <TableHead className="text-[10px] w-24">Study Involvement</TableHead>
-                      <TableHead className="text-[10px] w-32">Last Activity</TableHead>
-                      <TableHead className="text-[10px] w-28">Health</TableHead>
+                      <TableHead className="text-[10px] min-w-[9rem]">Organization</TableHead>
+                      <TableHead className="text-[10px] min-w-[9rem]">Country</TableHead>
+                      <TableHead className="text-[10px] w-36">Form</TableHead>
                       <TableHead className="text-[10px] w-28 text-right">Quick Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -162,12 +124,9 @@ export function DirectoryGroupedContactsTable({
                     {g.rows.map((c) => {
                       const pr = c.primary_role as { id?: string; name?: string } | null;
                       const pi = c.primary_institution;
-                      const st = c.study_enrichment?.study_involvement_active;
-                      const healthKey = c.study_enrichment
-                        ? c.study_enrichment.contact_health
-                        : computeContactHealth(c);
-                      const dhb = healthBadge(healthKey);
-                      const lastAct = lastActivityByContactId[c.id];
+                      const completeness = getContactCompleteness(c);
+                      const missing = completeness.missingFields.slice(0, 2).join(', ');
+                      const countryName = getCountryName(c.country_code) ?? '—';
                       return (
                         <TableRow key={c.id} className="h-12">
                           <TableCell className="align-middle">
@@ -190,6 +149,11 @@ export function DirectoryGroupedContactsTable({
                                 </p>
                               </div>
                             </div>
+                          </TableCell>
+                          <TableCell className="align-middle min-w-0 w-36 max-w-36 pr-1">
+                            <span className="text-xs text-muted-foreground truncate block" title={c.title ?? undefined}>
+                              {c.title || '—'}
+                            </span>
                           </TableCell>
                           <TableCell className="align-middle min-w-0 w-36 max-w-36 pr-1">
                             {pr?.id && pr.name ? (
@@ -223,47 +187,45 @@ export function DirectoryGroupedContactsTable({
                               ) : null}
                             </div>
                           </TableCell>
-                          <TableCell className="align-middle">
-                            {st == null ? (
-                              <span className="text-muted-foreground">—</span>
-                            ) : (
-                              <Badge
-                                variant={st ? 'default' : 'secondary'}
-                                className={cn(
-                                  'text-[9px]',
-                                  st && 'bg-sky-100 text-sky-700 border-0 dark:bg-sky-500/15 dark:text-sky-300'
-                                )}
-                              >
-                                {st ? 'Active' : 'Inactive'}
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-[10px] text-muted-foreground align-middle max-w-[8rem]">
-                            {lastAct ? (
-                              <div className="min-w-0">
-                                <p className="text-xs text-foreground truncate">
-                                  {lastAct.kind === 'visit'
-                                    ? `Visit on ${lastAct.date}`
-                                    : lastAct.kind === 'email'
-                                      ? `Email on ${lastAct.date}`
-                                      : 'No recent activity'}
-                                </p>
-                                <p className="text-[10px] text-muted-foreground truncate">{lastAct.relative}</p>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="align-middle">
-                            <span
-                              className={cn(
-                                'inline-flex items-center gap-1.5 text-[10px] px-1.5 py-0.5 rounded',
-                                dhb.className
-                              )}
-                            >
-                              <span className={cn('h-1.5 w-1.5 rounded-full', dhb.dot)} aria-hidden />
-                              {dhb.label}
+                          <TableCell className="align-middle max-w-[10rem]">
+                            <span className="text-xs text-foreground truncate block" title={countryName}>
+                              {countryName}
                             </span>
+                          </TableCell>
+                          <TableCell className="align-middle">
+                            <div className="min-w-0 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium tabular-nums text-foreground">
+                                  {completeness.percent}%
+                                </span>
+                                <div
+                                  className="h-1.5 w-16 overflow-hidden rounded-full bg-muted"
+                                  role="progressbar"
+                                  aria-label="Contact form completion"
+                                  aria-valuemin={0}
+                                  aria-valuemax={100}
+                                  aria-valuenow={completeness.percent}
+                                >
+                                  <div
+                                    className={cn(
+                                      'h-full rounded-full transition-[width]',
+                                      completeness.complete ? 'bg-emerald-500' : 'bg-sky-500'
+                                    )}
+                                    style={{ width: `${completeness.percent}%` }}
+                                  />
+                                </div>
+                              </div>
+                              {missing ? (
+                                <p
+                                  className="text-[10px] text-muted-foreground truncate"
+                                  title={completeness.missingFields.join(', ')}
+                                >
+                                  Missing {missing}
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-emerald-600 dark:text-emerald-400">Complete</p>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="align-middle">
                             <div className="flex items-center justify-end gap-0.5">
@@ -298,35 +260,15 @@ export function DirectoryGroupedContactsTable({
                               <Button
                                 type="button"
                                 variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                title="Schedule meeting"
+                                className="h-7 shrink-0 gap-1.5 px-2 text-xs font-medium"
+                                aria-label={`Open ${c.first_name} ${c.last_name}`}
+                                onClick={() =>
+                                  router.push(`/protected/directory/contacts/${c.id}${fromQuery}`)
+                                }
                               >
-                                <Calendar className="h-3.5 w-3.5" />
+                                <Eye className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                <span className="whitespace-nowrap">Open profile</span>
                               </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7"
-                                    title="More"
-                                  >
-                                    <MoreHorizontal className="h-3.5 w-3.5" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-40">
-                                  <DropdownMenuItem
-                                    className="cursor-pointer"
-                                    onClick={() => {
-                                      router.push(`/protected/directory/contacts/${c.id}${fromQuery}`);
-                                    }}
-                                  >
-                                    Open profile
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
                             </div>
                           </TableCell>
                         </TableRow>

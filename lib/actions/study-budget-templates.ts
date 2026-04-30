@@ -21,11 +21,10 @@ import {
   DEFAULT_WIZARD_ASSUMPTIONS,
   DEFAULT_WIZARD_DRIVERS,
 } from '@/lib/budget-template-generator';
-import { revalidateStudyFinancialsTree } from '@/lib/actions/financials';
+import { revalidateStudyCtmsLayout } from '@/lib/cache/revalidate-ctms';
 import { listStudyVisitDefinitions } from '@/lib/actions/study-visit-definitions';
 
-function revalidateFinancialsHubAndStudiesLayout() {
-  revalidatePath('/protected/financials');
+function revalidateStudyTemplatesAndCatalog() {
   revalidatePath('/protected/studies', 'layout');
 }
 
@@ -81,7 +80,7 @@ export async function createStudyBudgetTemplate(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidateFinancialsHubAndStudiesLayout();
+    revalidateStudyTemplatesAndCatalog();
     return { data: data as unknown as StudyBudgetTemplate, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'Unexpected error.' };
@@ -105,7 +104,7 @@ export async function updateStudyBudgetTemplate(
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq('id', id);
     if (error) return { error: error.message };
-    revalidateFinancialsHubAndStudiesLayout();
+    revalidateStudyTemplatesAndCatalog();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unexpected error.' };
@@ -117,7 +116,7 @@ export async function deleteStudyBudgetTemplate(id: string): Promise<{ error: st
   try {
     const { error } = await supabase.from('study_budget_templates').delete().eq('id', id);
     if (error) return { error: error.message };
-    revalidateFinancialsHubAndStudiesLayout();
+    revalidateStudyTemplatesAndCatalog();
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unexpected error.' };
@@ -150,7 +149,7 @@ export async function cloneStudyBudgetTemplate(
       .select()
       .single();
     if (error) return { data: null, error: error.message };
-    revalidateFinancialsHubAndStudiesLayout();
+    revalidateStudyTemplatesAndCatalog();
     return { data: data as unknown as StudyBudgetTemplate, error: null };
   } catch (err) {
     return { data: null, error: err instanceof Error ? err.message : 'Unexpected error.' };
@@ -362,7 +361,7 @@ export async function saveStudyBudgetWizardMetadata(
       .eq('study_id', studyId));
   }
   if (error) return { error: error.message };
-  await revalidateStudyFinancialsTree(studyId);
+  revalidateStudyCtmsLayout(studyId);
   return { error: null };
 }
 
@@ -435,7 +434,7 @@ export async function regenerateStudyBudgetFromWizard(
       });
     }
 
-    await revalidateStudyFinancialsTree(studyId);
+    revalidateStudyCtmsLayout(studyId);
     return { error: null };
   } catch (err) {
     return { error: err instanceof Error ? err.message : 'Unexpected error.' };
@@ -528,7 +527,7 @@ export async function generateBudgetFromTemplate(
       });
     }
 
-    await revalidateStudyFinancialsTree(studyId);
+    revalidateStudyCtmsLayout(studyId);
     return { budgetId, error: null };
   } catch (err) {
     return { budgetId: null, error: err instanceof Error ? err.message : 'Unexpected error.' };

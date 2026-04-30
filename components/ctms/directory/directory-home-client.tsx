@@ -4,12 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { useRouter } from 'next/navigation';
 import {
   ChevronDown,
-  Download,
   FileDown,
   Filter,
   Plus,
   Search,
-  Star,
   Upload,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -34,11 +32,17 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { listDirectoryContacts, createDirectoryContact } from '@/lib/actions/directory-contacts';
-import { listInstitutions, createInstitution as createInstitutionAction } from '@/lib/actions/directory-institutions';
+import {
+  createDirectoryContact,
+  listAllDirectoryContactsForStudy,
+} from '@/lib/actions/directory-contacts';
+import {
+  listInstitutions,
+  listAllInstitutionsForExport,
+  createInstitution as createInstitutionAction,
+} from '@/lib/actions/directory-institutions';
 import { importDirectoryContactsFromCsv, importInstitutionsFromCsv } from '@/lib/actions/directory-csv';
 import type {
-  DirectoryContactHealth,
   DirectoryContactListItem,
   DirectoryContactsSnapshot,
 } from '@/lib/types/directory';
@@ -48,22 +52,6 @@ import { cn } from '@/lib/utils';
 import { DirectoryContactsKpiRow, type KpiPreset } from '@/components/ctms/directory/directory-contacts-kpi-row';
 import { DirectoryGroupedContactsTable } from '@/components/ctms/directory/directory-grouped-contacts-table';
 import { DirectoryFlatContactsTable } from '@/components/ctms/directory/directory-flat-contacts-table';
-import {
-  DirectoryContactsRightRail,
-  RightRailOnMobileHint,
-} from '@/components/ctms/directory/directory-contacts-right-rail';
-import {
-  filterByKind,
-  normalizeAuditAndHistory,
-  type ActivityEvent,
-} from '@/lib/directory/activity-events';
-import { DirectoryActivityKpiRow } from '@/components/ctms/directory/activity/directory-activity-kpi-row';
-import {
-  DirectoryActivityFilterBar,
-  type ActivityKindFilter,
-} from '@/components/ctms/directory/activity/directory-activity-filter-bar';
-import { DirectoryActivityTimeline } from '@/components/ctms/directory/activity/directory-activity-timeline';
-import { DirectoryActivityRightRail } from '@/components/ctms/directory/activity/directory-activity-right-rail';
 import { directoryContactFormSchema, institutionFormSchema } from '@/lib/validation/directory';
 import {
   QuickContactFormFields,
@@ -75,44 +63,31 @@ import {
   type ParsedPlace,
 } from '@/components/ui/places-address-autocomplete';
 import {
+  DIRECTORY_CONTACTS_EXPORT_FILENAME,
   DIRECTORY_CONTACTS_TEMPLATE_FILENAME,
   DIRECTORY_ORGANIZATIONS_EXPORT_FILENAME,
   DIRECTORY_ORGANIZATIONS_TEMPLATE_FILENAME,
   getDirectoryContactsCsvTemplate,
   getDirectoryInstitutionsCsvTemplate,
-  getDirectoryInstitutionsExportCsv,
 } from '@/lib/data/directory-csv-templates';
+import {
+  getDirectoryContactsDisplayExportCsv,
+  getDirectoryOrganizationsDisplayExportCsv,
+} from '@/lib/data/directory-display-export';
 import { OrganizationsKpiRow, type OrgKpiPreset } from '@/components/ctms/directory/organizations/organizations-kpi-row';
 import { GroupedOrganizationsTable } from '@/components/ctms/directory/organizations/grouped-organizations-table';
 import { DirectoryFlatOrganizationsTable } from '@/components/ctms/directory/organizations/directory-flat-organizations-table';
-import { OrganizationsNeedsAttentionCard } from '@/components/ctms/directory/organizations/organizations-needs-attention-card';
-import { OrganizationsInsightsCard } from '@/components/ctms/directory/organizations/organizations-insights-card';
-import { OrganizationsSmartSuggestionsCard } from '@/components/ctms/directory/organizations/organizations-smart-suggestions-card';
 import {
-  type OrgAttentionKey,
-  type OrgHealth,
-  type DirectoryActivitySnapshot,
   type DirectoryOrganizationSnapshot,
-  type ContactLastActivity,
-  EMPTY_ACTIVITY_SNAPSHOT,
   EMPTY_ORGANIZATION_SNAPSHOT,
 } from '@/lib/directory/live-directory-types';
 import { ORG_TYPE_GROUP_LABEL } from '@/lib/directory/organization-display';
 import { triggerCsvDownload } from '@/lib/utils/csv-download';
 import { useClientPagination } from '@/lib/hooks/use-client-pagination';
 import { TablePaginationFooter } from '@/components/ui/table-pagination-footer';
-import { getDirectoryAuditLog, getDirectoryAssignmentHistory } from '@/lib/actions/directory-audit';
-import { getDirectoryActivitySnapshot } from '@/lib/actions/directory-dashboard';
-import { computeContactHealth } from '@/lib/directory/contact-health';
-import {
-  CONTACT_SITE_UNASSIGNED,
-  ContactHealthFilterChip,
-  ContactRoleFilterChip,
-  ContactSiteFilterChip,
-} from '@/components/ctms/directory/directory-contacts-filter-chips';
+import { ContactRoleFilterChip } from '@/components/ctms/directory/directory-contacts-filter-chips';
 import {
   OrganizationCountryFilterChip,
-  OrganizationHealthFilterChip,
   OrganizationRecordStatusFilterChip,
   OrganizationTypeFilterChip,
 } from '@/components/ctms/directory/organizations/directory-organizations-filter-chips';
@@ -120,35 +95,15 @@ import { getName } from 'i18n-iso-countries';
 import en from 'i18n-iso-countries/langs/en.json';
 import * as isoCountries from 'i18n-iso-countries';
 import { DirectoryEmptyState } from '@/components/ctms/directory/directory-empty-state';
+import {
+  getContactCompleteness,
+  getOrganizationCompleteness,
+} from '@/lib/directory/record-completeness';
 
 isoCountries.registerLocale(en);
 
 function formatIsoCountryLabel(code: string): string {
   return getName(code, 'en') ?? code;
-}
-
-function relativeDateLabel(iso: string): string {
-  const time = new Date(iso).getTime();
-  if (Number.isNaN(time)) return 'Not tracked';
-  const days = Math.max(0, Math.round((Date.now() - time) / (1000 * 60 * 60 * 24)));
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 30) return `${days} days ago`;
-  const months = Math.round(days / 30);
-  return months === 1 ? '1 month ago' : `${months} months ago`;
-}
-
-function shortDateLabel(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return 'Not tracked';
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function daysSinceIso(iso: string | null | undefined): number | null {
-  if (!iso) return null;
-  const time = new Date(iso).getTime();
-  if (Number.isNaN(time)) return null;
-  return Math.max(0, Math.round((Date.now() - time) / (1000 * 60 * 60 * 24)));
 }
 
 const DIRECTORY_DEFAULT_PAGE_SIZE = 25;
@@ -157,6 +112,17 @@ const INSTITUTION_OPTIONS_PAGE_SIZE = 500;
 const EMPTY_CONTACTS_SNAPSHOT: DirectoryContactsSnapshot = {
   totalContacts: 0,
   totalContactsDeltaWeek: null,
+  formCompleteness: {
+    total: 0,
+    complete: 0,
+    percent: 0,
+    missingTitle: 0,
+    missingRole: 0,
+    missingOrganization: 0,
+    missingEmail: 0,
+    missingPhone: 0,
+    missingContactInfo: 0,
+  },
   sitesCovered: { covered: 0, total: 0, percent: 0 },
   missingRoles: 0,
   unassignedToSite: 0,
@@ -170,11 +136,11 @@ const EMPTY_CONTACTS_SNAPSHOT: DirectoryContactsSnapshot = {
 };
 const EMPTY_STUDY_CONTACTS: DirectoryContactListItem[] = [];
 
-function directoryContactRowHealth(c: DirectoryContactListItem): DirectoryContactHealth {
-  return c.study_enrichment?.contact_health ?? computeContactHealth(c);
-}
-
 type CatalogCat = QuickContactCatalogCategory;
+
+type CompletenessFilter = 'all' | 'needs-completion';
+type ContactSort = 'name' | 'completion';
+type OrganizationSort = 'name' | 'completion';
 
 interface DirectoryHomeClientProps {
   companyId: string;
@@ -183,15 +149,9 @@ interface DirectoryHomeClientProps {
   catalog: CatalogCat[];
   /** From `getDirectoryRoleCatalog().error` when the catalog query failed. */
   catalogError?: string | null;
-  initialContacts: DirectoryContactListItem[];
-  contactTotal: number;
   initialInstitutions: InstitutionRow[];
   institutionTotal: number;
   initialInstitutionOptions: InstitutionRow[];
-  auditLog: Record<string, unknown>[];
-  auditLogTotal: number;
-  assignmentHistory: Record<string, unknown>[];
-  assignmentHistoryTotal: number;
   /** Originating study id, used so detail pages can return to this Directory tab. */
   studyId?: string;
   /** Pre-fetched study-scoped KPI / right-rail snapshot. */
@@ -199,7 +159,6 @@ interface DirectoryHomeClientProps {
   /** Pre-fetched contacts already enriched with study site info for grouping. */
   studyContactsEnriched?: DirectoryContactListItem[];
   initialOrganizationSnapshot?: DirectoryOrganizationSnapshot | null;
-  initialActivitySnapshot?: DirectoryActivitySnapshot | null;
 }
 
 export function DirectoryHomeClient({
@@ -208,31 +167,19 @@ export function DirectoryHomeClient({
   canImportCsv,
   catalog,
   catalogError = null,
-  initialContacts,
-  contactTotal,
   initialInstitutions,
   institutionTotal,
   initialInstitutionOptions,
-  auditLog,
-  auditLogTotal,
-  assignmentHistory,
-  assignmentHistoryTotal,
   studyId,
   initialSnapshot,
   studyContactsEnriched,
   initialOrganizationSnapshot,
-  initialActivitySnapshot,
 }: DirectoryHomeClientProps) {
   const router = useRouter();
   const fromQuery = studyId ? `?from=${studyId}` : '';
   const [, startTransition] = useTransition();
   const [tab, setTab] = useState('contacts');
-
-  const [, setContacts] = useState(initialContacts);
-  const [cTotal, setCTotal] = useState(contactTotal);
-  /** Server-side directory contacts search query (no UI wired yet). */
-  const cQuery = '';
-  const cSkipInitialLoad = useRef(true);
+  const [exportBusy, setExportBusy] = useState(false);
 
   const [institutions, setInstitutions] = useState(initialInstitutions);
   const [iTotal, setITotal] = useState(institutionTotal);
@@ -243,19 +190,9 @@ export function DirectoryHomeClient({
 
   const [institutionOptions, setInstitutionOptions] = useState<InstitutionRow[]>(initialInstitutionOptions);
 
-  const [auditRows, setAuditRows] = useState<Record<string, unknown>[]>(auditLog);
-  const [auditCount, setAuditCount] = useState(auditLogTotal);
-  const [historyRows, setHistoryRows] = useState<Record<string, unknown>[]>(assignmentHistory);
-  const [historyCount, setHistoryCount] = useState(assignmentHistoryTotal);
-  const aSkipInitialLoad = useRef(true);
-  const hSkipInitialLoad = useRef(true);
-
   const snapshot: DirectoryContactsSnapshot = initialSnapshot ?? EMPTY_CONTACTS_SNAPSHOT;
   const studyContacts: DirectoryContactListItem[] = studyContactsEnriched ?? EMPTY_STUDY_CONTACTS;
   const organizationSnapshot = initialOrganizationSnapshot ?? EMPTY_ORGANIZATION_SNAPSHOT;
-  const [activitySnapshot, setActivitySnapshot] = useState<DirectoryActivitySnapshot>(
-    initialActivitySnapshot ?? EMPTY_ACTIVITY_SNAPSHOT
-  );
 
   const displayedInstitutions: InstitutionRow[] = institutions;
 
@@ -263,56 +200,12 @@ export function DirectoryHomeClient({
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
   const [contactsSearch, setContactsSearch] = useState('');
   const [contactRoleFilter, setContactRoleFilter] = useState<'all' | string>('all');
-  const [contactSiteFilter, setContactSiteFilter] = useState<'all' | string>('all');
-  const [contactHealthFilter, setContactHealthFilter] = useState<'all' | DirectoryContactHealth>('all');
-  const [contactsView, setContactsView] = useState<'by-site' | 'all'>('by-site');
-  const [organizationsView, setOrganizationsView] = useState<'by-type' | 'all'>('by-type');
-
-  const [activityKind, setActivityKind] = useState<ActivityKindFilter>('all');
-  const [activityVisibleCount, setActivityVisibleCount] = useState<number>(DIRECTORY_DEFAULT_PAGE_SIZE);
-
-  const allActivityEvents = useMemo<ActivityEvent[]>(() => {
-    return normalizeAuditAndHistory(auditRows, historyRows, { fromQuery });
-  }, [auditRows, historyRows, fromQuery]);
-
-  const filteredActivityEvents = useMemo(
-    () => filterByKind(allActivityEvents, activityKind),
-    [allActivityEvents, activityKind]
-  );
-
-  const contactLastActivityById = useMemo<Record<string, ContactLastActivity>>(() => {
-    const map: Record<string, ContactLastActivity> = {};
-    for (const contact of studyContacts) {
-      if (!contact.updated_at) continue;
-      map[contact.id] = {
-        kind: 'none',
-        date: shortDateLabel(contact.updated_at),
-        relative: relativeDateLabel(contact.updated_at),
-      };
-    }
-    for (const event of allActivityEvents) {
-      const id = event.entity?.type === 'directory_contact' ? event.entity.id : null;
-      if (!id) continue;
-      const previous = map[id];
-      if (previous) {
-        const currentDate = new Date(previous.date).getTime();
-        if (!Number.isNaN(currentDate) && currentDate > event.at.getTime()) continue;
-      }
-      map[id] = {
-        kind: event.kind === 'visits' ? 'visit' : event.icon === 'mail' ? 'email' : 'none',
-        date: shortDateLabel(event.at.toISOString()),
-        relative: relativeDateLabel(event.at.toISOString()),
-      };
-    }
-    return map;
-  }, [allActivityEvents, studyContacts]);
-
-  const visibleActivityEvents = useMemo(
-    () => filteredActivityEvents.slice(0, activityVisibleCount),
-    [filteredActivityEvents, activityVisibleCount]
-  );
-
-  const canLoadMoreActivity = activityVisibleCount < filteredActivityEvents.length;
+  const [contactCompletenessFilter, setContactCompletenessFilter] = useState<CompletenessFilter>('all');
+  const [contactSort, setContactSort] = useState<ContactSort>('name');
+  const [contactsView, setContactsView] = useState<'by-site' | 'all'>('all');
+  const [organizationsView, setOrganizationsView] = useState<'by-type' | 'all'>('all');
+  const [orgCompletenessFilter, setOrgCompletenessFilter] = useState<CompletenessFilter>('all');
+  const [orgSort, setOrgSort] = useState<OrganizationSort>('name');
 
   const contactRoleOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -327,36 +220,22 @@ export function DirectoryHomeClient({
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [studyContacts]);
 
-  const { contactSiteSelectOptions, contactSiteHasUnassigned } = useMemo(() => {
-    const siteMap = new Map<string, string>();
-    let unassigned = false;
-    for (const c of studyContacts) {
-      const sid = c.study_enrichment?.primary_study_site_id;
-      if (!sid) {
-        unassigned = true;
-        continue;
-      }
-      const label = c.study_enrichment?.primary_study_site_label?.trim() || sid;
-      if (!siteMap.has(sid)) siteMap.set(sid, label);
-    }
-    const sites = Array.from(siteMap.entries())
-      .map(([key, label]) => ({ key, label }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-    return { contactSiteSelectOptions: sites, contactSiteHasUnassigned: unassigned };
-  }, [studyContacts]);
-
   const filteredStudyContacts = useMemo(() => {
     let rows = studyContacts;
     if (statusFilter !== 'all') {
       rows = rows.filter((c) => c.status === statusFilter);
     }
-    if (activePreset?.kind === 'missingRoles') {
-      rows = rows.filter((c) => !c.primary_directory_role_id);
-    } else if (activePreset?.kind === 'unassigned') {
-      rows = rows.filter((c) => !c.study_enrichment?.primary_study_site_id);
-    } else if (activePreset?.kind === 'recent') {
-      const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-      rows = rows.filter((c) => c.updated_at && new Date(c.updated_at).getTime() >= weekAgo);
+    if (activePreset?.kind === 'missingRole') {
+      rows = rows.filter((c) => getContactCompleteness(c).missingFields.includes('role'));
+    } else if (activePreset?.kind === 'missingTitle') {
+      rows = rows.filter((c) => getContactCompleteness(c).missingFields.includes('title'));
+    } else if (activePreset?.kind === 'missingInfo') {
+      rows = rows.filter((c) => {
+        const missing = getContactCompleteness(c).missingFields;
+        return missing.includes('email') || missing.includes('phone');
+      });
+    } else if (activePreset?.kind === 'complete') {
+      rows = rows.filter((c) => getContactCompleteness(c).complete);
     }
     const q = contactsSearch.trim().toLowerCase();
     if (q) {
@@ -374,16 +253,18 @@ export function DirectoryHomeClient({
         return key === contactRoleFilter;
       });
     }
-    if (contactSiteFilter !== 'all') {
-      if (contactSiteFilter === CONTACT_SITE_UNASSIGNED) {
-        rows = rows.filter((c) => !c.study_enrichment?.primary_study_site_id);
-      } else {
-        rows = rows.filter((c) => c.study_enrichment?.primary_study_site_id === contactSiteFilter);
+    if (contactCompletenessFilter === 'needs-completion') {
+      rows = rows.filter((c) => !getContactCompleteness(c).complete);
+    }
+    rows = [...rows].sort((a, b) => {
+      if (contactSort === 'completion') {
+        const diff = getContactCompleteness(a).percent - getContactCompleteness(b).percent;
+        if (diff !== 0) return diff;
       }
-    }
-    if (contactHealthFilter !== 'all') {
-      rows = rows.filter((c) => directoryContactRowHealth(c) === contactHealthFilter);
-    }
+      const aName = `${a.last_name} ${a.first_name}`.trim();
+      const bName = `${b.last_name} ${b.first_name}`.trim();
+      return aName.localeCompare(bName);
+    });
     return rows;
   }, [
     studyContacts,
@@ -391,16 +272,15 @@ export function DirectoryHomeClient({
     activePreset,
     contactsSearch,
     contactRoleFilter,
-    contactSiteFilter,
-    contactHealthFilter,
+    contactCompletenessFilter,
+    contactSort,
   ]);
 
   const contactsEmptyCopy = useMemo(() => {
     if (studyContacts.length === 0) {
       return {
-        title: 'No contacts linked to this study yet.',
-        description:
-          'Add a contact here, or open a company contact profile and link them under Study assignments.',
+        title: 'Add your first contact.',
+        description: 'Create a study directory contact with title, role, organization, and contact information.',
       };
     }
     if (filteredStudyContacts.length === 0) {
@@ -421,8 +301,8 @@ export function DirectoryHomeClient({
       activePreset?.kind,
       contactsSearch,
       contactRoleFilter,
-      contactSiteFilter,
-      contactHealthFilter,
+      contactCompletenessFilter,
+      contactSort,
     ],
   });
 
@@ -432,29 +312,13 @@ export function DirectoryHomeClient({
     setActivePreset((prev) => (prev?.kind === p.kind ? null : p));
   }, []);
 
-  const handleNeedsAttention = useCallback((key: 'missing' | 'sites' | 'inactive' | 'sites-missing-key') => {
-    if (key === 'missing') setActivePreset({ kind: 'missingRoles' });
-    else if (key === 'sites') setActivePreset({ kind: 'unassigned' });
-    else if (key === 'inactive') setActivePreset({ kind: 'recent' });
-    else setActivePreset({ kind: 'sites' });
-  }, []);
-
-  const handleSuggestion = useCallback((id: string) => {
-    if (id === 'missing-roles') setActivePreset({ kind: 'missingRoles' });
-    else if (id === 'unassigned') setActivePreset({ kind: 'unassigned' });
-  }, []);
-
-  const handleRoleRowClick = useCallback(() => {
-    setActivePreset({ kind: 'sites' });
-  }, []);
-
   const clearAllFilters = useCallback(() => {
     setActivePreset(null);
     setStatusFilter('all');
     setContactsSearch('');
     setContactRoleFilter('all');
-    setContactSiteFilter('all');
-    setContactHealthFilter('all');
+    setContactCompletenessFilter('all');
+    setContactSort('name');
   }, []);
 
   const hasActiveFilters =
@@ -462,8 +326,8 @@ export function DirectoryHomeClient({
     statusFilter !== 'all' ||
     contactsSearch.trim().length > 0 ||
     contactRoleFilter !== 'all' ||
-    contactSiteFilter !== 'all' ||
-    contactHealthFilter !== 'all';
+    contactCompletenessFilter !== 'all' ||
+    contactSort !== 'name';
 
   const [contactOpen, setContactOpen] = useState(false);
   const [instOpen, setInstOpen] = useState(false);
@@ -473,9 +337,6 @@ export function DirectoryHomeClient({
   const [csvFileLabel, setCsvFileLabel] = useState('');
   const csvFileInputRef = useRef<HTMLInputElement>(null);
 
-  const [favorite, setFavorite] = useState(false);
-  const [orgHealthFilter, setOrgHealthFilter] = useState<OrgHealth | null>(null);
-  const [orgAttentionFilter, setOrgAttentionFilter] = useState<OrgAttentionKey | null>(null);
   const [orgTypeFilter, setOrgTypeFilter] = useState<'all' | InstitutionOrganizationType>('all');
   const [orgRecordStatusFilter, setOrgRecordStatusFilter] = useState<'all' | 'active' | 'inactive'>(
     'all'
@@ -483,63 +344,34 @@ export function DirectoryHomeClient({
   const [orgCountryFilter, setOrgCountryFilter] = useState<'all' | string>('all');
 
   const handleOrgKpiPreset = useCallback((preset: OrgKpiPreset) => {
-    if (preset.kind === 'activeSites') {
-      setOrgTypeFilter('clinical_site');
-      setOrgRecordStatusFilter('active');
-      setOrgHealthFilter(null);
-      setOrgAttentionFilter(null);
+    if (preset.kind === 'complete') {
+      setOrgCompletenessFilter('all');
+      setOrgSort('completion');
       return;
     }
-    if (preset.kind === 'sitesAtRisk') {
-      setOrgTypeFilter('clinical_site');
-      setOrgRecordStatusFilter('all');
-      setOrgHealthFilter('at_risk');
-      setOrgAttentionFilter(null);
+    if (preset.kind === 'missingAddress') {
+      setOrgCompletenessFilter('needs-completion');
+      setOrgSort('completion');
+      setOrgCountryFilter('all');
       return;
     }
-    setOrgHealthFilter(null);
-    setOrgAttentionFilter(null);
+    if (preset.kind === 'missingLocation') {
+      setOrgCompletenessFilter('needs-completion');
+      setOrgSort('completion');
+      return;
+    }
     setOrgTypeFilter('all');
     setOrgRecordStatusFilter('all');
     setOrgCountryFilter('all');
-  }, []);
-
-  const handleOrgAttention = useCallback((key: OrgAttentionKey) => {
-    setOrgAttentionFilter(key);
-    setOrgHealthFilter(null);
-    if (key === 'sites_below_50' || key === 'no_visit_60') {
-      setOrgTypeFilter('clinical_site');
-      setOrgRecordStatusFilter('all');
-    } else {
-      setOrgTypeFilter('all');
-      setOrgRecordStatusFilter('all');
-    }
-  }, []);
-
-  const clearOrgFilters = useCallback(() => {
-    setOrgHealthFilter(null);
-    setOrgAttentionFilter(null);
-    setOrgTypeFilter('all');
-    setOrgRecordStatusFilter('all');
-    setOrgCountryFilter('all');
+    setOrgCompletenessFilter('all');
+    setOrgSort('name');
   }, []);
 
   const orgFilterLabel = useMemo(() => {
-    if (orgAttentionFilter) {
-      switch (orgAttentionFilter) {
-        case 'sites_below_50':
-          return 'Sites below 50% enrollment';
-        case 'no_visit_60':
-          return 'No visit in 60+ days';
-        case 'orgs_unassigned':
-          return 'Orgs not assigned to study';
-      }
-    }
-    if (orgHealthFilter === 'at_risk') return 'Health: At Risk';
-    if (orgHealthFilter === 'critical') return 'Health: Critical';
-    if (orgHealthFilter === 'healthy') return 'Health: Healthy';
+    if (orgCompletenessFilter === 'needs-completion') return 'Needs completion';
+    if (orgSort === 'completion') return 'Sorted by form completion';
     return null;
-  }, [orgAttentionFilter, orgHealthFilter]);
+  }, [orgCompletenessFilter, orgSort]);
 
   const orgTypeFilterOptions = useMemo(() => {
     const types = new Set<InstitutionOrganizationType>();
@@ -584,27 +416,6 @@ export function DirectoryHomeClient({
 
   const filteredOrgInstitutions = useMemo(() => {
     let rows = displayedInstitutions;
-    if (orgHealthFilter) {
-      rows = rows.filter(
-        (r) => organizationSnapshot.enrichmentByInstitutionId[r.id]?.health === orgHealthFilter
-      );
-    }
-    if (orgAttentionFilter) {
-      rows = rows.filter((r) => {
-        const enrichment = organizationSnapshot.enrichmentByInstitutionId[r.id];
-        if (orgAttentionFilter === 'sites_below_50') {
-          return (
-            !!enrichment?.enrollmentTarget &&
-            enrichment.enrollmentCurrent / enrichment.enrollmentTarget < 0.5
-          );
-        }
-        if (orgAttentionFilter === 'no_visit_60') {
-          const days = daysSinceIso(enrichment?.lastVisitISO);
-          return days != null && days >= 60;
-        }
-        return (enrichment?.studyInvolvement.length ?? 0) === 0;
-      });
-    }
     if (orgTypeFilter !== 'all') {
       rows = rows.filter((r) => r.organization_type === orgTypeFilter);
     }
@@ -615,27 +426,41 @@ export function DirectoryHomeClient({
       const target = orgCountryFilter.toUpperCase();
       rows = rows.filter((r) => (r.country_code ?? '').trim().toUpperCase() === target);
     }
+    if (orgCompletenessFilter === 'needs-completion') {
+      rows = rows.filter((r) => !getOrganizationCompleteness(r).complete);
+    }
+    rows = [...rows].sort((a, b) => {
+      if (orgSort === 'completion') {
+        const diff = getOrganizationCompleteness(a).percent - getOrganizationCompleteness(b).percent;
+        if (diff !== 0) return diff;
+      }
+      return a.name.localeCompare(b.name);
+    });
     return rows;
   }, [
     displayedInstitutions,
-    organizationSnapshot.enrichmentByInstitutionId,
-    orgAttentionFilter,
     orgCountryFilter,
-    orgHealthFilter,
+    orgCompletenessFilter,
     orgRecordStatusFilter,
+    orgSort,
     orgTypeFilter,
   ]);
+
+  const filteredOrganizationTypeCount = useMemo(
+    () => new Set(filteredOrgInstitutions.map((institution) => institution.organization_type)).size,
+    [filteredOrgInstitutions]
+  );
 
   const flatOrgPagination = useClientPagination({
     totalItems: filteredOrgInstitutions.length,
     initialPageSize: DIRECTORY_DEFAULT_PAGE_SIZE,
     resetKey: [
       organizationsView,
-      orgHealthFilter,
-      orgAttentionFilter,
       orgTypeFilter,
       orgRecordStatusFilter,
       orgCountryFilter,
+      orgCompletenessFilter,
+      orgSort,
       iQuery,
       institutions.length,
       displayedInstitutions.length,
@@ -644,45 +469,51 @@ export function DirectoryHomeClient({
 
   const paginatedFlatOrgInstitutions = flatOrgPagination.paginate(filteredOrgInstitutions);
 
-  const handleExportOrgs = useCallback(() => {
-    const csv = getDirectoryInstitutionsExportCsv(displayedInstitutions);
-    triggerCsvDownload(DIRECTORY_ORGANIZATIONS_EXPORT_FILENAME, csv);
-    toast.success(`Exported ${displayedInstitutions.length} organizations`);
-  }, [displayedInstitutions]);
+  const handleExportOrgs = useCallback(async () => {
+    setExportBusy(true);
+    try {
+      const { data, error } = await listAllInstitutionsForExport();
+      if (error) {
+        toast.error(error);
+        return;
+      }
+      const csv = getDirectoryOrganizationsDisplayExportCsv(data);
+      triggerCsvDownload(DIRECTORY_ORGANIZATIONS_EXPORT_FILENAME, csv);
+      toast.success(`Exported ${data.length} organizations`);
+    } finally {
+      setExportBusy(false);
+    }
+  }, []);
 
-  const contactPag = useClientPagination({
-    totalItems: cTotal,
-    initialPageSize: DIRECTORY_DEFAULT_PAGE_SIZE,
-  });
+  const handleExportContacts = useCallback(async () => {
+    if (!studyId) {
+      toast.error('Study context is required to export contacts.');
+      return;
+    }
+    setExportBusy(true);
+    try {
+      const { data, error } = await listAllDirectoryContactsForStudy(studyId);
+      if (error) {
+        toast.error(error);
+        return;
+      }
+      const csv = getDirectoryContactsDisplayExportCsv(data);
+      triggerCsvDownload(DIRECTORY_CONTACTS_EXPORT_FILENAME, csv);
+      toast.success(`Exported ${data.length} contacts`);
+    } finally {
+      setExportBusy(false);
+    }
+  }, [studyId]);
+
   const institutionPag = useClientPagination({
     totalItems: iTotal,
     initialPageSize: DIRECTORY_DEFAULT_PAGE_SIZE,
   });
-  const auditPag = useClientPagination({ totalItems: auditCount, initialPageSize: DIRECTORY_DEFAULT_PAGE_SIZE });
-  const historyPag = useClientPagination({ totalItems: historyCount, initialPageSize: DIRECTORY_DEFAULT_PAGE_SIZE });
 
-  const cPage = contactPag.currentPage;
-  const cSize = contactPag.pageSize;
   const iPage = institutionPag.currentPage;
   const iSize = institutionPag.pageSize;
-  const aPage = auditPag.currentPage;
-  const aSize = auditPag.pageSize;
-  const hPage = historyPag.currentPage;
-  const hSize = historyPag.pageSize;
 
-  const goContactPage1 = contactPag.goToPage;
   const goInstPage1 = institutionPag.goToPage;
-  const goAuditPage1 = auditPag.goToPage;
-  const goHistoryPage1 = historyPag.goToPage;
-
-  // Reset table state when the server revalidates (e.g. router.refresh); do not depend on goToPage
-  // identity — it would reset pagination whenever client fetch updates totals.
-  useEffect(() => {
-    setContacts(initialContacts);
-    setCTotal(contactTotal);
-    goContactPage1(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- RSC data only; never list goToPage
-  }, [initialContacts, contactTotal]);
 
   useEffect(() => {
     setInstitutions(initialInstitutions);
@@ -694,24 +525,6 @@ export function DirectoryHomeClient({
   useEffect(() => {
     setInstitutionOptions(initialInstitutionOptions);
   }, [initialInstitutionOptions]);
-
-  useEffect(() => {
-    setAuditRows(auditLog);
-    setAuditCount(auditLogTotal);
-    goAuditPage1(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auditLog, auditLogTotal]);
-
-  useEffect(() => {
-    setHistoryRows(assignmentHistory);
-    setHistoryCount(assignmentHistoryTotal);
-    goHistoryPage1(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [assignmentHistory, assignmentHistoryTotal]);
-
-  useEffect(() => {
-    setActivitySnapshot(initialActivitySnapshot ?? EMPTY_ACTIVITY_SNAPSHOT);
-  }, [initialActivitySnapshot]);
 
   useEffect(() => {
     if (csvOpen) {
@@ -734,26 +547,37 @@ export function DirectoryHomeClient({
     setIRefresh((n) => n + 1);
   }, [iSearch, goInstPage1]);
 
-  useEffect(() => {
-    if (cSkipInitialLoad.current) {
-      cSkipInitialLoad.current = false;
-      return;
-    }
-    const run = async () => {
-      const r = await listDirectoryContacts({
-        search: cQuery || undefined,
-        limit: cSize,
-        offset: (cPage - 1) * cSize,
-      });
-      if (!r.error) {
-        setContacts(r.data);
-        setCTotal(r.count);
-      }
-    };
-    startTransition(() => {
-      void run();
-    });
-  }, [cPage, cSize, startTransition]);
+  const clearOrgFilters = useCallback(() => {
+    setOrgTypeFilter('all');
+    setOrgRecordStatusFilter('all');
+    setOrgCountryFilter('all');
+    setOrgCompletenessFilter('all');
+    setOrgSort('name');
+    setISearch('');
+    setIQuery('');
+    goInstPage1(1);
+    setIRefresh((n) => n + 1);
+  }, [goInstPage1]);
+
+  const hasActiveOrgToolbarFilters = useMemo(
+    () =>
+      orgTypeFilter !== 'all' ||
+      orgRecordStatusFilter !== 'all' ||
+      orgCountryFilter !== 'all' ||
+      orgCompletenessFilter !== 'all' ||
+      orgSort !== 'name' ||
+      iSearch.trim().length > 0 ||
+      iQuery.trim().length > 0,
+    [
+      orgTypeFilter,
+      orgRecordStatusFilter,
+      orgCountryFilter,
+      orgCompletenessFilter,
+      orgSort,
+      iSearch,
+      iQuery,
+    ]
+  );
 
   useEffect(() => {
     if (iSkipInitialLoad.current) {
@@ -776,120 +600,70 @@ export function DirectoryHomeClient({
     });
   }, [iQuery, iPage, iSize, iRefresh, startTransition]);
 
-  useEffect(() => {
-    if (aSkipInitialLoad.current) {
-      aSkipInitialLoad.current = false;
-      return;
-    }
-    const run = async () => {
-      const r = await getDirectoryAuditLog({
-        limit: aSize,
-        offset: (aPage - 1) * aSize,
-      });
-      if (!r.error) {
-        setAuditRows(r.data);
-        setAuditCount(r.count);
-        const snap = await getDirectoryActivitySnapshot({
-          limit: aSize,
-          offset: (aPage - 1) * aSize,
-          fromQuery,
-        });
-        if (!snap.error) setActivitySnapshot(snap.data);
-      }
-    };
-    startTransition(() => {
-      void run();
-    });
-  }, [aPage, aSize, fromQuery, startTransition]);
-
-  useEffect(() => {
-    if (hSkipInitialLoad.current) {
-      hSkipInitialLoad.current = false;
-      return;
-    }
-    const run = async () => {
-      const r = await getDirectoryAssignmentHistory({
-        limit: hSize,
-        offset: (hPage - 1) * hSize,
-      });
-      if (!r.error) {
-        setHistoryRows(r.data);
-        setHistoryCount(r.count);
-        const snap = await getDirectoryActivitySnapshot({
-          limit: hSize,
-          offset: (hPage - 1) * hSize,
-          fromQuery,
-        });
-        if (!snap.error) setActivitySnapshot(snap.data);
-      }
-    };
-    startTransition(() => {
-      void run();
-    });
-  }, [hPage, hSize, fromQuery, startTransition]);
-
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-6">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <h1 className="text-2xl font-semibold tracking-tight">Contacts &amp; Organizations</h1>
-            <button
-              type="button"
-              aria-pressed={favorite}
-              aria-label={favorite ? 'Remove from favorites' : 'Add to favorites'}
-              onClick={() => setFavorite((f) => !f)}
-              className={cn(
-                'inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors',
-                'hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                favorite ? 'text-amber-500' : 'text-muted-foreground'
-              )}
-            >
-              <Star className={cn('h-4 w-4', favorite && 'fill-amber-400')} />
-            </button>
-          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">Study Directory</h1>
           <p className="text-sm text-muted-foreground">
-            Manage contacts and organization relationships.
+            Contacts, organizations, roles, and form completeness for this study.
           </p>
         </div>
-        {canImportCsv && (
-          <div className="shrink-0 self-start md:self-center">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-8 gap-1.5"
-                >
-                  <Upload className="h-3.5 w-3.5 shrink-0" />
-                  Import CSV
-                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
+        <div className="shrink-0 self-start md:self-center">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" size="sm" className="text-xs h-8 gap-1.5">
+                More
+                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-60">
+              {canImportCsv ? (
+                <>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setCsvKind('contacts');
+                      setCsvOpen(true);
+                    }}
+                  >
+                    <Upload className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                    Import contacts CSV
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setCsvKind('institutions');
+                      setCsvOpen(true);
+                    }}
+                  >
+                    <Upload className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                    Import organizations CSV
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+              {tab === 'contacts' ? (
                 <DropdownMenuItem
                   onClick={() => {
-                    setCsvKind('contacts');
-                    setCsvOpen(true);
+                    void handleExportContacts();
                   }}
+                  disabled={exportBusy || !studyId || snapshot.totalContacts === 0}
                 >
-                  <Upload className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                  Import contacts CSV
+                  <FileDown className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                  Export contacts CSV
                 </DropdownMenuItem>
+              ) : (
                 <DropdownMenuItem
                   onClick={() => {
-                    setCsvKind('institutions');
-                    setCsvOpen(true);
+                    void handleExportOrgs();
                   }}
+                  disabled={exportBusy || iTotal === 0}
                 >
-                  <Upload className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
-                  Import organizations CSV
+                  <FileDown className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                  Export organizations CSV
                 </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       <Tabs tabsId="directory-home" value={tab} onValueChange={setTab}>
@@ -900,13 +674,10 @@ export function DirectoryHomeClient({
           <TabsTrigger value="institutions" className="text-xs">
             Organizations
           </TabsTrigger>
-          <TabsTrigger value="history" className="text-xs">
-            Activity
-          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="contacts" className="mt-4">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[3fr_1fr]">
+          <div className="grid grid-cols-1 gap-4">
             <div className="min-w-0 space-y-3">
               <DirectoryContactsKpiRow
                 snapshot={snapshot}
@@ -929,14 +700,13 @@ export function DirectoryHomeClient({
                   onChange={setContactRoleFilter}
                   options={contactRoleOptions}
                 />
-                <ContactSiteFilterChip
-                  value={contactSiteFilter}
-                  onChange={setContactSiteFilter}
-                  sites={contactSiteSelectOptions}
-                  showUnassigned={contactSiteHasUnassigned}
-                />
+                <CompletenessFilterChip value={contactCompletenessFilter} onChange={setContactCompletenessFilter} />
                 <StatusFilterChip value={statusFilter} onChange={setStatusFilter} />
-                <ContactHealthFilterChip value={contactHealthFilter} onChange={setContactHealthFilter} />
+                <SortFilterChip
+                  value={contactSort}
+                  onChange={(value) => setContactSort(value as ContactSort)}
+                  labels={{ name: 'Sort: Name', completion: 'Sort: Form completion' }}
+                />
                 {hasActiveFilters && (
                   <Button
                     variant="link"
@@ -947,37 +717,60 @@ export function DirectoryHomeClient({
                     Clear all
                   </Button>
                 )}
-                <div className="flex-1" />
-                {canEdit && (
-                  <Button type="button" size="sm" className="text-xs h-9" onClick={() => setContactOpen(true)}>
-                    <Plus className="h-3.5 w-3.5 mr-1" />
-                    Add contact
-                  </Button>
-                )}
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-medium text-muted-foreground shrink-0">View</span>
-                <div className="inline-flex rounded-md border bg-muted/30 p-0.5" role="group" aria-label="Contacts layout">
+                <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground shrink-0">
+                  Layout
+                </span>
+                <div
+                  className="inline-flex items-center gap-1 rounded-lg border border-border/80 bg-muted/40 p-1 shadow-sm"
+                  role="group"
+                  aria-label="Contacts layout"
+                >
                   <Button
                     type="button"
-                    variant={contactsView === 'by-site' ? 'secondary' : 'ghost'}
+                    variant="ghost"
                     size="sm"
-                    className="h-8 text-xs px-3"
-                    onClick={() => setContactsView('by-site')}
-                  >
-                    By Site
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={contactsView === 'all' ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-8 text-xs px-3"
+                    aria-pressed={contactsView === 'all'}
+                    className={cn(
+                      'h-8 rounded-md px-3 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+                      contactsView === 'all'
+                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border/70'
+                        : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'
+                    )}
                     onClick={() => setContactsView('all')}
                   >
-                    All Contacts
+                    <span>All Contacts</span>
+                    <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {filteredStudyContacts.length}
+                    </span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-pressed={contactsView === 'by-site'}
+                    className={cn(
+                      'h-8 rounded-md px-3 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+                      contactsView === 'by-site'
+                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border/70'
+                        : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'
+                    )}
+                    onClick={() => setContactsView('by-site')}
+                  >
+                    <span>By Site</span>
+                    <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      {snapshot.sitesCovered.covered}
+                    </span>
                   </Button>
                 </div>
+                {canEdit ? (
+                  <Button type="button" size="sm" className="text-xs h-9 shrink-0" onClick={() => setContactOpen(true)}>
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Add contact
+                  </Button>
+                ) : null}
               </div>
 
               {contactsView === 'by-site' ? (
@@ -985,7 +778,6 @@ export function DirectoryHomeClient({
                   <DirectoryGroupedContactsTable
                     contacts={filteredStudyContacts}
                     fromQuery={fromQuery}
-                    lastActivityByContactId={contactLastActivityById}
                     emptyMessage={contactsEmptyCopy.title || 'No contacts in this list.'}
                     emptyDescription={contactsEmptyCopy.description}
                   />
@@ -1000,7 +792,6 @@ export function DirectoryHomeClient({
                   <DirectoryFlatContactsTable
                     contacts={paginatedStudyContacts}
                     fromQuery={fromQuery}
-                    lastActivityByContactId={contactLastActivityById}
                     emptyMessage={contactsEmptyCopy.title || 'No contacts in this list.'}
                     emptyDescription={contactsEmptyCopy.description}
                   />
@@ -1013,24 +804,13 @@ export function DirectoryHomeClient({
                   </div>
                 </>
               )}
-
-              <RightRailOnMobileHint />
             </div>
-
-            <aside className="space-y-4">
-              <DirectoryContactsRightRail
-                snapshot={snapshot}
-                onNeedsAttention={handleNeedsAttention}
-                onSuggestion={handleSuggestion}
-                onRoleRowClick={handleRoleRowClick}
-              />
-            </aside>
           </div>
         </TabsContent>
 
         <TabsContent value="institutions" className="mt-4">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-12">
-            <div className="space-y-3 xl:col-span-9 min-w-0">
+          <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-3 min-w-0">
               <OrganizationsKpiRow snapshot={organizationSnapshot.kpi} onPreset={handleOrgKpiPreset} />
 
               <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -1046,28 +826,6 @@ export function DirectoryHomeClient({
                     }}
                   />
                 </div>
-                {canEdit && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="text-xs h-9 shrink-0"
-                    onClick={() => setInstOpen(true)}
-                  >
-                    <Plus className="h-3.5 w-3.5 mr-1" />
-                    Add organization
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-9 shrink-0"
-                  onClick={handleExportOrgs}
-                  disabled={displayedInstitutions.length === 0}
-                >
-                  <Download className="h-3.5 w-3.5 mr-1" />
-                  Export
-                </Button>
                 {displayedInstitutions.length > 0 ? (
                   <>
                     <OrganizationTypeFilterChip
@@ -1075,7 +833,7 @@ export function DirectoryHomeClient({
                       onChange={setOrgTypeFilter}
                       options={orgTypeFilterOptions}
                     />
-                    <OrganizationHealthFilterChip value={orgHealthFilter} onChange={setOrgHealthFilter} />
+                    <CompletenessFilterChip value={orgCompletenessFilter} onChange={setOrgCompletenessFilter} />
                     <OrganizationRecordStatusFilterChip
                       value={orgRecordStatusFilter}
                       onChange={setOrgRecordStatusFilter}
@@ -1085,6 +843,21 @@ export function DirectoryHomeClient({
                       onChange={setOrgCountryFilter}
                       options={orgCountryFilterOptions}
                     />
+                    <SortFilterChip
+                      value={orgSort}
+                      onChange={(value) => setOrgSort(value as OrganizationSort)}
+                      labels={{ name: 'Sort: Name', completion: 'Sort: Form completion' }}
+                    />
+                    <Button
+                      type="button"
+                      variant="link"
+                      size="sm"
+                      disabled={!hasActiveOrgToolbarFilters}
+                      className="text-xs h-9 px-1 text-sky-600 dark:text-sky-400 disabled:pointer-events-none disabled:opacity-40"
+                      onClick={clearOrgFilters}
+                    >
+                      Clear all
+                    </Button>
                   </>
                 ) : null}
               </div>
@@ -1122,37 +895,76 @@ export function DirectoryHomeClient({
 
               {displayedInstitutions.length === 0 ? (
                 <DirectoryEmptyState
-                  title="No organizations yet."
-                  description="Add or import organizations to build the live directory for this study."
+                  title="Add your first organization."
+                  description="Create an organization record with type, status, address, country, and region."
+                  action={
+                    canEdit ? (
+                      <Button type="button" size="sm" className="text-xs h-8" onClick={() => setInstOpen(true)}>
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        Add organization
+                      </Button>
+                    ) : null
+                  }
                 />
               ) : (
                 <>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-medium text-muted-foreground shrink-0">View</span>
+                    <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground shrink-0">
+                      Layout
+                    </span>
                     <div
-                      className="inline-flex rounded-md border bg-muted/30 p-0.5"
+                      className="inline-flex items-center gap-1 rounded-lg border border-border/80 bg-muted/40 p-1 shadow-sm"
                       role="group"
                       aria-label="Organizations layout"
                     >
                       <Button
                         type="button"
-                        variant={organizationsView === 'by-type' ? 'secondary' : 'ghost'}
+                        variant="ghost"
                         size="sm"
-                        className="h-8 text-xs px-3"
-                        onClick={() => setOrganizationsView('by-type')}
+                        aria-pressed={organizationsView === 'all'}
+                        className={cn(
+                          'h-8 rounded-md px-3 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+                          organizationsView === 'all'
+                            ? 'bg-background text-foreground shadow-sm ring-1 ring-border/70'
+                            : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'
+                        )}
+                        onClick={() => setOrganizationsView('all')}
                       >
-                        By type
+                        <span>All organizations</span>
+                        <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {filteredOrgInstitutions.length}
+                        </span>
                       </Button>
                       <Button
                         type="button"
-                        variant={organizationsView === 'all' ? 'secondary' : 'ghost'}
+                        variant="ghost"
                         size="sm"
-                        className="h-8 text-xs px-3"
-                        onClick={() => setOrganizationsView('all')}
+                        aria-pressed={organizationsView === 'by-type'}
+                        className={cn(
+                          'h-8 rounded-md px-3 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring',
+                          organizationsView === 'by-type'
+                            ? 'bg-background text-foreground shadow-sm ring-1 ring-border/70'
+                            : 'text-muted-foreground hover:bg-background/70 hover:text-foreground'
+                        )}
+                        onClick={() => setOrganizationsView('by-type')}
                       >
-                        All organizations
+                        <span>By type</span>
+                        <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                          {filteredOrganizationTypeCount}
+                        </span>
                       </Button>
                     </div>
+                    {canEdit ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="text-xs h-9 shrink-0"
+                        onClick={() => setInstOpen(true)}
+                      >
+                        <Plus className="h-3.5 w-3.5 mr-1" />
+                        Add organization
+                      </Button>
+                    ) : null}
                   </div>
 
                   {organizationsView === 'by-type' ? (
@@ -1161,7 +973,6 @@ export function DirectoryHomeClient({
                         institutions={filteredOrgInstitutions}
                         fromQuery={fromQuery}
                         rowsPerGroup={4}
-                        enrichmentByInstitutionId={organizationSnapshot.enrichmentByInstitutionId}
                       />
                       <div className="text-[10px] text-muted-foreground flex items-center justify-between">
                         <span>
@@ -1185,13 +996,11 @@ export function DirectoryHomeClient({
                       <DirectoryFlatOrganizationsTable
                         institutions={paginatedFlatOrgInstitutions}
                         fromQuery={fromQuery}
-                        enrichmentByInstitutionId={organizationSnapshot.enrichmentByInstitutionId}
                         emptyMessage={
-                          orgHealthFilter ||
-                          orgAttentionFilter ||
                           orgTypeFilter !== 'all' ||
                           orgRecordStatusFilter !== 'all' ||
                           orgCountryFilter !== 'all' ||
+                          orgCompletenessFilter !== 'all' ||
                           orgFilterLabel
                             ? 'No organizations match the current filters.'
                             : 'No organizations in this list.'
@@ -1208,58 +1017,10 @@ export function DirectoryHomeClient({
                   )}
                 </>
               )}
-
-              <RightRailOnMobileHint />
             </div>
-
-            <aside className="space-y-4 xl:col-span-3 min-w-0">
-              <OrganizationsNeedsAttentionCard rows={organizationSnapshot.needsAttention} onSelect={handleOrgAttention} />
-              <OrganizationsInsightsCard insights={organizationSnapshot.insights} />
-              <OrganizationsSmartSuggestionsCard
-                suggestions={organizationSnapshot.suggestions}
-                onAttentionKey={handleOrgAttention}
-              />
-            </aside>
           </div>
         </TabsContent>
 
-        <TabsContent value="history" className="mt-4">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[3fr_1fr]">
-            <div className="min-w-0 space-y-3">
-              <DirectoryActivityKpiRow summary={activitySnapshot.summary} />
-              <DirectoryActivityFilterBar
-                value={activityKind}
-                onChange={(next) => {
-                  setActivityKind(next);
-                  setActivityVisibleCount(DIRECTORY_DEFAULT_PAGE_SIZE);
-                }}
-              />
-              <DirectoryActivityTimeline
-                events={visibleActivityEvents}
-                emptyMessage={
-                  activityKind === 'all'
-                    ? 'No activity recorded yet.'
-                    : 'No activity matches the selected filter.'
-                }
-                canLoadMore={canLoadMoreActivity}
-                onLoadMore={() =>
-                  setActivityVisibleCount((n) => n + DIRECTORY_DEFAULT_PAGE_SIZE)
-                }
-              />
-              <RightRailOnMobileHint />
-            </div>
-
-            <aside className="space-y-4">
-              <DirectoryActivityRightRail
-                summary={activitySnapshot.summary}
-                attention={activitySnapshot.attention}
-                insightsTrend={activitySnapshot.insightsTrend}
-                insightsTicks={activitySnapshot.insightsTicks}
-                insightsTotalLabel={activitySnapshot.insightsTotalLabel}
-              />
-            </aside>
-          </div>
-        </TabsContent>
       </Tabs>
 
       <QuickContactDialog
@@ -1456,6 +1217,77 @@ function StatusFilterChip({
         <DropdownMenuItem onClick={() => onChange('all')}>All</DropdownMenuItem>
         <DropdownMenuItem onClick={() => onChange('active')}>Active</DropdownMenuItem>
         <DropdownMenuItem onClick={() => onChange('inactive')}>Inactive</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function CompletenessFilterChip({
+  value,
+  onChange,
+}: {
+  value: CompletenessFilter;
+  onChange: (v: CompletenessFilter) => void;
+}) {
+  const active = value !== 'all';
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={cn(
+            'text-xs h-9 font-normal',
+            active &&
+              'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100 dark:bg-sky-500/10 dark:border-sky-500/30 dark:text-sky-300'
+          )}
+        >
+          {active ? 'Needs completion' : 'Completeness'}
+          <ChevronDown className="h-3 w-3 ml-1 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-48">
+        <DropdownMenuItem onClick={() => onChange('all')}>All records</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onChange('needs-completion')}>Needs completion</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function SortFilterChip<T extends string>({
+  value,
+  onChange,
+  labels,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  labels: Record<T, string>;
+}) {
+  const active = value !== 'name';
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={cn(
+            'text-xs h-9 font-normal',
+            active &&
+              'bg-sky-50 border-sky-200 text-sky-700 hover:bg-sky-100 dark:bg-sky-500/10 dark:border-sky-500/30 dark:text-sky-300'
+          )}
+        >
+          {labels[value]}
+          <ChevronDown className="h-3 w-3 ml-1 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-52">
+        {Object.entries(labels).map(([key, label]) => (
+          <DropdownMenuItem key={key} onClick={() => onChange(key as T)}>
+            {label as string}
+          </DropdownMenuItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );

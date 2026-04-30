@@ -1561,7 +1561,16 @@ export interface EcrfSchedulePreset {
 
 export type PaymentType = 'startup' | 'milestone' | 'per_subject' | 'pass_through';
 
-export type PaymentStatus = 'pending' | 'approved' | 'paid';
+export type PaymentStatus =
+  | 'not_triggered'
+  | 'triggered'
+  | 'invoice_received'
+  | 'under_review'
+  | 'pending'
+  | 'approved'
+  | 'paid'
+  | 'disputed'
+  | 'on_hold';
 
 export type ScheduleStatus = 'pending' | 'due' | 'paid';
 
@@ -1650,6 +1659,12 @@ export interface SitePayment {
   invoice_number: string | null;
   invoice_date: string | null;
   payment_date: string | null;
+  subject_visit_id?: string | null;
+  triggered_at?: string | null;
+  principal_investigator?: string | null;
+  country_name?: string | null;
+  holdback_amount?: number | null;
+  pass_through_amount?: number | null;
   notes: string | null;
   created_at: string;
 }
@@ -1688,9 +1703,15 @@ export const PAYMENT_TYPE_OPTIONS: { value: PaymentType; label: string }[] = [
 ];
 
 export const PAYMENT_STATUS_OPTIONS: { value: PaymentStatus; label: string }[] = [
+  { value: 'not_triggered', label: 'Not triggered' },
+  { value: 'triggered', label: 'Triggered' },
+  { value: 'invoice_received', label: 'Invoice received' },
+  { value: 'under_review', label: 'Under review' },
   { value: 'pending', label: 'Pending' },
   { value: 'approved', label: 'Approved' },
   { value: 'paid', label: 'Paid' },
+  { value: 'disputed', label: 'Disputed' },
+  { value: 'on_hold', label: 'On hold' },
 ];
 
 export const SCHEDULE_STATUS_OPTIONS: { value: ScheduleStatus; label: string }[] = [

@@ -18,11 +18,8 @@ import {
 import { getStudyVisits } from '@/lib/actions/visits';
 import { listStudyVisitDefinitions } from '@/lib/actions/study-visit-definitions';
 import { listStudyCrfs } from '@/lib/actions/study-crfs';
-import { getStudyBudgets, getStudyPayments, getStudyFinancialSummary } from '@/lib/actions/financials';
-import { listFinanceInvoicesForStudy } from '@/lib/actions/finance-invoices';
 import { getStudyKriValues, getEnrollmentCurve } from '@/lib/actions/reports';
 import { StudyDetailTabsDynamic } from '@/components/ctms/studies/study-detail-tabs-dynamic';
-import { listFinanceApprovalTemplateOptions } from '@/lib/actions/finance-approval-templates';
 import { countTeamMembersScopedToStudy } from '@/lib/team/scope-team-members';
 
 interface StudyDetailPageProps {
@@ -57,13 +54,8 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     pendingTeamInvitations,
     companyDomain,
     monitoringVisits,
-    budgets,
-    studyPayments,
-    financialSummary,
-    financeInvoices,
     kriValues,
     enrollmentCurve,
-    financeApprovalTemplateOptions,
     ecrfVisitDefinitions,
     ecrfStudyCrfs,
     ecrfRollup,
@@ -82,13 +74,8 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
     getPendingInvitations(),
     getCompanyDomain(),
     getStudyVisits(id),
-    getStudyBudgets(id),
-    getStudyPayments(id),
-    getStudyFinancialSummary(id),
-    listFinanceInvoicesForStudy(id).catch(() => []),
     getStudyKriValues(id),
     getEnrollmentCurve(id),
-    listFinanceApprovalTemplateOptions().catch(() => []),
     isAdmin ? listStudyVisitDefinitions(id).catch(() => []) : Promise.resolve([]),
     isAdmin ? listStudyCrfs(id).catch(() => []) : Promise.resolve([]),
     getStudyEcrfRollup(id),
@@ -116,14 +103,9 @@ export default async function StudyDetailPage({ params }: StudyDetailPageProps) 
         pendingTeamInvitations={pendingTeamInvitations}
         companyDomain={companyDomain}
         monitoringVisits={monitoringVisits}
-        budgets={budgets}
-        payments={studyPayments}
-        financialSummary={financialSummary}
-        financeInvoices={financeInvoices}
         kriValues={kriValues}
         enrollmentCurve={enrollmentCurve}
         isAdmin={isAdmin}
-        financeApprovalTemplateOptions={financeApprovalTemplateOptions}
         ecrfVisitDefinitions={ecrfVisitDefinitions}
         ecrfStudyCrfs={ecrfStudyCrfs}
         ecrfRollup={ecrfRollup}

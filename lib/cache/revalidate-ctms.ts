@@ -18,8 +18,6 @@ export function revalidateCtmsLegacyTopLevelPaths(): void {
   revalidatePath('/protected/sites');
   revalidatePath('/protected/visits');
   revalidatePath('/protected/trip-reports');
-  revalidatePath('/protected/financials');
-  revalidatePath('/protected/financials/approvals');
   revalidatePath('/protected/reports');
   revalidatePath('/protected/team');
   revalidatePath('/protected/countries');

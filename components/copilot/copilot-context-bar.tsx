@@ -1,6 +1,6 @@
 'use client';
 
-import { Beaker, FileText, MapPin, ShieldOff, User, ClipboardList, Receipt } from 'lucide-react';
+import { Beaker, FileText, MapPin, ShieldOff, User, ClipboardList } from 'lucide-react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
@@ -76,16 +76,6 @@ export function CopilotContextBar() {
       icon: <FileText className="h-3 w-3" />,
       label: ctx.documentLabel ?? 'Document',
       tooltip: ctx.documentId ? `Document id: ${ctx.documentId}` : 'Document context',
-    });
-  }
-
-  if (ctx.financialRecordLabel || ctx.financialRecordId) {
-    chips.push({
-      icon: <Receipt className="h-3 w-3" />,
-      label: ctx.financialRecordLabel ?? 'Financial record',
-      tooltip: ctx.financialRecordId
-        ? `Record id: ${ctx.financialRecordId}`
-        : 'Financial record context',
     });
   }
 

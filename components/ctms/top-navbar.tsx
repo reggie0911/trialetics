@@ -11,10 +11,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard,
-  DollarSign,
   BarChart3,
-  Calendar,
-  Pill,
   Menu,
   LogOut,
   Settings,
@@ -61,7 +58,6 @@ import {
 import { ProfileSettingsModal } from '@/components/profile/profile-settings-modal';
 import { createClient } from '@/lib/client';
 import { studyTrackerNavItems } from '@/lib/nav/study-trackers';
-import type { StudyTrackerNavItem } from '@/lib/nav/study-trackers';
 import { normalizeSubscriptionPlan, planMeetsTier, type SubscriptionPlan } from '@/lib/types/ctms';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -76,6 +72,14 @@ function isAccountHref(href: string): boolean {
 
 function isPlatformHref(href: string): boolean {
   return href.startsWith('/protected/platform/');
+}
+
+const standaloneModuleRoutes = ['/protected/time-expenses'] as const;
+
+function isStandaloneModuleHref(href: string): boolean {
+  return standaloneModuleRoutes.some(
+    (route) => href === route || href.startsWith(`${route}/`) || href.startsWith(`${route}?`)
+  );
 }
 
 type CtmsNavItemDef =
@@ -99,13 +103,6 @@ const ctmsNavItems: CtmsNavItemDef[] = [
   { label: 'Trip Reports', icon: FileText, studySegment: 'trip-reports' },
   { label: 'My Tasks', icon: CheckSquare, studySegment: 'my-tasks' },
   { label: 'Project Team Tasks', icon: ListTodo, studySegment: 'tasks' },
-  { label: 'Financials', icon: DollarSign, studySegment: 'financials', minPlan: 'core' },
-  {
-    label: 'Invoice approvals',
-    icon: FilePenLine,
-    studySegment: 'financials/approvals',
-    minPlan: 'core',
-  },
   { label: 'Reports & Analytics', icon: BarChart3, studySegment: 'reports', minPlan: 'core' },
   {
     label: 'Inventory management',
@@ -168,13 +165,7 @@ function buildCtmsNavItems(isCompanyAdmin: boolean): CtmsNavItemDef[] {
   return out;
 }
 
-const coreFeatureRoutes = [
-  '/protected/financials',
-  '/protected/financials/approvals',
-  '/protected/financials/approval-templates',
-  '/protected/reports',
-  '/protected/time-expenses',
-];
+const coreFeatureRoutes = ['/protected/reports', '/protected/time-expenses'];
 const enterpriseFeatureRoutes: string[] = [];
 
 export type CustomTrackerNavItem = {
@@ -274,9 +265,6 @@ export function TopNavbar({
   const pageName = getPageName(pathname, customTrackerNavItems);
   const studyId = parseStudyIdFromPathname(pathname);
   const navGated = hasCtmsAccess && !studyId;
-  const brandforgeHref = studyId
-    ? `/protected/studies/${studyId}/brand-forge`
-    : CTMS_STUDIES_CATALOG_HREF;
   const studyScopedHref = (segment: string): string =>
     studyId ? `/protected/studies/${studyId}/${segment}` : CTMS_STUDIES_CATALOG_HREF;
 
@@ -300,6 +288,7 @@ export function TopNavbar({
   const shouldGateHref = (href: string): boolean => {
     if (!navGated) return false;
     if (isAccountHref(href)) return false;
+    if (isStandaloneModuleHref(href)) return false;
     if (isPlatformAdmin && isPlatformHref(href)) return false;
     return href.startsWith('/protected/');
   };
@@ -381,7 +370,6 @@ export function TopNavbar({
                   <DropdownMenuTrigger
                     className={cn(
                       'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
-                      navGated && 'opacity-50 cursor-not-allowed',
                       hasCtmsAccess
                         ? isCtmsActive
                           ? 'bg-primary/10 text-primary'
@@ -436,7 +424,6 @@ export function TopNavbar({
                   <DropdownMenuTrigger
                     className={cn(
                       'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
-                      navGated && 'opacity-50 cursor-not-allowed',
                       hasEtmfAccess
                         ? isEtmfActive
                           ? 'bg-primary/10 text-primary'
@@ -489,7 +476,6 @@ export function TopNavbar({
                   <DropdownMenuTrigger
                     className={cn(
                       'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
-                      navGated && 'opacity-50 cursor-not-allowed',
                       hasEisfAccess
                         ? isEisfActive
                           ? 'bg-primary/10 text-primary'
@@ -539,7 +525,6 @@ export function TopNavbar({
                     <DropdownMenuTrigger
                       className={cn(
                         'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap outline-none border border-border',
-                        navGated && 'opacity-50 cursor-not-allowed',
                         isCustomActive ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted',
                       )}
                     >
@@ -597,10 +582,7 @@ export function TopNavbar({
             <DropdownMenu>
               <Tooltip>
                 <TooltipTrigger render={<span className="inline-flex" />}>
-                  <DropdownMenuTrigger className={cn(
-                    'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal text-muted-foreground hover:text-foreground hover:bg-muted transition-colors whitespace-nowrap outline-none border border-border',
-                    navGated && !isPlatformAdmin && 'opacity-50 cursor-not-allowed',
-                  )}>
+                  <DropdownMenuTrigger className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal text-muted-foreground hover:text-foreground hover:bg-muted transition-colors whitespace-nowrap outline-none border border-border">
                     Modules
                     <ChevronDown className="h-3 w-3" />
                   </DropdownMenuTrigger>
@@ -615,15 +597,19 @@ export function TopNavbar({
                     <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
                       Clinical operations
                     </div>
-                    {[{ href: '/protected/time-expenses', label: 'Time & Expenses' }].map((item) => {
+                    {[
+                      { href: '/protected/time-expenses', label: 'Time & Expenses', icon: Clock },
+                    ].map((item) => {
                       const locked = isLocked(item.href);
+                      const Icon = item.icon;
+                      const targetHref = locked ? '/protected/settings/billing' : item.href;
                       return (
                         <DropdownMenuItem
                           key={item.href}
                           className={cn('cursor-pointer', locked && 'opacity-50')}
-                          onClick={() => navigate(locked ? '/protected/settings/billing' : item.href)}
+                          onClick={() => router.push(targetHref)}
                         >
-                          <Clock className="mr-2 h-4 w-4" />
+                          <Icon className="mr-2 h-4 w-4" />
                           {item.label}
                           {locked && <Lock className="h-2.5 w-2.5 ml-auto" />}
                         </DropdownMenuItem>
@@ -639,7 +625,7 @@ export function TopNavbar({
                     </div>
                     <DropdownMenuItem
                       className="cursor-pointer"
-                      onClick={() => navigate(brandforgeHref)}
+                      onClick={() => router.push('/protected/brand-forge')}
                     >
                       <Palette className="mr-2 h-4 w-4" />
                       BrandForge
@@ -654,21 +640,21 @@ export function TopNavbar({
                     </div>
                     <DropdownMenuItem
                       className="cursor-pointer"
-                      onClick={() => navigate('/protected/platform/companies')}
+                      onClick={() => router.push('/protected/platform/companies')}
                     >
                       <Shield className="mr-2 h-4 w-4" />
                       Company module access
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="cursor-pointer"
-                      onClick={() => navigate('/protected/platform/docs')}
+                      onClick={() => router.push('/protected/platform/docs')}
                     >
                       <FilePenLine className="mr-2 h-4 w-4" />
                       Documentation editor
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="cursor-pointer"
-                      onClick={() => navigate('/protected/platform/analytics')}
+                      onClick={() => router.push('/protected/platform/analytics')}
                     >
                       <LineChart className="mr-2 h-4 w-4" />
                       Platform analytics
@@ -685,10 +671,9 @@ export function TopNavbar({
               <TooltipTrigger
                 render={
                   <Link
-                    href={guardedHref('/protected/docs')}
+                    href="/protected/docs"
                     className={cn(
                       'flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-normal transition-colors whitespace-nowrap border border-border',
-                      navGated && 'opacity-50 cursor-not-allowed',
                       pathname.startsWith('/protected/docs')
                         ? 'bg-primary/10 text-primary'
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted',
@@ -1012,19 +997,23 @@ export function TopNavbar({
             {hasCtmsAccess && (
               <>
                 <p className="px-4 py-1 text-[10px] text-muted-foreground">Clinical operations</p>
-                {[{ href: '/protected/time-expenses', label: 'Time & Expenses' }].map((item) => {
+                {[
+                  { href: '/protected/time-expenses', label: 'Time & Expenses', icon: Clock },
+                ].map((item) => {
                   const locked = isLocked(item.href);
+                  const Icon = item.icon;
+                  const targetHref = locked ? '/protected/settings/billing' : item.href;
                   return (
                     <Link
                       key={item.href}
-                      href={guardedHref(locked ? '/protected/settings/billing' : item.href)}
+                      href={targetHref}
                       onClick={() => setMobileOpen(false)}
                       className={cn(
                         'flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted',
                         locked && 'opacity-50',
                       )}
                     >
-                      <Clock className="h-4 w-4" />
+                      <Icon className="h-4 w-4" />
                       {item.label}
                       {locked && <Lock className="h-3 w-3 ml-auto" />}
                     </Link>
@@ -1036,7 +1025,7 @@ export function TopNavbar({
               <>
                 <p className="px-4 py-1 text-[10px] text-muted-foreground">Brand & Creative</p>
                 <Link
-                  href={guardedHref(brandforgeHref)}
+                  href="/protected/brand-forge"
                   onClick={() => setMobileOpen(false)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
@@ -1054,7 +1043,7 @@ export function TopNavbar({
               <>
                 {(hasCtmsAccess || showBrandforgeInNav) && <p className="px-4 py-1 text-[10px] text-muted-foreground">Platform</p>}
                 <Link
-                  href={guardedHref('/protected/platform/companies')}
+                  href="/protected/platform/companies"
                   onClick={() => setMobileOpen(false)}
                   className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
                 >
@@ -1062,7 +1051,7 @@ export function TopNavbar({
                   Company module access
                 </Link>
                 <Link
-                  href={guardedHref('/protected/platform/docs')}
+                  href="/protected/platform/docs"
                   onClick={() => setMobileOpen(false)}
                   className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
                 >
@@ -1070,7 +1059,7 @@ export function TopNavbar({
                   Documentation editor
                 </Link>
                 <Link
-                  href={guardedHref('/protected/platform/analytics')}
+                  href="/protected/platform/analytics"
                   onClick={() => setMobileOpen(false)}
                   className="flex items-center gap-2 px-4 py-2 text-sm transition-colors text-muted-foreground hover:bg-muted"
                 >
@@ -1086,7 +1075,7 @@ export function TopNavbar({
             <Separator className="my-2" />
             <p className="px-4 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Help</p>
             <Link
-              href={guardedHref('/protected/docs')}
+              href="/protected/docs"
               onClick={() => setMobileOpen(false)}
               className={cn(
                 'flex items-center gap-2 px-4 py-2 text-sm transition-colors',

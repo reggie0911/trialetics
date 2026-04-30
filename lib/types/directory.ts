@@ -1,3 +1,5 @@
+import type { ContactCompletenessSummary } from '@/lib/directory/record-completeness';
+
 export type DirectoryContactStatus = 'active' | 'inactive';
 export type InstitutionStatus = 'active' | 'inactive';
 export type InstitutionOrganizationType =
@@ -110,6 +112,7 @@ export interface DirectoryContactListItem extends DirectoryContactRow {
 export interface DirectoryContactsSnapshot {
   totalContacts: number;
   totalContactsDeltaWeek: number | null;
+  formCompleteness: ContactCompletenessSummary;
   sitesCovered: { covered: number; total: number; percent: number };
   missingRoles: number;
   unassignedToSite: number;

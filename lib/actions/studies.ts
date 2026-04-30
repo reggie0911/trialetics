@@ -329,60 +329,6 @@ export async function createStudy(input: CreateStudyInput): Promise<{ data: Stud
   }
 }
 
-export async function updateStudyFinanceApprovalTemplate(input: {
-  studyId: string;
-  templateId: string | null;
-}): Promise<{ error: string | null }> {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: 'Not signed in.' };
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('company_id, role')
-    .eq('user_id', user.id)
-    .maybeSingle();
-  if (!profile?.company_id) return { error: 'Profile not found.' };
-  if (profile.role !== 'admin') {
-    return { error: 'Only company administrators can change the study approval workflow.' };
-  }
-
-  const { data: study } = await supabase
-    .from('studies')
-    .select('company_id')
-    .eq('id', input.studyId)
-    .maybeSingle();
-  if (!study || study.company_id !== profile.company_id) return { error: 'Study not found.' };
-
-  if (input.templateId) {
-    const { data: tpl } = await supabase
-      .from('finance_approval_templates')
-      .select('id')
-      .eq('id', input.templateId)
-      .eq('company_id', profile.company_id)
-      .maybeSingle();
-    if (!tpl) return { error: 'Approval workflow not found.' };
-  }
-
-  const { error: writeGuard } = await assertStudyWritable(supabase, input.studyId, profile.company_id);
-  if (writeGuard) return { error: writeGuard };
-
-  const { error } = await supabase
-    .from('studies')
-    .update({ finance_approval_template_id: input.templateId })
-    .eq('id', input.studyId)
-    .eq('company_id', profile.company_id);
-  if (error) return { error: error.message };
-  revalidatePath('/protected');
-  revalidatePath('/protected/studies');
-  revalidateStudyCtmsLayout(input.studyId);
-  revalidatePath('/protected/financials');
-  return { error: null };
-}
-
 export async function updateStudy(input: UpdateStudyInput): Promise<{ data: Study | null; error: string | null }> {
   const supabase = await createClient();
 

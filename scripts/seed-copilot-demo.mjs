@@ -667,9 +667,9 @@ async function seedWorkQueue(user) {
     {
       queue: 'Snoozed',
       kind: 'insight',
-      title: 'Spend forecast variance > 10%',
-      body: 'Snoozed until next Monday for budget review meeting.',
-      agentId: 'spend-forecast',
+      title: 'Scenario: enrollment ramp sensitivity',
+      body: 'Snoozed until next Monday for ops review meeting.',
+      agentId: 'scenario-modeler',
     },
   ];
 
@@ -711,7 +711,7 @@ async function seedCollabSession(user, study) {
       coordinator_agent_version: '1.0.0',
       agent_roster: [
         { id: 'enrollment-forecast', version: '1.0.0' },
-        { id: 'spend-forecast', version: '1.0.0' },
+        { id: 'scenario-modeler', version: '1.0.0' },
         { id: 'irb-ec-coordinator', version: '1.0.0' },
       ],
     })
@@ -733,9 +733,9 @@ async function seedCollabSession(user, study) {
     },
     {
       role: 'agent',
-      agentId: 'spend-forecast',
+      agentId: 'scenario-modeler',
       content:
-        '[spend-forecast] Average per-site startup cost: $42K. Five sites = $210K incremental. Per-subject delta drops ~7% vs status quo if ramp meets plan.',
+        '[scenario-modeler] If startup stays at ~6 weeks per wave, adding 5 EU sites pushes peak capacity into late Q2; downside case (+2 weeks startup) shifts most gain into Q3.',
     },
     {
       role: 'agent',
@@ -748,7 +748,7 @@ async function seedCollabSession(user, study) {
       agentId: 'copilot-coordinator',
       content: `Synthesis:
 - Enrollment: net +12 subjects in Q2 likely (medium confidence).
-- Cost: $210K incremental; per-subject economics improve 7% if ramp holds.
+- Timeline: late Q2 capacity lift if startup holds; slips to Q3 if ramp delays.
 - Regulatory: 4-6 weeks (8 weeks worst-case w/ Belgium).
 
 Risks: ramp risk if PI engagement slips; regulatory worst-case slips Q2 gain into Q3.

@@ -21,8 +21,8 @@ interface Props {
 
 const SUGGESTED_ROSTERS: { label: string; agentIds: string[] }[] = [
   {
-    label: 'Enrollment + Finance + Regulatory',
-    agentIds: ['enrollment-forecast', 'spend-forecast', 'irb-ec-coordinator'],
+    label: 'Enrollment + Scenarios + Regulatory',
+    agentIds: ['enrollment-forecast', 'scenario-modeler', 'irb-ec-coordinator'],
   },
   {
     label: 'Risk + Monitoring + CAPA',

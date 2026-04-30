@@ -5,13 +5,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Building2,
-  Calendar,
   ChevronDown,
   ChevronRight,
-  Copy,
   Eye,
   FlaskConical,
-  MoreHorizontal,
   ShieldCheck,
   Stethoscope,
 } from 'lucide-react';
@@ -21,49 +18,37 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import type { InstitutionOrganizationType, InstitutionRow } from '@/lib/types/directory';
+import { COUNTRIES } from '@/lib/data/countries';
 import {
   ORG_TYPE_GROUP_LABEL,
   ORG_TYPE_GROUP_ORDER,
 } from '@/lib/directory/organization-display';
-import {
-  neutralOrgEnrichment,
-  type OrgEnrichment,
-  type OrgHealth,
-} from '@/lib/directory/live-directory-types';
 import { DirectoryEmptyState } from '@/components/ctms/directory/directory-empty-state';
+import { getOrganizationCompleteness } from '@/lib/directory/record-completeness';
 
 export type OrgGroupColumn =
   | 'org'
-  | 'location'
-  | 'studies'
-  | 'enrollment'
-  | 'approval'
-  | 'tat'
-  | 'lastVisit'
-  | 'health'
+  | 'country'
+  | 'region'
+  | 'status'
+  | 'form'
   | 'actions';
 
 const COLUMNS_BY_TYPE: Partial<Record<InstitutionOrganizationType, OrgGroupColumn[]>> = {
-  clinical_site: ['org', 'location', 'studies', 'enrollment', 'lastVisit', 'health', 'actions'],
-  irb_ec: ['org', 'location', 'studies', 'approval', 'lastVisit', 'health', 'actions'],
-  lab: ['org', 'location', 'studies', 'tat', 'lastVisit', 'health', 'actions'],
+  clinical_site: ['org', 'country', 'region', 'status', 'form', 'actions'],
+  irb_ec: ['org', 'country', 'region', 'status', 'form', 'actions'],
+  lab: ['org', 'country', 'region', 'status', 'form', 'actions'],
 };
 
 const DEFAULT_COLUMNS: OrgGroupColumn[] = [
   'org',
-  'location',
-  'studies',
-  'lastVisit',
-  'health',
+  'country',
+  'region',
+  'status',
+  'form',
   'actions',
 ];
 
@@ -116,67 +101,12 @@ const GROUP_THEME: Record<InstitutionOrganizationType, GroupTheme> = {
   },
 };
 
-function healthBadge(h: OrgHealth) {
-  if (h === 'not_tracked') {
-    return {
-      label: 'Not tracked',
-      className:
-        'bg-muted text-muted-foreground border border-border dark:bg-muted/40 dark:text-muted-foreground',
-    };
-  }
-  if (h === 'healthy') {
-    return {
-      label: 'Healthy',
-      className:
-        'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/20',
-    };
-  }
-  if (h === 'critical') {
-    return {
-      label: 'Critical',
-      className:
-        'bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/20',
-    };
-  }
-  return {
-    label: 'At Risk',
-    className:
-      'bg-orange-50 text-orange-700 border border-orange-200 dark:bg-orange-500/10 dark:text-orange-300 dark:border-orange-500/20',
-  };
-}
+const COUNTRY_NAME_BY_CODE = new Map(COUNTRIES.map((country) => [country.code, country.name]));
 
-function progressColor(pct: number): string {
-  if (pct >= 60) return 'bg-emerald-500';
-  if (pct >= 30) return 'bg-amber-500';
-  return 'bg-red-500';
-}
-
-function relativeFromNow(iso: string | null): string {
-  if (!iso) return 'Not tracked';
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return 'Not tracked';
-  const now = Date.now();
-  const days = Math.max(0, Math.round((now - then) / (1000 * 60 * 60 * 24)));
-  if (days === 0) return 'today';
-  if (days === 1) return '1 day ago';
-  if (days < 30) return `${days} days ago`;
-  const months = Math.round(days / 30);
-  if (months === 1) return '1 month ago';
-  if (months < 12) return `${months} months ago`;
-  const years = Math.round(days / 365);
-  return years === 1 ? '1 year ago' : `${years} years ago`;
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return 'Not tracked';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return 'Not tracked';
-  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
-}
-
-function formatLocation(inst: InstitutionRow): string {
-  const parts = [inst.city, inst.country_code].filter(Boolean);
-  return parts.length ? parts.join(', ') : inst.country_code ?? '—';
+function formatCountryName(countryCode: string | null): string {
+  if (!countryCode) return '—';
+  const normalizedCode = countryCode.trim().toUpperCase();
+  return COUNTRY_NAME_BY_CODE.get(normalizedCode) ?? countryCode;
 }
 
 interface OrgGroup {
@@ -210,30 +140,18 @@ interface GroupedOrganizationsTableProps {
    * (and the "View all N" footer link is hidden). Default: 4 rows per group.
    */
   rowsPerGroup?: number | null;
-  /** Local row filter — used by KPI / Needs-Attention chips. */
-  filter?: { health?: OrgHealth | null };
-  enrichmentByInstitutionId?: Record<string, OrgEnrichment>;
 }
 
 export function GroupedOrganizationsTable({
   institutions,
   fromQuery = '',
   rowsPerGroup = 4,
-  filter,
-  enrichmentByInstitutionId = {},
 }: GroupedOrganizationsTableProps) {
   const router = useRouter();
 
   const groups = useMemo(() => {
-    const all = buildGroups(institutions);
-    if (!filter?.health) return all;
-    return all
-      .map((g) => ({
-        ...g,
-        rows: g.rows.filter((r) => enrichmentByInstitutionId[r.id]?.health === filter.health),
-      }))
-      .filter((g) => g.rows.length > 0);
-  }, [institutions, filter, enrichmentByInstitutionId]);
+    return buildGroups(institutions);
+  }, [institutions]);
 
   if (groups.length === 0) {
     return (
@@ -252,7 +170,6 @@ export function GroupedOrganizationsTable({
           group={g}
           rowsPerGroup={rowsPerGroup}
           fromQuery={fromQuery}
-          enrichmentByInstitutionId={enrichmentByInstitutionId}
           onRowOpen={(id) => router.push(`/protected/directory/institutions/${id}${fromQuery}`)}
         />
       ))}
@@ -265,13 +182,11 @@ function OrgGroupSection({
   rowsPerGroup,
   fromQuery,
   onRowOpen,
-  enrichmentByInstitutionId,
 }: {
   group: OrgGroup;
   rowsPerGroup: number | null;
   fromQuery: string;
   onRowOpen: (id: string) => void;
-  enrichmentByInstitutionId: Record<string, OrgEnrichment>;
 }) {
   const labels = ORG_TYPE_GROUP_LABEL[group.type] ?? {
     plural: 'Organizations',
@@ -309,7 +224,7 @@ function OrgGroupSection({
       </div>
       <CollapsibleContent>
         <div className="overflow-x-auto">
-          <Table className="w-full min-w-[860px]">
+          <Table className="w-full min-w-[840px]">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 {cols.map((c) => (
@@ -324,7 +239,6 @@ function OrgGroupSection({
                   inst={inst}
                   cols={cols}
                   fromQuery={fromQuery}
-                  enr={enrichmentByInstitutionId[inst.id] ?? neutralOrgEnrichment()}
                   onOpen={onRowOpen}
                 />
               ))}
@@ -354,13 +268,10 @@ function OrgGroupSection({
 function ColumnHead({ col }: { col: OrgGroupColumn }) {
   const map: Record<OrgGroupColumn, { label: string; className?: string }> = {
     org: { label: 'Organization' },
-    location: { label: 'Location' },
-    studies: { label: 'Study Involvement' },
-    enrollment: { label: 'Enrollment' },
-    approval: { label: 'Approval Status' },
-    tat: { label: 'TAT' },
-    lastVisit: { label: 'Last Visit' },
-    health: { label: 'Health' },
+    country: { label: 'Country' },
+    region: { label: 'Region' },
+    status: { label: 'Status' },
+    form: { label: 'Form' },
     actions: { label: 'Actions', className: 'text-right w-[7rem]' },
   };
   const m = map[col];
@@ -372,13 +283,11 @@ function OrgRow({
   cols,
   fromQuery,
   onOpen,
-  enr,
 }: {
   inst: InstitutionRow;
   cols: OrgGroupColumn[];
   fromQuery: string;
   onOpen: (id: string) => void;
-  enr: OrgEnrichment;
 }) {
   return (
     <TableRow className="h-12">
@@ -387,7 +296,6 @@ function OrgRow({
           key={c}
           col={c}
           inst={inst}
-          enr={enr}
           fromQuery={fromQuery}
           onOpen={onOpen}
         />
@@ -399,25 +307,16 @@ function OrgRow({
 export function OrganizationTableCell({
   col,
   inst,
-  enr,
   fromQuery,
   onOpen,
-  organizationColumnVariant = 'default',
 }: {
   col: OrgGroupColumn;
   inst: InstitutionRow;
-  enr: OrgEnrichment;
   fromQuery: string;
   onOpen: (id: string) => void;
-  /** `nameOnly`: organization name link without type subtitle (flat table has a separate Type column). */
-  organizationColumnVariant?: 'default' | 'nameOnly';
 }) {
   switch (col) {
-    case 'org': {
-      const labels = ORG_TYPE_GROUP_LABEL[inst.organization_type] ?? {
-        singular: inst.organization_type,
-        plural: '',
-      };
+    case 'org':
       return (
         <TableCell className="align-middle max-w-[16rem]">
           <Link
@@ -427,131 +326,73 @@ export function OrganizationTableCell({
             <p className="text-xs font-medium text-foreground truncate" title={inst.name}>
               {inst.name}
             </p>
-            {organizationColumnVariant === 'default' ? (
-              <p className="text-[10px] text-muted-foreground truncate">{labels.singular}</p>
-            ) : null}
           </Link>
         </TableCell>
       );
-    }
-    case 'location':
+    case 'country':
+      const countryName = formatCountryName(inst.country_code);
       return (
-        <TableCell className="align-middle text-xs text-muted-foreground max-w-[12rem]">
-          <span className="block truncate" title={formatLocation(inst)}>
-            {formatLocation(inst)}
+        <TableCell className="align-middle text-xs text-foreground max-w-[8rem]">
+          <span className="block truncate" title={countryName}>
+            {countryName}
           </span>
         </TableCell>
       );
-    case 'studies': {
-      const studies = enr.studyInvolvement;
-      const first = studies[0];
-      const overflow = Math.max(0, studies.length - 1);
+    case 'region':
       return (
-        <TableCell className="align-middle">
-          {first ? (
-            <div className="flex items-center gap-1 flex-wrap">
-              <Badge
-                variant="secondary"
-                className="text-[10px] py-0 px-1.5 font-medium border-0 bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300"
-              >
-                {first}
-              </Badge>
-              {overflow > 0 ? (
-                <Badge
-                  variant="secondary"
-                  className="text-[10px] py-0 px-1.5 font-medium border-0 bg-muted text-muted-foreground"
-                  title={studies.slice(1).join(', ')}
-                >
-                  +{overflow}
-                </Badge>
-              ) : null}
-            </div>
-          ) : (
-            <span className="text-xs text-muted-foreground">—</span>
-          )}
+        <TableCell className="align-middle text-xs text-muted-foreground max-w-[10rem]">
+          <span className="block truncate" title={inst.region ?? '—'}>
+            {inst.region ?? '—'}
+          </span>
         </TableCell>
       );
-    }
-    case 'enrollment': {
-      if (!enr.enrollmentTarget) {
-        return (
-          <TableCell className="align-middle text-xs text-muted-foreground">Not tracked</TableCell>
-        );
-      }
-      const pct = Math.round((enr.enrollmentCurrent / enr.enrollmentTarget) * 100);
+    case 'status':
       return (
-        <TableCell className="align-middle min-w-[10rem]">
-          <div className="flex flex-col gap-1">
-            <span className="text-xs tabular-nums text-foreground">
-              {enr.enrollmentCurrent} / {enr.enrollmentTarget} ({pct}%)
-            </span>
-            <div className="h-1.5 w-full max-w-[10rem] rounded-full bg-muted overflow-hidden">
+        <TableCell className="align-middle">
+          <Badge
+            variant={inst.status === 'active' ? 'default' : 'secondary'}
+            className={cn(
+              'text-[10px] capitalize',
+              inst.status === 'active' && 'bg-sky-100 text-sky-700 border-0 dark:bg-sky-500/15 dark:text-sky-300'
+            )}
+          >
+            {inst.status}
+          </Badge>
+        </TableCell>
+      );
+    case 'form': {
+      const completeness = getOrganizationCompleteness(inst);
+      const missing = completeness.missingFields.slice(0, 2).join(', ');
+      return (
+        <TableCell className="align-middle">
+          <div className="min-w-0 space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium tabular-nums text-foreground">{completeness.percent}%</span>
               <div
-                className={cn('h-full rounded-full', progressColor(pct))}
-                style={{ width: `${Math.min(100, pct)}%` }}
-              />
+                className="h-1.5 w-16 overflow-hidden rounded-full bg-muted"
+                role="progressbar"
+                aria-label="Organization form completion"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={completeness.percent}
+              >
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-[width]',
+                    completeness.complete ? 'bg-emerald-500' : 'bg-sky-500'
+                  )}
+                  style={{ width: `${completeness.percent}%` }}
+                />
+              </div>
             </div>
+            {missing ? (
+              <p className="text-[10px] text-muted-foreground truncate" title={completeness.missingFields.join(', ')}>
+                Missing {missing}
+              </p>
+            ) : (
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-400">Complete</p>
+            )}
           </div>
-        </TableCell>
-      );
-    }
-    case 'approval': {
-      const status = enr.irbStatus ?? 'not_tracked';
-      if (status === 'not_tracked') {
-        return <TableCell className="align-middle text-xs text-muted-foreground">Not tracked</TableCell>;
-      }
-      const date = enr.irbDateISO ? formatDate(enr.irbDateISO) : '—';
-      const isApproved = status === 'approved';
-      return (
-        <TableCell className="align-middle min-w-[10rem]">
-          <div className="flex flex-col gap-0.5">
-            <Badge
-              variant="secondary"
-              className={cn(
-                'text-[10px] py-0 px-1.5 font-medium border-0 capitalize w-fit',
-                isApproved
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300'
-                  : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-200'
-              )}
-            >
-              {status}
-            </Badge>
-            <span className="text-[10px] text-muted-foreground">
-              {isApproved ? 'Approved' : 'Submitted'} {date}
-            </span>
-          </div>
-        </TableCell>
-      );
-    }
-    case 'tat': {
-      if (enr.tatDays == null) {
-        return <TableCell className="align-middle text-xs text-muted-foreground">Not tracked</TableCell>;
-      }
-      return (
-        <TableCell className="align-middle min-w-[8rem]">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs tabular-nums text-foreground">TAT: {enr.tatDays} days</span>
-            <span className="text-[10px] text-muted-foreground">This month</span>
-          </div>
-        </TableCell>
-      );
-    }
-    case 'lastVisit':
-      return (
-        <TableCell className="align-middle min-w-[8rem]">
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs text-foreground">{formatDate(enr.lastVisitISO)}</span>
-            <span className="text-[10px] text-muted-foreground">{relativeFromNow(enr.lastVisitISO)}</span>
-          </div>
-        </TableCell>
-      );
-    case 'health': {
-      const hb = healthBadge(enr.health);
-      return (
-        <TableCell className="align-middle">
-          <span className={cn('inline-flex items-center text-[10px] px-2 py-0.5 rounded-md', hb.className)}>
-            {hb.label}
-          </span>
         </TableCell>
       );
     }
@@ -562,56 +403,13 @@ export function OrganizationTableCell({
             <Button
               type="button"
               variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              title="Open profile"
+              className="h-7 shrink-0 gap-1.5 px-2 text-xs font-medium"
               onClick={() => onOpen(inst.id)}
               aria-label={`Open ${inst.name}`}
             >
-              <Eye className="h-3.5 w-3.5" />
+              <Eye className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              <span className="whitespace-nowrap">Open profile</span>
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              title="Copy organization name"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(inst.name);
-                  toast.success('Copied');
-                } catch {
-                  toast.error('Could not copy');
-                }
-              }}
-            >
-              <Copy className="h-3.5 w-3.5" />
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" variant="ghost" size="icon" className="h-7 w-7" title="More">
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                <DropdownMenuItem onClick={() => onOpen(inst.id)} className="cursor-pointer">
-                  Open profile
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onClick={() => toast.message('Use the Site Visits workflow to schedule monitoring visits.')}
-                >
-                  <Calendar className="h-3.5 w-3.5 mr-2" />
-                  Schedule visit
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onClick={() => toast.message('Open the organization profile to manage study and site links.')}
-                >
-                  Assign to study
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </TableCell>
       );
@@ -623,12 +421,9 @@ export function OrganizationTableCell({
 /** Full column set for the flat organizations table (superset). */
 export const FLAT_ORGANIZATION_COLUMNS: OrgGroupColumn[] = [
   'org',
-  'location',
-  'studies',
-  'enrollment',
-  'approval',
-  'tat',
-  'lastVisit',
-  'health',
+  'country',
+  'region',
+  'status',
+  'form',
   'actions',
 ];

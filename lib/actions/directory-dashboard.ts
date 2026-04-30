@@ -19,6 +19,7 @@ import {
   type OrgSuggestion,
 } from '@/lib/directory/live-directory-types';
 import type { InstitutionRow } from '@/lib/types/directory';
+import { summarizeOrganizationCompleteness } from '@/lib/directory/record-completeness';
 
 async function requireReader() {
   const supabase = await createClient();
@@ -140,6 +141,7 @@ export async function getDirectoryOrganizationSnapshot(
 
     const rows = (institutions ?? []) as InstitutionRow[];
     if (rows.length === 0) return { data: EMPTY_ORGANIZATION_SNAPSHOT, error: null };
+    const formCompleteness = summarizeOrganizationCompleteness(rows);
 
     const institutionIds = rows.map((r) => r.id);
     const [{ data: studyLinks }, { data: siteLinks }, { data: studySites }, { data: subjects }, { data: visits }] =
@@ -297,6 +299,7 @@ export async function getDirectoryOrganizationSnapshot(
         kpi: {
           totalOrganizations: rows.length,
           totalOrganizationsLabel: 'All types',
+          formCompleteness,
           activeSites: { active: activeClinical, total: clinical.length },
           sitesAtRisk,
           irbsPending: 0,

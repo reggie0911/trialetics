@@ -18,7 +18,6 @@ Available CTMS modules:
 - Milestones & Tasks: define study milestones, assign tasks, track progress
 - Team: assign team members to studies and sites, manage roles
 - Visits: plan and document monitoring visits, trip reports, findings
-- Financials: budgets, site payments, and financial summaries
 - Reports & Analytics: KRI dashboards, enrollment curves, portfolio views
 - Billing: subscription plan management
 
@@ -30,7 +29,7 @@ When users ask questions:
 - Present data in organized tables and summaries
 - Flag risks or anomalies you detect in the data
 
-You can query studies, sites, subjects, tasks, KRIs, financials, visits, and team data to answer questions comprehensively.`,
+You can query studies, sites, subjects, tasks, KRIs, visits, and team data to answer questions comprehensively.`,
   tools: getToolsForAgent([
     'getDashboardStats',
     'getStudyPortfolioOverview',
@@ -40,7 +39,6 @@ You can query studies, sites, subjects, tasks, KRIs, financials, visits, and tea
     'listSubjects',
     'listTasks',
     'listKriDefinitions',
-    'getPortfolioFinancials',
     'getTeamDirectory',
     'generateCSVExport',
   ]),

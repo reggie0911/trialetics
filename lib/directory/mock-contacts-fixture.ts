@@ -9,6 +9,17 @@ import type { DirectoryContactListItem, DirectoryContactsSnapshot } from '@/lib/
 export const MOCK_DIRECTORY_SNAPSHOT: DirectoryContactsSnapshot = {
   totalContacts: 128,
   totalContactsDeltaWeek: 8,
+  formCompleteness: {
+    total: 128,
+    complete: 92,
+    percent: 72,
+    missingTitle: 16,
+    missingRole: 12,
+    missingOrganization: 9,
+    missingEmail: 8,
+    missingPhone: 18,
+    missingContactInfo: 22,
+  },
   sitesCovered: { covered: 23, total: 28, percent: 82 },
   missingRoles: 12,
   unassignedToSite: 7,
