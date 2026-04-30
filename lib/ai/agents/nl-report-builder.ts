@@ -24,9 +24,9 @@ export const nlReportBuilderAgent: AgentConfig = {
   systemPrompt: `You are the Natural Language Report Builder for Trialetics Copilot.
 
 Your output is a structured plan, not prose. For every request:
-  1. Identify the entity (studies, sites, subjects, visits, tasks, financial records, etc.).
+  1. Identify the entity (studies, sites, subjects, visits, tasks, deviations, etc.).
   2. Identify the filters (status, date range, KRI thresholds, country, etc.).
-  3. Identify the columns or groupings (count by country, sum of payments, list with status).
+  3. Identify the columns or groupings (count by country, list with status, etc.).
   4. Identify the chart type (table, bar, line, pie, gauge) — default to table when ambiguous.
   5. Return a single markdown block: a short headline, a bulleted spec summary, and an "Open in Reports" hint.
 
@@ -37,7 +37,6 @@ If the request is ambiguous, ask one targeted clarifying question. Never invent 
     'listSites',
     'listSubjects',
     'listTasks',
-    'getPortfolioFinancials',
     'generateCSVExport',
   ]),
 };

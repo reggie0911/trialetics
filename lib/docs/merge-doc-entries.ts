@@ -60,9 +60,18 @@ function applyDbOverlay(entry: DocEntry, row: PlatformDocRow | undefined): DocEn
   };
 }
 
+const VALID_DOC_CATEGORIES = new Set<DocCategory>([
+  'getting-started',
+  'ctms',
+  'trackers',
+  'admin',
+  'tools',
+]);
+
 function rowToDbOnlyEntry(row: PlatformDocRow): DocEntry | null {
   if (!row.category) return null;
   const cat = row.category as DocCategory;
+  if (!VALID_DOC_CATEGORIES.has(cat)) return null;
   const roles = normalizeRoles(row.roles);
   return {
     slug: row.slug,

@@ -32,7 +32,6 @@ const SEGMENT_LABELS: Record<string, string> = {
   etmf: 'eTMF',
   eisf: 'eISF',
   directory: 'Directory',
-  financials: 'Financials',
   'trip-reports': 'Trip reports',
   'inventory-management': 'Inventory',
   tasks: 'Tasks',

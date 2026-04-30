@@ -1,4 +1,4 @@
-export type DocCategory = 'getting-started' | 'ctms' | 'trackers' | 'payments' | 'admin' | 'tools';
+export type DocCategory = 'getting-started' | 'ctms' | 'trackers' | 'admin' | 'tools';
 
 /** Serializable icon id — map to Lucide in client code via `getDocIcon` from `@/lib/docs/doc-icons`. */
 export type DocIconKey =
@@ -38,7 +38,6 @@ export const DOC_CATEGORY_LABELS: Record<DocCategory, string> = {
   'getting-started': 'Getting Started',
   ctms: 'Clinical Trial Management',
   trackers: 'Study Trackers',
-  payments: 'Payments & Financials',
   admin: 'Administration',
   tools: 'AI Tools & Creative',
 };
@@ -47,7 +46,6 @@ export const DOC_CATEGORY_ORDER: DocCategory[] = [
   'getting-started',
   'ctms',
   'trackers',
-  'payments',
   'tools',
   'admin',
 ];
@@ -152,31 +150,6 @@ export const docsRegistry: DocEntry[] = [
     moduleRoute: '/protected/mc',
   },
   {
-    slug: 'clinical-payments',
-    title: 'Clinical Payments',
-    description: 'Manage payment activities, contracts, and accruals for clinical sites.',
-    category: 'payments',
-    iconKey: 'creditCard',
-    filePath: 'docs/user-manuals/clinical-payments.md',
-    order: 1,
-    roles: ['admin', 'user'],
-    lastUpdated: '2026-03-21',
-    moduleRoute: '/protected/clinical-payments',
-  },
-  {
-    slug: 'financials-invoices',
-    title: 'Financials & Invoice Approvals',
-    description:
-      'Submitting invoices with AI extraction, configurable multi-step approval workflows, study defaults, amount escalation, approval queue, site budgets, and payment recording.',
-    category: 'payments',
-    iconKey: 'bookOpen',
-    filePath: 'docs/user-manuals/financials-invoices.md',
-    order: 2,
-    roles: ['admin', 'user'],
-    lastUpdated: '2026-03-31',
-    moduleRoute: '/protected/studies',
-  },
-  {
     slug: 'platform-admin',
     title: 'Platform Administration',
     description: 'Manage company access, modules, and platform-level configuration.',
@@ -221,7 +194,6 @@ export function getDocsByCategory(entries: DocEntry[]): Record<DocCategory, DocE
     'getting-started': [],
     ctms: [],
     trackers: [],
-    payments: [],
     admin: [],
     tools: [],
   };

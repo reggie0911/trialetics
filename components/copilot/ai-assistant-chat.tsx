@@ -68,11 +68,6 @@ const SUGGESTED_PROMPTS: Record<string, string[]> = {
     'Which sites are below target?',
     'Summarize SDV completion rates',
   ],
-  'clinical-payments': [
-    'Show payment status by site',
-    'Any payment exceptions?',
-    'Summarize outstanding payments',
-  ],
   'clinical-training': [
     'Show training completion rates',
     'Which sites are non-compliant?',

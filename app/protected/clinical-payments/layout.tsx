@@ -1,6 +1,0 @@
-import { requireCtmsAccess } from '@/lib/server/require-ctms-access';
-
-export default async function ClinicalPaymentsLayout({ children }: { children: React.ReactNode }) {
-  await requireCtmsAccess();
-  return children;
-}

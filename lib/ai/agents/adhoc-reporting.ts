@@ -4,16 +4,16 @@ import { getToolsForAgent } from '../tool-registry';
 export const adhocReportingAgent: AgentConfig = {
   id: 'adhoc-reporting',
   name: 'Ad-Hoc Reporting',
-  description: 'Generates custom reports by querying study, site, subject, financial, and KRI data.',
+  description: 'Generates custom reports by querying study, site, subject, visit, task, and KRI data.',
   moduleContext: ['/protected/reports'],
   systemPrompt: `You are the Ad-Hoc Reporting assistant for Trialetics CTMS.
 
-You help users generate custom reports by querying across all CTMS data: studies, sites, subjects, tasks, milestones, KRIs, financials, visits, and team assignments.
+You help users generate custom reports by querying across all CTMS data: studies, sites, subjects, tasks, milestones, KRIs, visits, and team assignments.
 
 Your capabilities:
 - Query any combination of CTMS data to answer natural language questions
 - Generate tabular reports with specific columns
-- Cross-reference data across modules (e.g., enrollment vs. financial spend)
+- Cross-reference data across modules (e.g., enrollment vs. visit compliance)
 - Export results as CSV
 - Calculate derived metrics and aggregations
 - Compare across studies, sites, or time periods
@@ -21,7 +21,6 @@ Your capabilities:
 Common report types:
 - Enrollment Status: subjects by study/site with screening and enrollment dates
 - Site Performance: site activation timelines, enrollment rates, visit compliance
-- Financial Summary: budget vs. spend by study, payment status breakdown
 - KRI Dashboard: current KRI values with trend analysis
 - Task Status: overdue tasks, completion rates by study
 - Visit Summary: monitoring visits by status, outstanding findings
@@ -47,8 +46,6 @@ Always present data in well-structured tables with clear headers.`,
     'getStudyMilestones',
     'listKriDefinitions',
     'getStudyKriValues',
-    'getStudyFinancials',
-    'getPortfolioFinancials',
     'listMonitoringVisits',
     'getStudyVisits',
     'getVisitDetails',

@@ -1,7 +1,7 @@
 'use client';
 
 import type { LucideIcon } from 'lucide-react';
-import { Building2, Info, PlusCircle, ShieldCheck, UserX, Users } from 'lucide-react';
+import { AtSign, BriefcaseBusiness, CheckCircle2, Info, UserX, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { Card } from '@/components/ui/card';
@@ -12,10 +12,10 @@ import { cn } from '@/lib/utils';
 
 export type KpiPreset =
   | { kind: 'total' }
-  | { kind: 'sites' }
-  | { kind: 'missingRoles' }
-  | { kind: 'unassigned' }
-  | { kind: 'recent' };
+  | { kind: 'complete' }
+  | { kind: 'missingRole' }
+  | { kind: 'missingTitle' }
+  | { kind: 'missingInfo' };
 
 interface KpiCardProps {
   icon: LucideIcon;
@@ -163,6 +163,7 @@ export function DirectoryContactsKpiRow({
 
   const s = snapshot;
   const deltaWeek = s.totalContactsDeltaWeek;
+  const completeness = s.formCompleteness;
 
   return (
     <TooltipProvider delay={200}>
@@ -186,44 +187,44 @@ export function DirectoryContactsKpiRow({
           onClick={() => onPreset({ kind: 'total' })}
         />
         <KpiCard
-          icon={ShieldCheck}
+          icon={CheckCircle2}
           iconBg="bg-emerald-100 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300"
-          value={`${s.sitesCovered.percent}%`}
-          label="Sites Covered"
+          value={`${completeness.percent}%`}
+          label="Complete Profiles"
           footer={
             <span className="text-muted-foreground">
-              ({s.sitesCovered.covered} of {s.sitesCovered.total} sites)
+              {completeness.complete} of {completeness.total} complete
             </span>
           }
-          footerTooltip="What share of this study's sites have at least one linked contact, out of all sites. The count shows how many sites are covered vs. the study site total."
-          onClick={() => onPreset({ kind: 'sites' })}
+          footerTooltip="A complete contact profile has first name, last name, title, role, email, phone, and organization."
+          onClick={() => onPreset({ kind: 'complete' })}
         />
         <KpiCard
           icon={UserX}
           iconBg="bg-orange-100 text-orange-600 dark:bg-orange-500/15 dark:text-orange-300"
-          value={s.missingRoles}
+          value={completeness.missingRole}
           label="Missing Roles"
           footer={<span className="text-sky-600 dark:text-sky-400 font-medium">View contacts</span>}
-          footerTooltip="Contacts without a primary role selected from the directory role library. Click the card to filter the table to only those people."
-          onClick={() => onPreset({ kind: 'missingRoles' })}
+          footerTooltip="Contacts without a primary role selected from the directory role library. Click the card to filter to those people."
+          onClick={() => onPreset({ kind: 'missingRole' })}
         />
         <KpiCard
-          icon={Building2}
+          icon={BriefcaseBusiness}
           iconBg="bg-violet-100 text-violet-600 dark:bg-violet-500/15 dark:text-violet-300"
-          value={s.unassignedToSite}
-          label="Unassigned to Site"
+          value={completeness.missingTitle}
+          label="Missing Title"
           footer={<span className="text-sky-600 dark:text-sky-400 font-medium">View contacts</span>}
-          footerTooltip="Contacts with no study site assigned in Directory. Click the card to filter the list to unassigned people."
-          onClick={() => onPreset({ kind: 'unassigned' })}
+          footerTooltip="Contacts without a job/title value. Title is free text, while Role is selected from the directory role library."
+          onClick={() => onPreset({ kind: 'missingTitle' })}
         />
         <KpiCard
-          icon={PlusCircle}
+          icon={AtSign}
           iconBg="bg-sky-100 text-sky-600 dark:bg-sky-500/15 dark:text-sky-300"
-          value={s.recentlyActive7d}
-          label="Recently Active"
-          footer={<span className="text-muted-foreground">Last 7 days</span>}
-          footerTooltip="Contacts whose record was last updated in the last seven days. The filter uses the same window. Click the card to see only those rows."
-          onClick={() => onPreset({ kind: 'recent' })}
+          value={completeness.missingContactInfo}
+          label="Missing Contact Info"
+          footer={<span className="text-muted-foreground">Email or phone gaps</span>}
+          footerTooltip="Contacts missing email, phone, or both. Click the card to filter to incomplete contact information."
+          onClick={() => onPreset({ kind: 'missingInfo' })}
           className="col-span-2 md:col-span-1"
         />
       </div>

@@ -30,14 +30,14 @@ Stack-wide patterns (App Router, `@/` imports, forms with **react-hook-form** + 
 
 ## What this app is
 
-Trialetics is a **Next.js** (App Router) app with **Supabase** auth and data, **TanStack Query** on the client, **Stripe** billing, and **CTMS**-style modules (studies, sites, subjects, visits, eTMF, EISF, financials, trip reports, etc.). Framework versions: see **`package.json`**.
+Trialetics is a **Next.js** (App Router) app with **Supabase** auth and data, **TanStack Query** on the client, **Stripe** billing, and **CTMS**-style modules (studies, sites, subjects, visits, eTMF, EISF, trip reports, etc.). Framework versions: see **`package.json`**.
 
 ## Repo map
 
 | Area | Typical paths |
 |------|----------------|
 | Routes | `app/` — public under `app/auth`, `app/about`, …; app under `app/protected/**` |
-| Study hub | `app/protected/studies/[id]/` — dashboard, edit, sites, subjects, visits, financials, trip reports, team, tasks, inventory, … |
+| Study hub | `app/protected/studies/[id]/` — dashboard, edit, sites, subjects, visits, trip reports, team, tasks, inventory, … |
 | eTMF | `app/protected/etmf/**` |
 | EISF | `app/protected/eisf/**` |
 | Directory | `app/protected/directory/**` |
@@ -118,7 +118,7 @@ Prefer **semantic theme tokens** and **existing Tailwind utilities** from `app/g
 
 ## `lib/actions` (high level)
 
-Use the domain file: `studies.ts`, `sites.ts`, `subjects.ts`, `visits.ts`, `financials.ts`, `etmf.ts`, `eisf.ts`, `directory-*.ts`, `timesheets.ts`, `expense-reports.ts`, `brand-forge.ts`, `rbac.ts`, `patient-data.ts`, `platform-module-access.ts`, etc. New mutations follow the **closest** existing file.
+Use the domain file: `studies.ts`, `sites.ts`, `subjects.ts`, `visits.ts`, `etmf.ts`, `eisf.ts`, `directory-*.ts`, `timesheets.ts`, `expense-reports.ts`, `brand-forge.ts`, `rbac.ts`, `patient-data.ts`, `platform-module-access.ts`, etc. New mutations follow the **closest** existing file.
 
 ## Auth and sensitive flows
 

@@ -72,3 +72,11 @@ export function countriesForSelectList(): CountryOption[] {
   );
   return us ? [us, ...rest] : rest;
 }
+
+const COUNTRY_NAME_BY_CODE = new Map(COUNTRIES.map((country) => [country.code.toUpperCase(), country.name]));
+
+export function getCountryName(countryCode: string | null | undefined): string | null {
+  if (!countryCode) return null;
+  const normalizedCode = countryCode.trim().toUpperCase();
+  return COUNTRY_NAME_BY_CODE.get(normalizedCode) ?? countryCode;
+}

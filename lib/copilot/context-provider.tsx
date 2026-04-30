@@ -34,8 +34,6 @@ export interface CopilotContextEnrichment {
   visitLabel?: string | null;
   documentId?: string | null;
   documentLabel?: string | null;
-  financialRecordId?: string | null;
-  financialRecordLabel?: string | null;
 }
 
 function copilotEnrichmentContentEqual(
@@ -60,7 +58,6 @@ export interface CopilotContextValue extends ResolvedCopilotContext {
   subjectLabel: string | null;
   visitLabel: string | null;
   documentLabel: string | null;
-  financialRecordLabel: string | null;
 
   isOpen: boolean;
   open: () => void;
@@ -126,7 +123,6 @@ export function CopilotContextProvider({
     let subjectId = resolved.subjectId;
     let visitId = resolved.visitId;
     let documentId = resolved.documentId;
-    let financialRecordId = resolved.financialRecordId;
 
     let studyTitle: string | null = null;
     let studyStatus: string | null = null;
@@ -135,7 +131,6 @@ export function CopilotContextProvider({
     let subjectLabel: string | null = null;
     let visitLabel: string | null = null;
     let documentLabel: string | null = null;
-    let financialRecordLabel: string | null = null;
 
     for (const enrichment of Object.values(enrichments)) {
       if (enrichment.module) mod = enrichment.module;
@@ -144,7 +139,6 @@ export function CopilotContextProvider({
       if (enrichment.subjectId !== undefined) subjectId = enrichment.subjectId;
       if (enrichment.visitId !== undefined) visitId = enrichment.visitId;
       if (enrichment.documentId !== undefined) documentId = enrichment.documentId;
-      if (enrichment.financialRecordId !== undefined) financialRecordId = enrichment.financialRecordId;
 
       if (enrichment.studyTitle !== undefined) studyTitle = enrichment.studyTitle;
       if (enrichment.studyStatus !== undefined) studyStatus = enrichment.studyStatus;
@@ -153,7 +147,6 @@ export function CopilotContextProvider({
       if (enrichment.subjectLabel !== undefined) subjectLabel = enrichment.subjectLabel;
       if (enrichment.visitLabel !== undefined) visitLabel = enrichment.visitLabel;
       if (enrichment.documentLabel !== undefined) documentLabel = enrichment.documentLabel;
-      if (enrichment.financialRecordLabel !== undefined) financialRecordLabel = enrichment.financialRecordLabel;
     }
 
     return {
@@ -163,7 +156,6 @@ export function CopilotContextProvider({
       subjectId,
       visitId,
       documentId,
-      financialRecordId,
       studyTitle,
       studyStatus,
       isStudyReadOnly,
@@ -171,7 +163,6 @@ export function CopilotContextProvider({
       subjectLabel,
       visitLabel,
       documentLabel,
-      financialRecordLabel,
       pathname,
       userId,
       userRole,

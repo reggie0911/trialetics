@@ -219,39 +219,6 @@ export const ctmsReadTools: Record<string, ToolDefinition> = {
     },
   },
 
-  // ─── Financial Tools ──────────────────────────────────────────
-
-  getStudyFinancials: {
-    name: 'getStudyFinancials',
-    description: 'Get financial summary for a study: budget totals, paid, pending, approved amounts.',
-    parameters: {
-      type: 'object',
-      properties: {
-        studyId: { type: 'string', description: 'Study UUID' },
-      },
-      required: ['studyId'],
-    },
-    handler: async (args) => {
-      const { getStudyFinancialSummary, getStudyBudgets, getStudyPayments } = await import('@/lib/actions/financials');
-      const [summary, budgets, payments] = await Promise.all([
-        getStudyFinancialSummary(args.studyId as string),
-        getStudyBudgets(args.studyId as string),
-        getStudyPayments(args.studyId as string),
-      ]);
-      return { summary, budgetCount: budgets.length, paymentCount: payments.length, budgets, payments };
-    },
-  },
-
-  getPortfolioFinancials: {
-    name: 'getPortfolioFinancials',
-    description: 'Get portfolio-level financial overview across all studies.',
-    parameters: { type: 'object', properties: {} },
-    handler: async () => {
-      const { getPortfolioFinancials } = await import('@/lib/actions/financials');
-      return getPortfolioFinancials();
-    },
-  },
-
   // ─── Visit/Monitoring Tools ────────────────────────────────────
 
   listMonitoringVisits: {

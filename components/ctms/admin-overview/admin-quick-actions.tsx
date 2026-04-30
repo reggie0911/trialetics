@@ -26,7 +26,7 @@ const ACTIONS: QuickAction[] = [
     icon: FileText,
     tone: { bg: 'bg-sky-500/10', text: 'text-sky-600 dark:text-sky-400' },
     cta: 'View Templates',
-    href: '/protected/financials/approval-templates',
+    href: '/protected/studies#study-templates',
   },
   {
     key: 'users',

@@ -15,14 +15,13 @@ import {
 import { TEAM_ROLE_OPTIONS, type TeamMemberRole } from '@/lib/types/ctms';
 import { cn } from '@/lib/utils';
 
-type Capability = 'sites' | 'subjects' | 'visits' | 'etmf' | 'financials' | 'team';
+type Capability = 'sites' | 'subjects' | 'visits' | 'etmf' | 'team';
 
 const CAPABILITY_LABEL: Record<Capability, string> = {
   sites: 'Sites',
   subjects: 'Subjects',
   visits: 'Visits',
   etmf: 'eTMF',
-  financials: 'Financials',
   team: 'Team',
 };
 
@@ -34,7 +33,7 @@ const CAPABILITY_LABEL: Record<Capability, string> = {
  * being wired up.
  */
 const ROLE_PERMISSIONS: Partial<Record<TeamMemberRole, Capability[]>> = {
-  clinical_project_manager: ['sites', 'subjects', 'visits', 'etmf', 'financials', 'team'],
+  clinical_project_manager: ['sites', 'subjects', 'visits', 'etmf', 'team'],
   clinical_research_associate: ['sites', 'subjects', 'visits', 'etmf'],
   clinical_trial_assistant: ['sites', 'subjects', 'etmf'],
   clinical_data_manager: ['subjects', 'visits'],
@@ -42,22 +41,22 @@ const ROLE_PERMISSIONS: Partial<Record<TeamMemberRole, Capability[]>> = {
   study_coordinator: ['subjects', 'visits'],
   principal_investigator: ['subjects', 'visits'],
   biostatistician: ['subjects'],
-  finance_director: ['financials'],
-  finance_reviewer: ['financials'],
-  accounts_payable_specialist: ['financials'],
-  site_budget_specialist: ['financials', 'sites'],
-  contracts_manager: ['etmf', 'financials'],
-  clinical_contracts_specialist: ['etmf', 'financials'],
+  finance_director: ['team'],
+  finance_reviewer: ['team'],
+  accounts_payable_specialist: ['team'],
+  site_budget_specialist: ['sites'],
+  contracts_manager: ['etmf'],
+  clinical_contracts_specialist: ['etmf'],
   regulatory_specialist: ['etmf'],
   safety_specialist: ['subjects'],
   inventory_specialist: ['sites'],
   medical_writer: ['etmf'],
-  executive_director: ['sites', 'subjects', 'visits', 'etmf', 'financials', 'team'],
+  executive_director: ['sites', 'subjects', 'visits', 'etmf', 'team'],
   vendor_manager: ['sites', 'etmf'],
   study_startup_specialist: ['sites', 'etmf'],
 };
 
-const CAPABILITIES: Capability[] = ['sites', 'subjects', 'visits', 'etmf', 'financials', 'team'];
+const CAPABILITIES: Capability[] = ['sites', 'subjects', 'visits', 'etmf', 'team'];
 
 export function StudyTeamRolesPermissions() {
   const visibleRoles = TEAM_ROLE_OPTIONS.filter((opt) => opt.value !== 'custom');

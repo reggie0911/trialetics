@@ -86,7 +86,7 @@ const testimonials = [
     image:
       'https://images.unsplash.com/photo-1507591064344-4c6ce005b128?w=400&h=400&fit=crop&crop=face',
     testimonial:
-      'We use Trialetics across all our study teams — from monitoring to financials. Having one platform for tasks, trips, and reports has transformed our operations.',
+      'We use Trialetics across all our study teams — from monitoring to documentation. Having one platform for tasks, trips, and reports has transformed our operations.',
   },
   {
     id: '8',

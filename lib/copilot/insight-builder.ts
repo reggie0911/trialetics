@@ -34,7 +34,6 @@ export type InsightModule =
   | 'visits'
   | 'tasks'
   | 'reports'
-  | 'financials'
   | 'general';
 
 export interface InsightContext {

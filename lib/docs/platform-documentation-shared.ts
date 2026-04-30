@@ -5,7 +5,6 @@ export const PLATFORM_DOC_CATEGORIES: DocCategory[] = [
   'getting-started',
   'ctms',
   'trackers',
-  'payments',
   'admin',
 ];
 

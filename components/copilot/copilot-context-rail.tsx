@@ -7,7 +7,6 @@ import {
   ClipboardList,
   FileText,
   MapPin,
-  Receipt,
   ShieldOff,
   User,
   Wrench,
@@ -189,14 +188,6 @@ function buildContextRows(ctx: CopilotContextValue) {
       icon: <FileText className="h-3 w-3" />,
       label: 'Document',
       value: ctx.documentLabel ?? ctx.documentId ?? '—',
-    });
-  }
-
-  if (ctx.financialRecordLabel || ctx.financialRecordId) {
-    rows.push({
-      icon: <Receipt className="h-3 w-3" />,
-      label: 'Financial record',
-      value: ctx.financialRecordLabel ?? ctx.financialRecordId ?? '—',
     });
   }
 

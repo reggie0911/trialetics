@@ -21,7 +21,6 @@ export type ReportEntity =
   | 'visits'
   | 'tasks'
   | 'documents'
-  | 'financials'
   | 'deviations';
 
 export type ReportChartType = 'table' | 'bar' | 'line' | 'pie' | 'gauge' | 'kpi';
@@ -43,11 +42,9 @@ export interface ReportSpec {
   caveats: string[];
 }
 
-// Order matters: more specific signals (financials, deviations) should be
-// checked before broad ones (sites, studies) so e.g. "payments by site" picks
-// financials with site as a group-by, not sites as the entity.
+// Order matters: more specific signals (deviations) should be
+// checked before broad ones (sites, studies).
 const ENTITY_KEYWORDS: { entity: ReportEntity; words: string[] }[] = [
-  { entity: 'financials', words: ['financ', 'budget', 'spend', 'invoice', 'payment', 'cost'] },
   { entity: 'deviations', words: ['deviation', 'protocol violation', 'non-compliance'] },
   { entity: 'documents', words: ['document', 'tmf', 'artifact', 'file'] },
   { entity: 'tasks', words: ['task', 'capa', 'action item', 'to-do', 'todo'] },
@@ -149,12 +146,6 @@ function detectGroupBy(prompt: string): string[] {
 
 function detectMetrics(prompt: string, entity: ReportEntity): ReportSpec['metrics'] {
   const lower = prompt.toLowerCase();
-  if (entity === 'financials') {
-    if (lower.includes('avg') || lower.includes('average')) {
-      return [{ id: 'avg_amount', label: 'Average amount', aggregation: 'avg' }];
-    }
-    return [{ id: 'sum_amount', label: 'Total amount', aggregation: 'sum' }];
-  }
   return [{ id: 'count', label: `Count of ${entity}`, aggregation: 'count' }];
 }
 
@@ -188,10 +179,6 @@ export function buildReportSpec(prompt: string): ReportSpec {
   if (chart !== 'table' && !groupBy.length) {
     caveats.push(`A ${chart} chart usually needs a grouping; defaulting to a flat axis.`);
   }
-  if (entity === 'financials' && !filters.some(f => f.field === 'status')) {
-    caveats.push('Financial reports usually exclude voided invoices — add an explicit filter if needed.');
-  }
-
   return {
     ...partial,
     headline: buildHeadline(partial),

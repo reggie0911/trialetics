@@ -19,7 +19,6 @@ export type CopilotModule =
   | 'visit'
   | 'tasks'
   | 'directory'
-  | 'financials'
   | 'reports'
   | 'time-expenses'
   | 'documents'
@@ -35,7 +34,6 @@ export type CopilotModule =
   | 'ae-metrics'
   | 'ecrf-query-tracker'
   | 'med-compliance'
-  | 'clinical-payments'
   | 'clinical-training'
   | 'inventory-management'
   | 'custom-tracker'
@@ -48,7 +46,6 @@ export interface ResolvedCopilotContext {
   subjectId: string | null;
   visitId: string | null;
   documentId: string | null;
-  financialRecordId: string | null;
 }
 
 const STUDY_RE = /^\/protected\/studies\/([^\/]+)/;
@@ -56,8 +53,6 @@ const STUDY_SITE_RE = /^\/protected\/studies\/[^\/]+\/sites\/([^\/]+)/;
 const STUDY_SUBJECT_RE = /^\/protected\/studies\/[^\/]+\/(?:patients|subjects)\/([^\/]+)/;
 const STUDY_VISIT_RE = /^\/protected\/studies\/[^\/]+\/visits\/([^\/]+)/;
 const STUDY_TRIP_REPORT_RE = /^\/protected\/studies\/[^\/]+\/trip-reports\/([^\/]+)/;
-const STUDY_FIN_RE = /^\/protected\/studies\/[^\/]+\/financials\/(?:invoices|approvals)\/([^\/]+)/;
-
 const MODULE_PREFIX_RULES: Array<{ prefix: string; module: CopilotModule }> = [
   { prefix: '/protected/studies', module: 'studies' },
   { prefix: '/protected/directory', module: 'directory' },
@@ -67,7 +62,6 @@ const MODULE_PREFIX_RULES: Array<{ prefix: string; module: CopilotModule }> = [
   { prefix: '/protected/platform', module: 'platform' },
   { prefix: '/protected/settings', module: 'settings' },
   { prefix: '/protected/time-expenses', module: 'time-expenses' },
-  { prefix: '/protected/financials', module: 'financials' },
   { prefix: '/protected/reports', module: 'reports' },
   { prefix: '/protected/trip-reports', module: 'trip-reports' },
   { prefix: '/protected/patients', module: 'patients' },
@@ -76,7 +70,6 @@ const MODULE_PREFIX_RULES: Array<{ prefix: string; module: CopilotModule }> = [
   { prefix: '/protected/ae', module: 'ae-metrics' },
   { prefix: '/protected/ecrf-query-tracker', module: 'ecrf-query-tracker' },
   { prefix: '/protected/mc', module: 'med-compliance' },
-  { prefix: '/protected/clinical-payments', module: 'clinical-payments' },
   { prefix: '/protected/clinical-training', module: 'clinical-training' },
   { prefix: '/protected/inventory-management', module: 'inventory-management' },
   { prefix: '/protected/custom-trackers', module: 'custom-tracker' },
@@ -91,8 +84,6 @@ export function resolveCopilotContext(pathname: string): ResolvedCopilotContext 
   const subjectMatch = pathname.match(STUDY_SUBJECT_RE);
   const visitMatch = pathname.match(STUDY_VISIT_RE);
   const tripMatch = pathname.match(STUDY_TRIP_REPORT_RE);
-  const finMatch = pathname.match(STUDY_FIN_RE);
-
   let mod: CopilotModule = 'general';
   if (pathname === '/protected' || pathname === '/protected/') {
     mod = 'dashboard';
@@ -114,7 +105,6 @@ export function resolveCopilotContext(pathname: string): ResolvedCopilotContext 
     subjectId: subjectMatch?.[1] ?? null,
     visitId: visitMatch?.[1] ?? tripMatch?.[1] ?? null,
     documentId: null,
-    financialRecordId: finMatch?.[1] ?? null,
   };
 }
 
@@ -131,7 +121,6 @@ export function moduleLabel(mod: CopilotModule): string {
     case 'visit': return 'Visit';
     case 'tasks': return 'Tasks';
     case 'directory': return 'Contacts & Organizations';
-    case 'financials': return 'Financials';
     case 'reports': return 'Reports & Analytics';
     case 'time-expenses': return 'Time & Expenses';
     case 'documents': return 'Documents';
@@ -147,7 +136,6 @@ export function moduleLabel(mod: CopilotModule): string {
     case 'ae-metrics': return 'AE Metrics';
     case 'ecrf-query-tracker': return 'eCRF Queries';
     case 'med-compliance': return 'Medication Compliance';
-    case 'clinical-payments': return 'Clinical Payments';
     case 'clinical-training': return 'Clinical Training';
     case 'inventory-management': return 'Inventory';
     case 'custom-tracker': return 'Custom Tracker';

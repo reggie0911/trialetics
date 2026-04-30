@@ -19,15 +19,6 @@ import { listDirectoryContacts } from '@/lib/actions/directory-contacts';
 import { getDirectoryRoleCatalog } from '@/lib/actions/directory-catalog';
 import { listInstitutions } from '@/lib/actions/directory-institutions';
 import { SiteDetailTabs } from '@/components/ctms/sites/site-detail-tabs';
-import type { InvoiceBudgetLineAllocationRef } from '@/lib/types/ctms';
-import {
-  getSiteBudgetWithLineItems,
-  getBudgetAllocationsForSite,
-  listInvoiceAllocationRefsBySiteBudget,
-} from '@/lib/actions/finance-site-budgets';
-import { listFinanceInvoicesForSite } from '@/lib/actions/finance-invoices';
-import { listFinanceApprovalTemplateOptions } from '@/lib/actions/finance-approval-templates';
-import { getStudySchedules, getStudyBudgetMeta, listStudyBudgetOptions } from '@/lib/actions/financials';
 import { buildEnrollmentCumulativeSeries } from '@/lib/site-enrollment-forecast';
 import {
   buildNeedsAttentionList,
@@ -66,17 +57,12 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
     enrolledCount,
     siteTasks,
     dirContactsRes,
-    siteBudget,
-    siteFinanceInvoices,
-    studySchedules,
     initialSiteSubjects,
     siteFunnel,
     studySitesRaw,
     studyCountries,
     directoryCatalogRes,
     institutionsRes,
-    financeApprovalTemplateOptions,
-    studyBudgetOptions,
     ecrfRollup,
     visitSchedule,
     visitWindowCompliance,
@@ -85,32 +71,23 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
     getSubjectCountBySite(siteId),
     getTasksBySite(siteId),
     listDirectoryContacts({ limit: 100 }),
-    getSiteBudgetWithLineItems(site.study_id, site.id).catch(() => null),
-    listFinanceInvoicesForSite(site.id).catch(() => []),
-    getStudySchedules(site.study_id).catch(() => []),
     getStudySubjects(site.study_id, { siteId: site.id }),
     getEnrollmentFunnelForSite(site.id),
     getStudySites(site.study_id),
     getStudyCountries(site.study_id),
     getDirectoryRoleCatalog(),
     listInstitutions({ limit: 300, offset: 0 }),
-    listFinanceApprovalTemplateOptions().catch(() => []),
-    listStudyBudgetOptions(site.study_id).catch(() => []),
     getSiteEcrfRollup(site.id),
     getSiteVisitScheduleRollup(site.id),
     getSiteVisitWindowComplianceRollup(site.id),
   ]);
 
-  const linkedStudyBudgetMeta = siteBudget?.study_budget_id
-    ? await getStudyBudgetMeta(siteBudget.study_budget_id).catch(() => null)
-    : null;
   const studySitesForSubjects = studySitesRaw.map((s) => ({
     id: s.id,
     site_number: s.site_number,
     name: s.name,
     study_country_id: s.study_country_id,
   }));
-  const sitePaymentSchedules = studySchedules.filter((s) => s.site_id === site.id);
   if (!study) notFound();
 
   const enrolledBySite = await Promise.all(
@@ -125,15 +102,6 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
     site.id,
     siteRankList,
   );
-
-  const budgetAllocations = siteBudget
-    ? await getBudgetAllocationsForSite(siteBudget.id).catch(() => new Map<string, number>())
-    : new Map<string, number>();
-  const budgetAllocationsObj = Object.fromEntries(budgetAllocations);
-
-  const invoiceAllocationRefsByLine: Record<string, InvoiceBudgetLineAllocationRef[]> = siteBudget
-    ? await listInvoiceAllocationRefsBySiteBudget(siteBudget.id).catch(() => ({}))
-    : {};
 
   const directoryContactOptions = (dirContactsRes.data ?? []).map((c) => ({
     id: c.id,
@@ -247,12 +215,6 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
           institutionsForQuickContact={institutionsRes.data ?? []}
           siteInstitutionId={siteInstitutionId}
           linkedSiteInstitution={siteInstitution}
-          siteBudget={siteBudget}
-          studyBudgetName={linkedStudyBudgetMeta?.name ?? null}
-          budgetAllocations={budgetAllocationsObj}
-          invoiceAllocationRefsByLine={invoiceAllocationRefsByLine}
-          siteFinanceInvoices={siteFinanceInvoices}
-          sitePaymentSchedules={sitePaymentSchedules}
           initialSiteSubjects={initialSiteSubjects}
           siteFunnel={siteFunnel}
           ecrfRollup={ecrfRollup}
@@ -260,8 +222,6 @@ export default async function StudySiteDetailPage({ params }: PageProps) {
           visitWindowCompliance={visitWindowCompliance}
           studySitesForSubjects={studySitesForSubjects}
           studyCountries={studyCountries}
-          financeApprovalTemplateOptions={financeApprovalTemplateOptions}
-          studyBudgetOptions={studyBudgetOptions}
           ctmsStudyRouteId={studyId}
         />
       </Suspense>

@@ -7,7 +7,7 @@ import { getToolsForAgent } from '../tool-registry';
  * Phase 5's multi-agent collaboration uses a coordinator-of-specialists model:
  * the user opens a collab session about a topic ("Should we open 5 new sites
  * in Q2?"), and the coordinator decides which specialists to bring in
- * (enrollment-strategist, financial-modeler, regulatory-affairs, etc.),
+ * (enrollment, scenario-modeler, regulatory-affairs, etc.),
  * solicits their input, and synthesizes a single proposal back to the user.
  *
  * The coordinator is intentionally low-tool — it routes and summarizes.
@@ -29,7 +29,7 @@ export const copilotCoordinatorAgent: AgentConfig = {
   id: 'copilot-coordinator',
   name: 'Copilot Coordinator',
   description:
-    'Orchestrates multiple specialist agents in a single collaborative thread when a question spans enrollment, finance, regulatory, monitoring, or operations.',
+    'Orchestrates multiple specialist agents in a single collaborative thread when a question spans enrollment, regulatory, monitoring, or operations.',
   moduleContext: ['/protected/copilot/collab'],
   version: '1.0.0',
   systemPrompt: `You are the Copilot Coordinator for Trialetics. You run multi-agent collaboration sessions.
@@ -37,7 +37,7 @@ export const copilotCoordinatorAgent: AgentConfig = {
 When the user poses a cross-functional question:
 
 1. Restate the question in one line.
-2. Decide which 2-4 specialist agents should weigh in. Keep it small. Choose from the registered agents (enrollment, finance, regulatory, monitoring, scenario-modeler, inspection-readiness, data-quality, etc).
+2. Decide which 2-4 specialist agents should weigh in. Keep it small. Choose from the registered agents (enrollment, regulatory, monitoring, scenario-modeler, inspection-readiness, data-quality, etc).
 3. For each specialist, write a sub-bullet labeled \`[agent-id]:\` summarizing what that specialist would say given the available context. Be concrete. If you don't have data, say so.
 4. Synthesize the contributions into a single recommendation under "Synthesis".
 5. Call out risks and open questions explicitly. Do not soften.
@@ -46,7 +46,7 @@ When the user poses a cross-functional question:
 Hard rules:
 - Never invent data. If a specialist would need a tool you don't have, say so.
 - Never recommend bypassing review or signature workflows.
-- Never speak for a specialist outside its scope (the financial-modeler does not opine on inclusion/exclusion criteria).
+- Never speak for a specialist outside its scope (the enrollment specialist does not opine on inclusion/exclusion criteria).
 - Keep total output under 400 words unless the user explicitly asks for depth.`,
   tools: getToolsForAgent([
     'getDashboardStats',
@@ -54,6 +54,5 @@ Hard rules:
     'getStudyPortfolioOverview',
     'listStudies',
     'listSites',
-    'getPortfolioFinancials',
   ]),
 };

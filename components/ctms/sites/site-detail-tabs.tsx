@@ -9,7 +9,6 @@ import {
   Copy,
   Check,
   ListTodo,
-  DollarSign,
   ClipboardList,
   CalendarClock,
 } from 'lucide-react';
@@ -29,11 +28,6 @@ import type {
   Study,
   StudyCountryWithSubmissions,
   StudySite,
-  FinanceInvoiceWithRelations,
-  FinanceApprovalTemplateOption,
-  InvoiceBudgetLineAllocationRef,
-  SiteBudgetWithLineItems,
-  PaymentScheduleWithSite,
   SiteEcrfRollupBundle,
   SiteVisitScheduleBundle,
   SiteVisitWindowComplianceBundle,
@@ -55,8 +49,6 @@ import { SiteEnrollmentPerformance } from './site-enrollment-performance';
 import { SiteMonitoringOverviewColumn } from './site-monitoring-overview-column';
 import { SiteOverviewFooter } from './site-overview-footer';
 import { SiteTasksTable } from './site-tasks-table';
-import { SiteFinancialsPanel } from './site-financials-panel';
-import type { SiteBudgetStudyOption } from '@/components/ctms/financials/site-budget-from-study-dialog';
 import { SubjectsTab } from '@/components/ctms/subjects/subjects-tab';
 import { SiteEcrfTrackingTab } from '@/components/ctms/ecrf-tracking/site-ecrf-tracking-tab';
 import { SiteVisitScheduleTab } from '@/components/ctms/visit-window-compliance/site-visit-window-compliance-tab';
@@ -75,11 +67,11 @@ const SITE_MAIN_TABS = new Set([
   'subjects',
   'ecrf-tracking',
   'visit-window-compliance',
-  'financials',
 ]);
 
 const LEGACY_SITE_TAB_REDIRECTS: Record<string, string> = {
   'visit-schedule': 'visit-window-compliance',
+  financials: 'overview',
 };
 
 const tabTooltipClassName = 'max-w-xs text-left text-xs leading-snug';
@@ -130,12 +122,6 @@ interface SiteDetailTabsProps {
   /** Institution row id linked to this study site (parent organization for new site contacts). */
   siteInstitutionId?: string | null;
   linkedSiteInstitution?: Pick<InstitutionRow, 'id' | 'name' | 'status' | 'organization_type'> | null;
-  siteBudget: SiteBudgetWithLineItems | null;
-  studyBudgetName?: string | null;
-  budgetAllocations?: Record<string, number>;
-  invoiceAllocationRefsByLine?: Record<string, InvoiceBudgetLineAllocationRef[]>;
-  siteFinanceInvoices: FinanceInvoiceWithRelations[];
-  sitePaymentSchedules: PaymentScheduleWithSite[];
   initialSiteSubjects: SubjectWithSite[];
   siteFunnel: EnrollmentFunnelData;
   ecrfRollup: SiteEcrfRollupBundle;
@@ -144,8 +130,6 @@ interface SiteDetailTabsProps {
   studySitesForSubjects: Pick<StudySite, 'id' | 'site_number' | 'name' | 'study_country_id'>[];
   /** Used with `studySitesForSubjects` to resolve country names in the Subjects table. */
   studyCountries: StudyCountryWithSubmissions[];
-  financeApprovalTemplateOptions: FinanceApprovalTemplateOption[];
-  studyBudgetOptions?: SiteBudgetStudyOption[];
   /** Study id for study-scoped CTMS URLs (sites list, edit). */
   ctmsStudyRouteId?: string;
 }
@@ -163,12 +147,6 @@ export function SiteDetailTabs({
   institutionsForQuickContact,
   siteInstitutionId = null,
   linkedSiteInstitution = null,
-  siteBudget,
-  studyBudgetName,
-  budgetAllocations = {},
-  invoiceAllocationRefsByLine = {},
-  siteFinanceInvoices,
-  sitePaymentSchedules,
   initialSiteSubjects,
   siteFunnel,
   ecrfRollup,
@@ -176,8 +154,6 @@ export function SiteDetailTabs({
   visitWindowCompliance,
   studySitesForSubjects,
   studyCountries,
-  financeApprovalTemplateOptions,
-  studyBudgetOptions = [],
   ctmsStudyRouteId,
 }: SiteDetailTabsProps) {
   const studyHub = useStudyHub();
@@ -433,13 +409,6 @@ export function SiteDetailTabs({
             <CalendarClock className="mr-1 h-3.5 w-3.5" />
             Visit Window Compliance
           </SiteTabWithTooltip>
-          <SiteTabWithTooltip
-            value="financials"
-            tooltip="Invoices, site budget, and payment schedules for this site."
-          >
-            <DollarSign className="mr-1 h-3.5 w-3.5" />
-            Financials
-          </SiteTabWithTooltip>
         </TabsList>
         </TooltipProvider>
 
@@ -634,34 +603,6 @@ export function SiteDetailTabs({
             siteId={site.id}
             bundle={visitSchedule}
             complianceBundle={visitWindowCompliance}
-          />
-        </TabsContent>
-
-        <TabsContent value="financials">
-          <SiteFinancialsPanel
-            studyId={study.id}
-            siteId={site.id}
-            siteDetailPath={
-              ctmsStudyRouteId
-                ? `/protected/studies/${ctmsStudyRouteId}/sites/${site.id}`
-                : undefined
-            }
-            companyId={study.company_id}
-            siteLabel={site.name ?? (site.site_number != null ? `Site ${site.site_number}` : site.id)}
-            studyLabel={study.title ?? study.protocol_number ?? study.id}
-            siteBudget={siteBudget}
-            studyBudgetName={studyBudgetName}
-            budgetAllocations={budgetAllocations}
-            invoiceAllocationRefsByLine={invoiceAllocationRefsByLine}
-            invoices={siteFinanceInvoices}
-            schedules={sitePaymentSchedules}
-            invoiceSites={[
-              { id: site.id, site_number: site.site_number, name: site.name },
-            ]}
-            financeApprovalTemplateOptions={financeApprovalTemplateOptions}
-            studyBudgetOptions={studyBudgetOptions}
-            initialFinancialsSubTab={searchParams.get('siteFinTab')}
-            highlightInvoiceId={searchParams.get('invoice')}
           />
         </TabsContent>
       </Tabs>

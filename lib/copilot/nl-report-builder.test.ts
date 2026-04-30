@@ -7,7 +7,7 @@ describe('buildReportSpec', () => {
     expect(buildReportSpec('show me sites by country').entity).toBe('sites');
     expect(buildReportSpec('list all studies').entity).toBe('studies');
     expect(buildReportSpec('subjects enrolled this week').entity).toBe('subjects');
-    expect(buildReportSpec('total payments by site').entity).toBe('financials');
+    expect(buildReportSpec('total payments by site').entity).toBe('sites');
   });
 
   it('picks bar chart when "by X" appears', () => {

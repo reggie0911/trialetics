@@ -1,4 +1,5 @@
 import type { ActivityEvent } from '@/lib/directory/activity-events';
+import type { OrganizationCompletenessSummary } from '@/lib/directory/record-completeness';
 import type { InstitutionOrganizationType } from '@/lib/types/directory';
 
 export type OrgHealth = 'healthy' | 'at_risk' | 'critical' | 'not_tracked';
@@ -18,6 +19,7 @@ export interface OrgEnrichment {
 export interface OrgKpiSnapshot {
   totalOrganizations: number;
   totalOrganizationsLabel: string;
+  formCompleteness: OrganizationCompletenessSummary;
   activeSites: { active: number; total: number };
   sitesAtRisk: number;
   irbsPending: number;
@@ -113,6 +115,13 @@ export const EMPTY_ORGANIZATION_SNAPSHOT: DirectoryOrganizationSnapshot = {
   kpi: {
     totalOrganizations: 0,
     totalOrganizationsLabel: 'All types',
+    formCompleteness: {
+      total: 0,
+      complete: 0,
+      percent: 0,
+      missingAddress: 0,
+      missingLocation: 0,
+    },
     activeSites: { active: 0, total: 0 },
     sitesAtRisk: 0,
     irbsPending: 0,

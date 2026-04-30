@@ -26,7 +26,7 @@ import { RecentSystemActivityCard } from './recent-activity-stub';
 import { HelpFooter } from './help-footer';
 
 const BANNER_DISMISSED_KEY = 'trialetics:admin-overview-banner-dismissed';
-const TEMPLATES_HREF = '/protected/financials/approval-templates';
+const TEMPLATES_HREF = '/protected/studies#study-templates';
 const STUDIES_CATALOG_HREF = '/protected/studies/catalog';
 
 interface AdminOverviewShellProps {

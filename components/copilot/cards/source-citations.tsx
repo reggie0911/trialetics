@@ -93,7 +93,7 @@ function defaultHref(source: CardSource): string | undefined {
     case 'task':
       return `/protected/tasks/${source.id}`;
     case 'financial_record':
-      return `/protected/financials/${source.id}`;
+      return undefined;
     default:
       return undefined;
   }
