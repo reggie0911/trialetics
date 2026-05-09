@@ -31,6 +31,7 @@ import {
   Package,
   FolderOpen,
   Gauge,
+  DollarSign,
 } from 'lucide-react';
 
 import Logo from '@/components/layout/logo';
@@ -104,12 +105,6 @@ const ctmsNavItems: CtmsNavItemDef[] = [
   { label: 'My Tasks', icon: CheckSquare, studySegment: 'my-tasks' },
   { label: 'Project Team Tasks', icon: ListTodo, studySegment: 'tasks' },
   { label: 'Reports & Analytics', icon: BarChart3, studySegment: 'reports', minPlan: 'core' },
-  {
-    label: 'Inventory management',
-    icon: Package,
-    studySegment: 'inventory-management',
-    minPlan: 'core',
-  },
 ];
 
 function resolveCtmsNavHref(pathname: string, item: CtmsNavItemDef): string {
@@ -208,6 +203,9 @@ function getPageName(pathname: string, customNames: CustomTrackerNavItem[]): str
     }
   }
   if (pathname.startsWith('/protected/custom-trackers')) return 'Custom trackers';
+  if (/\/studies\/[^/]+\/inventory-management(\/|$)/.test(pathname)) {
+    return 'Inventory management';
+  }
   const ctmsAll = buildCtmsNavItems(true);
   for (const item of ctmsAll) {
     const href = resolveCtmsNavHref(pathname, item);
@@ -599,13 +597,29 @@ export function TopNavbar({
                     </div>
                     {[
                       { href: '/protected/time-expenses', label: 'Time & Expenses', icon: Clock },
+                      {
+                        href: studyId
+                          ? `/protected/studies/${studyId}/finance-module`
+                          : CTMS_STUDIES_CATALOG_HREF,
+                        label: 'Finance Module',
+                        icon: DollarSign,
+                      },
+                      {
+                        href: studyScopedHref('inventory-management'),
+                        label: 'Inventory management',
+                        icon: Package,
+                        requiresCore: true as const,
+                      },
                     ].map((item) => {
-                      const locked = isLocked(item.href);
+                      const locked =
+                        'requiresCore' in item && item.requiresCore
+                          ? !planMeetsTier(normalizedPlan, 'core')
+                          : isLocked(item.href);
                       const Icon = item.icon;
                       const targetHref = locked ? '/protected/settings/billing' : item.href;
                       return (
                         <DropdownMenuItem
-                          key={item.href}
+                          key={item.label}
                           className={cn('cursor-pointer', locked && 'opacity-50')}
                           onClick={() => router.push(targetHref)}
                         >
@@ -999,8 +1013,24 @@ export function TopNavbar({
                 <p className="px-4 py-1 text-[10px] text-muted-foreground">Clinical operations</p>
                 {[
                   { href: '/protected/time-expenses', label: 'Time & Expenses', icon: Clock },
+                  {
+                    href: studyId
+                      ? `/protected/studies/${studyId}/finance-module`
+                      : CTMS_STUDIES_CATALOG_HREF,
+                    label: 'Finance Module',
+                    icon: DollarSign,
+                  },
+                  {
+                    href: studyScopedHref('inventory-management'),
+                    label: 'Inventory management',
+                    icon: Package,
+                    requiresCore: true as const,
+                  },
                 ].map((item) => {
-                  const locked = isLocked(item.href);
+                  const locked =
+                    'requiresCore' in item && item.requiresCore
+                      ? !planMeetsTier(normalizedPlan, 'core')
+                      : isLocked(item.href);
                   const Icon = item.icon;
                   const targetHref = locked ? '/protected/settings/billing' : item.href;
                   return (

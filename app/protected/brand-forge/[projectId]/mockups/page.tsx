@@ -1,3 +1,4 @@
+import { asResolved } from '@/lib/next/as-resolved';
 import { createClient } from '@/lib/server';
 import { MockupGallery } from '@/components/brand-forge/mockups/mockup-gallery';
 import { conceptLogoReferenceStoragePath } from '@/lib/brand-forge/mockup-prompt';
@@ -8,7 +9,7 @@ interface MockupsPageProps {
 }
 
 export default async function MockupsPage({ params }: MockupsPageProps) {
-  const { projectId } = await params;
+  const { projectId } = await asResolved(params);
   const supabase = await createClient();
 
   const { data: project } = await supabase

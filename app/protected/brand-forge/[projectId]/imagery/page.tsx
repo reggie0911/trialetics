@@ -1,3 +1,4 @@
+import { asResolved } from '@/lib/next/as-resolved';
 import { createClient } from '@/lib/server';
 import { ImageryGuide } from '@/components/brand-forge/imagery/imagery-guide';
 import type { BFBrandDirection } from '@/lib/types/brand-forge';
@@ -7,7 +8,7 @@ interface ImageryPageProps {
 }
 
 export default async function ImageryPage({ params }: ImageryPageProps) {
-  const { projectId } = await params;
+  const { projectId } = await asResolved(params);
   const supabase = await createClient();
 
   const { data: project } = await supabase

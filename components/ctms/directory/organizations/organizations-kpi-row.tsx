@@ -25,10 +25,22 @@ interface OrgKpiCardProps {
   footerTooltip: string;
   onClick?: () => void;
   className?: string;
+  variant?: 'default' | 'compact';
 }
 
-/** Layout aligned with [components/ctms/directory/directory-contacts-kpi-row.tsx](components/ctms/directory/directory-contacts-kpi-row.tsx) / StatCard. */
-function OrgKpiCard({ icon: Icon, iconBg, value, label, footer, footerTooltip, onClick, className }: OrgKpiCardProps) {
+/** Layout aligned with directory-contacts-kpi-row KpiCard (StatCard-style). */
+function OrgKpiCard({
+  icon: Icon,
+  iconBg,
+  value,
+  label,
+  footer,
+  footerTooltip,
+  onClick,
+  className,
+  variant = 'compact',
+}: OrgKpiCardProps) {
+  const compact = variant === 'compact';
   const inner = (
     <div className="relative z-10 flex h-full w-full flex-col">
       {onClick ? (
@@ -37,47 +49,65 @@ function OrgKpiCard({ icon: Icon, iconBg, value, label, footer, footerTooltip, o
           className="pointer-events-none absolute inset-0 origin-center scale-0 rounded-[5px] bg-primary/[0.07] opacity-0 transition-[transform,opacity] duration-300 ease-out group-hover:scale-100 group-hover:opacity-100"
         />
       ) : null}
-      <div className="relative z-10 flex h-full min-h-0 flex-1 flex-col gap-0 px-4 py-3.5">
-        <div className="flex w-full min-w-0 items-start justify-between gap-3">
-          <div className="min-w-0 flex-1 space-y-1.5 text-left">
+      <div
+        className={cn(
+          'relative z-10 flex h-full min-h-0 flex-1 flex-col gap-0',
+          compact ? 'px-3 py-2.5' : 'px-4 py-3.5'
+        )}
+      >
+        <div className="flex w-full min-w-0 items-start justify-between gap-2 sm:gap-3">
+          <div className={cn('min-w-0 flex-1 text-left', compact ? 'space-y-1' : 'space-y-1.5')}>
             <p
               data-slot="kpi-card-title"
-              className="!text-[12px] font-medium leading-tight text-muted-foreground"
+              className={cn(
+                'font-medium leading-tight text-muted-foreground',
+                compact ? '!text-[11px]' : '!text-[12px]'
+              )}
             >
               {label}
             </p>
-            <p className="min-w-0 break-words text-left !text-[30px] font-medium leading-[1.05] tracking-tight text-foreground tabular-nums">
+            <p
+              className={cn(
+                'min-w-0 break-words text-left font-medium leading-[1.05] tracking-tight text-foreground tabular-nums',
+                compact ? '!text-[22px]' : '!text-[30px]'
+              )}
+            >
               {value}
             </p>
           </div>
           <span
             className={cn(
-              'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/10',
+              'mt-0.5 flex shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/10',
+              compact ? 'h-6 w-6' : 'h-7 w-7',
               iconBg
             )}
             aria-hidden
           >
-            <Icon className="h-3.5 w-3.5 shrink-0 opacity-90" />
+            <Icon className={cn('shrink-0 opacity-90', compact ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
           </span>
         </div>
 
-        <div className="mt-3 flex w-full min-w-0 flex-col">
+        <div className={cn('flex w-full min-w-0 flex-col', compact ? 'mt-2' : 'mt-3')}>
           <div className="flex w-full justify-start">
             <Tooltip>
               <TooltipTrigger
                 render={
                   <span
                     className={cn(
-                      'inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border',
-                      'border-[#e5e5e5] bg-[#ffffff] px-2.5 py-1',
+                      'inline-flex max-w-full min-w-0 items-center gap-1 rounded-full border',
+                      'border-[#e5e5e5] bg-[#ffffff]',
                       'dark:border-neutral-200 dark:bg-[#ffffff]',
-                      'text-[11px] font-medium text-foreground',
+                      'font-medium text-foreground',
+                      compact ? 'px-2 py-0.5 text-[10px]' : 'gap-1.5 px-2.5 py-1 text-[11px]'
                     )}
                   />
                 }
               >
                 <Info
-                  className="h-3 w-3 shrink-0 text-muted-foreground dark:text-foreground/70"
+                  className={cn(
+                    'shrink-0 text-muted-foreground dark:text-foreground/70',
+                    compact ? 'h-2.5 w-2.5' : 'h-3 w-3'
+                  )}
                   aria-hidden
                 />
                 <div className="min-w-0 text-left font-medium leading-snug *:leading-snug text-muted-foreground">
@@ -137,7 +167,7 @@ export function OrganizationsKpiRow({
   return (
     <TooltipProvider delay={200}>
       <div
-        className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
+        className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4"
         aria-label="Organizations summary"
       >
         <OrgKpiCard

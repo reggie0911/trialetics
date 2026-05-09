@@ -69,6 +69,8 @@ export interface InstitutionRow {
   updated_at: string;
 }
 
+export type ContactAddressSource = 'manual' | 'site';
+
 export interface DirectoryContactRow {
   id: string;
   company_id: string;
@@ -79,13 +81,16 @@ export interface DirectoryContactRow {
   avatar_url: string | null;
   phone: string | null;
   department: string | null;
+  address_line1: string | null;
+  city: string | null;
+  postal_code: string | null;
+  contact_address_source: ContactAddressSource;
+  contact_address_study_site_id: string | null;
   country_code: string | null;
   region: string | null;
   status: DirectoryContactStatus;
   notes: string | null;
-  primary_directory_role_id: string | null;
   profile_id: string | null;
-  primary_institution_id: string | null;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
@@ -168,7 +173,13 @@ export interface DirectoryContactWithRelations extends DirectoryContactRow {
       site_number: string;
       name: string;
       study_id: string;
+      address: string | null;
+      city: string | null;
+      state: string | null;
+      postal_code: string | null;
+      study_country_id: string | null;
       studies: { title: string; protocol_number: string } | null;
+      study_countries: { country_code: string; country_name: string } | null;
     } | null;
     directory_roles: Pick<DirectoryRole, 'id' | 'name'> | null;
   }[];
@@ -270,12 +281,15 @@ export interface SaveDirectoryContactInput {
   avatar_url?: string | null;
   phone?: string;
   department?: string;
+  address_line1?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  contact_address_source?: ContactAddressSource;
+  contact_address_study_site_id?: string | null;
   country_code?: string;
   region?: string;
   status?: 'active' | 'inactive';
   notes?: string;
-  primary_directory_role_id?: string | null;
-  primary_institution_id?: string | null;
   profile_id?: string | null;
   secondary_role_ids?: string[];
 }

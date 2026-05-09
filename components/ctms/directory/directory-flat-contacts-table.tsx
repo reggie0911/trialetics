@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Eye, Mail, Phone, User } from 'lucide-react';
+import { Eye, User } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -121,16 +121,9 @@ export function DirectoryFlatContactsTable({
                     )}
                   </TableCell>
                   <TableCell className="align-middle min-w-0 max-w-[14rem]">
-                    <div className="min-w-0">
-                      <p className="text-xs truncate" title={pi?.name ?? undefined}>
-                        {pi?.name ?? '—'}
-                      </p>
-                      {c.region ? (
-                        <p className="text-[10px] text-muted-foreground truncate" title={c.region}>
-                          {c.region}
-                        </p>
-                      ) : null}
-                    </div>
+                    <p className="min-w-0 text-xs truncate" title={pi?.name ?? undefined}>
+                      {pi?.name ?? '—'}
+                    </p>
                   </TableCell>
                   <TableCell className="align-middle max-w-[10rem]">
                     <span className="text-xs text-foreground truncate block" title={countryName}>
@@ -169,34 +162,6 @@ export function DirectoryFlatContactsTable({
                   </TableCell>
                   <TableCell className="align-middle">
                     <div className="flex items-center justify-end gap-0.5">
-                      {c.email ? (
-                        <Button
-                          asChild
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          title="Send email"
-                        >
-                          <a href={`mailto:${c.email}`}>
-                            <Mail className="h-3.5 w-3.5" />
-                          </a>
-                        </Button>
-                      ) : null}
-                      {c.phone ? (
-                        <Button
-                          asChild
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          title="Call"
-                        >
-                          <a href={`tel:${c.phone}`}>
-                            <Phone className="h-3.5 w-3.5" />
-                          </a>
-                        </Button>
-                      ) : null}
                       <Button
                         type="button"
                         variant="ghost"

@@ -1,3 +1,4 @@
+import { asResolved } from '@/lib/next/as-resolved';
 import { createClient } from '@/lib/server';
 import { LogoGallery } from '@/components/brand-forge/logo-gallery';
 import type { BFLogoConcept, BFBrandInputs } from '@/lib/types/brand-forge';
@@ -7,7 +8,7 @@ interface GalleryPageProps {
 }
 
 export default async function GalleryPage({ params }: GalleryPageProps) {
-  const { projectId } = await params;
+  const { projectId } = await asResolved(params);
   const supabase = await createClient();
 
   const { data: project } = await supabase

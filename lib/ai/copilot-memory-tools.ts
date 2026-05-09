@@ -7,7 +7,7 @@ import { createClient } from '@/lib/server';
 /**
  * Tools the `memory-keeper` agent uses to read/write the per-user Copilot
  * memory store. The store is personal preference data, not company data, so
- * these are NOT registered in `WRITE_TOOLS` — every authenticated role can
+ * these are NOT registered in `getWriteTools()` — every authenticated role can
  * curate their own memory regardless of role.
  *
  * For `setCopilotMemory`/`deleteCopilotMemory` the underlying helpers in

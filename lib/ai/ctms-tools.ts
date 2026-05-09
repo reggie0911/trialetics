@@ -1,6 +1,20 @@
 import type { SiteStatus } from '@/lib/types/ctms';
 import type { ToolDefinition, UserContext } from './types';
-import { assertToolAllowedForRole } from './role-allowlist';
+import { writeToolDefinitions } from './write-tools';
+
+export type CopilotRole = string;
+
+/**
+ * Per-tool role allowlists. A missing entry means the tool is read-only and
+ * available to every authenticated role except `viewer` for writes (handled
+ * in `isToolAllowedForRole`).
+ */
+const TOOL_ROLE_ALLOWLIST: Record<string, ReadonlySet<CopilotRole>> = {
+  recordKriValue: new Set(['platform_admin', 'admin', 'manager']),
+  createMilestone: new Set(['platform_admin', 'admin', 'manager']),
+  createTask: new Set(['platform_admin', 'admin', 'manager', 'user']),
+  updateTripReportSummary: new Set(['platform_admin', 'admin', 'manager']),
+};
 
 function requireCompany(ctx: UserContext): string {
   if (!ctx.companyId) throw new Error('No company context available');
@@ -444,4 +458,43 @@ export const ctmsWriteTools: Record<string, ToolDefinition> = {
 
 export function getAllCtmsToolNames(): string[] {
   return [...Object.keys(ctmsReadTools), ...Object.keys(ctmsWriteTools)];
+}
+
+/** CTMS + tracker write tool names (for RBAC). Safe after `ctmsWriteTools` init. */
+export function getWriteTools(): ReadonlySet<string> {
+  return new Set([
+    ...Object.keys(ctmsWriteTools),
+    ...Object.keys(writeToolDefinitions),
+  ]);
+}
+
+/**
+ * Returns true if the role is permitted to invoke the tool.
+ *
+ * Read tools: allowed for any role.
+ * Write tools: denied for `viewer` always; for other roles, allowed if either
+ * the tool has no explicit allowlist or the role is in the allowlist;
+ * `platform_admin` is always allowed.
+ */
+export function isToolAllowedForRole(role: CopilotRole, toolName: string): boolean {
+  if (role === 'platform_admin') return true;
+  if (!getWriteTools().has(toolName)) return true;
+  if (role === 'viewer') return false;
+  const allow = TOOL_ROLE_ALLOWLIST[toolName];
+  if (!allow) return true;
+  return allow.has(role);
+}
+
+/**
+ * Throw a descriptive error if the role can't run the tool. Use inside write
+ * handlers as a defense-in-depth check (the orchestrator already pre-filters,
+ * but anything that bypasses the orchestrator — direct invocation, future
+ * tool-call APIs — still gets gated).
+ */
+export function assertToolAllowedForRole(role: CopilotRole, toolName: string): void {
+  if (!isToolAllowedForRole(role, toolName)) {
+    throw new Error(
+      `Permission denied: role "${role}" cannot run tool "${toolName}". Contact your admin if you believe this is in error.`
+    );
+  }
 }

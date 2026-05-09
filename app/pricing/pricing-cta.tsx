@@ -8,7 +8,7 @@ export function PricingCta() {
       <Button
         size="lg"
         variant="secondary"
-        render={<a href="/auth/sign-up" />}
+        render={<a href="/pricing?intent=signup" />}
       >
         Get started
       </Button>

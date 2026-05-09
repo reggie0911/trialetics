@@ -220,7 +220,6 @@ export async function syncSiteContactToDirectory(
         title: contact.role?.trim() || undefined,
         email: contact.email?.trim() || undefined,
         phone: contact.phone?.trim() || undefined,
-        primary_institution_id: institutionId,
         notes,
         status: 'active',
       };

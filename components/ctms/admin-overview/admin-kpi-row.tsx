@@ -36,7 +36,7 @@ export function AdminKpiRow({ stats, overview }: AdminKpiRowProps) {
       caption: 'Active templates',
       icon: FileText,
       tone: { bg: 'bg-sky-500/10', text: 'text-sky-600 dark:text-sky-400' },
-      href: '#study-templates',
+      href: '/protected/studies',
     },
     {
       key: 'users',

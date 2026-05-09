@@ -1,3 +1,4 @@
+import { asResolved } from '@/lib/next/as-resolved';
 import { createClient } from '@/lib/server';
 import { ColorPaletteEditor } from '@/components/brand-forge/colors/color-palette-editor';
 import type { BFBrandKit, BFBrandDirection } from '@/lib/types/brand-forge';
@@ -7,7 +8,7 @@ interface ColorsPageProps {
 }
 
 export default async function ColorsPage({ params }: ColorsPageProps) {
-  const { projectId } = await params;
+  const { projectId } = await asResolved(params);
   const supabase = await createClient();
 
   const { data: project } = await supabase

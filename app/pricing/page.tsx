@@ -7,6 +7,7 @@ import FAQSection from '@/components/sections/faq-section';
 import TestimonialsMarquee from '@/components/sections/testimonials-marquee';
 import Noise from '@/components/noise';
 import { PricingCta } from './pricing-cta';
+import { consumePageDynamic } from '@/lib/next/consume-page-dynamic';
 
 export const metadata: Metadata = {
   title: 'Pricing | Trialetics',
@@ -14,7 +15,13 @@ export const metadata: Metadata = {
     'Trialetics pricing from $149/mo (Consultant) through Professional ($2,999/mo). CTMS, eISF, eTMF, and more — unlimited active studies on self-serve plans.',
 };
 
-export default async function PricingPage() {
+type PricingPageProps = {
+  params?: Promise<Record<string, never>>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function PricingPage(props: PricingPageProps) {
+  await consumePageDynamic(props);
   let isLoggedIn = false;
   try {
     const supabase = await createClient();

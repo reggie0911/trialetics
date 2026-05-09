@@ -1,3 +1,4 @@
+import { asResolved } from '@/lib/next/as-resolved';
 import { createClient } from '@/lib/server';
 import { MaterialsThemeEditor } from '@/components/brand-forge/templates/materials-theme-editor';
 import type { BFMaterialTheme } from '@/lib/types/brand-forge';
@@ -7,7 +8,7 @@ interface TemplatesPageProps {
 }
 
 export default async function TemplatesPage({ params }: TemplatesPageProps) {
-  const { projectId } = await params;
+  const { projectId } = await asResolved(params);
   const supabase = await createClient();
 
   const { data: project } = await supabase

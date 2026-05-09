@@ -1,3 +1,4 @@
+import { asResolved } from '@/lib/next/as-resolved';
 import { createClient } from '@/lib/server';
 import { RecruitmentKitEditor } from '@/components/brand-forge/recruitment/recruitment-kit-editor';
 import type { BFRecruitmentKit } from '@/lib/types/brand-forge';
@@ -7,7 +8,7 @@ interface RecruitmentPageProps {
 }
 
 export default async function RecruitmentPage({ params }: RecruitmentPageProps) {
-  const { projectId } = await params;
+  const { projectId } = await asResolved(params);
   const supabase = await createClient();
 
   const { data: project } = await supabase

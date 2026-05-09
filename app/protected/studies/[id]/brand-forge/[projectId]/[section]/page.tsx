@@ -22,11 +22,14 @@ export default async function StudyBrandForgeSectionPage({
   searchParams,
 }: StudyBrandForgeSectionPageProps) {
   const { projectId, section } = await params;
+  const resolvedSearchParams = await searchParams;
   const sectionParams = Promise.resolve({ projectId });
 
   switch (section) {
     case 'edit':
-      return <OldEditPage params={sectionParams} searchParams={searchParams} />;
+      return (
+        <OldEditPage params={sectionParams} searchParams={Promise.resolve(resolvedSearchParams)} />
+      );
     case 'export':
       return <OldExportPage params={sectionParams} />;
     case 'recruitment':

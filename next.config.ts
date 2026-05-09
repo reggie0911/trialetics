@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 
+/** Use `pnpm run build` / `next build --webpack` — Turbopack can mis-resolve `next/app.js` → `./dist/pages/_app`. */
 const nextConfig: NextConfig = {
   async redirects() {
     return [

@@ -26,12 +26,14 @@
 -- NOTES
 --   • Tables dropped in later migrations (e.g. kanban task_labels, subject_milestones,
 --     site_startup_checklist, study_visit_crfs) are not referenced here.
---   • The Copilot / AI suite tables (copilot_*, 26 tables created in migrations
---     20260496000000 through 20260500000000) are intentionally NOT wiped by this
---     script. If you need to wipe Copilot data, do so out-of-band.
 --   • The transaction sets `SET LOCAL session_replication_role = 'replica'` so the
---     Part 11 immutability triggers on trip_report_status_events and
---     trip_report_signature_audit (which RAISE EXCEPTION on DELETE) do not fire.
+--     following BEFORE DELETE / BEFORE UPDATE guards (which RAISE EXCEPTION) do not
+--     fire and the wipe can proceed:
+--       – Part 11 trip_report_status_events / trip_report_signature_audit
+--       – Finance Module fm_audit_logs (append-only)
+--       – Finance Module fm_budget_versions / fm_budget_line_items immutability
+--       – Copilot append-only logs: copilot_audit_log, copilot_draft_versions,
+--         copilot_fill_audit
 --     `SET LOCAL` is reverted automatically at COMMIT/ROLLBACK.
 --   • After wipe, new signups still get company + profile via handle_new_user.
 --
@@ -48,9 +50,11 @@
 
 BEGIN;
 
--- Bypass user-defined triggers for this transaction so the Part 11 BEFORE DELETE
--- guards on trip_report_status_events / trip_report_signature_audit do not fire.
--- Reverted automatically at COMMIT.
+-- Bypass user-defined triggers for this transaction so RAISE EXCEPTION guards do
+-- not fire on append-only / immutable tables: Part 11 trip_report_status_events,
+-- trip_report_signature_audit; Finance Module fm_audit_logs, fm_budget_versions,
+-- fm_budget_line_items; Copilot copilot_audit_log, copilot_draft_versions,
+-- copilot_fill_audit. Reverted automatically at COMMIT.
 SET LOCAL session_replication_role = 'replica';
 
 -- =============================================================================
@@ -199,6 +203,15 @@ DELETE FROM public.finance_payments;
 DELETE FROM public.invoice_budget_allocations;
 DELETE FROM public.finance_invoice_decisions;
 DELETE FROM public.finance_invoices;
+-- finance_purchase_orders (migration 20260504000000): optional table — some DBs
+-- never had this migration; skip DELETE when the relation is absent.
+DO $wipe_finance_purchase_orders$
+BEGIN
+  IF to_regclass('public.finance_purchase_orders') IS NOT NULL THEN
+    EXECUTE 'DELETE FROM public.finance_purchase_orders';
+  END IF;
+END;
+$wipe_finance_purchase_orders$;
 DELETE FROM public.site_budget_line_items;
 DELETE FROM public.site_budgets;
 DELETE FROM public.financial_contracts;
@@ -220,6 +233,120 @@ DELETE FROM public.study_visit_definitions;
 DELETE FROM public.study_budget_templates;
 DELETE FROM public.payment_schedules;
 DELETE FROM public.site_payments;
+
+-- =============================================================================
+-- SECTION 10b — Finance Module (fm_*)
+-- =============================================================================
+-- All fm_* tables RESTRICT-reference public.studies (and most reference
+-- public.companies / public.study_sites). They MUST be wiped before Section 13
+-- (study_sites) and Section 14 (studies) or those deletes will fail.
+--
+-- Append-only / immutability triggers on fm_audit_logs, fm_budget_versions, and
+-- fm_budget_line_items are bypassed by the session_replication_role = 'replica'
+-- set at the top of this transaction.
+--
+-- Order: cross-cut leaves → audit/approvals/change-orders → site payment
+-- schedules → invoice/payment chain → POs → budget line items → budget versions
+-- (self-FK is SET NULL) → budget categories → budgets (active_version_id is
+-- SET NULL) → contracts → vendors → workspaces.
+
+-- Cross-cut leaf tables (study_id/company_id RESTRICT only)
+DELETE FROM public.fm_table_view;
+DELETE FROM public.fm_entity_comment;
+DELETE FROM public.fm_approval_policy;
+DELETE FROM public.fm_approval_delegation;
+DELETE FROM public.fm_forecast_scenario;
+DELETE FROM public.fm_export_job;
+DELETE FROM public.fm_scheduled_report;
+
+-- Audit, approvals, change orders (leaves)
+DELETE FROM public.fm_audit_logs;
+DELETE FROM public.fm_approval_requests;
+DELETE FROM public.fm_change_orders;
+
+-- Site payment schedules (RESTRICT → study_sites)
+DELETE FROM public.fm_site_payment_schedules;
+
+-- Invoice / payment chain
+-- fm_payments.invoice_id is SET NULL; fm_invoice_line_items CASCADE from invoice.
+DELETE FROM public.fm_payments;
+DELETE FROM public.fm_invoice_line_items;
+DELETE FROM public.fm_invoices;
+
+-- Purchase orders (referenced by fm_invoices.purchase_order_id SET NULL)
+DELETE FROM public.fm_purchase_orders;
+
+-- Budget chain (children → parents)
+-- fm_budget_line_items RESTRICT → budget_versions; line items also reference
+-- categories RESTRICT and SET NULL FKs to vendors/contracts.
+DELETE FROM public.fm_budget_line_items;
+-- fm_budget_versions has self-FK supersedes_by_version_id ON DELETE SET NULL,
+-- so a single DELETE clears all rows safely.
+DELETE FROM public.fm_budget_versions;
+DELETE FROM public.fm_budget_categories;
+-- fm_budgets.active_version_id → fm_budget_versions ON DELETE SET NULL (handled).
+DELETE FROM public.fm_budgets;
+
+-- Contracts → vendors → workspaces (parents last)
+DELETE FROM public.fm_contracts;
+DELETE FROM public.fm_vendors;
+DELETE FROM public.fm_workspaces;
+
+-- =============================================================================
+-- SECTION 10c — Copilot / AI suite (copilot_*)
+-- =============================================================================
+-- Tenant rows reference public.companies / auth.users with ON DELETE CASCADE
+-- (or SET NULL on optional user FKs), so Section 17 alone would clean almost
+-- everything. We delete explicitly here so:
+--   • residual rows with company_id = NULL (e.g. some copilot_validation_runs)
+--     are removed
+--   • the Copilot domain is fully zeroed before Section 17 fires
+--
+-- Append-only triggers on copilot_audit_log, copilot_draft_versions, and
+-- copilot_fill_audit are bypassed by the session_replication_role = 'replica'
+-- set at the top of this transaction.
+--
+-- Inter-copilot FKs are all CASCADE (or SET NULL on copilot_fill_audit.proposal_id
+-- and copilot_document_extractions.source_chunk_id), so child-first order below
+-- is defensive rather than strictly required.
+
+-- Briefings & memory & telemetry
+DELETE FROM public.copilot_briefing_items;
+DELETE FROM public.copilot_briefings;
+DELETE FROM public.copilot_memory;
+DELETE FROM public.copilot_audit_log;
+DELETE FROM public.copilot_telemetry;
+
+-- Documents (chunks/extractions/links CASCADE from copilot_documents)
+DELETE FROM public.copilot_document_extractions;
+DELETE FROM public.copilot_document_links;
+DELETE FROM public.copilot_document_chunks;
+DELETE FROM public.copilot_documents;
+
+-- Drafts (versions CASCADE from drafts)
+DELETE FROM public.copilot_draft_versions;
+DELETE FROM public.copilot_drafts;
+
+-- Work queues & collab
+DELETE FROM public.copilot_work_queue_items;
+DELETE FROM public.copilot_work_queues;
+DELETE FROM public.copilot_collab_messages;
+DELETE FROM public.copilot_collab_sessions;
+
+-- Personas, playbooks, scenarios, readiness, reports, validation
+DELETE FROM public.copilot_personas;
+DELETE FROM public.copilot_playbook_runs;
+DELETE FROM public.copilot_playbooks;
+DELETE FROM public.copilot_scenarios;
+DELETE FROM public.copilot_readiness_snapshots;
+DELETE FROM public.copilot_report_definitions;
+DELETE FROM public.copilot_validation_runs;
+
+-- Form fills (fill_audit.proposal_id is SET NULL → audit can clear independently)
+DELETE FROM public.copilot_fill_audit;
+DELETE FROM public.copilot_proposals;
+DELETE FROM public.copilot_field_mappings;
+DELETE FROM public.copilot_templates;
 
 -- =============================================================================
 -- SECTION 11 — CTMS directory

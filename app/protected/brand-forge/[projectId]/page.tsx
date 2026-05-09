@@ -1,3 +1,4 @@
+import { asResolved } from '@/lib/next/as-resolved';
 import { createClient } from '@/lib/server';
 import { StudyOverview } from '@/components/brand-forge/overview/study-overview';
 import type { BFBrandInputs, BFBrandDirection, BFWorkspaceStatus } from '@/lib/types/brand-forge';
@@ -34,7 +35,7 @@ interface OverviewPageProps {
 }
 
 export default async function OverviewPage({ params }: OverviewPageProps) {
-  const { projectId } = await params;
+  const { projectId } = await asResolved(params);
   const supabase = await createClient();
 
   const { data: project } = await supabase

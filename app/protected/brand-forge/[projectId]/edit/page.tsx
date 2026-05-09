@@ -1,15 +1,16 @@
 import { BrandBriefWizard } from '@/components/brand-forge/brand-brief-wizard';
+import { asResolved } from '@/lib/next/as-resolved';
 import { createClient } from '@/lib/server';
 import { brandInputsToFormValues, type BFBrandInputs } from '@/lib/types/brand-forge';
 
 interface EditBrandBriefPageProps {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ returnTo?: string }>;
+  searchParams?: Promise<{ returnTo?: string }>;
 }
 
 export default async function EditBrandBriefPage({ params, searchParams }: EditBrandBriefPageProps) {
-  const { projectId } = await params;
-  const { returnTo } = await searchParams;
+  const { projectId } = await asResolved(params);
+  const { returnTo } = await asResolved(searchParams ?? {});
   const editSuccessRedirect = returnTo === 'overview' ? 'overview' : 'logos';
   const supabase = await createClient();
 

@@ -6,8 +6,15 @@ import Hero from "@/components/sections/hero";
 import Logos from "@/components/sections/logos";
 import Pricing from "@/components/sections/pricing";
 import Testimonials from "@/components/sections/testimonials";
+import { consumePageDynamic } from "@/lib/next/consume-page-dynamic";
 
-export default function Home() {
+type HomePageProps = {
+  params?: Promise<Record<string, never>>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function Home(props: HomePageProps) {
+  await consumePageDynamic(props);
   return (
     <>
       <Hero />

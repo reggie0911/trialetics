@@ -200,6 +200,24 @@ async function syncProfileSubscriptionStatus(companyId: string, status: string) 
     .eq("company_id", companyId);
 }
 
+/** One self-serve Stripe trial per company (checked when creating Checkout with trial days). */
+async function markStripeTrialUsedIfNeeded(
+  event: Stripe.Event,
+  subscription: Stripe.Subscription,
+  companyId: string | null,
+) {
+  if (event.type !== "customer.subscription.updated") return;
+  const prev = event.data.previous_attributes as { status?: string } | undefined;
+  if (prev?.status !== "trialing") return;
+  if (subscription.status !== "active") return;
+  if (!companyId) return;
+  const now = new Date().toISOString();
+  await getSupabaseAdmin()
+    .from("profiles")
+    .update({ stripe_trial_used_at: now })
+    .eq("company_id", companyId);
+}
+
 async function insertTransaction(
   event: Stripe.Event,
   companyId: string | null,
@@ -290,6 +308,7 @@ Deno.serve(async (req: Request) => {
 
       if (companyId) {
         await syncProfileSubscriptionStatus(companyId, status);
+        await markStripeTrialUsedIfNeeded(event, subscription, companyId);
       }
       break;
     }

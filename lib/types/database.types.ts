@@ -1032,6 +1032,7 @@ export type Database = {
           id: string
           logo_url: string | null
           name: string
+          onboarding_completed_at: string | null
           settings: Json | null
           updated_at: string | null
         }
@@ -1047,6 +1048,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name: string
+          onboarding_completed_at?: string | null
           settings?: Json | null
           updated_at?: string | null
         }
@@ -1062,6 +1064,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name?: string
+          onboarding_completed_at?: string | null
           settings?: Json | null
           updated_at?: string | null
         }
@@ -1736,9 +1739,13 @@ export type Database = {
       }
       directory_contacts: {
         Row: {
+          address_line1: string | null
           archived_at: string | null
           avatar_url: string | null
+          city: string | null
           company_id: string
+          contact_address_source: string
+          contact_address_study_site_id: string | null
           country_code: string | null
           created_at: string
           department: string | null
@@ -1748,8 +1755,7 @@ export type Database = {
           last_name: string
           notes: string | null
           phone: string | null
-          primary_directory_role_id: string | null
-          primary_institution_id: string | null
+          postal_code: string | null
           profile_id: string | null
           region: string | null
           status: string
@@ -1757,9 +1763,13 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          address_line1?: string | null
           archived_at?: string | null
           avatar_url?: string | null
+          city?: string | null
           company_id: string
+          contact_address_source?: string
+          contact_address_study_site_id?: string | null
           country_code?: string | null
           created_at?: string
           department?: string | null
@@ -1769,8 +1779,7 @@ export type Database = {
           last_name: string
           notes?: string | null
           phone?: string | null
-          primary_directory_role_id?: string | null
-          primary_institution_id?: string | null
+          postal_code?: string | null
           profile_id?: string | null
           region?: string | null
           status?: string
@@ -1778,9 +1787,13 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          address_line1?: string | null
           archived_at?: string | null
           avatar_url?: string | null
+          city?: string | null
           company_id?: string
+          contact_address_source?: string
+          contact_address_study_site_id?: string | null
           country_code?: string | null
           created_at?: string
           department?: string | null
@@ -1790,8 +1803,7 @@ export type Database = {
           last_name?: string
           notes?: string | null
           phone?: string | null
-          primary_directory_role_id?: string | null
-          primary_institution_id?: string | null
+          postal_code?: string | null
           profile_id?: string | null
           region?: string | null
           status?: string
@@ -1807,17 +1819,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "directory_contacts_primary_directory_role_id_fkey"
-            columns: ["primary_directory_role_id"]
+            foreignKeyName: "directory_contacts_contact_address_study_site_id_fkey"
+            columns: ["contact_address_study_site_id"]
             isOneToOne: false
-            referencedRelation: "directory_roles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "directory_contacts_primary_institution_id_fkey"
-            columns: ["primary_institution_id"]
-            isOneToOne: false
-            referencedRelation: "institutions"
+            referencedRelation: "study_sites"
             referencedColumns: ["id"]
           },
           {
@@ -5488,7 +5493,9 @@ export type Database = {
           is_platform_admin: boolean
           last_name: string | null
           role: string
+          stripe_trial_used_at: string | null
           subscription_status: string | null
+          terms_accepted_at: string | null
           updated_at: string | null
           user_id: string
         }
@@ -5504,7 +5511,9 @@ export type Database = {
           is_platform_admin?: boolean
           last_name?: string | null
           role?: string
+          stripe_trial_used_at?: string | null
           subscription_status?: string | null
+          terms_accepted_at?: string | null
           updated_at?: string | null
           user_id: string
         }
@@ -5520,7 +5529,9 @@ export type Database = {
           is_platform_admin?: boolean
           last_name?: string | null
           role?: string
+          stripe_trial_used_at?: string | null
           subscription_status?: string | null
+          terms_accepted_at?: string | null
           updated_at?: string | null
           user_id?: string
         }
@@ -7367,6 +7378,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      stripe_checkout_attempts: {
+        Row: {
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       subscriptions: {
         Row: {

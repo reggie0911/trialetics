@@ -25,6 +25,96 @@ function getTrialDays(plan: SubscriptionPlan): number | undefined {
   return (plan === 'launch' || plan === 'core') ? trialDays : undefined;
 }
 
+type ProfileCheckoutRow = {
+  id: string;
+  email: string | null;
+  company_id: string | null;
+  stripe_trial_used_at: string | null;
+};
+
+type ProfileLoadResult =
+  | { kind: 'ok'; profile: ProfileCheckoutRow }
+  | { kind: 'bootstrapping' }
+  | { kind: 'error'; message: string };
+
+const PROFILE_SELECT = 'id, email, company_id, stripe_trial_used_at';
+const PROFILE_FALLBACK_SELECT = 'id, email, company_id';
+
+async function readProfile(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<{ data: ProfileCheckoutRow | null; error: { message: string; code?: string } | null }> {
+  const primary = await supabase
+    .from('profiles')
+    .select(PROFILE_SELECT)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (primary.error?.code === '42703') {
+    // stripe_trial_used_at not yet present in this database (migration not applied).
+    console.warn('[stripe/checkout] profiles.stripe_trial_used_at missing; using fallback select');
+    const fallback = await supabase
+      .from('profiles')
+      .select(PROFILE_FALLBACK_SELECT)
+      .eq('user_id', userId)
+      .maybeSingle();
+    return {
+      data: (fallback.data as ProfileCheckoutRow | null) ?? null,
+      error: fallback.error ? { message: fallback.error.message, code: fallback.error.code } : null,
+    };
+  }
+
+  return {
+    data: (primary.data as ProfileCheckoutRow | null) ?? null,
+    error: primary.error ? { message: primary.error.message, code: primary.error.code } : null,
+  };
+}
+
+async function loadProfileWithBootstrap(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<ProfileLoadResult> {
+  const first = await readProfile(supabase, userId);
+
+  if (first.error) {
+    console.error('[stripe/checkout] profile read failed', first.error);
+    return {
+      kind: 'error',
+      message: `Profile lookup failed: ${first.error.message}`,
+    };
+  }
+
+  if (first.data?.company_id) {
+    return { kind: 'ok', profile: first.data };
+  }
+
+  const { data: bootstrap, error: bootstrapError } = await supabase.rpc('ensure_user_profile');
+  const ok =
+    !bootstrapError &&
+    bootstrap !== null &&
+    typeof bootstrap === 'object' &&
+    'ok' in bootstrap &&
+    (bootstrap as { ok?: boolean }).ok === true;
+
+  if (!ok) {
+    console.error('[stripe/checkout] ensure_user_profile failed', bootstrapError, bootstrap);
+    return { kind: 'bootstrapping' };
+  }
+
+  const second = await readProfile(supabase, userId);
+
+  if (second.error) {
+    console.error('[stripe/checkout] profile refetch failed', second.error);
+    return { kind: 'error', message: `Profile refetch failed: ${second.error.message}` };
+  }
+
+  if (!second.data?.company_id) {
+    return { kind: 'bootstrapping' };
+  }
+
+  return { kind: 'ok', profile: second.data };
+}
+
 export async function POST(request: NextRequest) {
   const supabaseAdmin = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,14 +128,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, email, company_id')
-      .eq('user_id', user.id)
-      .single();
+    const profileResult = await loadProfileWithBootstrap(supabase, user.id);
+    if (profileResult.kind === 'error') {
+      return NextResponse.json(
+        {
+          error:
+            'Your account record is in a bad state. Refresh the page or contact support if the issue persists.',
+          detail: profileResult.message,
+        },
+        { status: 503 },
+      );
+    }
+    if (profileResult.kind === 'bootstrapping') {
+      return NextResponse.json(
+        {
+          error:
+            'Your account is still initializing. Wait a few seconds and try again, or open Billing from settings.',
+        },
+        { status: 503 },
+      );
+    }
+    const profile = profileResult.profile;
 
-    if (!profile?.company_id) {
-      return NextResponse.json({ error: 'No company found' }, { status: 400 });
+    const windowStart = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { count: recentCheckoutCount, error: rateErr } = await supabaseAdmin
+      .from('stripe_checkout_attempts')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .gte('created_at', windowStart);
+    if (rateErr) {
+      console.error('[stripe/checkout] Rate limit read failed', rateErr);
+    } else if ((recentCheckoutCount ?? 0) >= 5) {
+      return NextResponse.json(
+        { error: 'Too many checkout attempts. Please wait up to 10 minutes and try again.' },
+        { status: 429 },
+      );
     }
 
     const { plan, interval = 'month' } = (await request.json()) as {
@@ -72,7 +189,7 @@ export async function POST(request: NextRequest) {
       .from('subscriptions')
       .select('stripe_customer_id, stripe_subscription_id, status, plan')
       .eq('company_id', profile.company_id)
-      .single();
+      .maybeSingle();
 
     let customerId = subscription?.stripe_customer_id;
 
@@ -222,7 +339,9 @@ export async function POST(request: NextRequest) {
     }
 
     const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-    const trialDays = getTrialDays(safePlan);
+    const requestedTrialDays = getTrialDays(safePlan);
+    const trialDays =
+      requestedTrialDays && !profile.stripe_trial_used_at ? requestedTrialDays : undefined;
 
     try {
       await stripe.prices.retrieve(priceId);
@@ -236,11 +355,18 @@ export async function POST(request: NextRequest) {
 
     console.log('[stripe/checkout] Creating session', { plan: safePlan, interval: safeInterval, priceId, customerId });
 
+    const { error: attemptInsertErr } = await supabaseAdmin
+      .from('stripe_checkout_attempts')
+      .insert({ user_id: user.id });
+    if (attemptInsertErr) {
+      console.error('[stripe/checkout] Failed to log checkout attempt', attemptInsertErr);
+    }
+
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${origin}/protected/settings/billing/success`,
+      success_url: `${origin}/protected/settings/billing/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/protected/settings/billing?cancelled=true`,
       allow_promotion_codes: false,
       subscription_data: {

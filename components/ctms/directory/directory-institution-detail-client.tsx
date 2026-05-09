@@ -177,7 +177,7 @@ export function DirectoryInstitutionDetailClient({
   const isAddressVerified = Boolean(initial.address_line1 && initial.country_code);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="w-full min-w-0 max-w-full space-y-6">
       <ProfileHero
         institutionId={initial.id}
         name={initial.name}

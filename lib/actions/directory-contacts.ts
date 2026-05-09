@@ -17,8 +17,14 @@ import {
   updateDirectoryContactRecord,
 } from '@/lib/actions/directory-writers-internal';
 import { computeContactHealth, siteRoleCoverageFromRoleNames } from '@/lib/directory/contact-health';
+import {
+  derivePrimaryInstitutionFromJunctionRows,
+  derivePrimaryRoleFromJunctionRows,
+} from '@/lib/directory/contact-primary-from-junctions';
 import { summarizeContactCompleteness } from '@/lib/directory/record-completeness';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { contactAddAssignmentSchema } from '@/lib/validation/directory';
+import { upsertCommitteeMember } from '@/lib/actions/directory-committees';
 
 async function requireReader() {
   const supabase = await createClient();
@@ -65,7 +71,6 @@ export interface CreateDirectoryContactOptions {
 export interface CreateDirectoryContactResult {
   data: {
     id: string;
-    linkedInstitution: boolean;
     linkedStudy: boolean;
     linkWarnings: string[];
   } | null;
@@ -157,6 +162,63 @@ async function mergeStudyEnrichment(
   }
 }
 
+/** Batch-load junctions so list rows match `getDirectoryContactById` primary role + org. */
+async function mergeListPrimaryProfileFromJunctions(
+  supabase: SupabaseClient,
+  rows: DirectoryContactListItem[]
+): Promise<void> {
+  if (rows.length === 0) return;
+  const ids = rows.map((r) => r.id);
+
+  const [studRes, siteRes, instRes] = await Promise.all([
+    supabase
+      .from('directory_contact_study')
+      .select('directory_contact_id, directory_roles(id,name)')
+      .in('directory_contact_id', ids),
+    supabase
+      .from('directory_contact_study_site')
+      .select('directory_contact_id, directory_roles(id,name)')
+      .in('directory_contact_id', ids),
+    supabase
+      .from('directory_contact_institution')
+      .select('directory_contact_id, is_primary, institutions(id,name,organization_type)')
+      .in('directory_contact_id', ids),
+  ]);
+
+  if (studRes.error || siteRes.error || instRes.error) return;
+
+  const studiesByContact = new Map<string, { directory_roles?: unknown }[]>();
+  for (const r of studRes.data ?? []) {
+    const cid = r.directory_contact_id as string;
+    const arr = studiesByContact.get(cid) ?? [];
+    arr.push(r);
+    studiesByContact.set(cid, arr);
+  }
+  const sitesByContact = new Map<string, { directory_roles?: unknown }[]>();
+  for (const r of siteRes.data ?? []) {
+    const cid = r.directory_contact_id as string;
+    const arr = sitesByContact.get(cid) ?? [];
+    arr.push(r);
+    sitesByContact.set(cid, arr);
+  }
+  const instByContact = new Map<string, { is_primary?: boolean; institutions?: unknown }[]>();
+  for (const r of instRes.data ?? []) {
+    const cid = r.directory_contact_id as string;
+    const arr = instByContact.get(cid) ?? [];
+    arr.push(r);
+    instByContact.set(cid, arr);
+  }
+
+  for (const row of rows) {
+    row.primary_role = derivePrimaryRoleFromJunctionRows(
+      studiesByContact.get(row.id) ?? [],
+      sitesByContact.get(row.id) ?? []
+    );
+    const inst = derivePrimaryInstitutionFromJunctionRows(instByContact.get(row.id) ?? []);
+    row.primary_institution = inst ? { id: inst.id, name: inst.name } : null;
+  }
+}
+
 export async function listDirectoryContacts(
   params?: ListDirectoryContactsParams
 ): Promise<{ data: DirectoryContactListItem[]; count: number; error: string | null }> {
@@ -179,22 +241,13 @@ export async function listDirectoryContacts(
 
   let query = supabase
     .from('directory_contacts')
-    .select(
-      `
-      *,
-      primary_role:directory_roles!directory_contacts_primary_directory_role_id_fkey(id,name),
-      primary_institution:institutions!directory_contacts_primary_institution_id_fkey(id,name)
-    `,
-      { count: 'exact' }
-    )
+    .select('*', { count: 'exact' })
     .eq('company_id', companyId)
     .order('last_name')
     .order('first_name');
 
   if (allowedIds) query = query.in('id', allowedIds);
   if (params?.status) query = query.eq('status', params.status);
-  if (params?.primaryRoleId) query = query.eq('primary_directory_role_id', params.primaryRoleId);
-  if (params?.primaryInstitutionId) query = query.eq('primary_institution_id', params.primaryInstitutionId);
 
   if (params?.recent7d) {
     const d = new Date();
@@ -207,25 +260,18 @@ export async function listDirectoryContacts(
   } else if (params?.health === 'healthy') {
     query = query
       .eq('status', 'active')
-      .not('primary_directory_role_id', 'is', null)
       .not('email', 'is', null)
       .neq('email', '');
   } else if (params?.health === 'needs_update') {
     query = query.eq('status', 'active');
-    query = query.or('primary_directory_role_id.is.null,email.is.null,email.eq.');
+    query = query.or('email.is.null,email.eq.');
   }
 
   if (params?.search?.trim()) {
     const raw = params.search.trim();
     const esc = raw.replace(/%/g, '\\%').replace(/_/g, '\\_');
     const t = `%${esc}%`;
-    const { data: roleRows } = await supabase.from('directory_roles').select('id').ilike('name', t);
-    const roleIds = (roleRows ?? []).map((r) => r.id);
-    if (roleIds.length) {
-      query = query.or(`first_name.ilike.${t},last_name.ilike.${t},email.ilike.${t},primary_directory_role_id.in.(${roleIds.join(',')})`);
-    } else {
-      query = query.or(`first_name.ilike.${t},last_name.ilike.${t},email.ilike.${t}`);
-    }
+    query = query.or(`first_name.ilike.${t},last_name.ilike.${t},email.ilike.${t}`);
   }
 
   const { data, error, count } = await query.range(offset, offset + limit - 1);
@@ -233,6 +279,7 @@ export async function listDirectoryContacts(
   if (error) return { data: [], count: 0, error: error.message };
 
   const rows = (data ?? []) as DirectoryContactListItem[];
+  await mergeListPrimaryProfileFromJunctions(supabase, rows);
   if (params?.studyId) {
     await mergeStudyEnrichment(supabase, params.studyId, rows);
   }
@@ -318,6 +365,7 @@ export async function getDirectoryContactsSnapshot(
       .in('id', studyContactIds);
     if (contactErr) return { data: null, error: contactErr.message };
     studyContactRows = (contactRows ?? []) as DirectoryContactListItem[];
+    await mergeListPrimaryProfileFromJunctions(supabase, studyContactRows);
   }
   const formCompleteness = summarizeContactCompleteness(studyContactRows);
 
@@ -426,13 +474,7 @@ export async function getDirectoryContactById(
 
   const { data: row, error } = await supabase
     .from('directory_contacts')
-    .select(
-      `
-      *,
-      primary_role:directory_roles!directory_contacts_primary_directory_role_id_fkey(id,name,category_id,sort_order),
-      primary_institution:institutions!directory_contacts_primary_institution_id_fkey(id,name,organization_type)
-    `
-    )
+    .select('*')
     .eq('id', id)
     .eq('company_id', companyId)
     .maybeSingle();
@@ -461,7 +503,12 @@ export async function getDirectoryContactById(
     .select(
       `
       id, study_site_id, directory_role_id, start_date, end_date, is_active,
-      study_sites(id,site_number,name,study_id,studies(title,protocol_number)),
+      study_sites(
+        id,site_number,name,study_id,
+        address,city,state,postal_code,study_country_id,
+        studies(title,protocol_number),
+        study_countries(country_code,country_name)
+      ),
       directory_roles(id,name)
     `
     )
@@ -496,16 +543,21 @@ export async function getDirectoryContactById(
     })
     .filter(Boolean) as { id: string; name: string }[];
 
+  const studiesTyped = (studies ?? []) as unknown as DirectoryContactWithRelations['studies'];
+  const sitesTyped = (sites ?? []) as unknown as DirectoryContactWithRelations['sites'];
+  const institutionsTyped = (inst ?? []) as unknown as DirectoryContactWithRelations['institutions'];
+
+  const derivedRole = derivePrimaryRoleFromJunctionRows(studiesTyped, sitesTyped);
+  const derivedInstitution = derivePrimaryInstitutionFromJunctionRows(institutionsTyped);
+
   const out: DirectoryContactWithRelations = {
     ...(row as DirectoryContactWithRelations),
-    primary_role: (row as { primary_role?: DirectoryContactWithRelations['primary_role'] }).primary_role ?? null,
-    primary_institution:
-      (row as { primary_institution?: DirectoryContactWithRelations['primary_institution'] }).primary_institution ??
-      null,
+    primary_role: derivedRole as DirectoryContactWithRelations['primary_role'],
+    primary_institution: derivedInstitution,
     secondary_roles,
-    studies: (studies ?? []) as unknown as DirectoryContactWithRelations['studies'],
-    sites: (sites ?? []) as unknown as DirectoryContactWithRelations['sites'],
-    institutions: (inst ?? []) as unknown as DirectoryContactWithRelations['institutions'],
+    studies: studiesTyped,
+    sites: sitesTyped,
+    institutions: institutionsTyped,
     committees: (comm ?? []) as unknown as DirectoryContactWithRelations['committees'],
   };
 
@@ -537,23 +589,8 @@ export async function createDirectoryContact(
   const inserted = await insertDirectoryContactRecord(supabase, companyId, input);
   if ('error' in inserted) return { data: null, error: inserted.error };
 
-  let linkedInstitution = false;
   let linkedStudy = false;
   const linkWarnings: string[] = [];
-
-  if (input.primary_institution_id) {
-    const instLink = await ensureDirectoryContactPrimaryInstitution(
-      supabase,
-      companyId,
-      inserted.id,
-      input.primary_institution_id
-    );
-    if (instLink.error) {
-      linkWarnings.push(`Primary organization link failed: ${instLink.error}`);
-    } else {
-      linkedInstitution = true;
-    }
-  }
 
   if (options.studyId) {
     const studyLink = await ensureDirectoryContactStudyLink(supabase, companyId, inserted.id, options.studyId);
@@ -592,7 +629,7 @@ export async function createDirectoryContact(
     revalidatePath(`/protected/studies/${options.studyId}/directory`);
   }
   return {
-    data: { id: inserted.id, linkedInstitution, linkedStudy, linkWarnings },
+    data: { id: inserted.id, linkedStudy, linkWarnings },
     error: null,
     duplicateEmailWarning: !!dup,
   };
@@ -612,7 +649,29 @@ export async function updateDirectoryContact(
     .single();
   if (!existing) return { error: 'Contact not found' };
 
-  const upd = await updateDirectoryContactRecord(supabase, companyId, id, input);
+  const normalized: SaveDirectoryContactInput = {
+    ...input,
+    contact_address_source: input.contact_address_source ?? 'manual',
+    contact_address_study_site_id:
+      input.contact_address_source === 'manual' ? null : input.contact_address_study_site_id ?? null,
+  };
+
+  if (normalized.contact_address_source === 'site' && normalized.contact_address_study_site_id) {
+    const { count, error: linkErr } = await supabase
+      .from('directory_contact_study_site')
+      .select('id', { count: 'exact', head: true })
+      .eq('directory_contact_id', id)
+      .eq('study_site_id', normalized.contact_address_study_site_id);
+    if (linkErr) return { error: linkErr.message };
+    if ((count ?? 0) === 0) {
+      return {
+        error:
+          'Address site must be one of this contact’s site assignments. Add the site first, then choose it here.',
+      };
+    }
+  }
+
+  const upd = await updateDirectoryContactRecord(supabase, companyId, id, normalized);
   if (upd.error) return { error: upd.error };
 
   await supabase.from('directory_contact_secondary_roles').delete().eq('directory_contact_id', id);
@@ -635,7 +694,7 @@ export async function updateDirectoryContact(
     entityId: id,
     action: 'update',
     oldPayload: existing as Record<string, unknown>,
-    newPayload: input as unknown as Record<string, unknown>,
+    newPayload: normalized as unknown as Record<string, unknown>,
   });
 
   revalidatePath('/protected/directory');
@@ -701,7 +760,7 @@ export async function upsertContactStudyLink(input: {
   end_date?: string | null;
   is_active?: boolean;
   notes?: string | null;
-}): Promise<{ error: string | null }> {
+}): Promise<{ error: string | null; junctionId?: string | null }> {
   const { supabase, companyId } = await requireEditor();
 
   const payload = {
@@ -724,6 +783,8 @@ export async function upsertContactStudyLink(input: {
       action: 'update',
       snapshot: payload,
     });
+    revalidatePath('/protected/directory');
+    return { error: null, junctionId: input.id };
   } else {
     const { data, error } = await supabase.from('directory_contact_study').insert(payload).select('id').single();
     if (error) return { error: error.message };
@@ -734,9 +795,9 @@ export async function upsertContactStudyLink(input: {
       action: 'insert',
       snapshot: payload,
     });
+    revalidatePath('/protected/directory');
+    return { error: null, junctionId: data?.id ?? null };
   }
-  revalidatePath('/protected/directory');
-  return { error: null };
 }
 
 export async function removeContactStudyLink(id: string): Promise<{ error: string | null }> {
@@ -761,7 +822,7 @@ export async function upsertContactSiteLink(input: {
   start_date?: string | null;
   end_date?: string | null;
   is_active?: boolean;
-}): Promise<{ error: string | null }> {
+}): Promise<{ error: string | null; junctionId?: string | null }> {
   const { supabase, companyId } = await requireEditor();
   const payload = {
     directory_contact_id: input.directory_contact_id,
@@ -781,6 +842,8 @@ export async function upsertContactSiteLink(input: {
       action: 'update',
       snapshot: payload,
     });
+    revalidatePath('/protected/directory');
+    return { error: null, junctionId: input.id };
   } else {
     const { data, error } = await supabase.from('directory_contact_study_site').insert(payload).select('id').single();
     if (error) return { error: error.message };
@@ -791,9 +854,9 @@ export async function upsertContactSiteLink(input: {
       action: 'insert',
       snapshot: payload,
     });
+    revalidatePath('/protected/directory');
+    return { error: null, junctionId: data?.id ?? null };
   }
-  revalidatePath('/protected/directory');
-  return { error: null };
 }
 
 export async function removeContactSiteLink(id: string): Promise<{ error: string | null }> {
@@ -815,7 +878,7 @@ export async function upsertContactInstitutionLink(input: {
   directory_contact_id: string;
   institution_id: string;
   is_primary: boolean;
-}): Promise<{ error: string | null }> {
+}): Promise<{ error: string | null; junctionId?: string | null }> {
   const { supabase, companyId } = await requireEditor();
 
   if (input.is_primary) {
@@ -841,6 +904,8 @@ export async function upsertContactInstitutionLink(input: {
       action: 'update',
       snapshot: payload,
     });
+    revalidatePath('/protected/directory');
+    return { error: null, junctionId: input.id };
   } else {
     const { data, error } = await supabase
       .from('directory_contact_institution')
@@ -855,9 +920,9 @@ export async function upsertContactInstitutionLink(input: {
       action: 'insert',
       snapshot: payload,
     });
+    revalidatePath('/protected/directory');
+    return { error: null, junctionId: data?.id ?? null };
   }
-  revalidatePath('/protected/directory');
-  return { error: null };
 }
 
 export async function removeContactInstitutionLink(id: string): Promise<{ error: string | null }> {
@@ -872,4 +937,168 @@ export async function removeContactInstitutionLink(id: string): Promise<{ error:
   });
   revalidatePath('/protected/directory');
   return { error: null };
+}
+
+export type ContactAssignmentsBatchResult = {
+  error: string | null;
+  createdIds: {
+    study: string[];
+    site: string[];
+    institution: string[];
+    committee: string[];
+  };
+  rowErrors: string[];
+};
+
+/**
+ * Validates and applies multiple directory links in one request.
+ * Merges implicit study links for any site whose parent study is not already in `studyLinks` (rec 8).
+ * Skips rows that already exist (idempotent, rec 7). Returns junction ids created in this call for undo.
+ */
+export async function upsertContactAssignmentsBatch(raw: unknown): Promise<ContactAssignmentsBatchResult> {
+  const empty: ContactAssignmentsBatchResult['createdIds'] = {
+    study: [],
+    site: [],
+    institution: [],
+    committee: [],
+  };
+
+  const parsed = contactAddAssignmentSchema.safeParse(raw);
+  if (!parsed.success) {
+    const msg = parsed.error.issues.map((i) => i.message).join('; ') || 'Invalid assignment payload';
+    return { error: msg, createdIds: empty, rowErrors: [] };
+  }
+
+  const input = parsed.data;
+  const contactId = input.directory_contact_id;
+  const { supabase } = await requireEditor();
+
+  const createdIds = { ...empty };
+  const rowErrors: string[] = [];
+
+  /** Implicit study rows required by site selections (parent protocol link). */
+  const siteIds = input.siteLinks.map((s) => s.study_site_id);
+  const studyIdBySiteId = new Map<string, string>();
+  if (siteIds.length > 0) {
+    const { data: siteRows, error: siteQErr } = await supabase
+      .from('study_sites')
+      .select('id, study_id')
+      .in('id', siteIds);
+    if (siteQErr) {
+      return { error: siteQErr.message, createdIds: empty, rowErrors: [] };
+    }
+    for (const row of siteRows ?? []) {
+      if (row?.id && row?.study_id) studyIdBySiteId.set(String(row.id), String(row.study_id));
+    }
+  }
+
+  const explicitStudyIds = new Set(input.studyLinks.map((s) => s.study_id));
+  const mergedStudyLinks = [...input.studyLinks];
+  for (const sl of input.siteLinks) {
+    const studyId = studyIdBySiteId.get(sl.study_site_id);
+    if (!studyId || explicitStudyIds.has(studyId)) continue;
+    explicitStudyIds.add(studyId);
+    mergedStudyLinks.push({
+      study_id: studyId,
+      directory_role_id: sl.directory_role_id ?? null,
+      is_active: sl.is_active ?? true,
+      notes: null,
+    });
+  }
+
+  const dedupStudies = new Map<string, (typeof mergedStudyLinks)[0]>();
+  for (const row of mergedStudyLinks) {
+    if (!dedupStudies.has(row.study_id)) dedupStudies.set(row.study_id, row);
+  }
+  const finalStudyLinks = [...dedupStudies.values()];
+
+  if (input.orgLink) {
+    const { error, junctionId } = await upsertContactInstitutionLink({
+      directory_contact_id: contactId,
+      institution_id: input.orgLink.institution_id,
+      is_primary: input.orgLink.is_primary ?? false,
+    });
+    if (error) rowErrors.push(`Organization: ${error}`);
+    else if (junctionId) createdIds.institution.push(junctionId);
+  }
+
+  for (const sl of finalStudyLinks) {
+    const { data: existing } = await supabase
+      .from('directory_contact_study')
+      .select('id')
+      .eq('directory_contact_id', contactId)
+      .eq('study_id', sl.study_id)
+      .maybeSingle();
+    if (existing?.id) continue;
+
+    const { error, junctionId } = await upsertContactStudyLink({
+      directory_contact_id: contactId,
+      study_id: sl.study_id,
+      directory_role_id: sl.directory_role_id ?? null,
+      is_active: sl.is_active ?? true,
+      notes: sl.notes ?? null,
+    });
+    if (error) {
+      if (error.toLowerCase().includes('duplicate') || error.includes('23505')) continue;
+      rowErrors.push(`Study ${sl.study_id}: ${error}`);
+    } else if (junctionId) {
+      createdIds.study.push(junctionId);
+    }
+  }
+
+  for (const site of input.siteLinks) {
+    const { data: existing } = await supabase
+      .from('directory_contact_study_site')
+      .select('id')
+      .eq('directory_contact_id', contactId)
+      .eq('study_site_id', site.study_site_id)
+      .maybeSingle();
+    if (existing?.id) continue;
+
+    const { error, junctionId } = await upsertContactSiteLink({
+      directory_contact_id: contactId,
+      study_site_id: site.study_site_id,
+      directory_role_id: site.directory_role_id ?? null,
+      is_active: site.is_active ?? true,
+    });
+    if (error) {
+      if (error.toLowerCase().includes('duplicate') || error.includes('23505')) continue;
+      rowErrors.push(`Site ${site.study_site_id}: ${error}`);
+    } else if (junctionId) {
+      createdIds.site.push(junctionId);
+    }
+  }
+
+  for (const cm of input.committeeLinks) {
+    const { data: existing } = await supabase
+      .from('committee_members')
+      .select('id')
+      .eq('directory_contact_id', contactId)
+      .eq('committee_id', cm.committee_id)
+      .maybeSingle();
+    if (existing?.id) continue;
+
+    const { error, junctionId } = await upsertCommitteeMember({
+      committee_id: cm.committee_id,
+      directory_contact_id: contactId,
+      directory_role_id: cm.directory_role_id ?? null,
+      is_active: cm.is_active ?? true,
+    });
+    if (error) {
+      if (error.toLowerCase().includes('duplicate') || error.includes('23505')) continue;
+      rowErrors.push(`Committee ${cm.committee_id}: ${error}`);
+    } else if (junctionId) {
+      createdIds.committee.push(junctionId);
+    }
+  }
+
+  revalidatePath('/protected/directory');
+  revalidatePath(`/protected/directory/contacts/${contactId}`);
+
+  const fatal = rowErrors.length > 0 && createdIds.study.length + createdIds.site.length + createdIds.institution.length + createdIds.committee.length === 0;
+  return {
+    error: fatal ? rowErrors.join(' ') : null,
+    createdIds,
+    rowErrors,
+  };
 }

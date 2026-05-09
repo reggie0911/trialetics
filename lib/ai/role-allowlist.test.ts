@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { WRITE_TOOLS, assertToolAllowedForRole, isToolAllowedForRole } from './role-allowlist';
+import { getWriteTools, assertToolAllowedForRole, isToolAllowedForRole } from './role-allowlist';
 
 describe('isToolAllowedForRole', () => {
   it('allows read tools for every role', () => {
@@ -10,7 +10,7 @@ describe('isToolAllowedForRole', () => {
   });
 
   it('denies every write tool to viewers', () => {
-    for (const tool of WRITE_TOOLS) {
+    for (const tool of getWriteTools()) {
       expect(isToolAllowedForRole('viewer', tool)).toBe(false);
     }
   });

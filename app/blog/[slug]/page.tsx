@@ -20,9 +20,8 @@ export default async function BlogPostPage(
     searchParams?: Promise<Record<string, string | string[]>>;
   }
 ) {
-  const searchParams = await props.searchParams;
+  await props.searchParams;
   const { slug } = await props.params;
-  if (searchParams) await searchParams;
   const post = getBlogBySlug(slug);
 
   if (!post) {

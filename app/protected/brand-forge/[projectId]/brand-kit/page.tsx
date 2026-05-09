@@ -1,3 +1,4 @@
+import { asResolved } from '@/lib/next/as-resolved';
 import { createClient } from '@/lib/server';
 import { BrandKitEditor } from '@/components/brand-forge/brand-kit-editor';
 import { BrandKitVersionHistory } from '@/components/brand-forge/brand-kit-version-history';
@@ -8,7 +9,7 @@ interface BrandKitPageProps {
 }
 
 export default async function BrandKitPage({ params }: BrandKitPageProps) {
-  const { projectId } = await params;
+  const { projectId } = await asResolved(params);
   const supabase = await createClient();
 
   const { data: project } = await supabase

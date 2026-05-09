@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, Eye, Mail, Phone, User } from 'lucide-react';
+import { ChevronDown, Eye, User } from 'lucide-react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -13,35 +13,9 @@ import { siteRoleCoverageFromRoleNames } from '@/lib/directory/contact-health';
 import type { DirectoryContactListItem } from '@/lib/types/directory';
 import { cn } from '@/lib/utils';
 import { DirectoryEmptyState } from '@/components/ctms/directory/directory-empty-state';
+import { buildContactDirectorySiteGroups } from '@/lib/directory/contact-directory-site-groups';
 import { getContactCompleteness } from '@/lib/directory/record-completeness';
 import { getCountryName } from '@/lib/data/countries';
-
-const UNASS = '__unassigned__';
-
-type Group = { key: string; label: string; rows: DirectoryContactListItem[] };
-
-function buildGroups(contacts: DirectoryContactListItem[]): Group[] {
-  const m = new Map<string, { label: string; rows: DirectoryContactListItem[] }>();
-  for (const c of contacts) {
-    const e = c.study_enrichment;
-    const key = e?.primary_study_site_id ?? c.primary_institution?.id ?? UNASS;
-    const label =
-      e?.primary_study_site_label?.trim() ||
-      c.primary_institution?.name?.trim() ||
-      (key === UNASS ? 'Unassigned to site' : '—');
-    const g = m.get(key) ?? { label, rows: [] as DirectoryContactListItem[] };
-    g.label = label;
-    g.rows.push(c);
-    m.set(key, g);
-  }
-  const arr: Group[] = Array.from(m.entries()).map(([key, v]) => ({ key, label: v.label, rows: v.rows }));
-  arr.sort((a, b) => {
-    if (a.key === UNASS) return 1;
-    if (b.key === UNASS) return -1;
-    return a.label.localeCompare(b.label);
-  });
-  return arr;
-}
 
 function roleBadgeClass(roleId: string) {
   let h = 0;
@@ -62,7 +36,7 @@ export function DirectoryGroupedContactsTable({
   emptyDescription?: string;
 }) {
   const router = useRouter();
-  const groups = useMemo(() => buildGroups(contacts), [contacts]);
+  const groups = useMemo(() => buildContactDirectorySiteGroups(contacts), [contacts]);
 
   if (contacts.length === 0) {
     return (
@@ -176,16 +150,9 @@ export function DirectoryGroupedContactsTable({
                             )}
                           </TableCell>
                           <TableCell className="align-middle min-w-0 max-w-[12rem]">
-                            <div className="min-w-0">
-                              <p className="text-xs truncate" title={pi?.name ?? undefined}>
-                                {pi?.name ?? '—'}
-                              </p>
-                              {c.region ? (
-                                <p className="text-[10px] text-muted-foreground truncate" title={c.region}>
-                                  {c.region}
-                                </p>
-                              ) : null}
-                            </div>
+                            <p className="min-w-0 text-xs truncate" title={pi?.name ?? undefined}>
+                              {pi?.name ?? '—'}
+                            </p>
                           </TableCell>
                           <TableCell className="align-middle max-w-[10rem]">
                             <span className="text-xs text-foreground truncate block" title={countryName}>
@@ -229,34 +196,6 @@ export function DirectoryGroupedContactsTable({
                           </TableCell>
                           <TableCell className="align-middle">
                             <div className="flex items-center justify-end gap-0.5">
-                              {c.email ? (
-                                <Button
-                                  asChild
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  title="Send email"
-                                >
-                                  <a href={`mailto:${c.email}`}>
-                                    <Mail className="h-3.5 w-3.5" />
-                                  </a>
-                                </Button>
-                              ) : null}
-                              {c.phone ? (
-                                <Button
-                                  asChild
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  title="Call"
-                                >
-                                  <a href={`tel:${c.phone}`}>
-                                    <Phone className="h-3.5 w-3.5" />
-                                  </a>
-                                </Button>
-                              ) : null}
                               <Button
                                 type="button"
                                 variant="ghost"
