@@ -1,3 +1,4 @@
+import { asResolved } from '@/lib/next/as-resolved';
 import { createClient } from '@/lib/server';
 import { ExportPage } from '@/components/brand-forge/export-page';
 import type { BFLogoConcept, BFBrandKit, BFExport, BFShareLink } from '@/lib/types/brand-forge';
@@ -7,7 +8,7 @@ interface ExportsPageProps {
 }
 
 export default async function ExportsPage({ params }: ExportsPageProps) {
-  const { projectId } = await params;
+  const { projectId } = await asResolved(params);
   const supabase = await createClient();
 
   const { data: project } = await supabase

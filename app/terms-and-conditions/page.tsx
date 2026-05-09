@@ -1,13 +1,18 @@
 import { Metadata } from 'next';
 
 import Noise from '@/components/noise';
+import { consumePageDynamic } from '@/lib/next/consume-page-dynamic';
 
 export const metadata: Metadata = {
   title: 'Terms of Use | Trialetics',
   description: 'Terms of Use for Trialetics Clinical Trial Management System (CTMS). Effective February 8, 2025.',
 };
 
-export default function TermsOfUse() {
+export default async function TermsOfUse(props: {
+  params?: Promise<unknown>;
+  searchParams?: Promise<unknown>;
+}) {
+  await consumePageDynamic(props);
   return (
     <section className="section-padding relative">
       <Noise />

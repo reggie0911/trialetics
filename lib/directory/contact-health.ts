@@ -2,9 +2,25 @@ import type { DirectoryContactRow } from '@/lib/types/directory';
 
 export type ContactHealthStatus = 'healthy' | 'needs_update' | 'at_risk';
 
-export function computeContactHealth(c: Pick<DirectoryContactRow, 'status' | 'email' | 'primary_directory_role_id'>): ContactHealthStatus {
+interface ContactWithAssignments {
+  status: DirectoryContactRow['status'];
+  email: DirectoryContactRow['email'];
+  studies?: { directory_roles?: { id?: string } | null }[];
+  sites?: { directory_roles?: { id?: string } | null }[];
+}
+
+/**
+ * Computes health status from assignments rather than primary_directory_role_id.
+ * A contact is healthy if active, has email, and has at least one assignment with a role.
+ */
+export function computeContactHealth(c: ContactWithAssignments): ContactHealthStatus {
   if (c.status === 'inactive') return 'at_risk';
-  if (!c.email?.trim() || !c.primary_directory_role_id) return 'needs_update';
+  const hasEmail = Boolean(c.email?.trim());
+  const studies = c.studies ?? [];
+  const sites = c.sites ?? [];
+  const hasAssignmentRole =
+    studies.some((s) => s.directory_roles?.id) || sites.some((s) => s.directory_roles?.id);
+  if (!hasEmail || !hasAssignmentRole) return 'needs_update';
   return 'healthy';
 }
 

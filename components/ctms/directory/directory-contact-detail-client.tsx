@@ -1,39 +1,43 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type ReactNode,
+} from 'react';
 import Link from 'next/link';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import {
   AlertCircle,
   AlertTriangle,
-  BookOpen,
   Building2,
   CalendarClock,
   Camera,
   CheckCircle2,
-  ChevronRight,
   ClipboardList,
   Clock,
   Info,
-  KeyRound,
   Mail,
   MoreHorizontal,
   Pencil,
   Phone,
   Plus,
-  Shield,
   ShieldAlert,
-  Star,
   Trash2,
   User,
-  UserPlus,
   Users,
 } from 'lucide-react';
 
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -74,27 +78,34 @@ import {
   removeContactStudyLink,
   upsertContactStudyLink,
   removeContactSiteLink,
-  upsertContactSiteLink,
   removeContactInstitutionLink,
-  upsertContactInstitutionLink,
   setDirectoryContactStatus,
 } from '@/lib/actions/directory-contacts';
-import {
-  removeCommitteeMember,
-  upsertCommitteeMember,
-} from '@/lib/actions/directory-committees';
-import { directoryContactFormSchema } from '@/lib/validation/directory';
-import { DirectoryPrimaryRoleFields } from '@/components/ctms/directory/directory-primary-role-fields';
+import { removeCommitteeMember } from '@/lib/actions/directory-committees';
+import { directoryContactDetailFormSchema } from '@/lib/validation/directory';
 import { DirectoryCountryRegionFields } from '@/components/ctms/directory/directory-country-region-fields';
 import { DirectoryContactPhotoField } from '@/components/ctms/directory/directory-contact-photo-field';
+import {
+  ContactAddAssignmentDialog,
+  type AddAssignmentInitialTab,
+} from '@/components/ctms/directory/contact-add-assignment-dialog';
+import type { DirectoryAssignmentOpenEntry } from '@/lib/directory/contact-assignment-analytics';
+import {
+  ContactQuickAddCommitteeSheet,
+  ContactQuickAddOrgSheet,
+  ContactQuickAddSiteSheet,
+  ContactQuickAddStudySheet,
+} from '@/components/ctms/directory/contact-quick-add-dialogs';
 import { formatPhoneNumber, cn } from '@/lib/utils';
+import { getCountryName } from '@/lib/data/countries';
+import { resolveContactAddress } from '@/lib/directory/contact-address';
 import type { CommitteeRow, DirectoryContactWithRelations } from '@/lib/types/directory';
 import type { Study, StudySiteWithStudy } from '@/lib/types/ctms';
 import type { InstitutionRow } from '@/lib/types/directory';
+import { getOrganizationTypeLabel } from '@/components/ctms/directory/institution-profile/utils';
 
-const contactDetailFormSchema = directoryContactFormSchema.omit({ profile_id: true });
-type ContactDetailFormInput = z.input<typeof contactDetailFormSchema>;
-type ContactDetailFormOutput = z.infer<typeof contactDetailFormSchema>;
+type ContactDetailFormInput = z.input<typeof directoryContactDetailFormSchema>;
+type ContactDetailFormOutput = z.infer<typeof directoryContactDetailFormSchema>;
 
 type CatalogCat = {
   id: string;
@@ -137,7 +148,7 @@ function singleSite(s: unknown) {
     | null;
 }
 function singleInst(i: unknown) {
-  return (Array.isArray(i) ? i[0] : i) as { name?: string } | null;
+  return (Array.isArray(i) ? i[0] : i) as Pick<InstitutionRow, 'id' | 'name' | 'organization_type'> | null;
 }
 function singleComm(c: unknown) {
   return (Array.isArray(c) ? c[0] : c) as { name?: string } | null;
@@ -151,12 +162,13 @@ function studyLabel(s: { study_name?: string | null; protocol_number: string; ti
   return s.study_name?.trim() || s.title?.trim() || s.protocol_number?.trim() || 'this study';
 }
 
+/** ISO timestamps formatted for display. Uses date-fns (not `toLocale*`) so SSR and the browser match. */
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   try {
-    const d = new Date(iso);
+    const d = parseISO(iso);
     if (Number.isNaN(d.getTime())) return '—';
-    return d.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
+    return format(d, 'MMM dd, yyyy');
   } catch {
     return '—';
   }
@@ -165,11 +177,9 @@ function formatDate(iso: string | null | undefined): string {
 function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   try {
-    const d = new Date(iso);
+    const d = parseISO(iso);
     if (Number.isNaN(d.getTime())) return '—';
-    const date = d.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
-    const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-    return `${date} ${time}`;
+    return format(d, 'MMM dd, yyyy h:mm a');
   } catch {
     return '—';
   }
@@ -186,44 +196,40 @@ function initials(first: string, last: string): string {
   return `${f}${l}`.toUpperCase() || 'U';
 }
 
-/** Pick the contact's "primary" study row using the documented priority. */
-function pickPrimaryStudyRow(
-  studies: StudyLinkRow[],
-  contextStudyId: string | null | undefined
-): StudyLinkRow | null {
-  if (!studies.length) return null;
-  if (contextStudyId) {
-    const ctx = studies.find((s) => s.study_id === contextStudyId);
-    if (ctx) return ctx;
-  }
-  const active = studies.find((s) => s.is_active);
-  return active ?? studies[0] ?? null;
-}
-
-function studyPhaseLabel(phase: Study['phase']): string {
-  return phase ?? '';
-}
-
-function studyStatusLabel(status: Study['status']): string {
-  if (!status) return '';
-  return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
-}
-
 interface CompletenessCheck {
   id: 'role' | 'study' | 'site' | 'org' | 'contact';
   label: string;
   done: boolean;
 }
 
+function hasAnyAssignmentRole(contact: DirectoryContactWithRelations): boolean {
+  return (
+    contact.studies.some((s) => s.directory_roles?.id) ||
+    contact.sites.some((s) => s.directory_roles?.id)
+  );
+}
+
+function hasPrimaryInstitution(contact: DirectoryContactWithRelations): boolean {
+  return contact.institutions.some((i) => i.is_primary);
+}
+
 function getCompleteness(contact: DirectoryContactWithRelations): CompletenessCheck[] {
   return [
-    { id: 'role', label: 'Role assigned', done: !!contact.primary_directory_role_id },
+    { id: 'role', label: 'Role assigned', done: hasAnyAssignmentRole(contact) },
     { id: 'study', label: 'Study linked', done: contact.studies.length > 0 },
     { id: 'site', label: 'Site linked', done: contact.sites.length > 0 },
-    { id: 'org', label: 'Organization linked', done: !!contact.primary_institution_id || contact.institutions.length > 0 },
+    { id: 'org', label: 'Organization linked', done: hasPrimaryInstitution(contact) },
     { id: 'contact', label: 'Contact info present', done: !!contact.email || !!contact.phone },
   ];
 }
+
+const COMPLETENESS_SCROLL_IDS: Record<CompletenessCheck['id'], string> = {
+  role: 'contact-study-assignments',
+  study: 'contact-study-assignments',
+  site: 'contact-site-assignments',
+  org: 'contact-organizations',
+  contact: 'contact-profile-card',
+};
 
 interface AttentionItem {
   id: string;
@@ -240,18 +246,21 @@ function getAttentionItems(
   contextStudyId: string | null | undefined,
   isLinkedToContext: boolean,
   contextLabel: string | null,
-  actions: { editProfile: () => void; openSite: () => void; openStudy: () => void }
+  actions: {
+    editProfile: () => void;
+    openAddAssignmentForAttention: (tab: AddAssignmentInitialTab) => void;
+  }
 ): AttentionItem[] {
   const items: AttentionItem[] = [];
-  if (!contact.primary_directory_role_id) {
+  if (!hasAnyAssignmentRole(contact)) {
     items.push({
       id: 'no-role',
       icon: ShieldAlert,
       iconClass: 'text-amber-500',
-      title: 'Primary role not assigned',
-      description: 'Assign a role for this user in the directory.',
-      ctaLabel: 'Assign Role',
-      onAction: actions.editProfile,
+      title: 'No assignment has a role',
+      description: 'Add a role to at least one study or site assignment.',
+      ctaLabel: 'Add assignment',
+      onAction: () => actions.openAddAssignmentForAttention('studies'),
     });
   }
   if (contact.sites.length === 0) {
@@ -261,8 +270,8 @@ function getAttentionItems(
       iconClass: 'text-orange-500',
       title: 'Not assigned to any site',
       description: 'Assign to a site to enable visit tracking.',
-      ctaLabel: 'Assign to Site',
-      onAction: actions.openSite,
+      ctaLabel: 'Add assignment',
+      onAction: () => actions.openAddAssignmentForAttention('sites'),
     });
   }
   if (contextStudyId && contextLabel && !isLinkedToContext) {
@@ -272,8 +281,8 @@ function getAttentionItems(
       iconClass: 'text-amber-500',
       title: `Not linked to ${contextLabel}`,
       description: 'Profile will not appear on the study Directory list until linked.',
-      ctaLabel: 'Link to study',
-      onAction: actions.openStudy,
+      ctaLabel: 'Add assignment',
+      onAction: () => actions.openAddAssignmentForAttention('studies'),
     });
   }
   if (contact.studies.length === 0) {
@@ -283,8 +292,19 @@ function getAttentionItems(
       iconClass: 'text-sky-500',
       title: 'No study links',
       description: 'Link this person to one or more studies.',
-      ctaLabel: 'Assign Study',
-      onAction: actions.openStudy,
+      ctaLabel: 'Add assignment',
+      onAction: () => actions.openAddAssignmentForAttention('studies'),
+    });
+  }
+  if (!hasPrimaryInstitution(contact)) {
+    items.push({
+      id: 'no-org',
+      icon: Building2,
+      iconClass: 'text-amber-500',
+      title: 'No primary organization',
+      description: 'Mark one organization as primary for this contact.',
+      ctaLabel: 'Add assignment',
+      onAction: () => actions.openAddAssignmentForAttention('org'),
     });
   }
   if (contact.status === 'inactive') {
@@ -315,12 +335,35 @@ export function DirectoryContactDetailClient({
   const [, startTransition] = useTransition();
   const [contact, setContact] = useState(initial);
   const [editingProfile, setEditingProfile] = useState(false);
+  const addressStaleToastKey = useRef<string | null>(null);
+
+  useEffect(() => {
+    const key = `${contact.id}:${contact.updated_at}`;
+    if (addressStaleToastKey.current === key) return;
+    if (contact.contact_address_source !== 'site') return;
+    const r = resolveContactAddress(contact);
+    if (!r.staleOrMissingSite) return;
+    addressStaleToastKey.current = key;
+    toast.message(
+      'Site address could not be resolved from assignments. Edit the profile to pick a site or use a manual address.'
+    );
+  }, [contact]);
 
   const flatRoles = catalog.flatMap((c) => c.roles);
   const roleLibraryReady = catalog.some((c) => (c.roles?.length ?? 0) > 0);
 
+  const derivedRoleId = useMemo(() => {
+    for (const study of contact.studies) {
+      if (study.directory_roles?.id) return study.directory_roles.id;
+    }
+    for (const site of contact.sites) {
+      if (site.directory_roles?.id) return site.directory_roles.id;
+    }
+    return null;
+  }, [contact.studies, contact.sites]);
+
   const form = useForm<ContactDetailFormInput, unknown, ContactDetailFormOutput>({
-    resolver: zodResolver(contactDetailFormSchema),
+    resolver: zodResolver(directoryContactDetailFormSchema),
     defaultValues: {
       first_name: initial.first_name,
       last_name: initial.last_name,
@@ -331,25 +374,34 @@ export function DirectoryContactDetailClient({
       department: initial.department ?? '',
       country_code: initial.country_code ?? '',
       region: initial.region ?? '',
+      address_line1: initial.address_line1 ?? '',
+      city: initial.city ?? '',
+      postal_code: initial.postal_code ?? '',
+      contact_address_source: initial.contact_address_source ?? 'manual',
+      contact_address_study_site_id: initial.contact_address_study_site_id ?? '',
       status: initial.status,
       notes: initial.notes ?? '',
-      primary_directory_role_id: initial.primary_directory_role_id ?? '',
-      primary_institution_id: initial.primary_institution_id ?? '',
       secondary_role_ids: initial.secondary_roles.map((r) => r.id),
     },
   });
 
-  const [studyOpen, setStudyOpen] = useState(false);
   const [studyRoleEditRow, setStudyRoleEditRow] = useState<StudyLinkRow | null>(null);
-  const [siteOpen, setSiteOpen] = useState(false);
-  const [instOpen, setInstOpen] = useState(false);
-  const [committeeOpen, setCommitteeOpen] = useState(false);
+  const [assignmentOpen, setAssignmentOpen] = useState(false);
+  const [assignmentInitialTab, setAssignmentInitialTab] = useState<AddAssignmentInitialTab>('studies');
+  const [assignmentAnalyticsEntry, setAssignmentAnalyticsEntry] =
+    useState<DirectoryAssignmentOpenEntry>('completeness');
+  const [quickStudyOpen, setQuickStudyOpen] = useState(false);
+  const [quickSiteOpen, setQuickSiteOpen] = useState(false);
+  const [quickOrgOpen, setQuickOrgOpen] = useState(false);
+  const [quickCommitteeOpen, setQuickCommitteeOpen] = useState(false);
 
   useEffect(() => {
-    setContact(initial);
+    startTransition(() => {
+      setContact(initial);
+    });
   }, [initial.id, initial.updated_at]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional subset of `initial`
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     form.reset({
       first_name: contact.first_name,
       last_name: contact.last_name,
@@ -360,24 +412,27 @@ export function DirectoryContactDetailClient({
       department: contact.department ?? '',
       country_code: contact.country_code ?? '',
       region: contact.region ?? '',
+      address_line1: contact.address_line1 ?? '',
+      city: contact.city ?? '',
+      postal_code: contact.postal_code ?? '',
+      contact_address_source: contact.contact_address_source ?? 'manual',
+      contact_address_study_site_id: contact.contact_address_study_site_id ?? '',
       status: contact.status,
       notes: contact.notes ?? '',
-      primary_directory_role_id: contact.primary_directory_role_id ?? '',
-      primary_institution_id: contact.primary_institution_id ?? '',
       secondary_role_ids: contact.secondary_roles.map((r) => r.id),
     });
-  };
+  }, [contact, form]);
 
-  const enterEdit = () => {
+  const enterEdit = useCallback(() => {
     if (!canEdit) return;
     resetForm();
     setEditingProfile(true);
-  };
+  }, [canEdit, resetForm]);
 
-  const cancelEdit = () => {
+  const cancelEdit = useCallback(() => {
     resetForm();
     setEditingProfile(false);
-  };
+  }, [resetForm]);
 
   const onSave = form.handleSubmit(async (values) => {
     startTransition(async () => {
@@ -392,6 +447,11 @@ export function DirectoryContactDetailClient({
         country_code: values.country_code || undefined,
         region: values.region || undefined,
         notes: values.notes || undefined,
+        address_line1: values.address_line1,
+        city: values.city,
+        postal_code: values.postal_code,
+        contact_address_source: values.contact_address_source,
+        contact_address_study_site_id: values.contact_address_study_site_id,
       });
       if (res.error) toast.error(res.error);
       else {
@@ -410,8 +470,11 @@ export function DirectoryContactDetailClient({
           region: values.region || null,
           status: values.status,
           notes: values.notes || null,
-          primary_directory_role_id: values.primary_directory_role_id || null,
-          primary_institution_id: values.primary_institution_id || null,
+          address_line1: values.address_line1?.trim() ? values.address_line1.trim() : null,
+          city: values.city?.trim() ? values.city.trim() : null,
+          postal_code: values.postal_code?.trim() ? values.postal_code.trim() : null,
+          contact_address_source: values.contact_address_source,
+          contact_address_study_site_id: values.contact_address_study_site_id ?? null,
         }));
         setEditingProfile(false);
         router.refresh();
@@ -431,31 +494,64 @@ export function DirectoryContactDetailClient({
       contact.studies.some((row) => row.study_id === directoryContextStudyId)
   );
 
-  const primaryStudyRow = useMemo(
-    () => pickPrimaryStudyRow(contact.studies, directoryContextStudyId),
-    [contact.studies, directoryContextStudyId]
-  );
-
-  const primaryStudyMeta = useMemo(() => {
-    if (!primaryStudyRow) return null;
-    const ref = singleStudy(primaryStudyRow.studies);
-    const full = studies.find((s) => s.id === primaryStudyRow.study_id) ?? null;
-    return { ref, full };
-  }, [primaryStudyRow, studies]);
-
-  const primaryStudySites = useMemo(() => {
-    if (!primaryStudyRow) return [];
-    return contact.sites.filter((row) => {
-      const ss = row.study_sites as { study_id?: string } | null;
-      return ss?.study_id === primaryStudyRow.study_id;
-    });
-  }, [primaryStudyRow, contact.sites]);
-
   const completeness = useMemo(() => getCompleteness(contact), [contact]);
   const completenessRatio = useMemo(() => {
     const done = completeness.filter((c) => c.done).length;
     return { done, total: completeness.length };
   }, [completeness]);
+
+  const scrollToCompletenessSection = useCallback((id: CompletenessCheck['id']) => {
+    const domId = COMPLETENESS_SCROLL_IDS[id];
+    const el = typeof document !== 'undefined' ? document.getElementById(domId) : null;
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  const openAddAssignment = useCallback(
+    (tab: AddAssignmentInitialTab, analyticsEntry: DirectoryAssignmentOpenEntry = 'completeness') => {
+      if (!canEdit) {
+        toast.message('You do not have permission to edit assignments.');
+        return;
+      }
+      setAssignmentAnalyticsEntry(analyticsEntry);
+      setAssignmentInitialTab(tab);
+      setAssignmentOpen(true);
+    },
+    [canEdit]
+  );
+
+  const handleCompletenessRowClick = useCallback(
+    (id: CompletenessCheck['id']) => {
+      const row = completeness.find((c) => c.id === id);
+      if (!row) return;
+      if (!row.done) {
+        if (id === 'contact') {
+          if (!canEdit) {
+            toast.message('You do not have permission to edit this profile.');
+            return;
+          }
+          enterEdit();
+          setTimeout(() => {
+            document.getElementById('contact-profile-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 50);
+          return;
+        }
+        if (id === 'role' || id === 'study') {
+          openAddAssignment('studies', 'completeness');
+          return;
+        }
+        if (id === 'site') {
+          openAddAssignment('sites', 'completeness');
+          return;
+        }
+        if (id === 'org') {
+          openAddAssignment('org', 'completeness');
+          return;
+        }
+      }
+      scrollToCompletenessSection(id);
+    },
+    [completeness, canEdit, enterEdit, openAddAssignment, scrollToCompletenessSection]
+  );
 
   const actions = useMemo(
     () => ({
@@ -470,33 +566,34 @@ export function DirectoryContactDetailClient({
           el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 50);
       },
-      openSite: () => {
-        if (!canEdit) {
-          toast.message('You do not have permission to add site links.');
-          return;
-        }
-        setSiteOpen(true);
-      },
-      openStudy: () => {
+      openAddAssignment,
+      openQuickAddStudy: () => {
         if (!canEdit) {
           toast.message('You do not have permission to add study links.');
           return;
         }
-        setStudyOpen(true);
+        setQuickStudyOpen(true);
       },
-      openInst: () => {
+      openQuickAddSite: () => {
+        if (!canEdit) {
+          toast.message('You do not have permission to add site links.');
+          return;
+        }
+        setQuickSiteOpen(true);
+      },
+      openQuickAddOrg: () => {
         if (!canEdit) {
           toast.message('You do not have permission to add organization links.');
           return;
         }
-        setInstOpen(true);
+        setQuickOrgOpen(true);
       },
-      openCommittee: () => {
+      openQuickAddCommittee: () => {
         if (!canEdit) {
           toast.message('You do not have permission to edit committee memberships.');
           return;
         }
-        setCommitteeOpen(true);
+        setQuickCommitteeOpen(true);
       },
       openStudyRoleEdit: (row: StudyLinkRow) => {
         if (!canEdit) {
@@ -506,7 +603,15 @@ export function DirectoryContactDetailClient({
         setStudyRoleEditRow(row);
       },
     }),
-    [canEdit, enterEdit]
+    [canEdit, enterEdit, openAddAssignment]
+  );
+
+  const attentionActions = useMemo(
+    () => ({
+      editProfile: actions.editProfile,
+      openAddAssignmentForAttention: (tab: AddAssignmentInitialTab) => openAddAssignment(tab, 'attention'),
+    }),
+    [actions.editProfile, openAddAssignment]
   );
 
   const attention = useMemo(
@@ -516,9 +621,9 @@ export function DirectoryContactDetailClient({
         directoryContextStudyId,
         isLinkedToContextStudy,
         contextStudyLabel,
-        actions
+        attentionActions
       ),
-    [contact, directoryContextStudyId, isLinkedToContextStudy, contextStudyLabel, actions]
+    [contact, directoryContextStudyId, isLinkedToContextStudy, contextStudyLabel, attentionActions]
   );
 
   return (
@@ -543,33 +648,8 @@ export function DirectoryContactDetailClient({
           onEditProfile={actions.editProfile}
         />
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6 items-start">
           <div className="min-w-0 space-y-4">
-            <StudyContextCard
-              primaryStudyRow={primaryStudyRow}
-              primaryStudyFull={primaryStudyMeta?.full ?? null}
-              canEdit={canEdit}
-              onEditStudyRole={
-                primaryStudyRow
-                  ? () => actions.openStudyRoleEdit(primaryStudyRow)
-                  : () => {}
-              }
-            />
-
-            <AssignmentOverviewCard
-              primaryStudyRow={primaryStudyRow}
-              primaryStudyFull={primaryStudyMeta?.full ?? null}
-              primaryStudySites={primaryStudySites}
-              canEdit={canEdit}
-              onEditStudyRole={
-                primaryStudyRow
-                  ? () => actions.openStudyRoleEdit(primaryStudyRow)
-                  : () => {}
-              }
-              onAssignSite={actions.openSite}
-              onAssignStudy={actions.openStudy}
-            />
-
             <ProfileInformationCard
               companyId={companyId}
               contact={contact}
@@ -588,7 +668,7 @@ export function DirectoryContactDetailClient({
             <StudyAssignmentsTable
               rows={contact.studies}
               canEdit={canEdit}
-              onAdd={actions.openStudy}
+              onQuickAdd={actions.openQuickAddStudy}
               onEditRole={(row) => actions.openStudyRoleEdit(row)}
               onRemove={(id) =>
                 startTransition(async () => {
@@ -602,7 +682,7 @@ export function DirectoryContactDetailClient({
             <SiteAssignmentsTable
               rows={contact.sites}
               canEdit={canEdit}
-              onAdd={actions.openSite}
+              onQuickAdd={actions.openQuickAddSite}
               onRemove={(id) =>
                 startTransition(async () => {
                   await removeContactSiteLink(id);
@@ -615,7 +695,7 @@ export function DirectoryContactDetailClient({
             <OrganizationsTable
               rows={contact.institutions}
               canEdit={canEdit}
-              onAdd={actions.openInst}
+              onQuickAdd={actions.openQuickAddOrg}
               onRemove={(id) =>
                 startTransition(async () => {
                   await removeContactInstitutionLink(id);
@@ -628,7 +708,7 @@ export function DirectoryContactDetailClient({
             <CommitteeMembershipsTable
               rows={contact.committees}
               canEdit={canEdit}
-              onAdd={actions.openCommittee}
+              onQuickAdd={actions.openQuickAddCommittee}
               onRemove={(id) =>
                 startTransition(async () => {
                   const { error } = await removeCommitteeMember(id);
@@ -644,27 +724,12 @@ export function DirectoryContactDetailClient({
 
           <ContactRightRail
             contact={contact}
-            canEdit={canEdit}
-            primaryStudyRow={primaryStudyRow}
             attention={attention}
             completeness={completeness}
-            actions={actions}
+            onCompletenessRowClick={handleCompletenessRowClick}
           />
         </div>
 
-        <StudyLinkDialog
-          open={studyOpen}
-          onOpenChange={setStudyOpen}
-          contactId={contact.id}
-          studies={studies}
-          roles={flatRoles}
-          existingStudyIds={new Set(contact.studies.map((s) => s.study_id))}
-          defaultDirectoryRoleId={contact.primary_directory_role_id}
-          onDone={() => {
-            setStudyOpen(false);
-            router.refresh();
-          }}
-        />
         <StudyLinkRoleDialog
           open={studyRoleEditRow !== null}
           onOpenChange={(v) => {
@@ -679,40 +744,61 @@ export function DirectoryContactDetailClient({
             router.refresh();
           }}
         />
-        <SiteLinkDialog
-          open={siteOpen}
-          onOpenChange={setSiteOpen}
+        <ContactAddAssignmentDialog
+          open={assignmentOpen}
+          onOpenChange={setAssignmentOpen}
+          contact={contact}
+          studies={studies}
+          sites={sites}
+          institutions={institutions}
+          committees={committees}
+          roles={flatRoles}
+          catalog={catalog}
+          existingStudyIds={new Set(contact.studies.map((s) => s.study_id))}
+          existingSiteIds={new Set(contact.sites.map((s) => s.study_site_id))}
+          existingInstIds={new Set(contact.institutions.map((i) => i.institution_id))}
+          existingCommitteeIds={new Set(contact.committees.map((c) => c.committee_id))}
+          initialTab={assignmentInitialTab}
+          analyticsEntry={assignmentAnalyticsEntry}
+          onSuccess={() => router.refresh()}
+        />
+        <ContactQuickAddStudySheet
+          open={quickStudyOpen}
+          onOpenChange={setQuickStudyOpen}
+          contactId={contact.id}
+          studies={studies}
+          roles={flatRoles}
+          existingStudyIds={new Set(contact.studies.map((s) => s.study_id))}
+          defaultDirectoryRoleId={derivedRoleId}
+          onDone={() => router.refresh()}
+        />
+        <ContactQuickAddSiteSheet
+          open={quickSiteOpen}
+          onOpenChange={setQuickSiteOpen}
           contactId={contact.id}
           sites={sites}
           roles={flatRoles}
           existingSiteIds={new Set(contact.sites.map((s) => s.study_site_id))}
-          onDone={() => {
-            setSiteOpen(false);
-            router.refresh();
-          }}
+          defaultDirectoryRoleId={derivedRoleId}
+          onDone={() => router.refresh()}
         />
-        <InstLinkDialog
-          open={instOpen}
-          onOpenChange={setInstOpen}
+        <ContactQuickAddOrgSheet
+          open={quickOrgOpen}
+          onOpenChange={setQuickOrgOpen}
           contactId={contact.id}
           institutions={institutions}
           existingInstIds={new Set(contact.institutions.map((i) => i.institution_id))}
-          onDone={() => {
-            setInstOpen(false);
-            router.refresh();
-          }}
+          onDone={() => router.refresh()}
         />
-        <CommitteeLinkDialog
-          open={committeeOpen}
-          onOpenChange={setCommitteeOpen}
+        <ContactQuickAddCommitteeSheet
+          open={quickCommitteeOpen}
+          onOpenChange={setQuickCommitteeOpen}
           contactId={contact.id}
           committees={committees}
           roles={flatRoles}
           existingCommitteeIds={new Set(contact.committees.map((c) => c.committee_id))}
-          onDone={() => {
-            setCommitteeOpen(false);
-            router.refresh();
-          }}
+          defaultDirectoryRoleId={derivedRoleId}
+          onDone={() => router.refresh()}
         />
       </div>
     </TooltipProvider>
@@ -793,7 +879,7 @@ function ContactHeroCard({
               </div>
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             {canEdit && (
               <Button
                 type="button"
@@ -865,287 +951,6 @@ function HeroMeta({ label, value }: { label: string; value: string }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Study context                                                               */
-/* -------------------------------------------------------------------------- */
-
-function StudyContextCard({
-  primaryStudyRow,
-  primaryStudyFull,
-  canEdit,
-  onEditStudyRole,
-}: {
-  primaryStudyRow: StudyLinkRow | null;
-  primaryStudyFull: Study | null;
-  canEdit: boolean;
-  onEditStudyRole: () => void;
-}) {
-  const ref = singleStudy(primaryStudyRow?.studies);
-  const linkedRole = singleRole(primaryStudyRow?.directory_roles);
-
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-2 px-4 pt-4 pb-3">
-        <div className="flex items-center gap-2">
-          <CardTitle className="text-sm font-semibold">Study Context</CardTitle>
-          <Badge variant="secondary" className="text-[10px] uppercase tracking-wide">
-            {primaryStudyRow ? '1 Study' : 'No study'}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="px-4 pb-4 pt-0">
-        {!primaryStudyRow ? (
-          <EmptySection
-            icon={ClipboardList}
-            title="No study linked yet"
-            description="Link this contact to a study to see their study context."
-          />
-        ) : (
-          <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/20 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,15rem)]">
-            <div className="flex gap-3 min-w-0">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                <ClipboardList className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 space-y-1.5">
-                <Link
-                  href={`/protected/studies/${primaryStudyRow.study_id}/directory`}
-                  className="text-sm font-semibold text-foreground hover:text-primary"
-                >
-                  {ref?.protocol_number ?? '—'}
-                </Link>
-                {ref?.title ? (
-                  <p className="text-xs text-muted-foreground line-clamp-2">{ref.title}</p>
-                ) : null}
-                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                  {primaryStudyFull?.phase ? (
-                    <Badge variant="outline" className="text-[10px]">
-                      {studyPhaseLabel(primaryStudyFull.phase)}
-                    </Badge>
-                  ) : null}
-                  {primaryStudyFull?.status ? (
-                    <Badge
-                      variant={primaryStudyFull.status === 'active' ? 'success' : 'secondary'}
-                      className="text-[10px]"
-                    >
-                      {studyStatusLabel(primaryStudyFull.status)}
-                    </Badge>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-            <div className="rounded-md border border-dashed border-border/70 bg-background p-3 space-y-1.5">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                Your Role in Study
-              </p>
-              {linkedRole?.name ? (
-                <div className="flex flex-col gap-1.5">
-                  <Badge variant="info" className="text-[10px] w-fit">
-                    {linkedRole.name}
-                  </Badge>
-                  {canEdit ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 w-full text-xs"
-                      onClick={onEditStudyRole}
-                    >
-                      Edit study role
-                    </Button>
-                  ) : null}
-                </div>
-              ) : (
-                <>
-                  <Badge
-                    variant="destructive"
-                    className="text-[10px] inline-flex items-center gap-1"
-                  >
-                    <AlertCircle className="h-3 w-3" />
-                    No study role
-                  </Badge>
-                  {canEdit ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-1 h-7 w-full text-xs"
-                      onClick={onEditStudyRole}
-                    >
-                      Assign study role
-                    </Button>
-                  ) : null}
-                </>
-              )}
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/* Study & site assignments overview                                           */
-/* -------------------------------------------------------------------------- */
-
-function AssignmentOverviewCard({
-  primaryStudyRow,
-  primaryStudyFull,
-  primaryStudySites,
-  canEdit,
-  onEditStudyRole,
-  onAssignSite,
-  onAssignStudy,
-}: {
-  primaryStudyRow: StudyLinkRow | null;
-  primaryStudyFull: Study | null;
-  primaryStudySites: SiteLinkRow[];
-  canEdit: boolean;
-  onEditStudyRole: () => void;
-  onAssignSite: () => void;
-  onAssignStudy: () => void;
-}) {
-  const ref = singleStudy(primaryStudyRow?.studies);
-  const linkedRole = singleRole(primaryStudyRow?.directory_roles);
-  const isActive = primaryStudyRow ? primaryStudyRow.is_active : false;
-
-  return (
-    <Card>
-      <CardHeader className="px-4 pt-4 pb-3">
-        <CardTitle className="text-sm font-semibold">Study &amp; Site Assignments</CardTitle>
-      </CardHeader>
-      <CardContent className="px-4 pb-4 pt-0 space-y-3">
-        {primaryStudyRow ? (
-          <div className="rounded-lg border border-border/70 p-3 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Link
-                href={`/protected/studies/${primaryStudyRow.study_id}/directory`}
-                className="text-sm font-semibold text-foreground hover:text-primary"
-              >
-                {ref?.protocol_number ?? primaryStudyFull?.protocol_number ?? '—'}
-              </Link>
-              <Badge
-                variant={isActive ? 'success' : 'secondary'}
-                className="text-[10px]"
-              >
-                {isActive ? 'Active' : 'Inactive'}
-              </Badge>
-              <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                <Star className="h-3 w-3 text-amber-500 fill-amber-500" />
-                Primary Study
-              </span>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-md border border-border/60 bg-muted/20 p-2.5 space-y-2">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Your Role in Study
-                </p>
-                {linkedRole?.name ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="info" className="text-[10px]">
-                      {linkedRole.name}
-                    </Badge>
-                    {canEdit ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={onEditStudyRole}
-                      >
-                        Edit study role
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="destructive" className="text-[10px]">
-                      No study role
-                    </Badge>
-                    {canEdit ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={onEditStudyRole}
-                      >
-                        Assign study role
-                      </Button>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-              <div className="rounded-md border border-border/60 bg-muted/20 p-2.5 space-y-2">
-                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Site Assignments
-                </p>
-                {primaryStudySites.length === 0 ? (
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Building2 className="h-3.5 w-3.5" />
-                      Not assigned to any site
-                    </span>
-                    {canEdit ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={onAssignSite}
-                      >
-                        Assign to Site
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : (
-                  <ul className="text-xs space-y-1">
-                    {primaryStudySites.map((row) => {
-                      const ss = singleSite(row.study_sites);
-                      return (
-                        <li key={row.id} className="flex items-center gap-2">
-                          <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="truncate">
-                            {ss ? `${ss.site_number} — ${ss.name}` : '—'}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <EmptySection
-            icon={ClipboardList}
-            title="No study assigned"
-            description="Link this contact to a study to manage their roles and sites here."
-            cta={
-              canEdit
-                ? { label: 'Assign Study', onClick: onAssignStudy }
-                : undefined
-            }
-          />
-        )}
-
-        {canEdit && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="text-xs"
-            onClick={onAssignStudy}
-          >
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            Assign to Another Study
-          </Button>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
 /* Profile information (display + edit modes)                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -1198,7 +1003,7 @@ function ProfileInformationCard(props: ProfileFormProps) {
   const { contact, canEdit, editing, onEdit, onCancel, form } = props;
 
   return (
-    <Card id="contact-profile-card">
+    <Card id="contact-profile-card" className="scroll-mt-20">
       <CardHeader className="flex flex-row items-center justify-between px-4 pt-4 pb-3">
         <DirectoryCardSectionTitle
           title="Profile Information"
@@ -1247,10 +1052,41 @@ function ProfileInformationCard(props: ProfileFormProps) {
   );
 }
 
+function siteStudySitesCell(
+  row: DirectoryContactWithRelations['sites'][number]
+): DirectoryContactWithRelations['sites'][number]['study_sites'] {
+  const s = row.study_sites;
+  if (s == null) return null;
+  return Array.isArray(s) ? (s[0] ?? null) : s;
+}
+
+function siteAssignmentAddressOptionLabel(row: DirectoryContactWithRelations['sites'][number]): string {
+  const ss = siteStudySitesCell(row);
+  if (!ss) return `${row.study_site_id.slice(0, 8)}…`;
+  const studies = ss.studies;
+  const st =
+    studies == null ? null : Array.isArray(studies) ? (studies[0] ?? null) : studies;
+  const protocol = st?.protocol_number?.trim() ?? '';
+  const title = st?.title?.trim() ?? '';
+  const studyPart = protocol || title ? ` (${protocol || title})` : '';
+  const num = ss.site_number?.trim() ?? '';
+  const name = ss.name?.trim() ?? '';
+  const left = [num, name].filter(Boolean).join(' — ');
+  return `${left || 'Site'}${studyPart}`;
+}
+
 function ProfileDisplay({ contact }: { contact: DirectoryContactWithRelations }) {
   const primaryRole = contact.primary_role?.name;
-  const category = contact.primary_role?.directory_role_categories?.name;
   const org = contact.primary_institution?.name;
+  const resolved = resolveContactAddress(contact);
+  const countryDisplay =
+    getCountryName(resolved.countryCode) ?? resolved.countryCode ?? null;
+  const siteRow =
+    resolved.source === 'site' && contact.contact_address_study_site_id
+      ? contact.sites.find((s) => s.study_site_id === contact.contact_address_study_site_id)
+      : undefined;
+  const linkedSiteLabel = siteRow ? siteAssignmentAddressOptionLabel(siteRow) : null;
+
   return (
     <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
       <DisplayField label="First Name" value={contact.first_name} />
@@ -1258,7 +1094,6 @@ function ProfileDisplay({ contact }: { contact: DirectoryContactWithRelations })
       <DisplayField label="Title" value={contact.title} />
       <DisplayField label="Email" value={contact.email} />
       <DisplayField label="Phone" value={contact.phone} />
-      <DisplayField label="Department" value={contact.department} />
       <DisplayField
         label="Primary Role (Library)"
         value={
@@ -1273,10 +1108,36 @@ function ProfileDisplay({ contact }: { contact: DirectoryContactWithRelations })
           )
         }
       />
-      <DisplayField label="Primary role category" value={category ?? '—'} />
       <DisplayField label="Primary Organization" value={org} />
-      <DisplayField label="Country" value={contact.country_code} />
-      <DisplayField label="Region / State" value={contact.region} />
+      <DisplayField
+        label="Address source"
+        value={
+          resolved.source === 'site' ? (
+            <span className="text-xs">Site assignment address</span>
+          ) : (
+            <span className="text-xs">Manual address</span>
+          )
+        }
+      />
+      {resolved.source === 'site' && linkedSiteLabel ? (
+        <DisplayField label="Linked site" value={linkedSiteLabel} />
+      ) : null}
+      {resolved.staleOrMissingSite && contact.contact_address_source === 'site' ? (
+        <div className="sm:col-span-2 lg:col-span-3">
+          <Alert variant="destructive" className="py-2">
+            <AlertTitle className="text-xs">Site address unavailable</AlertTitle>
+            <AlertDescription className="text-xs">
+              This contact is set to use a site assignment address, but that site is not linked or
+              could not be loaded. Edit the profile to pick a valid site or switch to manual entry.
+            </AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
+      <DisplayField label="Street address" value={resolved.addressLine1} />
+      <DisplayField label="City" value={resolved.city} />
+      <DisplayField label="Postal code" value={resolved.postalCode} />
+      <DisplayField label="Country" value={countryDisplay} />
+      <DisplayField label="Region / State" value={resolved.region} />
       <DisplayField
         label="Status"
         value={
@@ -1322,6 +1183,201 @@ function DisplayField({
   );
 }
 
+function ContactMailingAddressFields({
+  form,
+  contact,
+  canEdit,
+  addressSource,
+  addressSiteId,
+}: {
+  form: ProfileFormProps['form'];
+  contact: DirectoryContactWithRelations;
+  canEdit: boolean;
+  addressSource: 'manual' | 'site';
+  addressSiteId: string | null;
+}) {
+  const siteAssignments = contact.sites;
+  const noSites = siteAssignments.length === 0;
+
+  const previewContact = useMemo(
+    () => ({
+      ...contact,
+      contact_address_source: addressSource,
+      contact_address_study_site_id: addressSiteId,
+    }),
+    [contact, addressSource, addressSiteId]
+  );
+  const preview = useMemo(() => resolveContactAddress(previewContact), [previewContact]);
+
+  useEffect(() => {
+    if (addressSource !== 'site' || !addressSiteId) return;
+    const r = resolveContactAddress({
+      ...contact,
+      contact_address_source: 'site',
+      contact_address_study_site_id: addressSiteId,
+    });
+    if (r.staleOrMissingSite) return;
+    const cc = r.countryCode ?? '';
+    const rg = r.region ?? '';
+    if (form.getValues('country_code') !== cc) {
+      form.setValue('country_code', cc, { shouldDirty: true });
+    }
+    if (form.getValues('region') !== rg) {
+      form.setValue('region', rg, { shouldDirty: true });
+    }
+  }, [addressSource, addressSiteId, contact, form]);
+
+  return (
+    <div className="space-y-3 rounded-md border border-input bg-muted/15 p-3">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        Mailing address
+      </p>
+      <RadioGroup
+        value={addressSource}
+        onValueChange={(v) => {
+          const next = v as 'manual' | 'site';
+          if (next === 'site' && noSites) return;
+          if (next === 'manual') {
+            const r = resolveContactAddress({
+              ...contact,
+              contact_address_source: 'site',
+              contact_address_study_site_id: form.getValues('contact_address_study_site_id') as
+                | string
+                | null,
+            });
+            form.setValue('contact_address_source', 'manual', { shouldDirty: true });
+            form.setValue('address_line1', r.addressLine1 ?? '', { shouldDirty: true });
+            form.setValue('city', r.city ?? '', { shouldDirty: true });
+            form.setValue('postal_code', r.postalCode ?? '', { shouldDirty: true });
+            form.setValue('country_code', r.countryCode ?? '', { shouldDirty: true });
+            form.setValue('region', r.region ?? '', { shouldDirty: true });
+            form.setValue('contact_address_study_site_id', '', { shouldDirty: true });
+          } else {
+            form.setValue('contact_address_source', 'site', { shouldDirty: true });
+            const current = form.getValues('contact_address_study_site_id') as string | null | '';
+            const currentStr = current === '' || current == null ? null : current;
+            const ok =
+              currentStr && siteAssignments.some((s) => s.study_site_id === currentStr);
+            if (!ok) {
+              if (siteAssignments.length === 1) {
+                form.setValue(
+                  'contact_address_study_site_id',
+                  siteAssignments[0].study_site_id,
+                  { shouldDirty: true }
+                );
+              } else {
+                form.setValue('contact_address_study_site_id', '', { shouldDirty: true });
+              }
+            }
+          }
+        }}
+        className="gap-3"
+      >
+        <div className="flex items-start gap-2">
+          <RadioGroupItem value="manual" id="contact-addr-manual" disabled={!canEdit} />
+          <div className="min-w-0 space-y-0.5">
+            <Label htmlFor="contact-addr-manual" className="cursor-pointer text-xs font-normal">
+              Manual address
+            </Label>
+            <p className="text-[11px] text-muted-foreground">
+              Enter street, city, postal code, and country or region below.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-start gap-2">
+          <RadioGroupItem value="site" id="contact-addr-site" disabled={!canEdit || noSites} />
+          <div className="min-w-0 space-y-0.5">
+            <Label htmlFor="contact-addr-site" className="cursor-pointer text-xs font-normal">
+              Use site assignment address
+            </Label>
+            <p className="text-[11px] text-muted-foreground">
+              {noSites
+                ? 'Add at least one site assignment to use a study site’s address.'
+                : 'Country and region follow the selected site; they update when you change the site.'}
+            </p>
+          </div>
+        </div>
+      </RadioGroup>
+
+      {addressSource === 'manual' ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="space-y-1 sm:col-span-2">
+            <Label className="text-xs">Street address</Label>
+            <Input
+              className="text-xs h-9"
+              disabled={!canEdit}
+              {...form.register('address_line1')}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">City</Label>
+            <Input className="text-xs h-9" disabled={!canEdit} {...form.register('city')} />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Postal code</Label>
+            <Input className="text-xs h-9" disabled={!canEdit} {...form.register('postal_code')} />
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Site assignment</Label>
+            <select
+              className="flex h-9 w-full max-w-full rounded-md border border-input bg-background px-2 text-xs disabled:opacity-50 sm:max-w-md"
+              disabled={!canEdit}
+              value={addressSiteId ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                form.setValue('contact_address_study_site_id', v === '' ? '' : v, {
+                  shouldDirty: true,
+                });
+              }}
+            >
+              <option value="">Select site…</option>
+              {siteAssignments.map((row) => (
+                <option key={row.id} value={row.study_site_id}>
+                  {siteAssignmentAddressOptionLabel(row)}
+                </option>
+              ))}
+            </select>
+            {form.formState.errors.contact_address_study_site_id ? (
+              <p className="text-[11px] text-destructive">
+                {form.formState.errors.contact_address_study_site_id.message as string}
+              </p>
+            ) : null}
+          </div>
+          {preview.staleOrMissingSite ? (
+            <Alert variant="destructive" className="py-2">
+              <AlertDescription className="text-xs">
+                Selected site is not linked to this contact, or its details could not be loaded. Add
+                the site assignment or pick another site.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="rounded-md border border-dashed border-input bg-background px-3 py-2">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                Preview
+              </p>
+              <ul className="mt-1 space-y-0.5 text-[11px] text-foreground">
+                {[preview.addressLine1, preview.city, preview.postalCode]
+                  .filter(Boolean)
+                  .map((line, i) => (
+                    <li key={i}>{line}</li>
+                  ))}
+                <li>
+                  {[preview.region, getCountryName(preview.countryCode) ?? preview.countryCode]
+                    .filter(Boolean)
+                    .join(', ') || '—'}
+                </li>
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ProfileEditForm(props: ProfileFormProps) {
   const {
     companyId,
@@ -1334,6 +1390,15 @@ function ProfileEditForm(props: ProfileFormProps) {
     roleLibraryReady,
     institutions,
   } = props;
+
+  const addressSource =
+    (useWatch({ control: form.control, name: 'contact_address_source' }) as
+      | 'manual'
+      | 'site'
+      | undefined) ?? 'manual';
+  const addressSiteIdRaw = useWatch({ control: form.control, name: 'contact_address_study_site_id' });
+  const addressSiteId =
+    addressSiteIdRaw === '' || addressSiteIdRaw == null ? null : addressSiteIdRaw;
 
   return (
     <form id="contact-profile-form" onSubmit={onSave} className="space-y-3">
@@ -1430,36 +1495,6 @@ function ProfileEditForm(props: ProfileFormProps) {
         </div>
       </div>
       <div className="space-y-1">
-        <p className="text-xs text-muted-foreground">Primary role (library)</p>
-        <p className="text-[11px] text-muted-foreground">Pick a category, then a role.</p>
-      </div>
-      <DirectoryPrimaryRoleFields
-        catalog={catalog}
-        roleId={form.watch('primary_directory_role_id') ?? ''}
-        onRoleChange={(id) =>
-          form.setValue('primary_directory_role_id', id, { shouldDirty: true })
-        }
-        disabled={!canEdit || !!catalogError || !roleLibraryReady}
-      />
-      <div className="space-y-1">
-        <Label className="text-xs">Primary organization</Label>
-        <select
-          className="flex h-9 w-full rounded-md border border-input bg-background px-2 text-xs disabled:opacity-50 max-w-full sm:max-w-md"
-          disabled={!canEdit}
-          {...form.register('primary_institution_id')}
-        >
-          <option value="">None</option>
-          {institutions.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <p className="text-[11px] text-muted-foreground">
-        Additional organizations (matrix affiliations) appear in the Organizations section below.
-      </p>
-      <div className="space-y-1">
         <Label className="text-xs">Status</Label>
         <select
           className="flex h-9 w-full max-w-full rounded-md border border-input bg-background px-2 text-xs disabled:opacity-50 sm:max-w-md"
@@ -1470,6 +1505,13 @@ function ProfileEditForm(props: ProfileFormProps) {
           <option value="inactive">Inactive</option>
         </select>
       </div>
+      <ContactMailingAddressFields
+        form={form}
+        contact={contact}
+        canEdit={canEdit}
+        addressSource={addressSource}
+        addressSiteId={addressSiteId}
+      />
       <DirectoryCountryRegionFields
         variant="contactRow"
         countryCode={form.watch('country_code') ?? ''}
@@ -1478,7 +1520,7 @@ function ProfileEditForm(props: ProfileFormProps) {
           form.setValue('country_code', c, { shouldDirty: true });
         }}
         onRegionChange={(r) => form.setValue('region', r, { shouldDirty: true })}
-        disabled={!canEdit}
+        disabled={!canEdit || addressSource === 'site'}
       />
       <div className="space-y-1">
         <Label className="text-xs">Notes</Label>
@@ -1496,46 +1538,49 @@ function ProfileEditForm(props: ProfileFormProps) {
 /* Assignment tables                                                           */
 /* -------------------------------------------------------------------------- */
 
+const directoryAssignmentsSectionClass =
+  'bg-card text-card-foreground flex w-full min-w-0 flex-col overflow-hidden rounded-[5px] border border-input shadow-none';
+
 function StudyAssignmentsTable({
   rows,
   canEdit,
-  onAdd,
+  onQuickAdd,
   onEditRole,
   onRemove,
 }: {
   rows: StudyLinkRow[];
   canEdit: boolean;
-  onAdd: () => void;
+  onQuickAdd: () => void;
   onEditRole: (row: StudyLinkRow) => void;
   onRemove: (id: string) => void;
 }) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between px-4 pt-4 pb-3">
+    <section
+      id="contact-study-assignments"
+      className={cn(directoryAssignmentsSectionClass, 'scroll-mt-20')}
+      aria-label="Study assignments"
+    >
+      <div className="flex flex-row flex-wrap items-start justify-between gap-3 px-4 pt-4 pb-3">
         <DirectoryCardSectionTitle
           title="Study Assignments"
           description="Protocols this contact is linked to and their study-level directory role. Distinct from site assignments and from the primary library role on their profile."
         />
-        {canEdit && (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="text-xs h-8"
-            onClick={onAdd}
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            Add
-          </Button>
-        )}
-      </CardHeader>
-      <CardContent className="px-0 pb-2 pt-0">
+        {canEdit ? (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={onQuickAdd}>
+              <Plus className="mr-1 h-3 w-3" />
+              Add
+            </Button>
+          </div>
+        ) : null}
+      </div>
+      <div className="px-0 pb-2 pt-0">
         {rows.length === 0 ? (
           <EmptySection
             icon={ClipboardList}
             title="No study assignments yet"
             description="Link this contact to one or more studies."
-            cta={canEdit ? { label: 'Add Study', onClick: onAdd } : undefined}
+            cta={canEdit ? { label: 'Add Study', onClick: onQuickAdd } : undefined}
             paddedX
           />
         ) : (
@@ -1629,49 +1674,49 @@ function StudyAssignmentsTable({
             </TableBody>
           </Table>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
 function SiteAssignmentsTable({
   rows,
   canEdit,
-  onAdd,
+  onQuickAdd,
   onRemove,
 }: {
   rows: SiteLinkRow[];
   canEdit: boolean;
-  onAdd: () => void;
+  onQuickAdd: () => void;
   onRemove: (id: string) => void;
 }) {
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between px-4 pt-4 pb-3">
+    <section
+      id="contact-site-assignments"
+      className={cn(directoryAssignmentsSectionClass, 'scroll-mt-20')}
+      aria-label="Site assignments"
+    >
+      <div className="flex flex-row flex-wrap items-start justify-between gap-3 px-4 pt-4 pb-3">
         <DirectoryCardSectionTitle
           title="Site Assignments"
           description="Study sites (investigator locations) where this contact is assigned. Roles here can reflect responsibilities at a specific site."
         />
-        {canEdit && (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="text-xs h-8"
-            onClick={onAdd}
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            Add
-          </Button>
-        )}
-      </CardHeader>
-      <CardContent className="px-0 pb-2 pt-0">
+        {canEdit ? (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={onQuickAdd}>
+              <Plus className="mr-1 h-3 w-3" />
+              Add
+            </Button>
+          </div>
+        ) : null}
+      </div>
+      <div className="px-0 pb-2 pt-0">
         {rows.length === 0 ? (
           <EmptySection
             icon={Building2}
             title="No site assignments yet"
             description="Assign the user to one or more sites to enable monitoring and tasks."
-            cta={canEdit ? { label: 'Assign to Site', onClick: onAdd } : undefined}
+            cta={canEdit ? { label: 'Assign to Site', onClick: onQuickAdd } : undefined}
             paddedX
           />
         ) : (
@@ -1744,40 +1789,36 @@ function SiteAssignmentsTable({
             </TableBody>
           </Table>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }
 
 function OrganizationsTable({
   rows,
   canEdit,
-  onAdd,
+  onQuickAdd,
   onRemove,
 }: {
   rows: InstLinkRow[];
   canEdit: boolean;
-  onAdd: () => void;
+  onQuickAdd: () => void;
   onRemove: (id: string) => void;
 }) {
   return (
-    <Card>
+    <Card id="contact-organizations" className="scroll-mt-20">
       <CardHeader className="flex flex-row items-center justify-between px-4 pt-4 pb-3">
         <DirectoryCardSectionTitle
           title="Organizations"
           description="Institutional affiliations beyond the primary organization on the profile—e.g. sponsor, site, CRO, or partner entities."
         />
         {canEdit && (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="text-xs h-8"
-            onClick={onAdd}
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            Add Link
-          </Button>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button type="button" size="sm" variant="outline" className="text-xs h-8" onClick={onQuickAdd}>
+              <Plus className="h-3 w-3 mr-1" />
+              Add Link
+            </Button>
+          </div>
         )}
       </CardHeader>
       <CardContent className="px-0 pb-2 pt-0">
@@ -1786,7 +1827,7 @@ function OrganizationsTable({
             icon={Building2}
             title="No organizations linked"
             description="Add organization links if this user is affiliated with any."
-            cta={canEdit ? { label: 'Add Link', onClick: onAdd } : undefined}
+            cta={canEdit ? { label: 'Add Link', onClick: onQuickAdd } : undefined}
             paddedX
           />
         ) : (
@@ -1794,8 +1835,8 @@ function OrganizationsTable({
             <TableHeader>
               <TableRow>
                 <TableHead className="text-[10px] uppercase">Organization</TableHead>
+                <TableHead className="text-[10px] uppercase min-w-[7rem]">Type</TableHead>
                 <TableHead className="text-[10px] uppercase w-20">Primary</TableHead>
-                <TableHead className="text-[10px] uppercase w-20">Role</TableHead>
                 <TableHead className="text-[10px] uppercase w-16 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -1805,6 +1846,11 @@ function OrganizationsTable({
                 return (
                   <TableRow key={row.id}>
                     <TableCell className="text-xs">{ins?.name ?? '—'}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {ins?.organization_type
+                        ? getOrganizationTypeLabel(ins.organization_type)
+                        : '—'}
+                    </TableCell>
                     <TableCell className="text-xs">
                       {row.is_primary ? (
                         <Badge variant="info" className="text-[10px]">
@@ -1814,7 +1860,6 @@ function OrganizationsTable({
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">—</TableCell>
                     <TableCell className="text-xs text-right">
                       {canEdit && (
                         <Tooltip>
@@ -1848,12 +1893,12 @@ function OrganizationsTable({
 function CommitteeMembershipsTable({
   rows,
   canEdit,
-  onAdd,
+  onQuickAdd,
   onRemove,
 }: {
   rows: CommitteeLinkRow[];
   canEdit: boolean;
-  onAdd: () => void;
+  onQuickAdd: () => void;
   onRemove: (junctionId: string) => void;
 }) {
   return (
@@ -1864,10 +1909,12 @@ function CommitteeMembershipsTable({
           description="Ethics, DSMB, steering, or other governance committees this contact is recorded on for oversight and compliance."
         />
         {canEdit && (
-          <Button type="button" size="sm" variant="outline" className="text-xs h-8" onClick={onAdd}>
-            <Plus className="h-3 w-3 mr-1" />
-            Add
-          </Button>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button type="button" size="sm" variant="outline" className="text-xs h-8" onClick={onQuickAdd}>
+              <Plus className="h-3 w-3 mr-1" />
+              Add
+            </Button>
+          </div>
         )}
       </CardHeader>
       <CardContent className="px-0 pb-2 pt-0">
@@ -1876,7 +1923,7 @@ function CommitteeMembershipsTable({
             icon={Users}
             title="No committee memberships"
             description="Add this user to committees to participate in governance."
-            cta={canEdit ? { label: 'Add to committee', onClick: onAdd } : undefined}
+            cta={canEdit ? { label: 'Add to committee', onClick: onQuickAdd } : undefined}
             paddedX
           />
         ) : (
@@ -1932,26 +1979,32 @@ function CommitteeMembershipsTable({
 /* Right rail                                                                  */
 /* -------------------------------------------------------------------------- */
 
+function completenessRowAriaLabel(c: CompletenessCheck): string {
+  const statusWord = c.done ? 'complete' : 'needed';
+  const dest =
+    c.id === 'contact'
+      ? 'profile information'
+      : c.id === 'role' || c.id === 'study'
+        ? 'study assignments'
+        : c.id === 'site'
+          ? 'site assignments'
+          : 'organizations';
+  if (!c.done && (c.id === 'role' || c.id === 'study' || c.id === 'site' || c.id === 'org')) {
+    return `Open add assignment for ${c.label}: ${statusWord}`;
+  }
+  return `Go to ${dest}: ${c.label} is ${statusWord}`;
+}
+
 function ContactRightRail({
   contact,
-  canEdit,
-  primaryStudyRow,
   attention,
   completeness,
-  actions,
+  onCompletenessRowClick,
 }: {
   contact: DirectoryContactWithRelations;
-  canEdit: boolean;
-  primaryStudyRow: StudyLinkRow | null;
   attention: AttentionItem[];
   completeness: CompletenessCheck[];
-  actions: {
-    editProfile: () => void;
-    openSite: () => void;
-    openStudy: () => void;
-    openInst: () => void;
-    openStudyRoleEdit: (row: StudyLinkRow) => void;
-  };
+  onCompletenessRowClick: (id: CompletenessCheck['id']) => void;
 }) {
   return (
     <div className="space-y-4 lg:sticky lg:top-20" aria-label="Contact insights">
@@ -2004,28 +2057,35 @@ function ContactRightRail({
         <CardHeader className="px-4 pt-3 pb-2">
           <CardTitle className="text-sm font-medium">Profile Completeness</CardTitle>
         </CardHeader>
-        <CardContent className="px-4 pb-3 pt-0 space-y-1.5">
+        <CardContent className="px-2 pb-3 pt-0 space-y-1">
           {completeness.map((c) => (
-            <div key={c.id} className="flex items-center justify-between gap-2 text-xs">
-              <span className="inline-flex items-center gap-2">
+            <button
+              key={c.id}
+              type="button"
+              data-testid={`directory-completeness-${c.id}`}
+              className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={completenessRowAriaLabel(c)}
+              onClick={() => onCompletenessRowClick(c.id)}
+            >
+              <span className="inline-flex min-w-0 items-center gap-2">
                 {c.done ? (
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
                 ) : (
-                  <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0 text-amber-500" />
                 )}
-                <span className={cn(c.done ? 'text-foreground' : 'text-muted-foreground')}>
+                <span className={cn('min-w-0', c.done ? 'text-foreground' : 'text-muted-foreground')}>
                   {c.label}
                 </span>
               </span>
               <span
                 className={cn(
-                  'text-[10px] uppercase',
+                  'shrink-0 text-[10px] uppercase',
                   c.done ? 'text-emerald-600' : 'text-amber-600'
                 )}
               >
                 {c.done ? 'Done' : 'Needed'}
               </span>
-            </div>
+            </button>
           ))}
         </CardContent>
       </Card>
@@ -2045,8 +2105,6 @@ function ContactRightRail({
             label="Last updated"
             value={formatDateTime(contact.updated_at)}
           />
-          <ActivityRow icon={ClipboardList} label="Tasks assigned" value="—" />
-          <ActivityRow icon={CheckCircle2} label="Visits logged" value="—" />
           <ActivityRow
             icon={Users}
             label="Linked studies"
@@ -2057,87 +2115,19 @@ function ContactRightRail({
             label="Linked sites"
             value={String(contact.sites.length)}
           />
-        </CardContent>
-      </Card>
-
-      <Card className="py-0">
-        <CardHeader className="px-4 pt-3 pb-2">
-          <CardTitle className="text-sm font-medium">Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent className="px-2 pb-3 pt-0 space-y-0.5">
-          <QuickAction
-            icon={UserPlus}
-            label={primaryStudyRow ? 'Study role' : 'Assign Role'}
-            description={
-              primaryStudyRow
-                ? 'Set or update role on the linked study'
-                : 'Set directory primary role or link a study first'
-            }
-            disabled={!canEdit}
-            disabledReason={!canEdit ? 'You do not have permission to edit this profile.' : undefined}
-            onClick={() =>
-              primaryStudyRow
-                ? actions.openStudyRoleEdit(primaryStudyRow)
-                : actions.editProfile()
-            }
-          />
-          <QuickAction
+          <ActivityRow
             icon={Building2}
-            label="Assign to Site"
-            description="Link user to one or more sites"
-            disabled={!canEdit}
-            disabledReason={!canEdit ? 'You do not have permission to add site links.' : undefined}
-            onClick={actions.openSite}
+            label="Linked organizations"
+            value={String(contact.institutions.length)}
           />
-          <QuickAction
-            icon={Shield}
-            label="Manage Permissions"
-            description="View and manage user access"
-            disabled
-            disabledReason="Permissions are managed in the platform settings."
-          />
-          <QuickAction
-            icon={ClipboardList}
-            label="View Audit Trail"
-            description="See history of changes"
-            disabled
-            disabledReason="Per-contact audit trail is not available here yet."
-          />
-          <QuickAction
-            icon={KeyRound}
-            label="Reset Password"
-            description="Send password reset email"
-            disabled={!contact.profile_id}
-            disabledReason={
-              !contact.profile_id
-                ? 'No linked app login on this contact.'
-                : undefined
-            }
-            onClick={() => toast.message('Password reset is sent from the app login screen.')}
+          <ActivityRow
+            icon={Users}
+            label="Linked committees"
+            value={String(contact.committees.length)}
           />
         </CardContent>
       </Card>
 
-      <Card className="py-0">
-        <CardHeader className="px-4 pt-3 pb-2">
-          <CardTitle className="flex items-center gap-2 text-sm font-medium">
-            <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
-            User Guide
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-4 pb-3 pt-0 space-y-1">
-          <p className="text-[11px] text-muted-foreground leading-snug">
-            Need help managing users?
-          </p>
-          <Link
-            href="/protected/directory"
-            className="inline-flex items-center gap-1 text-xs text-sky-600 hover:underline dark:text-sky-400"
-          >
-            View user management guide
-            <ChevronRight className="h-3 w-3" />
-          </Link>
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -2160,56 +2150,6 @@ function ActivityRow({
       <span className="truncate text-right tabular-nums text-foreground">{value}</span>
     </div>
   );
-}
-
-function QuickAction({
-  icon: Icon,
-  label,
-  description,
-  disabled = false,
-  disabledReason,
-  onClick,
-}: {
-  icon: typeof Clock;
-  label: string;
-  description: string;
-  disabled?: boolean;
-  disabledReason?: string;
-  onClick?: () => void;
-}) {
-  const button = (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        'flex w-full items-center justify-between gap-2 rounded-md px-3 py-2 text-left transition-colors',
-        !disabled && 'hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
-        disabled && 'cursor-not-allowed opacity-60'
-      )}
-    >
-      <span className="flex items-center gap-2 min-w-0">
-        <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="min-w-0">
-          <span className="block text-xs text-foreground leading-tight">{label}</span>
-          <span className="block text-[10px] text-muted-foreground leading-tight truncate">
-            {description}
-          </span>
-        </span>
-      </span>
-      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-    </button>
-  );
-
-  if (disabled && disabledReason) {
-    return (
-      <Tooltip>
-        <TooltipTrigger render={<span className="block" />}>{button}</TooltipTrigger>
-        <TooltipContent side="left">{disabledReason}</TooltipContent>
-      </Tooltip>
-    );
-  }
-  return button;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2253,106 +2193,8 @@ function EmptySection({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Link dialogs (preserved)                                                    */
+/* Study link role edit (single row)                                          */
 /* -------------------------------------------------------------------------- */
-
-function StudyLinkDialog({
-  open,
-  onOpenChange,
-  contactId,
-  studies,
-  roles,
-  existingStudyIds,
-  defaultDirectoryRoleId,
-  onDone,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  contactId: string;
-  studies: Study[];
-  roles: { id: string; name: string }[];
-  existingStudyIds: Set<string>;
-  /** Pre-selects study role from directory primary role when linking. */
-  defaultDirectoryRoleId?: string | null;
-  onDone: () => void;
-}) {
-  const [pending, setPending] = useState(false);
-
-  const submit = async (fd: FormData) => {
-    const study_id = String(fd.get('study_id'));
-    if (existingStudyIds.has(study_id)) {
-      toast.error('Already linked to this study');
-      return;
-    }
-    setPending(true);
-    const rawRole = String(fd.get('directory_role_id') ?? '');
-    const directory_role_id = rawRole || null;
-    const { error } = await upsertContactStudyLink({
-      directory_contact_id: contactId,
-      study_id,
-      directory_role_id,
-      is_active: true,
-    });
-    setPending(false);
-    if (error) toast.error(error);
-    else {
-      toast.success('Linked');
-      onDone();
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="text-base">Link study</DialogTitle>
-        </DialogHeader>
-        <form action={submit} className="space-y-3">
-          <div className="space-y-1">
-            <Label className="text-xs">Study</Label>
-            <select
-              name="study_id"
-              required
-              className="flex h-9 w-full rounded-md border border-input px-2 text-xs"
-            >
-              {studies.map((s) => (
-                <option key={s.id} value={s.id} disabled={existingStudyIds.has(s.id)}>
-                  {s.study_name || s.protocol_number}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Role</Label>
-            <select
-              key={`study-link-role-${open}-${defaultDirectoryRoleId ?? ''}`}
-              name="directory_role_id"
-              defaultValue={defaultDirectoryRoleId ?? ''}
-              className="flex h-9 w-full rounded-md border border-input px-2 text-xs"
-            >
-              <option value="">None</option>
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-            {defaultDirectoryRoleId ? (
-              <p className="text-[11px] text-muted-foreground leading-snug">
-                Defaults to Primary Role (Library). Choose None to link without a study role.
-              </p>
-            ) : null}
-          </div>
-          <DialogFooter>
-            <Button type="submit" className="text-xs" disabled={pending}>
-              {pending ? 'Saving…' : 'Link'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 function StudyLinkRoleDialog({
   open,
@@ -2446,270 +2288,6 @@ function StudyLinkRoleDialog({
             </DialogFooter>
           </form>
         ) : null}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function SiteLinkDialog({
-  open,
-  onOpenChange,
-  contactId,
-  sites,
-  roles,
-  existingSiteIds,
-  onDone,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  contactId: string;
-  sites: StudySiteWithStudy[];
-  roles: { id: string; name: string }[];
-  existingSiteIds: Set<string>;
-  onDone: () => void;
-}) {
-  const [pending, setPending] = useState(false);
-
-  const submit = async (fd: FormData) => {
-    const study_site_id = String(fd.get('study_site_id'));
-    if (existingSiteIds.has(study_site_id)) {
-      toast.error('Already linked to this site');
-      return;
-    }
-    setPending(true);
-    const { error } = await upsertContactSiteLink({
-      directory_contact_id: contactId,
-      study_site_id,
-      directory_role_id: String(fd.get('directory_role_id')) || null,
-      is_active: true,
-    });
-    setPending(false);
-    if (error) toast.error(error);
-    else {
-      toast.success('Linked');
-      onDone();
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="text-base">Link site</DialogTitle>
-        </DialogHeader>
-        <form action={submit} className="space-y-3">
-          <div className="space-y-1">
-            <Label className="text-xs">Site</Label>
-            <select
-              name="study_site_id"
-              required
-              className="flex h-9 w-full rounded-md border border-input px-2 text-xs"
-            >
-              {sites.map((s) => (
-                <option key={s.id} value={s.id} disabled={existingSiteIds.has(s.id)}>
-                  {s.studies?.protocol_number} / {s.site_number} — {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Role</Label>
-            <select
-              name="directory_role_id"
-              className="flex h-9 w-full rounded-md border border-input px-2 text-xs"
-            >
-              <option value="">None</option>
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <DialogFooter>
-            <Button type="submit" className="text-xs" disabled={pending}>
-              {pending ? 'Saving…' : 'Link'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function InstLinkDialog({
-  open,
-  onOpenChange,
-  contactId,
-  institutions,
-  existingInstIds,
-  onDone,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  contactId: string;
-  institutions: InstitutionRow[];
-  existingInstIds: Set<string>;
-  onDone: () => void;
-}) {
-  const [pending, setPending] = useState(false);
-
-  const submit = async (fd: FormData) => {
-    const institution_id = String(fd.get('institution_id'));
-    if (existingInstIds.has(institution_id)) {
-      toast.error('Already linked');
-      return;
-    }
-    setPending(true);
-    const { error } = await upsertContactInstitutionLink({
-      directory_contact_id: contactId,
-      institution_id,
-      is_primary: fd.get('is_primary') === 'on',
-    });
-    setPending(false);
-    if (error) toast.error(error);
-    else {
-      toast.success('Linked');
-      onDone();
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="text-base">Link organization</DialogTitle>
-        </DialogHeader>
-        <form action={submit} className="space-y-3">
-          <div className="space-y-1">
-            <Label className="text-xs">Organization</Label>
-            <select
-              name="institution_id"
-              required
-              className="flex h-9 w-full rounded-md border border-input px-2 text-xs"
-            >
-              {institutions.map((i) => (
-                <option key={i.id} value={i.id} disabled={existingInstIds.has(i.id)}>
-                  {i.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <label className="flex items-center gap-2 text-xs">
-            <input type="checkbox" name="is_primary" />
-            Set as primary affiliation
-          </label>
-          <DialogFooter>
-            <Button type="submit" className="text-xs" disabled={pending}>
-              {pending ? 'Saving…' : 'Link'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function CommitteeLinkDialog({
-  open,
-  onOpenChange,
-  contactId,
-  committees,
-  roles,
-  existingCommitteeIds,
-  onDone,
-}: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  contactId: string;
-  committees: CommitteeRow[];
-  roles: { id: string; name: string }[];
-  existingCommitteeIds: Set<string>;
-  onDone: () => void;
-}) {
-  const [pending, setPending] = useState(false);
-  const linkable = committees.filter((c) => !existingCommitteeIds.has(c.id));
-
-  const submit = async (fd: FormData) => {
-    const committee_id = String(fd.get('committee_id'));
-    if (existingCommitteeIds.has(committee_id)) {
-      toast.error('Already a member of this committee');
-      return;
-    }
-    setPending(true);
-    const { error } = await upsertCommitteeMember({
-      committee_id,
-      directory_contact_id: contactId,
-      directory_role_id: String(fd.get('directory_role_id')) || null,
-      is_active: true,
-    });
-    setPending(false);
-    if (error) toast.error(error);
-    else {
-      toast.success('Added to committee');
-      onDone();
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="text-base">Add to committee</DialogTitle>
-        </DialogHeader>
-        {committees.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            No committees exist yet. Open{' '}
-            <Link
-              href="/protected/directory/committees"
-              className="font-medium text-primary underline underline-offset-2"
-            >
-              Committees (directory setup)
-            </Link>{' '}
-            to create one, then return here to link this contact.
-          </p>
-        ) : linkable.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            This contact is already linked to every committee in your company.
-          </p>
-        ) : (
-          <form action={submit} className="space-y-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Committee</Label>
-              <select
-                name="committee_id"
-                required
-                className="flex h-9 w-full rounded-md border border-input px-2 text-xs"
-              >
-                {linkable.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                    {c.committee_type ? ` (${c.committee_type.replace(/_/g, ' ')})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Role in committee</Label>
-              <select
-                name="directory_role_id"
-                className="flex h-9 w-full rounded-md border border-input px-2 text-xs"
-              >
-                <option value="">None</option>
-                {roles.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <DialogFooter>
-              <Button type="submit" className="text-xs" disabled={pending}>
-                {pending ? 'Saving…' : 'Add'}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
       </DialogContent>
     </Dialog>
   );

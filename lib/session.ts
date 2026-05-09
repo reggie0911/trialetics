@@ -141,5 +141,21 @@ export async function updateSession(request: NextRequest) {
   // If this is not done, you may be causing the browser and server to go out
   // of sync and terminate the user's session prematurely!
 
+  const pathname = request.nextUrl.pathname
+  if (pathname.startsWith('/protected')) {
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set('x-pathname', pathname)
+    const withPath = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
+    // ResponseCookies has no setAll(); copy each cookie individually.
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      withPath.cookies.set(cookie.name, cookie.value, cookie)
+    })
+    return withPath
+  }
+
   return supabaseResponse
 }

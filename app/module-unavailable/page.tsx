@@ -1,4 +1,10 @@
-export default function ModuleUnavailablePage() {
+import { consumePageDynamic } from '@/lib/next/consume-page-dynamic';
+
+export default async function ModuleUnavailablePage(props: {
+  params?: Promise<unknown>;
+  searchParams?: Promise<unknown>;
+}) {
+  await consumePageDynamic(props);
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background">
       <div className="max-w-md text-center space-y-3">

@@ -44,6 +44,7 @@ export default async function StudyDirectoryPage({ params }: StudyDirectoryPageP
         initialInstitutionOptions={institutionFormOptions.data}
         studyId={studyId}
         initialSnapshot={snapshot.data}
+        contactsSnapshotError={snapshot.error}
         studyContactsEnriched={studyContacts.data}
         initialOrganizationSnapshot={organizationSnapshot.data}
       />

@@ -1,4 +1,4 @@
-import type { DirectoryContactListItem, DirectoryContactRow, InstitutionRow } from '@/lib/types/directory';
+import type { DirectoryContactRow, InstitutionRow } from '@/lib/types/directory';
 
 export interface RecordCompleteness {
   percent: number;
@@ -33,11 +33,13 @@ type ContactCompletenessInput = Pick<
   | 'title'
   | 'email'
   | 'phone'
-  | 'primary_directory_role_id'
-  | 'primary_institution_id'
 > & {
-  primary_role?: DirectoryContactListItem['primary_role'];
-  primary_institution?: DirectoryContactListItem['primary_institution'];
+  studies?: { directory_roles?: { id?: string } | null }[];
+  sites?: { directory_roles?: { id?: string } | null }[];
+  institutions?: { is_primary?: boolean }[];
+  /** List/detail display primary from FK or junction merge (see listDirectoryContacts). */
+  primary_role?: { id?: string } | null;
+  primary_institution?: { id?: string } | null;
 };
 
 function hasText(value: string | null | undefined): boolean {
@@ -48,18 +50,38 @@ function pct(complete: number, total: number): number {
   return total === 0 ? 0 : Math.round((complete / total) * 100);
 }
 
+function hasAnyAssignmentRole(contact: ContactCompletenessInput): boolean {
+  const studies = contact.studies ?? [];
+  const sites = contact.sites ?? [];
+  return (
+    studies.some((s) => s.directory_roles?.id) || sites.some((s) => s.directory_roles?.id)
+  );
+}
+
+function hasPrimaryInstitution(contact: ContactCompletenessInput): boolean {
+  const institutions = contact.institutions ?? [];
+  return institutions.some((i) => i.is_primary);
+}
+
+/** Role satisfied by study/site assignment embeds or by merged/FK primary_role on list rows. */
+function hasRoleForCompleteness(contact: ContactCompletenessInput): boolean {
+  return hasAnyAssignmentRole(contact) || Boolean(contact.primary_role?.id);
+}
+
+/** Organization satisfied by primary institution link or merged/FK primary_institution on list rows. */
+function hasOrganizationForCompleteness(contact: ContactCompletenessInput): boolean {
+  return hasPrimaryInstitution(contact) || Boolean(contact.primary_institution?.id);
+}
+
 export function getContactCompleteness(contact: ContactCompletenessInput): RecordCompleteness {
   const checks = [
     { label: 'first name', complete: hasText(contact.first_name) },
     { label: 'last name', complete: hasText(contact.last_name) },
     { label: 'title', complete: hasText(contact.title) },
-    { label: 'role', complete: Boolean(contact.primary_directory_role_id || contact.primary_role?.id) },
+    { label: 'role', complete: hasRoleForCompleteness(contact) },
     { label: 'email', complete: hasText(contact.email) },
     { label: 'phone', complete: hasText(contact.phone) },
-    {
-      label: 'organization',
-      complete: Boolean(contact.primary_institution_id || contact.primary_institution?.id),
-    },
+    { label: 'organization', complete: hasOrganizationForCompleteness(contact) },
   ];
   const missingFields = checks.filter((check) => !check.complete).map((check) => check.label);
   return {
@@ -84,8 +106,8 @@ export function summarizeContactCompleteness(
     const c = getContactCompleteness(contact);
     if (c.complete) complete += 1;
     if (!hasText(contact.title)) missingTitle += 1;
-    if (!contact.primary_directory_role_id && !contact.primary_role?.id) missingRole += 1;
-    if (!contact.primary_institution_id && !contact.primary_institution?.id) missingOrganization += 1;
+    if (!hasRoleForCompleteness(contact)) missingRole += 1;
+    if (!hasOrganizationForCompleteness(contact)) missingOrganization += 1;
     if (!hasText(contact.email)) missingEmail += 1;
     if (!hasText(contact.phone)) missingPhone += 1;
     if (!hasText(contact.email) || !hasText(contact.phone)) missingContactInfo += 1;

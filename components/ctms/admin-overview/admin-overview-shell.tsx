@@ -19,14 +19,12 @@ import type { DashboardStats } from '@/lib/types/ctms';
 
 import { AdminKpiRow } from './admin-kpi-row';
 import { AdminQuickActions } from './admin-quick-actions';
-import { StudyTemplatesRow } from './study-templates-row';
 import { PendingInvitationsCard } from './pending-invitations-card';
 import { UserAccessOverview } from './user-access-overview';
 import { RecentSystemActivityCard } from './recent-activity-stub';
 import { HelpFooter } from './help-footer';
 
 const BANNER_DISMISSED_KEY = 'trialetics:admin-overview-banner-dismissed';
-const TEMPLATES_HREF = '/protected/studies#study-templates';
 const STUDIES_CATALOG_HREF = '/protected/studies/catalog';
 
 interface AdminOverviewShellProps {
@@ -159,7 +157,6 @@ function AdminBody({
       <div className="space-y-6 lg:col-span-2">
         <AdminKpiRow stats={stats} overview={overview} />
         <AdminQuickActions />
-        <StudyTemplatesRow templates={overview.templates} manageHref={TEMPLATES_HREF} />
       </div>
       <aside className="space-y-6 lg:col-span-1">
         <PendingInvitationsCard pendingInvitations={overview.pendingInvitations} />

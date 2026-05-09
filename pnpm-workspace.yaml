@@ -1,0 +1,12 @@
+packages:
+  - '.'
+
+# pnpm 11+: explicit opt-in for dependency lifecycle scripts (replaces onlyBuiltDependencies).
+# Keep in sync with CI / ERR_PNPM_IGNORED_BUILDS when adding native/tooling deps.
+allowBuilds:
+  esbuild: true
+  msw: true
+  sharp: true
+  supabase: true
+  tesseract.js: true
+  unrs-resolver: true

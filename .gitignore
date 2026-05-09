@@ -14,6 +14,9 @@ node_modules/.pnpm
 
 # testing
 /coverage
+/playwright-report/
+/test-results/
+/blob-report/
 
 # next.js
 /.next/
@@ -44,3 +47,6 @@ next-env.d.ts
 
 # csv splitter chunks
 /csv-chunks
+
+# Storybook static export
+/storybook-static

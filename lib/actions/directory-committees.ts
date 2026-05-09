@@ -170,7 +170,7 @@ export async function upsertCommitteeMember(input: {
   start_date?: string | null;
   end_date?: string | null;
   is_active?: boolean;
-}): Promise<{ error: string | null }> {
+}): Promise<{ error: string | null; junctionId?: string | null }> {
   const { supabase, companyId } = await requireEditor();
   const payload = {
     committee_id: input.committee_id,
@@ -190,6 +190,10 @@ export async function upsertCommitteeMember(input: {
       action: 'update',
       snapshot: payload,
     });
+    revalidatePath('/protected/directory');
+    revalidatePath(`/protected/directory/contacts/${input.directory_contact_id}`);
+    revalidatePath(`/protected/directory/committees/${input.committee_id}`);
+    return { error: null, junctionId: input.id };
   } else {
     const { data, error } = await supabase.from('committee_members').insert(payload).select('id').single();
     if (error) return { error: error.message };
@@ -200,11 +204,11 @@ export async function upsertCommitteeMember(input: {
       action: 'insert',
       snapshot: payload,
     });
+    revalidatePath('/protected/directory');
+    revalidatePath(`/protected/directory/contacts/${input.directory_contact_id}`);
+    revalidatePath(`/protected/directory/committees/${input.committee_id}`);
+    return { error: null, junctionId: data?.id ?? null };
   }
-  revalidatePath('/protected/directory');
-  revalidatePath(`/protected/directory/contacts/${input.directory_contact_id}`);
-  revalidatePath(`/protected/directory/committees/${input.committee_id}`);
-  return { error: null };
 }
 
 export async function removeCommitteeMember(id: string): Promise<{ error: string | null }> {

@@ -52,6 +52,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Vendored / scratch (excluded from tsconfig); keep lint focused on the main app
     "lumen-temp/**",
+    // Storybook static export (generated); do not lint bundled JS.
+    "storybook-static/**",
   ]),
 ]);
 

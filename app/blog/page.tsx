@@ -2,8 +2,13 @@ import { getAllBlogs } from '@/lib/blog';
 import { calculateReadTime } from '@/lib/read-time';
 
 import BlogClient from './blog-client';
+import { consumePageDynamic } from '@/lib/next/consume-page-dynamic';
 
-export default function BlogPage() {
+export default async function BlogPage(props: {
+  params?: Promise<unknown>;
+  searchParams?: Promise<unknown>;
+}) {
+  await consumePageDynamic(props);
   // Get all blog posts
   const allBlogPosts = getAllBlogs();
 

@@ -107,9 +107,13 @@ export async function insertDirectoryContactRecord(
       region: input.region?.trim() || null,
       status: input.status ?? 'active',
       notes: input.notes?.trim() || null,
-      primary_directory_role_id: input.primary_directory_role_id ?? null,
-      primary_institution_id: input.primary_institution_id ?? null,
       profile_id: input.profile_id ?? null,
+      address_line1: input.address_line1?.trim() || null,
+      city: input.city?.trim() || null,
+      postal_code: input.postal_code?.trim() || null,
+      contact_address_source: input.contact_address_source ?? 'manual',
+      contact_address_study_site_id:
+        input.contact_address_source === 'site' ? input.contact_address_study_site_id ?? null : null,
     })
     .select('id')
     .single();
@@ -138,9 +142,13 @@ export async function updateDirectoryContactRecord(
       region: input.region?.trim() || null,
       status: input.status ?? 'active',
       notes: input.notes?.trim() || null,
-      primary_directory_role_id: input.primary_directory_role_id ?? null,
-      primary_institution_id: input.primary_institution_id ?? null,
       profile_id: input.profile_id ?? null,
+      address_line1: input.address_line1?.trim() || null,
+      city: input.city?.trim() || null,
+      postal_code: input.postal_code?.trim() || null,
+      contact_address_source: input.contact_address_source ?? 'manual',
+      contact_address_study_site_id:
+        input.contact_address_source === 'site' ? input.contact_address_study_site_id ?? null : null,
     })
     .eq('id', directoryContactId)
     .eq('company_id', companyId);
@@ -380,14 +388,5 @@ export async function ensureDirectoryContactPrimaryInstitution(
     return { error: clearErr.message };
   }
 
-  const { error: primErr } = await supabase
-    .from('directory_contacts')
-    .update({ primary_institution_id: institutionId })
-    .eq('id', directoryContactId)
-    .eq('company_id', companyId);
-  if (primErr) {
-    console.error('ensureDirectoryContactPrimaryInstitution primary_institution_id', primErr.message);
-    return { error: primErr.message };
-  }
   return { error: null };
 }

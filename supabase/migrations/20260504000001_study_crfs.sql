@@ -21,6 +21,11 @@ CREATE INDEX IF NOT EXISTS idx_study_crfs_study_id
 
 ALTER TABLE public.study_crfs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "study_crfs_select" ON public.study_crfs;
+DROP POLICY IF EXISTS "study_crfs_insert" ON public.study_crfs;
+DROP POLICY IF EXISTS "study_crfs_update" ON public.study_crfs;
+DROP POLICY IF EXISTS "study_crfs_delete" ON public.study_crfs;
+
 CREATE POLICY "study_crfs_select" ON public.study_crfs
   FOR SELECT USING (
     study_id IN (
@@ -70,6 +75,11 @@ CREATE INDEX IF NOT EXISTS idx_study_visit_crfs_crf
   ON public.study_visit_crfs(crf_id);
 
 ALTER TABLE public.study_visit_crfs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "study_visit_crfs_select" ON public.study_visit_crfs;
+DROP POLICY IF EXISTS "study_visit_crfs_insert" ON public.study_visit_crfs;
+DROP POLICY IF EXISTS "study_visit_crfs_update" ON public.study_visit_crfs;
+DROP POLICY IF EXISTS "study_visit_crfs_delete" ON public.study_visit_crfs;
 
 CREATE POLICY "study_visit_crfs_select" ON public.study_visit_crfs
   FOR SELECT USING (
@@ -128,6 +138,11 @@ CREATE INDEX IF NOT EXISTS idx_study_crf_questions_crf
   ON public.study_crf_questions(crf_id, sort_order);
 
 ALTER TABLE public.study_crf_questions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "study_crf_questions_select" ON public.study_crf_questions;
+DROP POLICY IF EXISTS "study_crf_questions_insert" ON public.study_crf_questions;
+DROP POLICY IF EXISTS "study_crf_questions_update" ON public.study_crf_questions;
+DROP POLICY IF EXISTS "study_crf_questions_delete" ON public.study_crf_questions;
 
 CREATE POLICY "study_crf_questions_select" ON public.study_crf_questions
   FOR SELECT USING (

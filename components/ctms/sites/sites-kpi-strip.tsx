@@ -222,7 +222,7 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
     };
   }, [sites]);
 
-  const atRiskTooltip = metrics.atRisk.length
+  const atRiskReasonLines = metrics.atRisk.length
     ? Object.entries(metrics.reasonCounts)
         .map(
           ([reason, count]) =>
@@ -232,7 +232,13 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
             }`,
         )
         .join(' \u00B7 ')
-    : 'No sites currently flagged at risk.';
+    : null;
+
+  const atRiskTooltip = [
+    atRiskReasonLines ?? 'No sites currently flagged at risk.',
+    'At-risk counts only sites that match at least one rule; all other linked sites are Not At-Risk.',
+    'Enrollment pace applies after activation (on or before today) when target enrollment is greater than zero.',
+  ].join(' ');
 
   const remaining = (count: number) => Math.max(metrics.total - count, 0);
   const remainingDot = 'bg-muted-foreground/30 dark:bg-muted-foreground/40';
@@ -390,7 +396,7 @@ export function SitesKpiStrip({ sites }: SitesKpiStripProps) {
           percentage: pct(remaining(atRiskCount), metrics.total),
           dotClassName: remainingDot,
         }}
-        meta="Of total linked sites"
+        meta="Subset of linked sites with a risk flag"
         tooltip={atRiskTooltip}
       />
     </div>

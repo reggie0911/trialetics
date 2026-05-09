@@ -452,14 +452,11 @@ export function ContactFormDialog({
   const watchedDirectoryContactId = form.watch('directory_contact_id');
   /* eslint-enable react-hooks/incompatible-library */
 
-  const [addPrimaryRoleId, setAddPrimaryRoleId] = useState('');
-  const [addPrimaryInstitutionId, setAddPrimaryInstitutionId] = useState('');
   const [addContactCountryCode, setAddContactCountryCode] = useState('');
   const [addContactRegion, setAddContactRegion] = useState('');
   const [addPhone, setAddPhone] = useState('');
   const [addAvatarUrl, setAddAvatarUrl] = useState('');
   const [addIsPrimary, setAddIsPrimary] = useState(false);
-  const [addPrimaryFieldsLocked, setAddPrimaryFieldsLocked] = useState(false);
   const [addPending, setAddPending] = useState(false);
 
   useEffect(() => {
@@ -473,15 +470,11 @@ export function ContactFormDialog({
     }
 
     if (openAddContactIntent === 'pi' && !addOpenedWithPiIntentRef.current) {
-      const rid = findPrincipalInvestigatorRoleId(directoryCatalog);
       setAddContactCountryCode('');
       setAddContactRegion('');
       setAddPhone('');
       setAddAvatarUrl('');
-      setAddPrimaryInstitutionId(siteInstitutionId ?? '');
-      setAddPrimaryRoleId(rid ?? '');
       setAddIsPrimary(true);
-      setAddPrimaryFieldsLocked(true);
       addOpenedWithPiIntentRef.current = true;
       onAddContactIntentConsumed?.();
       return;
@@ -492,10 +485,7 @@ export function ContactFormDialog({
       setAddContactRegion('');
       setAddPhone('');
       setAddAvatarUrl('');
-      setAddPrimaryInstitutionId(siteInstitutionId ?? '');
-      setAddPrimaryRoleId('');
       setAddIsPrimary(false);
-      setAddPrimaryFieldsLocked(false);
     }
   }, [
     open,
@@ -504,9 +494,7 @@ export function ContactFormDialog({
     isEdit,
     contact,
     openAddContactIntent,
-    directoryCatalog,
     onAddContactIntentConsumed,
-    siteInstitutionId,
   ]);
 
   const onSubmitEdit = async (values: ContactFormValues) => {
@@ -557,14 +545,8 @@ export function ContactFormDialog({
       region: addContactRegion || undefined,
       status: (fd.get('status') as string) === 'inactive' ? 'inactive' : 'active',
       notes: String(fd.get('notes') ?? '') || undefined,
-      primary_directory_role_id: addPrimaryRoleId || null,
-      primary_institution_id: String(fd.get('primary_institution_id') ?? '') || null,
     };
-    const parsed = directoryContactFormSchema.safeParse({
-      ...raw,
-      primary_directory_role_id: raw.primary_directory_role_id || null,
-      primary_institution_id: raw.primary_institution_id || null,
-    });
+    const parsed = directoryContactFormSchema.safeParse(raw);
     if (!parsed.success) {
       const err = parsed.error.errors[0];
       const msg = err?.path?.length
@@ -588,7 +570,7 @@ export function ContactFormDialog({
     const siteName = `${parsed.data.first_name} ${parsed.data.last_name}`.trim();
     const siteRole = siteRoleLabelFromQuickContact(
       directoryCatalog,
-      addPrimaryRoleId,
+      '',
       parsed.data.title ?? ''
     );
     const { error: siteErr } = await addSiteContact(
@@ -628,17 +610,12 @@ export function ContactFormDialog({
               catalog={directoryCatalog}
               catalogError={directoryCatalogError}
               institutions={institutions}
-              primaryRoleId={addPrimaryRoleId}
-              onPrimaryRoleChange={setAddPrimaryRoleId}
               contactCountryCode={addContactCountryCode}
               contactRegion={addContactRegion}
               onContactCountryChange={setAddContactCountryCode}
               onContactRegionChange={setAddContactRegion}
               phone={addPhone}
               onPhoneChange={setAddPhone}
-              primaryInstitutionId={addPrimaryInstitutionId}
-              onPrimaryInstitutionChange={setAddPrimaryInstitutionId}
-              primaryFieldsLocked={addPrimaryFieldsLocked}
               companyId={companyId}
               avatarUrl={addAvatarUrl}
               onAvatarUrlChange={setAddAvatarUrl}
@@ -648,10 +625,9 @@ export function ContactFormDialog({
                   id="site_add_is_primary"
                   checked={addIsPrimary}
                   onCheckedChange={(c) => setAddIsPrimary(!!c)}
-                  disabled={addPrimaryFieldsLocked}
                 />
                 <Label htmlFor="site_add_is_primary" className="text-sm font-normal">
-                  {addPrimaryFieldsLocked ? 'Primary contact for this site (locked for PI)' : 'Primary contact for this site'}
+                  Primary contact for this site
                 </Label>
               </div>
             </QuickContactFormFields>

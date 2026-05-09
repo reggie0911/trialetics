@@ -76,6 +76,8 @@ interface DirectoryPrimaryRoleFieldsProps {
   disabled?: boolean;
   /** Label for empty role option (e.g. "None" vs "Optional"). */
   emptyRoleLabel?: string;
+  /** When true, show a single Role list (all catalog roles) with no Category step. */
+  hideCategory?: boolean;
 }
 
 export function DirectoryPrimaryRoleFields({
@@ -84,6 +86,7 @@ export function DirectoryPrimaryRoleFields({
   onRoleChange,
   disabled,
   emptyRoleLabel = 'None',
+  hideCategory = false,
 }: DirectoryPrimaryRoleFieldsProps) {
   const [categoryId, setCategoryId] = useState(() => getCategoryIdForRoleId(catalog, roleId));
   const prevRoleIdRef = useRef<string | undefined>(undefined);
@@ -107,18 +110,42 @@ export function DirectoryPrimaryRoleFields({
   }, [catalog]);
 
   const rolesInCategory = useMemo(() => {
+    if (hideCategory) return getRoleOptionsForCategoryFilter(catalog, '');
     if (!categoryId) return [];
     return getRoleOptionsForCategoryFilter(catalog, categoryId);
-  }, [catalog, categoryId]);
+  }, [hideCategory, catalog, categoryId]);
 
   const roleLabelById = useMemo(() => roleOptionLabels(rolesInCategory), [rolesInCategory]);
 
   const governanceHint =
+    !hideCategory &&
     categoriesWithRoles.find((c) => c.id === categoryId)?.code === 'governance'
       ? 'Oversight committees and advisory roles.'
       : undefined;
 
-  const roleDisabled = disabled || !categoryId;
+  const roleDisabled = hideCategory ? !!disabled : disabled || !categoryId;
+
+  if (hideCategory) {
+    return (
+      <div className="space-y-1">
+        <Label className="text-xs">Role</Label>
+        <select
+          className={selectClassName}
+          disabled={roleDisabled}
+          value={roleId && rolesInCategory.some((r) => r.id === roleId) ? roleId : ''}
+          aria-label="Primary role"
+          onChange={(e) => onRoleChange(e.target.value)}
+        >
+          <option value="">{emptyRoleLabel}</option>
+          {rolesInCategory.map((r) => (
+            <option key={r.id} value={r.id}>
+              {roleLabelById.get(r.id) ?? r.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-2">

@@ -311,6 +311,7 @@ const Pricing32 = ({
 
   // Auto-trigger checkout when user arrives from email-confirmed signup
   // (?checkout=1&plan=launch&interval=month is set by the sign-up redirect).
+  const checkoutAutoKey = `${isLoggedIn}:${searchParams.toString()}`;
   useEffect(() => {
     if (!isLoggedIn) return;
     const checkoutParam = searchParams.get("checkout");
@@ -318,20 +319,32 @@ const Pricing32 = ({
     const intervalParam = searchParams.get("interval") ?? "month";
     if (checkoutParam !== "1" || !planParam) return;
     const safeInterval: BillingInterval = intervalParam === "year" ? "year" : "month";
-    fetch("/api/stripe/checkout", {
+    let cancelled = false;
+    void fetch("/api/stripe/checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ plan: planParam, interval: safeInterval }),
     })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.url) window.location.href = data.url;
+      .then(async (r) => {
+        const data = (await r.json()) as { url?: string; error?: string };
+        if (cancelled) return;
+        if (!r.ok) {
+          toast.error(typeof data.error === "string" ? data.error : "Could not start checkout");
+          return;
+        }
+        if (data.url) {
+          window.location.href = data.url;
+          return;
+        }
+        toast.error("No checkout URL returned. Choose a plan below and tap Subscribe.");
       })
       .catch(() => {
-        // If auto-checkout fails, user can click Subscribe manually
+        if (!cancelled) toast.error("Could not start checkout. Try Subscribe on a plan below.");
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [checkoutAutoKey, isLoggedIn, searchParams]);
 
   return (
     <section className={cn("relative z-10 py-20", className)}>

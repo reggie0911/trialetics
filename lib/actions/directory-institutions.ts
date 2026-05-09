@@ -134,7 +134,7 @@ export async function getInstitutionById(id: string): Promise<{
     .from('directory_contact_institution')
     .select(
       `id, directory_contact_id, is_primary,
-       directory_contacts(id,first_name,last_name,email,phone,title,primary_directory_role_id,directory_roles(id,name))`
+       directory_contacts(id,first_name,last_name,email,phone,title)`
     )
     .eq('institution_id', id);
 

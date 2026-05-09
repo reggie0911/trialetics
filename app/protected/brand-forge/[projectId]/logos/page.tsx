@@ -1,3 +1,4 @@
+import { asResolved } from '@/lib/next/as-resolved';
 import { createClient } from '@/lib/server';
 import { LogoGallery } from '@/components/brand-forge/logo-gallery';
 import { withFreshConceptThumbnails } from '@/lib/brand-forge/concept-thumbnails';
@@ -8,7 +9,7 @@ interface LogosPageProps {
 }
 
 export default async function LogosPage({ params }: LogosPageProps) {
-  const { projectId } = await params;
+  const { projectId } = await asResolved(params);
   const supabase = await createClient();
 
   const { data: project } = await supabase

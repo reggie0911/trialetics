@@ -2,13 +2,18 @@ import { Metadata } from 'next';
 import Link from 'next/link';
 
 import Noise from '@/components/noise';
+import { consumePageDynamic } from '@/lib/next/consume-page-dynamic';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy | Trialetics',
   description: 'Privacy Policy for Trialetics Clinical Trial Management System (CTMS) subscribers. Learn how we collect, use, and protect your data. Version: January 8, 2025.',
 };
 
-export default function PrivacyPolicy() {
+export default async function PrivacyPolicy(props: {
+  params?: Promise<unknown>;
+  searchParams?: Promise<unknown>;
+}) {
+  await consumePageDynamic(props);
   return (
     <section className="section-padding relative">
       <Noise />

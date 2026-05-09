@@ -1,3 +1,4 @@
+import { asResolved } from '@/lib/next/as-resolved';
 import { createClient } from '@/lib/server';
 import { TypographyEditor } from '@/components/brand-forge/typography/typography-editor';
 import type { BFBrandKit } from '@/lib/types/brand-forge';
@@ -7,7 +8,7 @@ interface TypographyPageProps {
 }
 
 export default async function TypographyPage({ params }: TypographyPageProps) {
-  const { projectId } = await params;
+  const { projectId } = await asResolved(params);
   const supabase = await createClient();
 
   const { data: project } = await supabase

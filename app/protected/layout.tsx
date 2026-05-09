@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
 import { createClient } from '@/lib/server';
@@ -5,10 +6,19 @@ import { TopNavbar } from '@/components/ctms/top-navbar';
 import { CopilotShell } from '@/components/copilot/copilot-shell';
 import { CopilotFillsHost } from '@/components/copilot/forms/copilot-fills-host';
 import { CopilotContextProvider } from '@/lib/copilot/context-provider';
+import {
+  companyHasPaidSubscriptionAccess,
+  evaluateSubscriptionGate,
+  isBillingSettingsPath,
+  isCanceledSubscriptionStillInGracePeriod,
+  isOnboardingPath,
+} from '@/lib/server/require-active-subscription';
 import { normalizeSubscriptionPlan, type SubscriptionPlan } from '@/lib/types/ctms';
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
+  const headerList = await headers();
+  const pathname = headerList.get('x-pathname') ?? '';
 
   const { data, error } = await supabase.auth.getUser();
   if (error || !data?.user) {
@@ -57,18 +67,49 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const displayCompanyName = isDefaultName ? null : companyName;
 
   const isPlatformAdmin = profile.is_platform_admin === true;
+
+  const { data: subscription } = await supabase
+    .from('subscriptions')
+    .select('plan, status, current_period_end, cancel_at_period_end, updated_at')
+    .eq('company_id', profile.company_id)
+    .maybeSingle();
+
+  const gate = evaluateSubscriptionGate({
+    pathname,
+    isPlatformAdmin,
+    subscription,
+  });
+  if (!gate.allowed) {
+    redirect(gate.redirectTo);
+  }
+
   const hasCtmsAccess = company?.has_ctms_access !== false;
   const hasEtmfAccess = company?.has_etmf_access === true;
   const hasEisfAccess = company?.has_eisf_access === true;
   const hasTrackerAccess = company?.has_tracker_access === true;
   const hasBrandforgeAccess = company?.has_brandforge_access === true;
-  const hasProductAccess = hasCtmsAccess || hasTrackerAccess || hasEtmfAccess || hasEisfAccess || hasBrandforgeAccess;
+  const paidPlan = normalizeSubscriptionPlan(subscription?.plan);
+  const consultantSoloPaid =
+    companyHasPaidSubscriptionAccess(subscription) && paidPlan === 'independent_consultant';
+  const hasProductAccess =
+    hasCtmsAccess ||
+    hasTrackerAccess ||
+    hasEtmfAccess ||
+    hasEisfAccess ||
+    hasBrandforgeAccess ||
+    consultantSoloPaid;
 
   const enabledStudyKeys = (company?.enabled_study_tracker_keys as string[] | null | undefined) ?? [];
   /** Plain string[] only — icons are resolved inside the client TopNavbar. */
   const studyTrackerMenuKeys = hasTrackerAccess ? enabledStudyKeys : [];
 
-  if (!isPlatformAdmin && !hasProductAccess) {
+  // Billing / onboarding are reachable before module flags catch up (e.g. right after checkout).
+  if (
+    !isPlatformAdmin &&
+    !hasProductAccess &&
+    !isBillingSettingsPath(pathname) &&
+    !isOnboardingPath(pathname)
+  ) {
     redirect('/module-unavailable');
   }
 
@@ -84,21 +125,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
     customTrackerNavItems = (defs as CustomTrackerNavItem[]) ?? [];
   }
 
-  const { data: subscription } = await supabase
-    .from('subscriptions')
-    .select('plan, status, current_period_end, cancel_at_period_end')
-    .eq('company_id', profile.company_id)
-    .single();
-
-  const isCanceledButStillInPaidPeriod =
-    subscription?.status === 'cancelled' &&
-    !!subscription?.current_period_end &&
-    new Date(subscription.current_period_end).getTime() > Date.now();
-  const statusKeepsPaidAccess =
-    subscription?.status === 'active' ||
-    subscription?.status === 'trialing' ||
-    subscription?.status === 'past_due' ||
-    isCanceledButStillInPaidPeriod;
+  const isCanceledButStillInPaidPeriod = isCanceledSubscriptionStillInGracePeriod(subscription);
+  const statusKeepsPaidAccess = companyHasPaidSubscriptionAccess(subscription);
   const currentPlan: SubscriptionPlan = statusKeepsPaidAccess
     ? normalizeSubscriptionPlan(subscription?.plan)
     : 'independent_consultant';
